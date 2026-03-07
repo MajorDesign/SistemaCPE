@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Projetos - CPE Control</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/style.css">
+
+  <style>
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 2px solid #e5e7eb;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .page-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin: 0;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+      transform: translateY(-2px);
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #6b7280;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+
+    .stat-change {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    .projects-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 24px;
+    }
+
+    .project-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .project-card:hover {
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(-4px);
+      border-color: #667eea;
+    }
+
+    .project-header {
+      padding: 24px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .project-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      margin-bottom: 12px;
+    }
+
+    .project-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 6px;
+    }
+
+    .project-description {
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.5;
+    }
+
+    .project-body {
+      padding: 20px 24px;
+      flex: 1;
+    }
+
+    .project-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .project-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    .project-progress {
+      margin: 16px 0;
+    }
+
+    .progress-bar-custom {
+      height: 6px;
+      background-color: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      transition: width 0.3s ease;
+    }
+
+    .progress-text {
+      font-size: 12px;
+      color: #6b7280;
+      font-weight: 600;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status-active {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: #065f46;
+    }
+
+    .status-paused {
+      background-color: rgba(245, 158, 11, 0.1);
+      color: #92400e;
+    }
+
+    .status-completed {
+      background-color: rgba(59, 130, 246, 0.1);
+      color: #1e40af;
+    }
+
+    .project-team {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .team-member {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .project-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-project-action {
+      flex: 1;
+      padding: 0.6rem;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+      background: white;
+      color: #1f2937;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-project-action:hover {
+      background-color: #f3f4f6;
+      border-color: #667eea;
+      color: #667eea;
+    }
+
+    .btn-project-action.danger:hover {
+      background-color: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    .btn-new-project {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+
+    .btn-new-project:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+      color: white;
+      text-decoration: none;
+    }
+
+    .search-filter {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .search-filter input,
+    .search-filter select {
+      padding: 0.75rem 1rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      flex: 1;
+      min-width: 250px;
+    }
+
+    .search-filter input:focus,
+    .search-filter select:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      outline: none;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: #6b7280;
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      color: #d1d5db;
+      margin-bottom: 1rem;
+    }
+
+    .alert {
+      border: none;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+
+    .alert-danger {
+      background-color: rgba(220, 38, 38, 0.1);
+      color: #991b1b;
+    }
+
+    .alert-success {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: #065f46;
+    }
+
+    .modal-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+    }
+
+    .modal-header .btn-close {
+      filter: brightness(0) invert(1);
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .d-none {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      .projects-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .search-filter {
+        flex-direction: column;
+      }
+
+      .search-filter input,
+      .search-filter select {
+        width: 100%;
+      }
+
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ============================================================ -->
+  <!-- 🔒 LOADING PAGE -->
+  <!-- ============================================================ -->
+  <div id="loadingPage"
+    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
+    <div style="text-align: center; color: white;">
+      <div class="spinner-border" role="status"
+        style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
+        <span class="visually-hidden">Carregando...</span>
+      </div>
+      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+    </div>
+  </div>
+  <!-- ============================================================ -->
+
+  <div class="container-main" style="display: none;">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">CPE</div>
+        <div class="sidebar-title">CONTROL</div>
+      </div>
+
+      <div class="search-box">
+        <input type="text" placeholder="Buscar">
+      </div>
+
+      <ul class="sidebar-menu"></ul>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <div class="top-bar">
+        <button class="menu-toggle">☰</button>
+        <h1><i class="bi bi-folder"></i> Projetos</h1>
+      </div>
+
+      <div class="content">
+        <!-- ALERTS -->
+        <div class="alert alert-danger d-none" id="alertBox" role="alert">
+          <i class="bi bi-exclamation-circle"></i>
+          <span id="alertMessage"></span>
+        </div>
+
+        <div class="alert alert-success d-none" id="successBox" role="alert">
+          <i class="bi bi-check-circle"></i>
+          <span id="successMessage">Operação realizada com sucesso!</span>
+        </div>
+
+        <!-- PAGE HEADER -->
+        <div class="page-header">
+          <h2 class="page-title">
+            <i class="bi bi-folder-check"></i> Meus Projetos
+          </h2>
+          <button class="btn-new-project" id="btnNewProject" data-bs-toggle="modal" data-bs-target="#projectModal">
+            <i class="bi bi-plus-lg"></i> Novo Projeto
+          </button>
+        </div>
+
+        <!-- STATISTICS -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total de Projetos</div>
+            <div class="stat-value" id="totalProjects">0</div>
+            <div class="stat-change">Projetos criados</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Ativos</div>
+            <div class="stat-value" id="activeProjects">0</div>
+            <div class="stat-change">Em desenvolvimento</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Concluídos</div>
+            <div class="stat-value" id="completedProjects">0</div>
+            <div class="stat-change">Finalizados</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Progresso Médio</div>
+            <div class="stat-value" id="averageProgress">0%</div>
+            <div class="stat-change">Andamento geral</div>
+          </div>
+        </div>
+
+        <!-- SEARCH AND FILTER -->
+        <div class="search-filter">
+          <input type="text" id="searchInput" placeholder="Buscar projeto...">
+          <select id="statusFilter" style="width: 200px;">
+            <option value="">Todos os Status</option>
+            <option value="active">Ativo</option>
+            <option value="paused">Pausado</option>
+            <option value="completed">Concluído</option>
+          </select>
+        </div>
+
+        <!-- PROJECTS GRID -->
+        <div class="projects-grid" id="projectsGrid">
+          <div style="grid-column: 1 / -1;">
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <i class="bi bi-inbox"></i>
+              </div>
+              <p>Carregando projetos...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Novo/Editar Projeto -->
+  <!-- ============================================================ -->
+  <div class="modal fade" id="projectModal" tabindex="-1" aria-labelledby="projectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="projectModalLabel">
+            <i class="bi bi-plus-square"></i> Novo Projeto
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+
+        <div class="modal-body" style="padding: 2rem;">
+          <!-- Alert de Erro -->
+          <div class="alert alert-danger d-none" id="modalAlertBox" role="alert">
+            <i class="bi bi-exclamation-circle"></i>
+            <span id="modalAlertMessage"></span>
+          </div>
+
+          <!-- Formulário -->
+          <form id="projectForm" novalidate>
+            <div class="mb-3">
+              <label for="projectTitle" class="form-label">
+                <i class="bi bi-input-cursor"></i> Título do Projeto
+              </label>
+              <input type="text" class="form-control" id="projectTitle"
+                placeholder="Ex: Redesign do Dashboard" required />
+            </div>
+
+            <div class="mb-3">
+              <label for="projectDescription" class="form-label">
+                <i class="bi bi-file-text"></i> Descrição
+              </label>
+              <textarea class="form-control" id="projectDescription" rows="3"
+                placeholder="Descreva os objetivos do projeto..."></textarea>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="projectStatus" class="form-label">
+                  <i class="bi bi-info-circle"></i> Status
+                </label>
+                <select class="form-select" id="projectStatus" required>
+                  <option value="">Selecione o status...</option>
+                  <option value="active">Ativo</option>
+                  <option value="paused">Pausado</option>
+                  <option value="completed">Concluído</option>
+                </select>
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="projectProgress" class="form-label">
+                  <i class="bi bi-percent"></i> Progresso (%)
+                </label>
+                <input type="number" class="form-control" id="projectProgress"
+                  placeholder="0" min="0" max="100" value="0" />
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="projectStartDate" class="form-label">
+                  <i class="bi bi-calendar"></i> Data Início
+                </label>
+                <input type="date" class="form-control" id="projectStartDate" />
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="projectEndDate" class="form-label">
+                  <i class="bi bi-calendar"></i> Data Término
+                </label>
+                <input type="date" class="form-control" id="projectEndDate" />
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="projectManager" class="form-label">
+                <i class="bi bi-person"></i> Gerente do Projeto
+              </label>
+              <input type="text" class="form-control" id="projectManager"
+                placeholder="Nome do responsável" />
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
+                <i class="bi bi-check-lg"></i> Criar Projeto
+              </button>
+              <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">
+                <i class="bi bi-x-lg"></i> Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 📦 SCRIPTS -->
+  <!-- ============================================================ -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const user = await initPageAuth("PROJECTS");
+      if (!user) return;
+
+      await loadProjects();
+    });
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÕES DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    let projects = [];
+    let selectedProjectId = null;
+
+    /**
+     * Carrega os projetos
+     */
+    async function loadProjects() {
+      try {
+        console.log("[PROJECTS/LOAD] Carregando projetos...");
+
+        // Simular dados de API - substitua pela chamada real
+        projects = [
+          {
+            id: 1,
+            title: "Redesign do Dashboard",
+            description: "Novo design moderno e responsivo para o dashboard principal",
+            status: "active",
+            progress: 75,
+            startDate: "2024-01-15",
+            endDate: "2024-03-15",
+            manager: "João Silva",
+            team: ["JS", "MA", "CP"],
+            created: "2024-01-15"
+          },
+          {
+            id: 2,
+            title: "Integração com APIs Externas",
+            description: "Integração com APIs de terceiros para análise de dados",
+            status: "active",
+            progress: 45,
+            startDate: "2024-02-01",
+            endDate: "2024-04-01",
+            manager: "Maria Santos",
+            team: ["MS", "LF"],
+            created: "2024-02-01"
+          },
+          {
+            id: 3,
+            title: "Sistema de Notificações",
+            description: "Novo sistema de notificações em tempo real",
+            status: "paused",
+            progress: 30,
+            startDate: "2024-02-15",
+            endDate: "2024-05-15",
+            manager: "Carlos Oliveira",
+            team: ["CO", "AP", "RM"],
+            created: "2024-02-15"
+          },
+          {
+            id: 4,
+            title: "Otimização de Performance",
+            description: "Melhorias de performance e carregamento da aplicação",
+            status: "completed",
+            progress: 100,
+            startDate: "2023-12-01",
+            endDate: "2024-01-31",
+            manager: "Ana Paula",
+            team: ["AP"],
+            created: "2023-12-01"
+          },
+          {
+            id: 5,
+            title: "Documentação Técnica",
+            description: "Documentação completa da arquitetura e APIs",
+            status: "active",
+            progress: 60,
+            startDate: "2024-01-20",
+            endDate: "2024-03-20",
+            manager: "Roberto Martins",
+            team: ["RM", "EB"],
+            created: "2024-01-20"
+          },
+          {
+            id: 6,
+            title: "Testes Automatizados",
+            description: "Implementação de testes e CI/CD",
+            status: "active",
+            progress: 50,
+            startDate: "2024-02-10",
+            endDate: "2024-04-10",
+            manager: "Everton Brito",
+            team: ["EB", "CP", "JS"],
+            created: "2024-02-10"
+          }
+        ];
+
+        console.log("[PROJECTS/LOAD] ✓", projects.length, "projetos carregados");
+        renderProjects(filterProjects());
+        updateStatistics();
+
+      } catch (err) {
+        console.error("[PROJECTS/LOAD] ✗ Erro:", err.message);
+        showError("Erro ao carregar projetos: " + err.message);
+      }
+    }
+
+    /**
+     * Filtra os projetos
+     */
+    function filterProjects() {
+      let filtered = projects;
+
+      // Filtro por busca
+      const searchTerm = document.getElementById("searchInput")?.value?.toLowerCase() || "";
+      if (searchTerm) {
+        filtered = filtered.filter(p =>
+          p.title.toLowerCase().includes(searchTerm) ||
+          p.description.toLowerCase().includes(searchTerm) ||
+          p.manager.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      // Filtro por status
+      const statusFilter = document.getElementById("statusFilter")?.value || "";
+      if (statusFilter) {
+        filtered = filtered.filter(p => p.status === statusFilter);
+      }
+
+      return filtered;
+    }
+
+    /**
+     * Renderiza os projetos
+     */
+    function renderProjects(list = projects) {
+      const grid = document.getElementById("projectsGrid");
+
+      if (!list || list.length === 0) {
+        grid.innerHTML = `
+          <div style="grid-column: 1 / -1;">
+            <div class="empty-state">
+              <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
+              <p>Nenhum projeto encontrado</p>
+              <p style="font-size: 12px; margin-top: 1rem;">Clique em "Novo Projeto" para criar um</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = list.map(project => `
+        <div class="project-card">
+          <div class="project-header">
+            <div class="project-icon"><i class="bi bi-folder-fill"></i></div>
+            <div class="project-title">${project.title}</div>
+            <div class="project-description">${project.description}</div>
+          </div>
+
+          <div class="project-body">
+            <div class="project-team">
+              ${project.team.map(member => `<div class="team-member">${member}</div>`).join('')}
+            </div>
+
+            <div class="project-meta">
+              <div class="project-meta-item">
+                <i class="bi bi-person"></i>
+                <span>${project.manager}</span>
+              </div>
+              <div class="project-meta-item">
+                <i class="bi bi-calendar"></i>
+                <span>${new Date(project.startDate).toLocaleDateString('pt-BR')} até ${new Date(project.endDate).toLocaleDateString('pt-BR')}</span>
+              </div>
+            </div>
+
+            <div class="project-progress">
+              <div class="progress-bar-custom">
+                <div class="progress-fill" style="width: ${project.progress}%;"></div>
+              </div>
+              <div class="progress-text">${project.progress}% Concluído</div>
+            </div>
+
+            <div>
+              <span class="status-badge status-${project.status}">
+                ${getStatusLabel(project.status)}
+              </span>
+            </div>
+          </div>
+
+          <div class="project-footer">
+            <button class="btn-project-action" onclick="editProject(${project.id})">
+              <i class="bi bi-pencil"></i> Editar
+            </button>
+            <button class="btn-project-action danger" onclick="deleteProject(${project.id}, '${project.title.replace(/'/g, "\\'")}')">
+              <i class="bi bi-trash"></i> Deletar
+            </button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    /**
+     * Retorna o label do status
+     */
+    function getStatusLabel(status) {
+      const labels = {
+        active: "🔄 Ativo",
+        paused: "⏸️ Pausado",
+        completed: "✅ Concluído"
+      };
+      return labels[status] || status;
+    }
+
+    /**
+     * Atualiza as estatísticas
+     */
+    function updateStatistics() {
+      const total = projects.length;
+      const active = projects.filter(p => p.status === "active").length;
+      const completed = projects.filter(p => p.status === "completed").length;
+      const avgProgress = Math.round(
+        projects.reduce((sum, p) => sum + p.progress, 0) / total || 0
+      );
+
+      document.getElementById("totalProjects").textContent = total;
+      document.getElementById("activeProjects").textContent = active;
+      document.getElementById("completedProjects").textContent = completed;
+      document.getElementById("averageProgress").textContent = avgProgress + "%";
+    }
+
+    /**
+     * Mostra mensagem de erro
+     */
+    function showError(message) {
+      const alertBox = document.getElementById("alertBox");
+      const alertMessage = document.getElementById("alertMessage");
+      alertMessage.textContent = message;
+      alertBox.classList.remove("d-none");
+      setTimeout(() => {
+        alertBox.classList.add("d-none");
+      }, 5000);
+    }
+
+    /**
+     * Mostra mensagem de sucesso
+     */
+    function showSuccess(message) {
+      const successBox = document.getElementById("successBox");
+      const successMessage = document.getElementById("successMessage");
+      successMessage.textContent = message;
+      successBox.classList.remove("d-none");
+      setTimeout(() => {
+        successBox.classList.add("d-none");
+      }, 5000);
+    }
+
+    /**
+     * Mostra mensagem de erro no modal
+     */
+    function showModalError(message) {
+      const modalAlert = document.getElementById("modalAlertBox");
+      const modalAlertMsg = document.getElementById("modalAlertMessage");
+      if (modalAlert && modalAlertMsg) {
+        modalAlertMsg.textContent = message;
+        modalAlert.classList.remove("d-none");
+      }
+    }
+
+    /**
+     * Edita um projeto
+     */
+    function editProject(projectId) {
+      const project = projects.find(p => p.id === projectId);
+      if (!project) return;
+
+      console.log("[PROJECTS/EDIT] Editando projeto:", projectId);
+
+      selectedProjectId = projectId;
+      document.getElementById("projectModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Projeto';
+      document.getElementById("projectTitle").value = project.title;
+      document.getElementById("projectDescription").value = project.description;
+      document.getElementById("projectStatus").value = project.status;
+      document.getElementById("projectProgress").value = project.progress;
+      document.getElementById("projectStartDate").value = project.startDate;
+      document.getElementById("projectEndDate").value = project.endDate;
+      document.getElementById("projectManager").value = project.manager;
+      document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Projeto';
+
+      const modal = new bootstrap.Modal(document.getElementById("projectModal"));
+      modal.show();
+    }
+
+    /**
+     * Deleta um projeto
+     */
+    async function deleteProject(projectId, projectTitle) {
+      console.log("[PROJECTS/DELETE] Deletando projeto:", projectId);
+
+      if (!confirm(`Tem certeza que deseja deletar o projeto "${projectTitle}"?`)) {
+        return;
+      }
+
+      try {
+        projects = projects.filter(p => p.id !== projectId);
+        showSuccess(`Projeto "${projectTitle}" deletado com sucesso!`);
+        renderProjects(filterProjects());
+        updateStatistics();
+
+      } catch (err) {
+        console.error("[PROJECTS/DELETE] ✗ Erro:", err.message);
+        showError("Erro ao deletar projeto: " + err.message);
+      }
+    }
+
+    /**
+     * Submissão do formulário
+     */
+    document.getElementById("projectForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const title = document.getElementById("projectTitle")?.value?.trim();
+      const description = document.getElementById("projectDescription")?.value?.trim();
+      const status = document.getElementById("projectStatus")?.value;
+      const progress = parseInt(document.getElementById("projectProgress")?.value || 0);
+      const startDate = document.getElementById("projectStartDate")?.value;
+      const endDate = document.getElementById("projectEndDate")?.value;
+      const manager = document.getElementById("projectManager")?.value?.trim();
+
+      if (!title || !status) {
+        showModalError("Preencha os campos obrigatórios (Título, Status)!");
+        return;
+      }
+
+      if (progress < 0 || progress > 100) {
+        showModalError("O progresso deve estar entre 0 e 100!");
+        return;
+      }
+
+      try {
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
+
+        if (selectedProjectId) {
+          // Atualizar
+          const project = projects.find(p => p.id === selectedProjectId);
+          if (project) {
+            project.title = title;
+            project.description = description;
+            project.status = status;
+            project.progress = progress;
+            project.startDate = startDate;
+            project.endDate = endDate;
+            project.manager = manager || project.manager;
+          }
+          console.log("[PROJECTS/SUBMIT] ✓ Projeto atualizado");
+          showSuccess("Projeto atualizado com sucesso!");
+        } else {
+          // Criar
+          const newProject = {
+            id: Math.max(...projects.map(p => p.id), 0) + 1,
+            title,
+            description,
+            status,
+            progress,
+            startDate,
+            endDate,
+            manager: manager || "Não atribuído",
+            team: [],
+            created: new Date().toISOString().split('T')[0]
+          };
+          projects.push(newProject);
+          console.log("[PROJECTS/SUBMIT] ✓ Projeto criado");
+          showSuccess("Projeto criado com sucesso!");
+        }
+
+        document.getElementById("projectForm").reset();
+        const modal = bootstrap.Modal.getInstance(document.getElementById("projectModal"));
+        modal.hide();
+
+        selectedProjectId = null;
+        renderProjects(filterProjects());
+        updateStatistics();
+
+      } catch (err) {
+        console.error("[PROJECTS/SUBMIT] ✗ Erro:", err.message);
+        showModalError(err.message || "Erro ao processar projeto!");
+      } finally {
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Criar Projeto';
+      }
+    });
+
+    /**
+     * Event listeners para filtros
+     */
+    document.getElementById("searchInput")?.addEventListener("input", () => {
+      renderProjects(filterProjects());
+    });
+
+    document.getElementById("statusFilter")?.addEventListener("change", () => {
+      renderProjects(filterProjects());
+    });
+
+    /**
+     * Reset modal quando abrir
+     */
+    document.getElementById("projectModal")?.addEventListener("show.bs.modal", () => {
+      if (!selectedProjectId) {
+        document.getElementById("projectModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Novo Projeto';
+        document.getElementById("projectForm").reset();
+        document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Projeto';
+      }
+      document.getElementById("modalAlertBox").classList.add("d-none");
+    });
+
+    /**
+     * Reset quando fechar
+     */
+    document.getElementById("projectModal")?.addEventListener("hidden.bs.modal", () => {
+      selectedProjectId = null;
+    });
+  </script>
+
+</body>
+
+</html>

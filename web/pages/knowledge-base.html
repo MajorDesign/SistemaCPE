@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Base de Conhecimento - CPE Control</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/style.css">
+
+  <style>
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 2px solid #e5e7eb;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .page-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin: 0;
+    }
+
+    .search-section {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 250px;
+      padding: 0.75rem 1rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .search-input:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      outline: none;
+    }
+
+    .category-pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+
+    .category-pill {
+      padding: 8px 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 20px;
+      background: white;
+      color: #1f2937;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      font-size: 13px;
+    }
+
+    .category-pill:hover {
+      border-color: #667eea;
+      color: #667eea;
+    }
+
+    .category-pill.active {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-color: #667eea;
+      color: white;
+    }
+
+    .articles-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 2rem;
+    }
+
+    .article-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 24px;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+      cursor: pointer;
+    }
+
+    .article-card:hover {
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(-4px);
+      border-color: #667eea;
+    }
+
+    .article-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+
+    .article-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
+    .article-description {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 12px;
+      flex: 1;
+      line-height: 1.5;
+    }
+
+    .article-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 12px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .article-category {
+      display: inline-block;
+      padding: 4px 8px;
+      background-color: #f3f4f6;
+      border-radius: 4px;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .article-views {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+      transform: translateY(-2px);
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #6b7280;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+
+    .stat-change {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    .btn-new-article {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+
+    .btn-new-article:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+      color: white;
+      text-decoration: none;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: #6b7280;
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      color: #d1d5db;
+      margin-bottom: 1rem;
+    }
+
+    .alert {
+      border: none;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+
+    .alert-danger {
+      background-color: rgba(220, 38, 38, 0.1);
+      color: #991b1b;
+    }
+
+    .alert-success {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: #065f46;
+    }
+
+    .modal-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+    }
+
+    .modal-header .btn-close {
+      filter: brightness(0) invert(1);
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .d-none {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      .articles-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .search-section {
+        flex-direction: column;
+      }
+
+      .search-input {
+        width: 100%;
+      }
+
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ============================================================ -->
+  <!-- 🔒 LOADING PAGE -->
+  <!-- ============================================================ -->
+  <div id="loadingPage"
+    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
+    <div style="text-align: center; color: white;">
+      <div class="spinner-border" role="status"
+        style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
+        <span class="visually-hidden">Carregando...</span>
+      </div>
+      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+    </div>
+  </div>
+  <!-- ============================================================ -->
+
+  <div class="container-main" style="display: none;">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">CPE</div>
+        <div class="sidebar-title">CONTROL</div>
+      </div>
+
+      <div class="search-box">
+        <input type="text" placeholder="Buscar">
+      </div>
+
+      <ul class="sidebar-menu"></ul>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <div class="top-bar">
+        <button class="menu-toggle">☰</button>
+        <h1><i class="bi bi-book-fill"></i> Base de Conhecimento</h1>
+      </div>
+
+      <div class="content">
+        <!-- ALERTS -->
+        <div class="alert alert-danger d-none" id="alertBox" role="alert">
+          <i class="bi bi-exclamation-circle"></i>
+          <span id="alertMessage"></span>
+        </div>
+
+        <div class="alert alert-success d-none" id="successBox" role="alert">
+          <i class="bi bi-check-circle"></i>
+          <span id="successMessage">Operação realizada com sucesso!</span>
+        </div>
+
+        <!-- PAGE HEADER -->
+        <div class="page-header">
+          <h2 class="page-title">
+            <i class="bi bi-book"></i> Artigos e Documentação
+          </h2>
+          <button class="btn-new-article" id="btnNewArticle" data-bs-toggle="modal" data-bs-target="#articleModal">
+            <i class="bi bi-plus-lg"></i> Novo Artigo
+          </button>
+        </div>
+
+        <!-- STATISTICS -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total de Artigos</div>
+            <div class="stat-value" id="totalArticles">0</div>
+            <div class="stat-change">Documentos publicados</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Categorias</div>
+            <div class="stat-value" id="totalCategories">0</div>
+            <div class="stat-change">Tópicos diferentes</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Visualizações</div>
+            <div class="stat-value" id="totalViews">0</div>
+            <div class="stat-change">Total de acessos</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Taxa Útil</div>
+            <div class="stat-value" id="helpfulRate">0%</div>
+            <div class="stat-change">Conteúdo avaliado</div>
+          </div>
+        </div>
+
+        <!-- SEARCH SECTION -->
+        <div class="search-section">
+          <input type="text" id="searchInput" class="search-input" placeholder="Buscar artigos...">
+          <select id="sortFilter" style="padding: 0.75rem 1rem; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+            <option value="recent">Mais Recentes</option>
+            <option value="popular">Mais Populares</option>
+            <option value="views">Mais Visualizados</option>
+            <option value="helpful">Mais Úteis</option>
+          </select>
+        </div>
+
+        <!-- CATEGORY PILLS -->
+        <div class="category-pills" id="categoryPills">
+          <div class="category-pill active" onclick="filterByCategory('')">
+            Todos <i class="bi bi-check-lg"></i>
+          </div>
+        </div>
+
+        <!-- ARTICLES GRID -->
+        <div class="articles-grid" id="articlesList">
+          <div style="grid-column: 1 / -1;">
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <i class="bi bi-inbox"></i>
+              </div>
+              <p>Carregando artigos...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Novo/Editar Artigo -->
+  <!-- ============================================================ -->
+  <div class="modal fade" id="articleModal" tabindex="-1" aria-labelledby="articleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="articleModalLabel">
+            <i class="bi bi-plus-square"></i> Novo Artigo
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+
+        <div class="modal-body" style="padding: 2rem;">
+          <!-- Alert de Erro -->
+          <div class="alert alert-danger d-none" id="modalAlertBox" role="alert">
+            <i class="bi bi-exclamation-circle"></i>
+            <span id="modalAlertMessage"></span>
+          </div>
+
+          <!-- Formulário -->
+          <form id="articleForm" novalidate>
+            <div class="mb-3">
+              <label for="articleTitle" class="form-label">
+                <i class="bi bi-input-cursor"></i> Título
+              </label>
+              <input type="text" class="form-control" id="articleTitle"
+                placeholder="Ex: Como configurar o agente Windows" required />
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="articleCategory" class="form-label">
+                  <i class="bi bi-tag"></i> Categoria
+                </label>
+                <select class="form-select" id="articleCategory" required>
+                  <option value="">Selecione a categoria...</option>
+                  <option value="getting-started">Iniciando</option>
+                  <option value="installation">Instalação</option>
+                  <option value="configuration">Configuração</option>
+                  <option value="troubleshooting">Resolução de Problemas</option>
+                  <option value="api">API</option>
+                  <option value="faq">FAQ</option>
+                </select>
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="articleAuthor" class="form-label">
+                  <i class="bi bi-person"></i> Autor
+                </label>
+                <input type="text" class="form-control" id="articleAuthor" readonly />
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="articleContent" class="form-label">
+                <i class="bi bi-file-text"></i> Conteúdo
+              </label>
+              <textarea class="form-control" id="articleContent" rows="6"
+                placeholder="Escreva o conteúdo do artigo..." required></textarea>
+              <small class="form-text text-muted">Markdown suportado</small>
+            </div>
+
+            <div class="mb-3">
+              <label for="articleTags" class="form-label">
+                <i class="bi bi-tags"></i> Tags
+              </label>
+              <input type="text" class="form-control" id="articleTags"
+                placeholder="Ex: windows, instalação, agente (separados por vírgula)" />
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
+                <i class="bi bi-check-lg"></i> Publicar Artigo
+              </button>
+              <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">
+                <i class="bi bi-x-lg"></i> Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Ver Artigo Completo -->
+  <!-- ============================================================ -->
+  <div class="modal fade" id="viewArticleModal" tabindex="-1" aria-labelledby="viewArticleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="viewArticleModalLabel"></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+
+        <div class="modal-body" style="padding: 2rem;">
+          <div id="articleFullContent"></div>
+
+          <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e5e7eb; display: flex; gap: 1rem;">
+            <button class="btn btn-sm btn-outline-primary" onclick="markArticleHelpful(true)">
+              <i class="bi bi-hand-thumbs-up"></i> Útil
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="markArticleHelpful(false)">
+              <i class="bi bi-hand-thumbs-down"></i> Não Útil
+            </button>
+            <div style="flex: 1;"></div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="editCurrentArticle()">
+              <i class="bi bi-pencil"></i> Editar
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteCurrentArticle()">
+              <i class="bi bi-trash"></i> Deletar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 📦 SCRIPTS -->
+  <!-- ============================================================ -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const user = await initPageAuth("KNOWLEDGE-BASE");
+      if (!user) return;
+
+      // Carrega os artigos
+      await loadArticles();
+      
+      // Preenche autor no formulário
+      document.getElementById("articleAuthor").value = user.name || "Anônimo";
+    });
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÕES DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    let articles = [];
+    let selectedArticleId = null;
+    let currentFilter = "";
+
+    /**
+     * Carrega os artigos
+     */
+    async function loadArticles() {
+      try {
+        console.log("[KB/LOAD] Carregando artigos...");
+
+        // Simular dados de API - substitua pela chamada real
+        articles = [
+          {
+            id: 1,
+            title: "Como instalar o CPE Agent no Windows",
+            category: "installation",
+            description: "Guia passo a passo para instalação do agente em sistemas Windows",
+            content: "## Pré-requisitos\n- Windows 10 ou superior\n- Permissões de administrador\n\n## Passos\n1. Baixe o instalador\n2. Execute como administrador\n3. Siga as instruções do assistente",
+            author: "Admin",
+            tags: ["windows", "instalação", "agente"],
+            views: 1250,
+            helpful: 98,
+            unhelpful: 5,
+            published: "2024-02-01",
+            updated: "2024-03-01"
+          },
+          {
+            id: 2,
+            title: "Configuração básica do painel de controle",
+            category: "configuration",
+            description: "Aprenda a configurar as opções básicas do seu painel de controle",
+            content: "## Configurações Essenciais\n- Dashboard\n- Notificações\n- Integração de APIs\n\n## Guia Passo a Passo",
+            author: "Admin",
+            tags: ["configuração", "painel", "setup"],
+            views: 850,
+            helpful: 75,
+            unhelpful: 3,
+            published: "2024-01-15",
+            updated: "2024-02-28"
+          },
+          {
+            id: 3,
+            title: "Resolvendo problemas comuns de conectividade",
+            category: "troubleshooting",
+            description: "Dicas para resolver problemas de conexão com o agente",
+            content: "## Problemas Comuns\n1. Agente offline\n2. Timeout de conexão\n3. Autenticação falha\n\n## Soluções",
+            author: "Admin",
+            tags: ["troubleshooting", "conexão", "debug"],
+            views: 620,
+            helpful: 82,
+            unhelpful: 8,
+            published: "2024-02-10",
+            updated: "2024-03-02"
+          },
+          {
+            id: 4,
+            title: "Documentação da API REST",
+            category: "api",
+            description: "Referência completa da API REST do CPE Control",
+            content: "## Endpoints\n- GET /api/agents\n- POST /api/tasks\n- PUT /api/settings\n\n## Autenticação com Bearer Token",
+            author: "Admin",
+            tags: ["api", "rest", "integração"],
+            views: 420,
+            helpful: 65,
+            unhelpful: 2,
+            published: "2024-01-01",
+            updated: "2024-02-20"
+          },
+          {
+            id: 5,
+            title: "Perguntas Frequentes",
+            category: "faq",
+            description: "Respostas para perguntas mais comuns dos usuários",
+            content: "## Q: Como faço para resetar minha senha?\nA: Clique em 'Esqueci a senha' na tela de login\n\n## Q: Quanto custa?\nA: Consulte nossos planos de preço",
+            author: "Admin",
+            tags: ["faq", "dúvidas", "ajuda"],
+            views: 1890,
+            helpful: 120,
+            unhelpful: 15,
+            published: "2023-12-01",
+            updated: "2024-03-01"
+          },
+          {
+            id: 6,
+            title: "Guia de Início Rápido",
+            category: "getting-started",
+            description: "Primeiros passos para começar a usar o CPE Control",
+            content: "## 1. Criar uma conta\n## 2. Configurar seu primeiro agente\n## 3. Monitorar seus dispositivos\n\n## Próximos passos",
+            author: "Admin",
+            tags: ["iniciante", "tutorial", "primeiros-passos"],
+            views: 3200,
+            helpful: 210,
+            unhelpful: 12,
+            published: "2024-01-01",
+            updated: "2024-02-15"
+          }
+        ];
+
+        console.log("[KB/LOAD] ✓", articles.length, "artigos carregados");
+        renderArticles(articles);
+        renderCategories();
+        updateStatistics();
+
+      } catch (err) {
+        console.error("[KB/LOAD] ✗ Erro:", err.message);
+        showError("Erro ao carregar artigos: " + err.message);
+      }
+    }
+
+    /**
+     * Renderiza os artigos
+     */
+    function renderArticles(list = articles) {
+      const articlesList = document.getElementById("articlesList");
+
+      if (!list || list.length === 0) {
+        articlesList.innerHTML = `
+          <div style="grid-column: 1 / -1;">
+            <div class="empty-state">
+              <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
+              <p>Nenhum artigo encontrado</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      articlesList.innerHTML = list.map(article => {
+        const helpfulPercent = article.helpful + article.unhelpful > 0
+          ? Math.round((article.helpful / (article.helpful + article.unhelpful)) * 100)
+          : 0;
+
+        return `
+          <div class="article-card" onclick="viewArticle(${article.id})">
+            <div class="article-icon">📄</div>
+            <div class="article-title">${article.title}</div>
+            <div class="article-description">${article.description}</div>
+            <div class="article-meta">
+              <span class="article-category">${getCategoryLabel(article.category)}</span>
+              <div class="article-views">
+                <i class="bi bi-eye"></i>
+                <span>${article.views.toLocaleString('pt-BR')}</span>
+                <span style="margin-left: 12px;">👍 ${helpfulPercent}%</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    /**
+     * Renderiza as categorias
+     */
+    function renderCategories() {
+      const categories = [...new Set(articles.map(a => a.category))];
+      const pillsContainer = document.getElementById("categoryPills");
+
+      let html = '<div class="category-pill active" onclick="filterByCategory(\'\'">Todos <i class="bi bi-check-lg"></i></div>';
+
+      categories.forEach(cat => {
+        html += `
+          <div class="category-pill" onclick="filterByCategory('${cat}')">
+            ${getCategoryLabel(cat)}
+          </div>
+        `;
+      });
+
+      pillsContainer.innerHTML = html;
+    }
+
+    /**
+     * Retorna o label da categoria
+     */
+    function getCategoryLabel(category) {
+      const labels = {
+        "getting-started": "Iniciando",
+        "installation": "Instalação",
+        "configuration": "Configuração",
+        "troubleshooting": "Resolução de Problemas",
+        "api": "API",
+        "faq": "FAQ"
+      };
+      return labels[category] || category;
+    }
+
+    /**
+     * Atualiza as estatísticas
+     */
+    function updateStatistics() {
+      const totalViews = articles.reduce((sum, a) => sum + a.views, 0);
+      const totalHelpful = articles.reduce((sum, a) => sum + a.helpful, 0);
+      const totalUnhelpful = articles.reduce((sum, a) => sum + a.unhelpful, 0);
+      const helpfulRate = totalHelpful + totalUnhelpful > 0
+        ? Math.round((totalHelpful / (totalHelpful + totalUnhelpful)) * 100)
+        : 0;
+
+      const categories = [...new Set(articles.map(a => a.category))].length;
+
+      document.getElementById("totalArticles").textContent = articles.length;
+      document.getElementById("totalCategories").textContent = categories;
+      document.getElementById("totalViews").textContent = totalViews.toLocaleString('pt-BR');
+      document.getElementById("helpfulRate").textContent = helpfulRate + "%";
+    }
+
+    /**
+     * Filtra por categoria
+     */
+    function filterByCategory(category) {
+      currentFilter = category;
+
+      // Atualiza pills ativas
+      document.querySelectorAll(".category-pill").forEach(pill => {
+        pill.classList.remove("active");
+      });
+      event.target.closest(".category-pill")?.classList.add("active");
+
+      // Filtra artigos
+      filterArticles();
+    }
+
+    /**
+     * Filtra artigos
+     */
+    function filterArticles() {
+      const searchTerm = document.getElementById("searchInput")?.value?.toLowerCase() || "";
+      const sortBy = document.getElementById("sortFilter")?.value || "recent";
+
+      let filtered = articles.filter(article => {
+        const matchesSearch = article.title.toLowerCase().includes(searchTerm) ||
+          article.description.toLowerCase().includes(searchTerm) ||
+          article.tags.some(tag => tag.toLowerCase().includes(searchTerm));
+
+        const matchesCategory = !currentFilter || article.category === currentFilter;
+        return matchesSearch && matchesCategory;
+      });
+
+      // Ordena
+      switch (sortBy) {
+        case "popular":
+          filtered.sort((a, b) => b.views - a.views);
+          break;
+        case "views":
+          filtered.sort((a, b) => b.views - a.views);
+          break;
+        case "helpful":
+          filtered.sort((a, b) => b.helpful - a.helpful);
+          break;
+        case "recent":
+        default:
+          filtered.sort((a, b) => new Date(b.published) - new Date(a.published));
+      }
+
+      renderArticles(filtered);
+    }
+
+    /**
+     * Visualiza um artigo completo
+     */
+    function viewArticle(articleId) {
+      const article = articles.find(a => a.id === articleId);
+      if (!article) return;
+
+      console.log("[KB/VIEW] Visualizando artigo:", articleId);
+      selectedArticleId = articleId;
+
+      document.getElementById("viewArticleModalLabel").textContent = article.title;
+      document.getElementById("articleFullContent").innerHTML = `
+        <div style="margin-bottom: 1rem;">
+          <small style="color: #6b7280;">
+            <i class="bi bi-calendar"></i> Publicado em ${new Date(article.published).toLocaleDateString('pt-BR')} |
+            <i class="bi bi-eye"></i> ${article.views.toLocaleString('pt-BR')} visualizações |
+            <span class="article-category">${getCategoryLabel(article.category)}</span>
+          </small>
+        </div>
+        <div style="line-height: 1.8; color: #1f2937;">
+          ${article.content.replace(/\n/g, '<br>')}
+        </div>
+        <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+          <strong>Tags:</strong> ${article.tags.map(tag => `<span class="badge bg-secondary">${tag}</span>`).join(' ')}
+        </div>
+      `;
+
+      const modal = new bootstrap.Modal(document.getElementById("viewArticleModal"));
+      modal.show();
+
+      // Incrementa views
+      article.views++;
+    }
+
+    /**
+     * Marca artigo como útil/não útil
+     */
+    function markArticleHelpful(helpful) {
+      const article = articles.find(a => a.id === selectedArticleId);
+      if (!article) return;
+
+      if (helpful) {
+        article.helpful++;
+      } else {
+        article.unhelpful++;
+      }
+
+      showSuccess(helpful ? "Artigo marcado como útil!" : "Obrigado pelo feedback!");
+    }
+
+    /**
+     * Edita o artigo atual
+     */
+    function editCurrentArticle() {
+      const article = articles.find(a => a.id === selectedArticleId);
+      if (!article) return;
+
+      const viewModal = bootstrap.Modal.getInstance(document.getElementById("viewArticleModal"));
+      viewModal.hide();
+
+      selectedArticleId = article.id;
+      document.getElementById("articleModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Artigo';
+      document.getElementById("articleTitle").value = article.title;
+      document.getElementById("articleCategory").value = article.category;
+      document.getElementById("articleContent").value = article.content;
+      document.getElementById("articleTags").value = article.tags.join(", ");
+      document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Artigo';
+
+      const editModal = new bootstrap.Modal(document.getElementById("articleModal"));
+      editModal.show();
+    }
+
+    /**
+     * Deleta o artigo atual
+     */
+    function deleteCurrentArticle() {
+      const article = articles.find(a => a.id === selectedArticleId);
+      if (!article) return;
+
+      if (!confirm(`Tem certeza que deseja deletar o artigo "${article.title}"?`)) {
+        return;
+      }
+
+      articles = articles.filter(a => a.id !== selectedArticleId);
+      const modal = bootstrap.Modal.getInstance(document.getElementById("viewArticleModal"));
+      modal.hide();
+
+      showSuccess("Artigo deletado com sucesso!");
+      renderArticles(articles);
+      updateStatistics();
+    }
+
+    /**
+     * Mostra mensagem de erro
+     */
+    function showError(message) {
+      const alertBox = document.getElementById("alertBox");
+      const alertMessage = document.getElementById("alertMessage");
+      alertMessage.textContent = message;
+      alertBox.classList.remove("d-none");
+      setTimeout(() => {
+        alertBox.classList.add("d-none");
+      }, 5000);
+    }
+
+    /**
+     * Mostra mensagem de sucesso
+     */
+    function showSuccess(message) {
+      const successBox = document.getElementById("successBox");
+      const successMessage = document.getElementById("successMessage");
+      successMessage.textContent = message;
+      successBox.classList.remove("d-none");
+      setTimeout(() => {
+        successBox.classList.add("d-none");
+      }, 5000);
+    }
+
+    /**
+     * Mostra mensagem de erro no modal
+     */
+    function showModalError(message) {
+      const modalAlert = document.getElementById("modalAlertBox");
+      const modalAlertMsg = document.getElementById("modalAlertMessage");
+      if (modalAlert && modalAlertMsg) {
+        modalAlertMsg.textContent = message;
+        modalAlert.classList.remove("d-none");
+      }
+    }
+
+    /**
+     * Submissão do formulário
+     */
+    document.getElementById("articleForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const title = document.getElementById("articleTitle")?.value?.trim();
+      const category = document.getElementById("articleCategory")?.value;
+      const content = document.getElementById("articleContent")?.value?.trim();
+      const tags = document.getElementById("articleTags")?.value?.split(",").map(t => t.trim()).filter(t => t) || [];
+
+      if (!title || !category || !content) {
+        showModalError("Preencha todos os campos obrigatórios!");
+        return;
+      }
+
+      try {
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
+
+        if (selectedArticleId) {
+          // Atualizar
+          const article = articles.find(a => a.id === selectedArticleId);
+          if (article) {
+            article.title = title;
+            article.category = category;
+            article.content = content;
+            article.tags = tags;
+            article.updated = new Date().toISOString().split('T')[0];
+          }
+          console.log("[KB/SUBMIT] ✓ Artigo atualizado");
+          showSuccess("Artigo atualizado com sucesso!");
+        } else {
+          // Criar
+          const newArticle = {
+            id: Math.max(...articles.map(a => a.id), 0) + 1,
+            title,
+            category,
+            description: content.substring(0, 100) + "...",
+            content,
+            author: document.getElementById("articleAuthor").value,
+            tags,
+            views: 0,
+            helpful: 0,
+            unhelpful: 0,
+            published: new Date().toISOString().split('T')[0],
+            updated: new Date().toISOString().split('T')[0]
+          };
+          articles.push(newArticle);
+          console.log("[KB/SUBMIT] ✓ Artigo criado");
+          showSuccess("Artigo publicado com sucesso!");
+        }
+
+        document.getElementById("articleForm").reset();
+        const modal = bootstrap.Modal.getInstance(document.getElementById("articleModal"));
+        modal.hide();
+
+        selectedArticleId = null;
+        renderArticles(articles);
+        renderCategories();
+        updateStatistics();
+
+      } catch (err) {
+        console.error("[KB/SUBMIT] ✗ Erro:", err.message);
+        showModalError(err.message || "Erro ao processar artigo!");
+      } finally {
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Publicar Artigo';
+      }
+    });
+
+    /**
+     * Event listeners para filtros
+     */
+    document.getElementById("searchInput")?.addEventListener("input", filterArticles);
+    document.getElementById("sortFilter")?.addEventListener("change", filterArticles);
+
+    /**
+     * Reset modal quando abrir
+     */
+    document.getElementById("articleModal")?.addEventListener("show.bs.modal", () => {
+      if (!selectedArticleId) {
+        document.getElementById("articleModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Novo Artigo';
+        document.getElementById("articleForm").reset();
+        document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Publicar Artigo';
+      }
+      document.getElementById("modalAlertBox").classList.add("d-none");
+    });
+
+    /**
+     * Reset quando fechar
+     */
+    document.getElementById("articleModal")?.addEventListener("hidden.bs.modal", () => {
+      selectedArticleId = null;
+    });
+  </script>
+
+</body>
+
+</html>

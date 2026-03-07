@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Configurações - CPE Control</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/style.css">
+
+  <style>
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 2px solid #e5e7eb;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .page-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin: 0;
+    }
+
+    .settings-container {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+    }
+
+    .settings-sidebar {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      height: fit-content;
+      position: sticky;
+      top: 20px;
+    }
+
+    .settings-menu {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .settings-menu-item {
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .settings-menu-item:last-child {
+      border-bottom: none;
+    }
+
+    .settings-menu-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      color: #6b7280;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .settings-menu-link:hover {
+      background-color: #f9fafb;
+      color: #667eea;
+      padding-left: 20px;
+    }
+
+    .settings-menu-link.active {
+      background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+      color: #667eea;
+      border-left: 4px solid #667eea;
+      padding-left: 12px;
+    }
+
+    .settings-menu-icon {
+      font-size: 18px;
+      width: 24px;
+      text-align: center;
+    }
+
+    .settings-content {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 32px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    .settings-section {
+      display: none;
+    }
+
+    .settings-section.active {
+      display: block;
+    }
+
+    .section-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-subtitle {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 24px;
+    }
+
+    .settings-group {
+      margin-bottom: 32px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .settings-group:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .group-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 16px;
+      text-transform: uppercase;
+    }
+
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .setting-item:last-child {
+      border-bottom: none;
+    }
+
+    .setting-label {
+      flex: 1;
+    }
+
+    .setting-name {
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 4px;
+    }
+
+    .setting-description {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    .toggle-switch {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 28px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: 0.3s;
+      border-radius: 28px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 22px;
+      width: 22px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(22px);
+    }
+
+    .select-input {
+      min-width: 200px;
+      padding: 0.6rem 1rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+    }
+
+    .select-input:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      outline: none;
+    }
+
+    .btn-primary-custom {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary-custom:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+      color: white;
+      text-decoration: none;
+    }
+
+    .btn-secondary-custom {
+      background: white;
+      color: #1f2937;
+      border: 2px solid #e5e7eb;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .btn-secondary-custom:hover {
+      background-color: #f3f4f6;
+      border-color: #667eea;
+      color: #667eea;
+    }
+
+    .profile-section {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+      margin-bottom: 32px;
+    }
+
+    .profile-avatar {
+      width: 120px;
+      height: 120px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 48px;
+      flex-shrink: 0;
+    }
+
+    .profile-info {
+      flex: 1;
+    }
+
+    .profile-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 4px;
+    }
+
+    .profile-email {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 12px;
+    }
+
+    .profile-role {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background-color: rgba(102, 126, 234, 0.1);
+      color: #667eea;
+    }
+
+    .form-group-custom {
+      margin-bottom: 20px;
+    }
+
+    .form-label-custom {
+      display: block;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .form-control-custom {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+    }
+
+    .form-control-custom:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      outline: none;
+    }
+
+    .alert {
+      border: none;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+
+    .alert-danger {
+      background-color: rgba(220, 38, 38, 0.1);
+      color: #991b1b;
+    }
+
+    .alert-success {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: #065f46;
+    }
+
+    .alert-warning {
+      background-color: rgba(245, 158, 11, 0.1);
+      color: #92400e;
+    }
+
+    .d-none {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      .settings-container {
+        grid-template-columns: 1fr;
+      }
+
+      .settings-sidebar {
+        position: static;
+      }
+
+      .settings-menu {
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+        padding: 8px;
+      }
+
+      .settings-menu-item {
+        border-bottom: none;
+        border-right: 1px solid #e5e7eb;
+      }
+
+      .settings-menu-link {
+        padding: 8px 12px;
+        white-space: nowrap;
+        font-size: 12px;
+      }
+
+      .profile-section {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+
+      .select-input {
+        min-width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ============================================================ -->
+  <!-- 🔒 LOADING PAGE -->
+  <!-- ============================================================ -->
+  <div id="loadingPage"
+    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
+    <div style="text-align: center; color: white;">
+      <div class="spinner-border" role="status"
+        style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
+        <span class="visually-hidden">Carregando...</span>
+      </div>
+      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+    </div>
+  </div>
+  <!-- ============================================================ -->
+
+  <div class="container-main" style="display: none;">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">CPE</div>
+        <div class="sidebar-title">CONTROL</div>
+      </div>
+
+      <div class="search-box">
+        <input type="text" placeholder="Buscar">
+      </div>
+
+      <ul class="sidebar-menu"></ul>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <div class="top-bar">
+        <button class="menu-toggle">☰</button>
+        <h1><i class="bi bi-gear"></i> Configurações</h1>
+      </div>
+
+      <div class="content">
+        <!-- ALERTS -->
+        <div class="alert alert-danger d-none" id="alertBox" role="alert">
+          <i class="bi bi-exclamation-circle"></i>
+          <span id="alertMessage"></span>
+        </div>
+
+        <div class="alert alert-success d-none" id="successBox" role="alert">
+          <i class="bi bi-check-circle"></i>
+          <span id="successMessage">Operação realizada com sucesso!</span>
+        </div>
+
+        <!-- PAGE HEADER -->
+        <div class="page-header">
+          <h2 class="page-title">
+            <i class="bi bi-sliders"></i> Configurações do Sistema
+          </h2>
+        </div>
+
+        <!-- SETTINGS CONTAINER -->
+        <div class="settings-container">
+          <!-- SETTINGS SIDEBAR -->
+          <div class="settings-sidebar">
+            <ul class="settings-menu">
+              <li class="settings-menu-item">
+                <a href="#" class="settings-menu-link active" onclick="switchSettingsTab('profile', event)">
+                  <span class="settings-menu-icon"><i class="bi bi-person"></i></span>
+                  <span>Perfil</span>
+                </a>
+              </li>
+              <li class="settings-menu-item">
+                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('notifications', event)">
+                  <span class="settings-menu-icon"><i class="bi bi-bell"></i></span>
+                  <span>Notificações</span>
+                </a>
+              </li>
+              <li class="settings-menu-item">
+                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('security', event)">
+                  <span class="settings-menu-icon"><i class="bi bi-shield-lock"></i></span>
+                  <span>Segurança</span>
+                </a>
+              </li>
+              <li class="settings-menu-item">
+                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('appearance', event)">
+                  <span class="settings-menu-icon"><i class="bi bi-palette"></i></span>
+                  <span>Aparência</span>
+                </a>
+              </li>
+              <li class="settings-menu-item">
+                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('integrations', event)">
+                  <span class="settings-menu-icon"><i class="bi bi-diagram-3"></i></span>
+                  <span>Integrações</span>
+                </a>
+              </li>
+              <li class="settings-menu-item">
+                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('billing', event)">
+                  <span class="settings-menu-icon"><i class="bi bi-credit-card"></i></span>
+                  <span>Faturamento</span>
+                </a>
+              </li>
+              <li class="settings-menu-item">
+                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('advanced', event)">
+                  <span class="settings-menu-icon"><i class="bi bi-terminal"></i></span>
+                  <span>Avançado</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <!-- SETTINGS CONTENT -->
+          <div class="settings-content">
+            <!-- PROFILE SECTION -->
+            <div class="settings-section active" id="profile-section">
+              <div class="section-title">
+                <i class="bi bi-person-circle"></i> Meu Perfil
+              </div>
+              <p class="section-subtitle">Gerenciar informações pessoais e dados de perfil</p>
+
+              <div class="settings-group">
+                <div class="group-title">Informações Pessoais</div>
+
+                <div class="profile-section">
+                  <div class="profile-avatar">JD</div>
+                  <div class="profile-info">
+                    <div class="profile-name" id="profileName">João Daniel</div>
+                    <div class="profile-email" id="profileEmail">joao.daniel@empresa.com</div>
+                    <span class="profile-role" id="profileRole">Administrador</span>
+                    <button class="btn-secondary-custom" style="margin-top: 12px;">
+                      <i class="bi bi-pencil"></i> Alterar Avatar
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="group-title">Dados de Perfil</div>
+
+                <div class="form-group-custom">
+                  <label class="form-label-custom">Nome Completo</label>
+                  <input type="text" class="form-control-custom" id="fullName" value="João Daniel" />
+                </div>
+
+                <div class="form-group-custom">
+                  <label class="form-label-custom">E-mail</label>
+                  <input type="email" class="form-control-custom" id="email" value="joao.daniel@empresa.com" />
+                </div>
+
+                <div class="form-group-custom">
+                  <label class="form-label-custom">Telefone</label>
+                  <input type="tel" class="form-control-custom" id="phone" placeholder="(11) 9 9999-9999" />
+                </div>
+
+                <div class="form-group-custom">
+                  <label class="form-label-custom">Departamento</label>
+                  <select class="form-control-custom" id="department">
+                    <option>Tecnologia</option>
+                    <option>Recursos Humanos</option>
+                    <option>Vendas</option>
+                    <option>Suporte</option>
+                  </select>
+                </div>
+
+                <button class="btn-primary-custom">
+                  <i class="bi bi-check-lg"></i> Salvar Alterações
+                </button>
+              </div>
+            </div>
+
+            <!-- NOTIFICATIONS SECTION -->
+            <div class="settings-section" id="notifications-section">
+              <div class="section-title">
+                <i class="bi bi-bell"></i> Notificações
+              </div>
+              <p class="section-subtitle">Controle como você recebe notificações</p>
+
+              <div class="settings-group">
+                <div class="group-title">Notificações por E-mail</div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Novos Tickets</div>
+                    <div class="setting-description">Receber e-mail quando novos tickets são criados</div>
+                  </div>
+                  <div class="toggle-switch">
+                    <label class="switch">
+                      <input type="checkbox" checked>
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Atualizações de Projetos</div>
+                    <div class="setting-description">Receber e-mail sobre atualizações de projetos</div>
+                  </div>
+                  <div class="toggle-switch">
+                    <label class="switch">
+                      <input type="checkbox" checked>
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Tarefas Atribuídas</div>
+                    <div class="setting-description">Notificar quando novas tarefas são atribuídas</div>
+                  </div>
+                  <div class="toggle-switch">
+                    <label class="switch">
+                      <input type="checkbox" checked>
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="group-title">Notificações no Navegador</div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Ativar Notificações</div>
+                    <div class="setting-description">Exibir notificações no navegador em tempo real</div>
+                  </div>
+                  <div class="toggle-switch">
+                    <label class="switch">
+                      <input type="checkbox" checked>
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Som de Notificação</div>
+                    <div class="setting-description">Reproduzir som ao receber notificações</div>
+                  </div>
+                  <div class="toggle-switch">
+                    <label class="switch">
+                      <input type="checkbox">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <button class="btn-primary-custom">
+                <i class="bi bi-check-lg"></i> Salvar Preferências
+              </button>
+            </div>
+
+            <!-- SECURITY SECTION -->
+            <div class="settings-section" id="security-section">
+              <div class="section-title">
+                <i class="bi bi-shield-lock"></i> Segurança
+              </div>
+              <p class="section-subtitle">Proteja sua conta e dados sensíveis</p>
+
+              <div class="settings-group">
+                <div class="group-title">Senha</div>
+
+                <div class="form-group-custom">
+                  <label class="form-label-custom">Senha Atual</label>
+                  <input type="password" class="form-control-custom" placeholder="Digite sua senha atual" />
+                </div>
+
+                <div class="form-group-custom">
+                  <label class="form-label-custom">Nova Senha</label>
+                  <input type="password" class="form-control-custom" placeholder="Digite uma nova senha" />
+                </div>
+
+                <div class="form-group-custom">
+                  <label class="form-label-custom">Confirmar Nova Senha</label>
+                  <input type="password" class="form-control-custom" placeholder="Confirme a nova senha" />
+                </div>
+
+                <button class="btn-primary-custom">
+                  <i class="bi bi-shield-check"></i> Alterar Senha
+                </button>
+              </div>
+
+              <div class="settings-group">
+                <div class="group-title">Autenticação em Duas Etapas</div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">2FA Habilitado</div>
+                    <div class="setting-description">Adicionar uma camada extra de segurança à sua conta</div>
+                  </div>
+                  <div class="toggle-switch">
+                    <label class="switch">
+                      <input type="checkbox">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="group-title">Sessões Ativas</div>
+                <p style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">
+                  Você está conectado em 2 dispositivos
+                </p>
+                <button class="btn-secondary-custom" onclick="showAlert('Todas as outras sessões foram encerradas', 'warning')">
+                  <i class="bi bi-box-arrow-right"></i> Encerrar Outras Sessões
+                </button>
+              </div>
+            </div>
+
+            <!-- APPEARANCE SECTION -->
+            <div class="settings-section" id="appearance-section">
+              <div class="section-title">
+                <i class="bi bi-palette"></i> Aparência
+              </div>
+              <p class="section-subtitle">Personalize a aparência da interface</p>
+
+              <div class="settings-group">
+                <div class="group-title">Tema</div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Modo Escuro</div>
+                    <div class="setting-description">Usar tema escuro na interface</div>
+                  </div>
+                  <div class="toggle-switch">
+                    <label class="switch">
+                      <input type="checkbox">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Modo Compacto</div>
+                    <div class="setting-description">Exibir interface em modo mais compacto</div>
+                  </div>
+                  <div class="toggle-switch">
+                    <label class="switch">
+                      <input type="checkbox">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="group-title">Idioma</div>
+
+                <div class="form-group-custom">
+                  <label class="form-label-custom">Selecionar Idioma</label>
+                  <select class="form-control-custom">
+                    <option>Português (Brasil)</option>
+                    <option>English (USA)</option>
+                    <option>Español</option>
+                    <option>Français</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="group-title">Data e Hora</div>
+
+                <div class="form-group-custom">
+                  <label class="form-label-custom">Fuso Horário</label>
+                  <select class="form-control-custom">
+                    <option>(UTC-3) Brasília</option>
+                    <option>(UTC-5) Nova York</option>
+                    <option>(UTC) Londres</option>
+                    <option>(UTC+1) Berlim</option>
+                  </select>
+                </div>
+
+                <div class="form-group-custom">
+                  <label class="form-label-custom">Formato de Data</label>
+                  <select class="form-control-custom">
+                    <option>DD/MM/AAAA</option>
+                    <option>MM/DD/AAAA</option>
+                    <option>AAAA-MM-DD</option>
+                  </select>
+                </div>
+              </div>
+
+              <button class="btn-primary-custom">
+                <i class="bi bi-check-lg"></i> Salvar Preferências
+              </button>
+            </div>
+
+            <!-- INTEGRATIONS SECTION -->
+            <div class="settings-section" id="integrations-section">
+              <div class="section-title">
+                <i class="bi bi-diagram-3"></i> Integrações
+              </div>
+              <p class="section-subtitle">Conecte ferramentas externas ao CPE Control</p>
+
+              <div class="settings-group">
+                <div class="group-title">Serviços Disponíveis</div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Slack</div>
+                    <div class="setting-description">Receber notificações no Slack</div>
+                  </div>
+                  <button class="btn-secondary-custom">
+                    <i class="bi bi-link"></i> Conectar
+                  </button>
+                </div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Microsoft Teams</div>
+                    <div class="setting-description">Integrar com Microsoft Teams</div>
+                  </div>
+                  <button class="btn-secondary-custom">
+                    <i class="bi bi-link"></i> Conectar
+                  </button>
+                </div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Google Calendar</div>
+                    <div class="setting-description">Sincronizar com Google Calendar</div>
+                  </div>
+                  <button class="btn-secondary-custom">
+                    <i class="bi bi-link"></i> Conectar
+                  </button>
+                </div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Zapier</div>
+                    <div class="setting-description">Automações com Zapier</div>
+                  </div>
+                  <button class="btn-secondary-custom">
+                    <i class="bi bi-link"></i> Conectar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- BILLING SECTION -->
+            <div class="settings-section" id="billing-section">
+              <div class="section-title">
+                <i class="bi bi-credit-card"></i> Faturamento
+              </div>
+              <p class="section-subtitle">Gerencie planos e pagamentos</p>
+
+              <div class="settings-group">
+                <div class="group-title">Plano Atual</div>
+
+                <div style="padding: 16px; background: #f9fafb; border-radius: 8px; margin-bottom: 16px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                      <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Plano Profissional</div>
+                      <div style="font-size: 13px; color: #6b7280;">R$ 299,00/mês</div>
+                    </div>
+                    <button class="btn-secondary-custom">
+                      <i class="bi bi-pencil"></i> Alterar
+                    </button>
+                  </div>
+                </div>
+
+                <p style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">
+                  Próximo ciclo de faturamento: 15 de Abril de 2024
+                </p>
+              </div>
+
+              <div class="settings-group">
+                <div class="group-title">Método de Pagamento</div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Cartão de Crédito</div>
+                    <div class="setting-description">Visa terminado em 4242</div>
+                  </div>
+                  <button class="btn-secondary-custom">
+                    <i class="bi bi-pencil"></i> Editar
+                  </button>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="group-title">Ações</div>
+
+                <button class="btn-secondary-custom" style="margin-right: 8px;">
+                  <i class="bi bi-download"></i> Baixar Recibos
+                </button>
+                <button class="btn-secondary-custom">
+                  <i class="bi bi-file-earmark-pdf"></i> Fatura
+                </button>
+              </div>
+            </div>
+
+            <!-- ADVANCED SECTION -->
+            <div class="settings-section" id="advanced-section">
+              <div class="section-title">
+                <i class="bi bi-terminal"></i> Avançado
+              </div>
+              <p class="section-subtitle">Configurações avançadas para usuários experientes</p>
+
+              <div class="settings-group">
+                <div class="group-title">API</div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Chave de API</div>
+                    <div class="setting-description">Use sua chave de API para integração programática</div>
+                  </div>
+                  <button class="btn-secondary-custom">
+                    <i class="bi bi-key"></i> Gerar
+                  </button>
+                </div>
+              </div>
+
+              <div class="settings-group">
+                <div class="group-title">Dados</div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Exportar Dados</div>
+                    <div class="setting-description">Baixe todos os seus dados em formato ZIP</div>
+                  </div>
+                  <button class="btn-secondary-custom">
+                    <i class="bi bi-download"></i> Exportar
+                  </button>
+                </div>
+
+                <div class="setting-item">
+                  <div class="setting-label">
+                    <div class="setting-name">Deletar Conta</div>
+                    <div class="setting-description" style="color: #ef4444;">
+                      Esta ação é permanente e não pode ser desfeita
+                    </div>
+                  </div>
+                  <button class="btn-secondary-custom" style="border-color: #ef4444; color: #ef4444;" 
+                    onclick="showAlert('Funcionalidade desativada para proteção', 'danger')">
+                    <i class="bi bi-trash"></i> Deletar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 📦 SCRIPTS -->
+  <!-- ============================================================ -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const user = await initPageAuth("SETTINGS");
+      if (!user) return;
+
+      loadSettings(user);
+    });
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÕES DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * Carrega as configurações
+     */
+    function loadSettings(user) {
+      try {
+        console.log("[SETTINGS/LOAD] Carregando configurações...");
+
+        // Atualizar informações de perfil
+        if (user) {
+          const initials = user.name
+            ?.split(' ')
+            .map(n => n.charAt(0))
+            .join('')
+            .toUpperCase() || 'U';
+
+          document.getElementById("profileName").textContent = user.name || "Usuário";
+          document.getElementById("profileEmail").textContent = user.email || "email@empresa.com";
+          document.getElementById("profileRole").textContent = user.role || "Usuário";
+
+          // Atualizar campos do formulário
+          document.getElementById("fullName").value = user.name || "";
+          document.getElementById("email").value = user.email || "";
+
+          // Atualizar avatar
+          const avatarElement = document.querySelector(".profile-avatar");
+          if (avatarElement) {
+            avatarElement.textContent = initials;
+          }
+        }
+
+        console.log("[SETTINGS/LOAD] ✓ Configurações carregadas");
+
+      } catch (err) {
+        console.error("[SETTINGS/LOAD] ✗ Erro:", err.message);
+        showAlert("Erro ao carregar configurações: " + err.message, "danger");
+      }
+    }
+
+    /**
+     * Alterna entre as abas de configurações
+     */
+    function switchSettingsTab(tab, event) {
+      event.preventDefault();
+
+      // Remover active de todos
+      document.querySelectorAll(".settings-section").forEach(section => {
+        section.classList.remove("active");
+      });
+
+      document.querySelectorAll(".settings-menu-link").forEach(link => {
+        link.classList.remove("active");
+      });
+
+      // Adicionar active ao selecionado
+      document.getElementById(tab + "-section").classList.add("active");
+      event.target.closest(".settings-menu-link").classList.add("active");
+    }
+
+    /**
+     * Mostra mensagem de alerta
+     */
+    function showAlert(message, type = "danger") {
+      const alertBox = document.getElementById("alertBox");
+      const alertMessage = document.getElementById("alertMessage");
+
+      if (type === "success") {
+        document.getElementById("successBox").classList.remove("d-none");
+        document.getElementById("successMessage").textContent = message;
+        setTimeout(() => {
+          document.getElementById("successBox").classList.add("d-none");
+        }, 5000);
+      } else {
+        alertBox.classList.remove("d-none");
+        alertMessage.textContent = message;
+
+        if (type === "warning") {
+          alertBox.classList.remove("alert-danger");
+          alertBox.classList.add("alert-warning");
+        } else {
+          alertBox.classList.remove("alert-warning");
+          alertBox.classList.add("alert-danger");
+        }
+
+        setTimeout(() => {
+          alertBox.classList.add("d-none");
+        }, 5000);
+      }
+    }
+
+    /**
+     * Salvar alterações de perfil
+     */
+    document.querySelectorAll(".btn-primary-custom").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        const section = e.target.closest(".settings-section");
+
+        if (section.id === "profile-section") {
+          const fullName = document.getElementById("fullName").value;
+          const email = document.getElementById("email").value;
+
+          if (!fullName || !email) {
+            showAlert("Preencha todos os campos obrigatórios", "danger");
+            return;
+          }
+
+          console.log("[SETTINGS/SAVE] Salvando perfil...");
+          showAlert("Perfil atualizado com sucesso!", "success");
+        } else if (section.id === "notifications-section") {
+          console.log("[SETTINGS/SAVE] Salvando preferências de notificações...");
+          showAlert("Preferências de notificações atualizadas!", "success");
+        } else if (section.id === "appearance-section") {
+          console.log("[SETTINGS/SAVE] Salvando preferências de aparência...");
+          showAlert("Preferências de aparência atualizadas!", "success");
+        }
+      });
+    });
+  </script>
+
+</body>
+
+</html>

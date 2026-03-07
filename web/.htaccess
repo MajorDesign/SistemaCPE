@@ -1,0 +1,18 @@
+Options -Indexes
+ErrorDocument 403 /SistemaCPE/error.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /SistemaCPE/web/
+
+  # ===== PERMITE todos os arquivos e diretórios que existem =====
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # ===== Bloqueia .htaccess =====
+  RewriteRule ^\.htaccess$ - [F,L]
+
+  # ===== Bloqueia acesso a diretórios listados =====
+  RewriteRule ^(server|\.git|node_modules) - [F,L]
+</IfModule>

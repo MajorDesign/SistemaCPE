@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - CPE Control</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/style.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/app.css">
+
+</head>
+
+<body>
+  <!-- ✅ LOADING PAGE - Verificar sessão ANTES de renderizar -->
+  <div id="loadingPage" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
+    <div style="text-align: center; color: white;">
+      <div class="spinner-border" role="status" style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
+        <span class="visually-hidden">Carregando...</span>
+      </div>
+      <p style="margin-top: 1rem; font-size: 1rem;">Verificando autenticação...</p>
+    </div>
+  </div>
+
+  <!-- Navbar de Autenticação -->
+  <nav class="navbar-auth">
+    <div class="container-fluid d-flex align-items-center">
+      <h5 class="mb-0" style="color: white; font-weight: 700;">
+        <i class="bi bi-shield-check"></i> CPE Control
+      </h5>
+
+      <div class="user-menu">
+        <div class="user-info">
+          <span class="user-name" id="userName">Carregando...</span>
+          <span class="user-role" id="userRole">usuário</span>
+        </div>
+
+        <div class="dropdown">
+          <button class="avatar" id="avatarBtn" data-bs-toggle="dropdown" aria-expanded="false" title="Menu do Usuário">
+            <i class="bi bi-person-circle"></i>
+          </button>
+
+          <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="avatarBtn">
+            <li>
+              <h6 class="dropdown-header" id="dropdownEmail">email@example.com</h6>
+            </li>
+            <li>
+              <hr class="dropdown-divider">
+            </li>
+            <li><a class="dropdown-item" href="#" id="profileBtn">
+                <i class="bi bi-person"></i> Meu Perfil
+              </a></li>
+            <li><a class="dropdown-item" href="#" id="settingsBtn">
+                <i class="bi bi-gear"></i> Configurações
+              </a></li>
+            <li>
+              <hr class="dropdown-divider">
+            </li>
+            <li><a class="dropdown-item logout" href="#" id="logoutBtn">
+                <i class="bi bi-box-arrow-right"></i> Sair
+              </a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Container Principal -->
+  <div class="container-main">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">CPE</div>
+        <div class="sidebar-title">CONTROL</div>
+      </div>
+
+      <div class="search-box">
+        <input type="text" placeholder="Buscar">
+      </div>
+
+      <ul class="sidebar-menu"></ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+      <div class="top-bar">
+        <button class="menu-toggle">☰</button>
+        <h1>Dashboard</h1>
+      </div>
+
+      <div class="content">
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total de Tickets</div>
+            <div class="stat-value">1,234</div>
+            <div class="stat-change">+12% em relação ao mês anterior</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Resolvidos</div>
+            <div class="stat-value">856</div>
+            <div class="stat-change">Taxa de resolução: 69%</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Pendentes</div>
+            <div class="stat-value" style="color: var(--danger);">378</div>
+            <div class="stat-change" style="color: var(--danger);">Requerem atenção</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Satisfação</div>
+            <div class="stat-value" style="color: var(--success);">4.8/5</div>
+            <div class="stat-change" style="color: var(--success);">Baseado em 234 avaliações</div>
+          </div>
+        </div>
+
+        <!-- Tabela de Atividade Recente -->
+        <div class="card">
+          <h2 class="card-title">Atividade Recente</h2>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Título</th>
+                  <th>Cliente</th>
+                  <th>Status</th>
+                  <th>Atualizado</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>#1234</strong></td>
+                  <td>Problema com login</td>
+                  <td>João Silva</td>
+                  <td><span class="badge badge-success">Resolvido</span></td>
+                  <td>2 horas atrás</td>
+                </tr>
+                <tr>
+                  <td><strong>#1233</strong></td>
+                  <td>Erro ao processar pagamento</td>
+                  <td>Maria Santos</td>
+                  <td><span class="badge badge-primary">Em Andamento</span></td>
+                  <td>4 horas atrás</td>
+                </tr>
+                <tr>
+                  <td><strong>#1232</strong></td>
+                  <td>Dúvida sobre funcionalidade</td>
+                  <td>Pedro Costa</td>
+                  <td><span class="badge badge-warning">Aberto</span></td>
+                  <td>6 horas atrás</td>
+                </tr>
+                <tr>
+                  <td><strong>#1231</strong></td>
+                  <td>Solicitação de feature</td>
+                  <td>Ana Oliveira</td>
+                  <td><span class="badge badge-warning">Aberto</span></td>
+                  <td>1 dia atrás</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+
+  <!-- ... resto do HTML ... -->
+
+<script>
+  // ✅ BOOT: Verificar sessão com TIMEOUT e RETRY
+  (async () => {
+    console.log("\n" + "=".repeat(60));
+    console.log("[INDEX/BOOT] Verificando sessão...");
+    console.log("=".repeat(60));
+
+    const maxRetries = 3;
+    let retryCount = 0;
+    let sessionValid = false;
+
+    while (retryCount < maxRetries && !sessionValid) {
+      try {
+        console.log(`[INDEX/BOOT] Tentativa ${retryCount + 1} de ${maxRetries}...`);
+        
+        const user = await Promise.race([
+          getMe(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout")), 5000)
+          )
+        ]);
+
+        console.log("[INDEX/BOOT] ✓ Sessão válida, usuário:", user.name);
+        sessionValid = true;
+
+        // Remove a tela de loading
+        const loadingPage = document.getElementById("loadingPage");
+        if (loadingPage) {
+          loadingPage.style.display = "none";
+        }
+
+        // Mostra o conteúdo principal
+        const containerMain = document.querySelector(".container-main");
+        if (containerMain) {
+          containerMain.style.display = "flex";
+        }
+
+      } catch (err) {
+        console.warn(`[INDEX/BOOT] ✗ Tentativa ${retryCount + 1} falhou:`, err.message);
+        retryCount++;
+
+        if (retryCount >= maxRetries) {
+          console.error("[INDEX/BOOT] ✗ Todas as tentativas falharam");
+          console.log("[INDEX/BOOT] ✗ Redirecionando para login em 2 segundos...");
+          
+          setTimeout(() => {
+            window.location.href = "/SistemaCPE/web/login.html";
+          }, 2000);
+        } else {
+          // Aguarda 1 segundo antes de tentar novamente
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    }
+  })();
+</script>
+
+<script>
+  document.addEventListener("DOMContentLoaded", async function () {
+    console.log("\n" + "=".repeat(60));
+    console.log("[INDEX/PAGE] Inicializando Dashboard");
+    console.log("=".repeat(60));
+
+    try {
+      console.log("[INDEX/PAGE] Obtendo dados do usuário...");
+
+      // ✅ Obtém dados do usuário já autenticado
+      const user = await getMe();
+
+      console.log("[INDEX/PAGE] ✓ Usuário autenticado:", user.name);
+
+      // Atualiza as informações do usuário
+      const userNameEl = document.getElementById("userName");
+      const userRoleEl = document.getElementById("userRole");
+      const dropdownEmailEl = document.getElementById("dropdownEmail");
+
+      if (userNameEl) userNameEl.textContent = user.name;
+      if (userRoleEl) userRoleEl.textContent = user.role || "usuário";
+      if (dropdownEmailEl) dropdownEmailEl.textContent = user.email;
+
+      // ✅ Renderiza a navegação dinâmica
+      console.log("[INDEX/PAGE] Renderizando navegação...");
+      await renderNavigation(user.role || "USER");
+
+      console.log("[INDEX/PAGE] ✓ Dashboard carregado com sucesso");
+      console.log("=".repeat(60) + "\n");
+
+    } catch (err) {
+      console.error("[INDEX/PAGE] ✗ Erro:", err.message);
+    }
+
+    // Handler do botão Logout
+    const logoutBtn = document.getElementById("logoutBtn");
+    if (logoutBtn) {
+      logoutBtn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        if (confirm("Tem certeza que deseja sair?")) {
+          try {
+            console.log("[INDEX/LOGOUT] Executando logout...");
+            await logout();
+            console.log("[INDEX/LOGOUT] ✓ Logout bem-sucedido");
+            window.location.href = "/SistemaCPE/web/login.html";
+          } catch (err) {
+            console.error("[INDEX/LOGOUT] ✗ Erro:", err.message);
+            window.location.href = "/SistemaCPE/web/login.html";
+          }
+        }
+      });
+    }
+
+    // Toggle do menu mobile
+    const menuToggle = document.querySelector(".menu-toggle");
+    const sidebar = document.querySelector(".sidebar");
+    if (menuToggle) {
+      menuToggle.addEventListener("click", () => {
+        sidebar.classList.toggle("active");
+      });
+    }
+  });
+</script>
+
+</body>
+
+</html>

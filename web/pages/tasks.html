@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tarefas - CPE Control</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/style.css">
+
+  <style>
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 2px solid #e5e7eb;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .page-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin: 0;
+    }
+
+    .tabs-navigation {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 2rem;
+      border-bottom: 2px solid #e5e7eb;
+      flex-wrap: wrap;
+    }
+
+    .tab-button {
+      padding: 12px 20px;
+      border: none;
+      background: none;
+      color: #6b7280;
+      font-weight: 600;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+      font-size: 14px;
+    }
+
+    .tab-button:hover {
+      color: #667eea;
+    }
+
+    .tab-button.active {
+      color: #667eea;
+    }
+
+    .tab-button.active::after {
+      content: '';
+      position: absolute;
+      bottom: -2rem;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 2px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+    }
+
+    .stat-card:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+      transform: translateY(-2px);
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #6b7280;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 8px;
+    }
+
+    .stat-change {
+      font-size: 13px;
+      color: #6b7280;
+    }
+
+    .search-filter {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .search-filter input,
+    .search-filter select {
+      padding: 0.75rem 1rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 14px;
+      flex: 1;
+      min-width: 250px;
+    }
+
+    .search-filter input:focus,
+    .search-filter select:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      outline: none;
+    }
+
+    .task-item {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    .task-item:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+      border-color: #667eea;
+      transform: translateY(-2px);
+    }
+
+    .task-item.completed {
+      opacity: 0.6;
+      background-color: #f9fafb;
+    }
+
+    .task-checkbox {
+      width: 24px;
+      height: 24px;
+      margin-top: 2px;
+      cursor: pointer;
+      accent-color: #667eea;
+      flex-shrink: 0;
+    }
+
+    .task-content {
+      flex: 1;
+    }
+
+    .task-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+      gap: 12px;
+    }
+
+    .task-title {
+      font-weight: 600;
+      font-size: 15px;
+      color: #1f2937;
+      margin-bottom: 4px;
+    }
+
+    .task-item.completed .task-title {
+      text-decoration: line-through;
+      color: #9ca3af;
+    }
+
+    .task-description {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .task-meta {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+      font-size: 12px;
+    }
+
+    .task-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #6b7280;
+    }
+
+    .priority-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .priority-low {
+      background-color: rgba(34, 197, 94, 0.1);
+      color: #15803d;
+    }
+
+    .priority-medium {
+      background-color: rgba(59, 130, 246, 0.1);
+      color: #1e40af;
+    }
+
+    .priority-high {
+      background-color: rgba(245, 158, 11, 0.1);
+      color: #92400e;
+    }
+
+    .priority-urgent {
+      background-color: rgba(239, 68, 68, 0.1);
+      color: #991b1b;
+    }
+
+    .task-progress {
+      margin-top: 12px;
+    }
+
+    .progress-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: #6b7280;
+      font-weight: 500;
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+
+    .task-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-task-action {
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+      background: white;
+      color: #1f2937;
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-task-action:hover {
+      background-color: #f3f4f6;
+      border-color: #667eea;
+      color: #667eea;
+    }
+
+    .btn-task-action.danger:hover {
+      background-color: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    .btn-new-task {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+
+    .btn-new-task:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+      color: white;
+      text-decoration: none;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: #6b7280;
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      color: #d1d5db;
+      margin-bottom: 1rem;
+    }
+
+    .alert {
+      border: none;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+
+    .alert-danger {
+      background-color: rgba(220, 38, 38, 0.1);
+      color: #991b1b;
+    }
+
+    .alert-success {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: #065f46;
+    }
+
+    .modal-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+    }
+
+    .modal-header .btn-close {
+      filter: brightness(0) invert(1);
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .d-none {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      .search-filter {
+        flex-direction: column;
+      }
+
+      .search-filter input,
+      .search-filter select {
+        width: 100%;
+      }
+
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .task-item {
+        flex-direction: column;
+      }
+
+      .task-header {
+        flex-direction: column;
+      }
+
+      .task-meta {
+        gap: 8px;
+      }
+
+      .btn-task-action {
+        padding: 6px 10px;
+        font-size: 11px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ============================================================ -->
+  <!-- 🔒 LOADING PAGE -->
+  <!-- ============================================================ -->
+  <div id="loadingPage"
+    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
+    <div style="text-align: center; color: white;">
+      <div class="spinner-border" role="status"
+        style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
+        <span class="visually-hidden">Carregando...</span>
+      </div>
+      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+    </div>
+  </div>
+  <!-- ============================================================ -->
+
+  <div class="container-main" style="display: none;">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">CPE</div>
+        <div class="sidebar-title">CONTROL</div>
+      </div>
+
+      <div class="search-box">
+        <input type="text" placeholder="Buscar">
+      </div>
+
+      <ul class="sidebar-menu"></ul>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <div class="top-bar">
+        <button class="menu-toggle">☰</button>
+        <h1><i class="bi bi-check2-square"></i> Tarefas</h1>
+      </div>
+
+      <div class="content">
+        <!-- ALERTS -->
+        <div class="alert alert-danger d-none" id="alertBox" role="alert">
+          <i class="bi bi-exclamation-circle"></i>
+          <span id="alertMessage"></span>
+        </div>
+
+        <div class="alert alert-success d-none" id="successBox" role="alert">
+          <i class="bi bi-check-circle"></i>
+          <span id="successMessage">Operação realizada com sucesso!</span>
+        </div>
+
+        <!-- PAGE HEADER -->
+        <div class="page-header">
+          <h2 class="page-title">
+            <i class="bi bi-list-check"></i> Minhas Tarefas
+          </h2>
+          <button class="btn-new-task" id="btnNewTask" data-bs-toggle="modal" data-bs-target="#taskModal">
+            <i class="bi bi-plus-lg"></i> Nova Tarefa
+          </button>
+        </div>
+
+        <!-- TABS NAVIGATION -->
+        <div class="tabs-navigation">
+          <button class="tab-button active" onclick="switchTab('all')">
+            <i class="bi bi-list"></i> Todas
+          </button>
+          <button class="tab-button" onclick="switchTab('pending')">
+            <i class="bi bi-clock"></i> Pendentes
+          </button>
+          <button class="tab-button" onclick="switchTab('completed')">
+            <i class="bi bi-check-circle"></i> Concluídas
+          </button>
+          <button class="tab-button" onclick="switchTab('overdue')">
+            <i class="bi bi-exclamation-triangle"></i> Atrasadas
+          </button>
+        </div>
+
+        <!-- STATISTICS -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Total de Tarefas</div>
+            <div class="stat-value" id="totalTasks">0</div>
+            <div class="stat-change">Tarefas criadas</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Pendentes</div>
+            <div class="stat-value" id="pendingTasks">0</div>
+            <div class="stat-change">Aguardando conclusão</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Concluídas</div>
+            <div class="stat-value" id="completedTasks">0</div>
+            <div class="stat-change">Tarefas terminadas</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label">Atrasadas</div>
+            <div class="stat-value" id="overdueTasks">0</div>
+            <div class="stat-change">Não entregues no prazo</div>
+          </div>
+        </div>
+
+        <!-- SEARCH AND FILTER -->
+        <div class="search-filter">
+          <input type="text" id="searchInput" placeholder="Buscar tarefas...">
+          <select id="priorityFilter">
+            <option value="">Todas as Prioridades</option>
+            <option value="low">Baixa</option>
+            <option value="medium">Média</option>
+            <option value="high">Alta</option>
+            <option value="urgent">Urgente</option>
+          </select>
+        </div>
+
+        <!-- TASKS LIST -->
+        <div id="tasksList">
+          <div class="empty-state">
+            <div class="empty-state-icon">
+              <i class="bi bi-inbox"></i>
+            </div>
+            <p>Carregando tarefas...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Nova/Editar Tarefa -->
+  <!-- ============================================================ -->
+  <div class="modal fade" id="taskModal" tabindex="-1" aria-labelledby="taskModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="taskModalLabel">
+            <i class="bi bi-plus-square"></i> Nova Tarefa
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+
+        <div class="modal-body" style="padding: 2rem;">
+          <!-- Alert de Erro -->
+          <div class="alert alert-danger d-none" id="modalAlertBox" role="alert">
+            <i class="bi bi-exclamation-circle"></i>
+            <span id="modalAlertMessage"></span>
+          </div>
+
+          <!-- Formulário -->
+          <form id="taskForm" novalidate>
+            <div class="mb-3">
+              <label for="taskTitle" class="form-label">
+                <i class="bi bi-input-cursor"></i> Título
+              </label>
+              <input type="text" class="form-control" id="taskTitle"
+                placeholder="Ex: Implementar novo dashboard" required />
+            </div>
+
+            <div class="mb-3">
+              <label for="taskDescription" class="form-label">
+                <i class="bi bi-file-text"></i> Descrição
+              </label>
+              <textarea class="form-control" id="taskDescription" rows="3"
+                placeholder="Descreva os detalhes da tarefa..."></textarea>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="taskPriority" class="form-label">
+                  <i class="bi bi-exclamation-lg"></i> Prioridade
+                </label>
+                <select class="form-select" id="taskPriority" required>
+                  <option value="">Selecione a prioridade...</option>
+                  <option value="low">Baixa</option>
+                  <option value="medium">Média</option>
+                  <option value="high">Alta</option>
+                  <option value="urgent">Urgente</option>
+                </select>
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="taskAssignee" class="form-label">
+                  <i class="bi bi-person"></i> Atribuído a
+                </label>
+                <select class="form-select" id="taskAssignee">
+                  <option value="">Não atribuído</option>
+                  <option value="me">Mim</option>
+                  <option value="user1">João Silva</option>
+                  <option value="user2">Maria Santos</option>
+                  <option value="user3">Carlos Oliveira</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label for="taskDueDate" class="form-label">
+                  <i class="bi bi-calendar"></i> Data de Vencimento
+                </label>
+                <input type="date" class="form-control" id="taskDueDate" />
+              </div>
+
+              <div class="col-md-6 mb-3">
+                <label for="taskProgress" class="form-label">
+                  <i class="bi bi-percent"></i> Progresso
+                </label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <input type="range" class="form-range" id="taskProgress" min="0" max="100" value="0" style="flex: 1;">
+                  <span id="progressValue" style="font-weight: 600; color: #667eea; min-width: 40px;">0%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
+                <i class="bi bi-check-lg"></i> Criar Tarefa
+              </button>
+              <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">
+                <i class="bi bi-x-lg"></i> Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 📦 SCRIPTS -->
+  <!-- ============================================================ -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const user = await initPageAuth("TASKS");
+      if (!user) return;
+
+      await loadTasks();
+    });
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÕES DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    let tasks = [];
+    let selectedTaskId = null;
+    let currentTab = "all";
+
+    /**
+     * Carrega as tarefas
+     */
+    async function loadTasks() {
+      try {
+        console.log("[TASKS/LOAD] Carregando tarefas...");
+
+        // Simular dados de API - substitua pela chamada real
+        tasks = [
+          {
+            id: 1,
+            title: "Implementar novo dashboard",
+            description: "Dashboard em tempo real com gráficos interativos",
+            priority: "high",
+            progress: 65,
+            completed: false,
+            assignee: "me",
+            dueDate: "2024-03-20",
+            createdAt: "2024-03-01"
+          },
+          {
+            id: 2,
+            title: "Corrigir bug de login",
+            description: "Problema em mobile com validação de sessão",
+            priority: "urgent",
+            progress: 30,
+            completed: false,
+            assignee: "me",
+            dueDate: "2024-03-05",
+            createdAt: "2024-03-02"
+          },
+          {
+            id: 3,
+            title: "Documentar API REST",
+            description: "Criar documentação completa da API com exemplos",
+            priority: "medium",
+            progress: 100,
+            completed: true,
+            assignee: "user1",
+            dueDate: "2024-02-28",
+            createdAt: "2024-02-10"
+          },
+          {
+            id: 4,
+            title: "Otimizar performance do banco de dados",
+            description: "Índices e queries para melhorar tempo de resposta",
+            priority: "high",
+            progress: 45,
+            completed: false,
+            assignee: "user2",
+            dueDate: "2024-03-25",
+            createdAt: "2024-03-03"
+          },
+          {
+            id: 5,
+            title: "Implementar autenticação 2FA",
+            description: "Adicionar segundo fator de autenticação no sistema",
+            priority: "high",
+            progress: 20,
+            completed: false,
+            assignee: "me",
+            dueDate: "2024-03-15",
+            createdAt: "2024-03-01"
+          },
+          {
+            id: 6,
+            title: "Criar testes unitários",
+            description: "Cobertura mínima de 80% do código",
+            priority: "medium",
+            progress: 55,
+            completed: false,
+            assignee: "user3",
+            dueDate: "2024-03-30",
+            createdAt: "2024-02-20"
+          },
+          {
+            id: 7,
+            title: "Revisar código da equipe",
+            description: "Code review de 5 pull requests pendentes",
+            priority: "low",
+            progress: 40,
+            completed: false,
+            assignee: "me",
+            dueDate: "2024-03-10",
+            createdAt: "2024-03-04"
+          },
+          {
+            id: 8,
+            title: "Atualizar dependências",
+            description: "Atualizar bibliotecas e frameworks para versões recentes",
+            priority: "low",
+            progress: 0,
+            completed: false,
+            assignee: null,
+            dueDate: "2024-04-01",
+            createdAt: "2024-03-04"
+          }
+        ];
+
+        console.log("[TASKS/LOAD] ✓", tasks.length, "tarefas carregadas");
+        renderTasks(filterTasks());
+        updateStatistics();
+
+      } catch (err) {
+        console.error("[TASKS/LOAD] ✗ Erro:", err.message);
+        showError("Erro ao carregar tarefas: " + err.message);
+      }
+    }
+
+    /**
+     * Filtra as tarefas
+     */
+    function filterTasks() {
+      let filtered = tasks;
+
+      // Filtro por tab
+      if (currentTab === "pending") {
+        filtered = filtered.filter(t => !t.completed);
+      } else if (currentTab === "completed") {
+        filtered = filtered.filter(t => t.completed);
+      } else if (currentTab === "overdue") {
+        const today = new Date().toISOString().split('T')[0];
+        filtered = filtered.filter(t => !t.completed && t.dueDate < today);
+      }
+
+      // Filtro por prioridade
+      const priorityFilter = document.getElementById("priorityFilter")?.value || "";
+      if (priorityFilter) {
+        filtered = filtered.filter(t => t.priority === priorityFilter);
+      }
+
+      // Filtro por busca
+      const searchTerm = document.getElementById("searchInput")?.value?.toLowerCase() || "";
+      if (searchTerm) {
+        filtered = filtered.filter(t =>
+          t.title.toLowerCase().includes(searchTerm) ||
+          t.description.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      return filtered;
+    }
+
+    /**
+     * Renderiza as tarefas
+     */
+    function renderTasks(list = tasks) {
+      const tasksList = document.getElementById("tasksList");
+
+      if (!list || list.length === 0) {
+        tasksList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
+            <p>Nenhuma tarefa encontrada</p>
+            <p style="font-size: 12px; margin-top: 1rem;">Clique em "Nova Tarefa" para criar uma</p>
+          </div>
+        `;
+        return;
+      }
+
+      tasksList.innerHTML = list.map(task => `
+        <div class="task-item ${task.completed ? 'completed' : ''}">
+          <input type="checkbox" class="task-checkbox" ${task.completed ? 'checked' : ''} 
+            onchange="toggleTaskComplete(${task.id})" />
+          
+          <div class="task-content">
+            <div class="task-header">
+              <div>
+                <div class="task-title">${task.title}</div>
+                <div class="task-description">${task.description}</div>
+              </div>
+              <span class="priority-badge priority-${task.priority}">
+                ${getPriorityLabel(task.priority)}
+              </span>
+            </div>
+
+            <div class="task-meta">
+              ${task.assignee ? `
+                <div class="task-meta-item">
+                  <i class="bi bi-person"></i>
+                  <span>${getAssigneeLabel(task.assignee)}</span>
+                </div>
+              ` : ''}
+              
+              ${task.dueDate ? `
+                <div class="task-meta-item">
+                  <i class="bi bi-calendar"></i>
+                  <span>${new Date(task.dueDate).toLocaleDateString('pt-BR')}</span>
+                </div>
+              ` : ''}
+
+              <div class="task-meta-item">
+                <i class="bi bi-file-text"></i>
+                <span>Criado em ${new Date(task.createdAt).toLocaleDateString('pt-BR')}</span>
+              </div>
+            </div>
+
+            ${!task.completed ? `
+              <div class="task-progress">
+                <div class="progress-label">
+                  <span>Progresso</span>
+                  <span style="font-weight: 700; color: #667eea;">${task.progress}%</span>
+                </div>
+                <div class="progress-bar">
+                  <div class="progress-fill" style="width: ${task.progress}%"></div>
+                </div>
+              </div>
+            ` : ''}
+
+            <div class="task-actions" style="margin-top: 16px;">
+              <button class="btn-task-action" onclick="editTask(${task.id})">
+                <i class="bi bi-pencil"></i> Editar
+              </button>
+              <button class="btn-task-action" onclick="duplicateTask(${task.id})">
+                <i class="bi bi-files"></i> Duplicar
+              </button>
+              <button class="btn-task-action danger" onclick="deleteTask(${task.id}, '${task.title.replace(/'/g, "\\'")}')">
+                <i class="bi bi-trash"></i> Deletar
+              </button>
+            </div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    /**
+     * Retorna o label da prioridade
+     */
+    function getPriorityLabel(priority) {
+      const labels = {
+        low: "Baixa",
+        medium: "Média",
+        high: "Alta",
+        urgent: "Urgente"
+      };
+      return labels[priority] || priority;
+    }
+
+    /**
+     * Retorna o label do responsável
+     */
+    function getAssigneeLabel(assignee) {
+      const labels = {
+        me: "Mim",
+        user1: "João Silva",
+        user2: "Maria Santos",
+        user3: "Carlos Oliveira"
+      };
+      return labels[assignee] || assignee;
+    }
+
+    /**
+     * Atualiza as estatísticas
+     */
+    function updateStatistics() {
+      const total = tasks.length;
+      const pending = tasks.filter(t => !t.completed).length;
+      const completed = tasks.filter(t => t.completed).length;
+      const today = new Date().toISOString().split('T')[0];
+      const overdue = tasks.filter(t => !t.completed && t.dueDate < today).length;
+
+      document.getElementById("totalTasks").textContent = total;
+      document.getElementById("pendingTasks").textContent = pending;
+      document.getElementById("completedTasks").textContent = completed;
+      document.getElementById("overdueTasks").textContent = overdue;
+    }
+
+    /**
+     * Alterna entre as abas
+     */
+    function switchTab(tab) {
+      currentTab = tab;
+
+      // Atualiza buttons ativos
+      document.querySelectorAll(".tab-button").forEach(btn => {
+        btn.classList.remove("active");
+      });
+      event.target.closest(".tab-button")?.classList.add("active");
+
+      renderTasks(filterTasks());
+    }
+
+    /**
+     * Marca tarefa como completa/incompleta
+     */
+    function toggleTaskComplete(taskId) {
+      const task = tasks.find(t => t.id === taskId);
+      if (task) {
+        task.completed = !task.completed;
+        console.log("[TASKS/TOGGLE]", task.completed ? "✓ Concluída:" : "↩️ Reabierta:", taskId);
+        renderTasks(filterTasks());
+        updateStatistics();
+      }
+    }
+
+    /**
+     * Edita uma tarefa
+     */
+    function editTask(taskId) {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      console.log("[TASKS/EDIT] Editando tarefa:", taskId);
+
+      selectedTaskId = taskId;
+      document.getElementById("taskModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Tarefa';
+      document.getElementById("taskTitle").value = task.title;
+      document.getElementById("taskDescription").value = task.description;
+      document.getElementById("taskPriority").value = task.priority;
+      document.getElementById("taskAssignee").value = task.assignee || "";
+      document.getElementById("taskDueDate").value = task.dueDate || "";
+      document.getElementById("taskProgress").value = task.progress;
+      document.getElementById("progressValue").textContent = task.progress + "%";
+      document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Tarefa';
+
+      const modal = new bootstrap.Modal(document.getElementById("taskModal"));
+      modal.show();
+    }
+
+    /**
+     * Duplica uma tarefa
+     */
+    function duplicateTask(taskId) {
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+
+      console.log("[TASKS/DUPLICATE] Duplicando tarefa:", taskId);
+
+      const newTask = {
+        id: Math.max(...tasks.map(t => t.id), 0) + 1,
+        title: task.title + " (Cópia)",
+        description: task.description,
+        priority: task.priority,
+        progress: 0,
+        completed: false,
+        assignee: task.assignee,
+        dueDate: task.dueDate,
+        createdAt: new Date().toISOString().split('T')[0]
+      };
+
+      tasks.push(newTask);
+      showSuccess("Tarefa duplicada com sucesso!");
+      renderTasks(filterTasks());
+      updateStatistics();
+    }
+
+    /**
+     * Deleta uma tarefa
+     */
+    async function deleteTask(taskId, taskTitle) {
+      console.log("[TASKS/DELETE] Deletando tarefa:", taskId);
+
+      if (!confirm(`Tem certeza que deseja deletar a tarefa "${taskTitle}"?`)) {
+        return;
+      }
+
+      try {
+        tasks = tasks.filter(t => t.id !== taskId);
+        showSuccess(`Tarefa "${taskTitle}" deletada com sucesso!`);
+        renderTasks(filterTasks());
+        updateStatistics();
+
+      } catch (err) {
+        console.error("[TASKS/DELETE] ✗ Erro:", err.message);
+        showError("Erro ao deletar tarefa: " + err.message);
+      }
+    }
+
+    /**
+     * Mostra mensagem de erro
+     */
+    function showError(message) {
+      const alertBox = document.getElementById("alertBox");
+      const alertMessage = document.getElementById("alertMessage");
+      alertMessage.textContent = message;
+      alertBox.classList.remove("d-none");
+      setTimeout(() => {
+        alertBox.classList.add("d-none");
+      }, 5000);
+    }
+
+    /**
+     * Mostra mensagem de sucesso
+     */
+    function showSuccess(message) {
+      const successBox = document.getElementById("successBox");
+      const successMessage = document.getElementById("successMessage");
+      successMessage.textContent = message;
+      successBox.classList.remove("d-none");
+      setTimeout(() => {
+        successBox.classList.add("d-none");
+      }, 5000);
+    }
+
+    /**
+     * Mostra mensagem de erro no modal
+     */
+    function showModalError(message) {
+      const modalAlert = document.getElementById("modalAlertBox");
+      const modalAlertMsg = document.getElementById("modalAlertMessage");
+      if (modalAlert && modalAlertMsg) {
+        modalAlertMsg.textContent = message;
+        modalAlert.classList.remove("d-none");
+      }
+    }
+
+    /**
+     * Submissão do formulário
+     */
+    document.getElementById("taskForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const title = document.getElementById("taskTitle")?.value?.trim();
+      const description = document.getElementById("taskDescription")?.value?.trim();
+      const priority = document.getElementById("taskPriority")?.value;
+      const assignee = document.getElementById("taskAssignee")?.value || null;
+      const dueDate = document.getElementById("taskDueDate")?.value;
+      const progress = document.getElementById("taskProgress")?.value || 0;
+
+      if (!title || !priority) {
+        showModalError("Preencha os campos obrigatórios!");
+        return;
+      }
+
+      try {
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
+
+        if (selectedTaskId) {
+          // Atualizar
+          const task = tasks.find(t => t.id === selectedTaskId);
+          if (task) {
+            task.title = title;
+            task.description = description;
+            task.priority = priority;
+            task.assignee = assignee;
+            task.dueDate = dueDate;
+            task.progress = parseInt(progress);
+          }
+          console.log("[TASKS/SUBMIT] ✓ Tarefa atualizada");
+          showSuccess("Tarefa atualizada com sucesso!");
+        } else {
+          // Criar
+          const newTask = {
+            id: Math.max(...tasks.map(t => t.id), 0) + 1,
+            title,
+            description,
+            priority,
+            progress: 0,
+            completed: false,
+            assignee,
+            dueDate,
+            createdAt: new Date().toISOString().split('T')[0]
+          };
+          tasks.push(newTask);
+          console.log("[TASKS/SUBMIT] ✓ Tarefa criada");
+          showSuccess("Tarefa criada com sucesso!");
+        }
+
+        document.getElementById("taskForm").reset();
+        const modal = bootstrap.Modal.getInstance(document.getElementById("taskModal"));
+        modal.hide();
+
+        selectedTaskId = null;
+        renderTasks(filterTasks());
+        updateStatistics();
+
+      } catch (err) {
+        console.error("[TASKS/SUBMIT] ✗ Erro:", err.message);
+        showModalError(err.message || "Erro ao processar tarefa!");
+      } finally {
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Criar Tarefa';
+      }
+    });
+
+    /**
+     * Update progress percentage display
+     */
+    document.getElementById("taskProgress")?.addEventListener("input", (e) => {
+      document.getElementById("progressValue").textContent = e.target.value + "%";
+    });
+
+    /**
+     * Event listeners para filtros
+     */
+    document.getElementById("searchInput")?.addEventListener("input", () => {
+      renderTasks(filterTasks());
+    });
+
+    document.getElementById("priorityFilter")?.addEventListener("change", () => {
+      renderTasks(filterTasks());
+    });
+
+    /**
+     * Reset modal quando abrir
+     */
+    document.getElementById("taskModal")?.addEventListener("show.bs.modal", () => {
+      if (!selectedTaskId) {
+        document.getElementById("taskModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Nova Tarefa';
+        document.getElementById("taskForm").reset();
+        document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Tarefa';
+        document.getElementById("progressValue").textContent = "0%";
+      }
+      document.getElementById("modalAlertBox").classList.add("d-none");
+    });
+
+    /**
+     * Reset quando fechar
+     */
+    document.getElementById("taskModal")?.addEventListener("hidden.bs.modal", () => {
+      selectedTaskId = null;
+    });
+  </script>
+
+</body>
+
+</html>

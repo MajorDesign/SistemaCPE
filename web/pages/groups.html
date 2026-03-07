@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gerenciar Grupos - CPE Control</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/style.css">
+
+  <style>
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 2px solid #e5e7eb;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .page-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin: 0;
+    }
+
+    .groups-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    .group-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 24px;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .group-card:hover {
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+      transform: translateY(-4px);
+      border-color: #667eea;
+    }
+
+    .group-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+
+    .group-header {
+      margin-bottom: 16px;
+    }
+
+    .group-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 4px;
+    }
+
+    .group-description {
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .group-meta {
+      display: flex;
+      gap: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #e5e7eb;
+      margin-bottom: 16px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .group-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .group-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    .btn-group-action {
+      flex: 1;
+      padding: 0.6rem;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+      background: white;
+      color: #1f2937;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-group-action:hover {
+      background-color: #f3f4f6;
+      border-color: #667eea;
+      color: #667eea;
+    }
+
+    .btn-group-action.danger:hover {
+      background-color: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    .btn-new-group {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      white-space: nowrap;
+      transition: all 0.3s ease;
+    }
+
+    .btn-new-group:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+      color: white;
+      text-decoration: none;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem 2rem;
+      color: #6b7280;
+    }
+
+    .empty-state-icon {
+      font-size: 3rem;
+      color: #d1d5db;
+      margin-bottom: 1rem;
+    }
+
+    .alert {
+      border: none;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+
+    .alert-danger {
+      background-color: rgba(220, 38, 38, 0.1);
+      color: #991b1b;
+    }
+
+    .alert-success {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: #065f46;
+    }
+
+    .modal-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+    }
+
+    .modal-header .btn-close {
+      filter: brightness(0) invert(1);
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .d-none {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      .groups-container {
+        grid-template-columns: 1fr;
+      }
+
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- ============================================================ -->
+  <!-- 🔒 LOADING PAGE -->
+  <!-- ============================================================ -->
+  <div id="loadingPage"
+    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
+    <div style="text-align: center; color: white;">
+      <div class="spinner-border" role="status"
+        style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
+        <span class="visually-hidden">Carregando...</span>
+      </div>
+      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+    </div>
+  </div>
+  <!-- ============================================================ -->
+
+  <div class="container-main" style="display: none;">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">CPE</div>
+        <div class="sidebar-title">CONTROL</div>
+      </div>
+
+      <div class="search-box">
+        <input type="text" placeholder="Buscar">
+      </div>
+
+      <ul class="sidebar-menu"></ul>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <div class="top-bar">
+        <button class="menu-toggle">☰</button>
+        <h1><i class="bi bi-diagram-3"></i> Gerenciar Grupos</h1>
+      </div>
+
+      <div class="content">
+        <!-- ALERTS -->
+        <div class="alert alert-danger d-none" id="alertBox" role="alert">
+          <i class="bi bi-exclamation-circle"></i>
+          <span id="alertMessage"></span>
+        </div>
+
+        <div class="alert alert-success d-none" id="successBox" role="alert">
+          <i class="bi bi-check-circle"></i>
+          <span id="successMessage">Operação realizada com sucesso!</span>
+        </div>
+
+        <!-- PAGE HEADER -->
+        <div class="page-header">
+          <h2 class="page-title">
+            <i class="bi bi-folder-plus"></i> Meus Grupos
+          </h2>
+          <button class="btn-new-group" id="btnNewGroup" data-bs-toggle="modal" data-bs-target="#groupModal">
+            <i class="bi bi-plus-lg"></i> Novo Grupo
+          </button>
+        </div>
+
+        <!-- GROUPS GRID -->
+        <div class="groups-container" id="groupsList">
+          <div style="grid-column: 1 / -1;">
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <i class="bi bi-inbox"></i>
+              </div>
+              <p>Carregando grupos...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Novo/Editar Grupo -->
+  <!-- ============================================================ -->
+  <div class="modal fade" id="groupModal" tabindex="-1" aria-labelledby="groupModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="groupModalLabel">
+            <i class="bi bi-plus-square"></i> Novo Grupo
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+
+        <div class="modal-body" style="padding: 2rem;">
+          <!-- Alert de Erro -->
+          <div class="alert alert-danger d-none" id="modalAlertBox" role="alert">
+            <i class="bi bi-exclamation-circle"></i>
+            <span id="modalAlertMessage"></span>
+          </div>
+
+          <!-- Formulário -->
+          <form id="groupForm" novalidate>
+            <div class="mb-3">
+              <label for="groupName" class="form-label">
+                <i class="bi bi-input-cursor"></i> Nome do Grupo
+              </label>
+              <input type="text" class="form-control" id="groupName"
+                placeholder="Ex: Suporte Técnico" required />
+              <div class="invalid-feedback"></div>
+            </div>
+
+            <div class="mb-3">
+              <label for="groupDescription" class="form-label">
+                <i class="bi bi-file-text"></i> Descrição
+              </label>
+              <textarea class="form-control" id="groupDescription" rows="4"
+                placeholder="Descreva o propósito deste grupo..."></textarea>
+              <small class="form-text text-muted">Opcional</small>
+            </div>
+
+            <div class="mb-3">
+              <label for="groupPermission" class="form-label">
+                <i class="bi bi-shield-check"></i> Nível de Permissão
+              </label>
+              <select class="form-select" id="groupPermission" required>
+                <option value="">Selecione o nível...</option>
+                <option value="admin">Administrador</option>
+                <option value="editor">Editor</option>
+                <option value="viewer">Visualizador</option>
+                <option value="custom">Personalizado</option>
+              </select>
+              <div class="invalid-feedback"></div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
+                <i class="bi bi-check-lg"></i> Criar Grupo
+              </button>
+              <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">
+                <i class="bi bi-x-lg"></i> Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 📦 SCRIPTS -->
+  <!-- ============================================================ -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
+  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    document.addEventListener("DOMContentLoaded", async () => {
+      const user = await initPageAuth("GROUPS");
+      if (!user) return;
+
+      // Verifica se é admin
+      if (user.role !== "ADMIN") {
+        console.warn("[GROUPS] Usuário não é admin, redirecionando...");
+        showError("Apenas administradores podem acessar esta página!");
+        setTimeout(() => {
+          window.location.href = "/SistemaCPE/web/pages/dashboard.html";
+        }, 2000);
+        return;
+      }
+
+      console.log("[GROUPS] ✓ Usuário é admin, carregando grupos...");
+      await loadGroups();
+    });
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÕES DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    let groups = [];
+    let selectedGroupId = null;
+    let groupModalInstance = null;
+
+    /**
+     * Carrega os grupos
+     */
+    async function loadGroups() {
+      try {
+        console.log("[GROUPS/LOAD] Carregando grupos...");
+
+        // Simular dados de API - substitua pela chamada real
+        groups = [
+          {
+            id: 1,
+            name: "Suporte Técnico",
+            description: "Equipe responsável pelo suporte técnico aos clientes",
+            permission: "admin",
+            members: 5,
+            created: "2024-01-15"
+          },
+          {
+            id: 2,
+            name: "Vendas",
+            description: "Equipe comercial responsável pelas negociações",
+            permission: "editor",
+            members: 8,
+            created: "2024-01-10"
+          },
+          {
+            id: 3,
+            name: "Desenvolvimento",
+            description: "Equipe de desenvolvimento e manutenção de software",
+            permission: "admin",
+            members: 12,
+            created: "2023-12-20"
+          },
+          {
+            id: 4,
+            name: "Gerência",
+            description: "Gestores e coordenadores de projeto",
+            permission: "admin",
+            members: 4,
+            created: "2023-12-15"
+          },
+          {
+            id: 5,
+            name: "Marketing",
+            description: "Equipe de marketing e comunicação",
+            permission: "viewer",
+            members: 6,
+            created: "2023-11-01"
+          }
+        ];
+
+        console.log("[GROUPS/LOAD] ✓", groups.length, "grupos carregados");
+        renderGroups(groups);
+
+      } catch (err) {
+        console.error("[GROUPS/LOAD] ✗ Erro:", err.message);
+        showError("Erro ao carregar grupos: " + err.message);
+      }
+    }
+
+    /**
+     * Renderiza os grupos
+     */
+    function renderGroups(list = groups) {
+      const groupsList = document.getElementById("groupsList");
+
+      if (!list || list.length === 0) {
+        groupsList.innerHTML = `
+          <div style="grid-column: 1 / -1;">
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                <i class="bi bi-inbox"></i>
+              </div>
+              <p>Nenhum grupo encontrado</p>
+              <p style="font-size: 12px; margin-top: 1rem;">Clique em "Novo Grupo" para criar um</p>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      groupsList.innerHTML = list.map(group => `
+        <div class="group-card">
+          <div class="group-icon">
+            <i class="bi bi-people-fill"></i>
+          </div>
+
+          <div class="group-header">
+            <div class="group-name">${group.name}</div>
+            <div class="group-description">${group.description || "Sem descrição"}</div>
+          </div>
+
+          <div class="group-meta">
+            <div class="group-meta-item">
+              <i class="bi bi-people"></i>
+              <span>${group.members} membros</span>
+            </div>
+            <div class="group-meta-item">
+              <i class="bi bi-shield-check"></i>
+              <span>${getPermissionLabel(group.permission)}</span>
+            </div>
+            <div class="group-meta-item">
+              <i class="bi bi-calendar"></i>
+              <span>${formatDate(group.created)}</span>
+            </div>
+          </div>
+
+          <div class="group-actions">
+            <button class="btn-group-action" onclick="editGroup(${group.id}, event)">
+              <i class="bi bi-pencil"></i> Editar
+            </button>
+            <button class="btn-group-action danger" onclick="deleteGroup(${group.id}, '${group.name.replace(/'/g, "\\'")}', event)">
+              <i class="bi bi-trash"></i> Deletar
+            </button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    /**
+     * Retorna o label da permissão
+     */
+    function getPermissionLabel(permission) {
+      const labels = {
+        admin: "Admin",
+        editor: "Editor",
+        viewer: "Visualizador",
+        custom: "Personalizado"
+      };
+      return labels[permission] || permission;
+    }
+
+    /**
+     * Formata data
+     */
+    function formatDate(dateString) {
+      if (!dateString) return "Sem data";
+      const date = new Date(dateString);
+      return date.toLocaleDateString("pt-BR", { month: "short", day: "numeric" });
+    }
+
+    /**
+     * Mostra mensagem de erro
+     */
+    function showError(message) {
+      const alertBox = document.getElementById("alertBox");
+      const alertMessage = document.getElementById("alertMessage");
+      alertMessage.textContent = message;
+      alertBox.classList.remove("d-none");
+      setTimeout(() => {
+        alertBox.classList.add("d-none");
+      }, 5000);
+    }
+
+    /**
+     * Mostra mensagem de sucesso
+     */
+    function showSuccess(message) {
+      const successBox = document.getElementById("successBox");
+      const successMessage = document.getElementById("successMessage");
+      successMessage.textContent = message;
+      successBox.classList.remove("d-none");
+      setTimeout(() => {
+        successBox.classList.add("d-none");
+      }, 5000);
+    }
+
+    /**
+     * Mostra mensagem de erro no modal
+     */
+    function showModalError(message) {
+      const modalAlert = document.getElementById("modalAlertBox");
+      const modalAlertMsg = document.getElementById("modalAlertMessage");
+      if (modalAlert && modalAlertMsg) {
+        modalAlertMsg.textContent = message;
+        modalAlert.classList.remove("d-none");
+      }
+    }
+
+    /**
+     * Esconde mensagem de erro no modal
+     */
+    function hideModalError() {
+      const modalAlert = document.getElementById("modalAlertBox");
+      if (modalAlert) {
+        modalAlert.classList.add("d-none");
+      }
+    }
+
+    /**
+     * Edita um grupo
+     */
+    function editGroup(groupId, event) {
+      event.preventDefault();
+      console.log("[GROUPS/EDIT] Editando grupo:", groupId);
+
+      const group = groups.find(g => g.id === groupId);
+      if (!group) return;
+
+      selectedGroupId = groupId;
+      document.getElementById("groupModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Grupo';
+      document.getElementById("groupName").value = group.name;
+      document.getElementById("groupDescription").value = group.description;
+      document.getElementById("groupPermission").value = group.permission;
+      document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Grupo';
+
+      groupModalInstance = new bootstrap.Modal(document.getElementById("groupModal"));
+      groupModalInstance.show();
+    }
+
+    /**
+     * Deleta um grupo
+     */
+    async function deleteGroup(groupId, groupName, event) {
+      event.preventDefault();
+      console.log("[GROUPS/DELETE] Deletando grupo:", groupId);
+
+      if (!confirm(`Tem certeza que deseja deletar o grupo "${groupName}"?`)) {
+        return;
+      }
+
+      try {
+        // Simular API call
+        console.log("[GROUPS/DELETE] ✓ Grupo deletado com sucesso");
+
+        groups = groups.filter(g => g.id !== groupId);
+        showSuccess(`Grupo "${groupName}" deletado com sucesso!`);
+        renderGroups();
+
+      } catch (err) {
+        console.error("[GROUPS/DELETE] ✗ Erro:", err.message);
+        showError("Erro ao deletar grupo: " + err.message);
+      }
+    }
+
+    /**
+     * Submissão do formulário
+     */
+    document.getElementById("groupForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById("groupName")?.value?.trim();
+      const description = document.getElementById("groupDescription")?.value?.trim();
+      const permission = document.getElementById("groupPermission")?.value;
+
+      console.log("[GROUPS/SUBMIT]", selectedGroupId ? "Atualizando..." : "Criando novo grupo...");
+
+      if (!name || !permission) {
+        showModalError("Preencha os campos obrigatórios!");
+        return;
+      }
+
+      try {
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
+
+        if (selectedGroupId) {
+          // Atualizar
+          const group = groups.find(g => g.id === selectedGroupId);
+          if (group) {
+            group.name = name;
+            group.description = description;
+            group.permission = permission;
+          }
+          console.log("[GROUPS/SUBMIT] ✓ Grupo atualizado");
+          showSuccess("Grupo atualizado com sucesso!");
+        } else {
+          // Criar
+          const newGroup = {
+            id: Math.max(...groups.map(g => g.id), 0) + 1,
+            name,
+            description,
+            permission,
+            members: 0,
+            created: new Date().toISOString().split('T')[0]
+          };
+          groups.push(newGroup);
+          console.log("[GROUPS/SUBMIT] ✓ Grupo criado");
+          showSuccess("Grupo criado com sucesso!");
+        }
+
+        document.getElementById("groupForm").reset();
+        const modal = bootstrap.Modal.getInstance(document.getElementById("groupModal"));
+        modal.hide();
+
+        selectedGroupId = null;
+        renderGroups();
+
+      } catch (err) {
+        console.error("[GROUPS/SUBMIT] ✗ Erro:", err.message);
+        showModalError(err.message || "Erro ao processar grupo!");
+      } finally {
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Criar Grupo';
+      }
+    });
+
+    /**
+     * Reset modal quando abrir
+     */
+    document.getElementById("groupModal")?.addEventListener("show.bs.modal", () => {
+      if (!selectedGroupId) {
+        document.getElementById("groupModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Novo Grupo';
+        document.getElementById("groupForm").reset();
+        document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Grupo';
+      }
+      hideModalError();
+    });
+
+    /**
+     * Reset quando fechar
+     */
+    document.getElementById("groupModal")?.addEventListener("hidden.bs.modal", () => {
+      selectedGroupId = null;
+    });
+  </script>
+
+</body>
+
+</html>
