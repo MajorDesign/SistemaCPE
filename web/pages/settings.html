@@ -75,6 +75,7 @@
       transition: all 0.2s ease;
       font-weight: 500;
       font-size: 14px;
+      cursor: pointer;
     }
 
     .settings-menu-link:hover {
@@ -110,6 +111,18 @@
 
     .settings-section.active {
       display: block;
+      animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .section-title {
@@ -146,6 +159,7 @@
       color: #1f2937;
       margin-bottom: 16px;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     .setting-item {
@@ -154,6 +168,8 @@
       justify-content: space-between;
       padding: 16px 0;
       border-bottom: 1px solid #f3f4f6;
+      flex-wrap: wrap;
+      gap: 12px;
     }
 
     .setting-item:last-child {
@@ -162,6 +178,7 @@
 
     .setting-label {
       flex: 1;
+      min-width: 250px;
     }
 
     .setting-name {
@@ -226,17 +243,29 @@
       transform: translateX(22px);
     }
 
-    .select-input {
-      min-width: 200px;
-      padding: 0.6rem 1rem;
+    .form-group-custom {
+      margin-bottom: 20px;
+    }
+
+    .form-label-custom {
+      display: block;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .form-control-custom {
+      width: 100%;
+      padding: 0.75rem 1rem;
       border: 2px solid #e5e7eb;
       border-radius: 8px;
       font-size: 14px;
-      background: white;
-      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s ease;
     }
 
-    .select-input:focus {
+    .form-control-custom:focus {
       border-color: #667eea;
       box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
       outline: none;
@@ -251,6 +280,8 @@
       font-weight: 600;
       white-space: nowrap;
       transition: all 0.3s ease;
+      cursor: pointer;
+      font-size: 14px;
     }
 
     .btn-primary-custom:hover {
@@ -258,6 +289,16 @@
       box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
       color: white;
       text-decoration: none;
+    }
+
+    .btn-primary-custom:active {
+      transform: translateY(0);
+    }
+
+    .btn-primary-custom:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
     }
 
     .btn-secondary-custom {
@@ -269,12 +310,24 @@
       font-weight: 600;
       white-space: nowrap;
       transition: all 0.2s ease;
+      cursor: pointer;
+      font-size: 14px;
     }
 
     .btn-secondary-custom:hover {
       background-color: #f3f4f6;
       border-color: #667eea;
       color: #667eea;
+    }
+
+    .btn-secondary-custom.danger {
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    .btn-secondary-custom.danger:hover {
+      background-color: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
     }
 
     .profile-section {
@@ -295,6 +348,7 @@
       color: white;
       font-size: 48px;
       flex-shrink: 0;
+      font-weight: 700;
     }
 
     .profile-info {
@@ -324,36 +378,19 @@
       color: #667eea;
     }
 
-    .form-group-custom {
-      margin-bottom: 20px;
-    }
-
-    .form-label-custom {
-      display: block;
-      font-weight: 600;
-      color: #1f2937;
-      margin-bottom: 8px;
-      font-size: 14px;
-    }
-
-    .form-control-custom {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      border: 2px solid #e5e7eb;
-      border-radius: 8px;
-      font-size: 14px;
-    }
-
-    .form-control-custom:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-      outline: none;
-    }
-
     .alert {
       border: none;
       border-radius: 8px;
       margin-bottom: 1.5rem;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .alert i {
+      font-size: 18px;
+      flex-shrink: 0;
     }
 
     .alert-danger {
@@ -371,8 +408,61 @@
       color: #92400e;
     }
 
+    .alert-info {
+      background-color: rgba(59, 130, 246, 0.1);
+      color: #1e40af;
+    }
+
+    .connected-service {
+      padding: 16px;
+      background: #f9fafb;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .service-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .service-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .service-details {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .service-name {
+      font-weight: 600;
+      color: #1f2937;
+      font-size: 14px;
+    }
+
+    .service-status {
+      font-size: 12px;
+      color: #10b981;
+    }
+
     .d-none {
-      display: none;
+      display: none !important;
     }
 
     @media (max-width: 768px) {
@@ -386,20 +476,28 @@
 
       .settings-menu {
         display: flex;
-        gap: 8px;
+        gap: 4px;
         overflow-x: auto;
         padding: 8px;
+        border-bottom: 1px solid #e5e7eb;
       }
 
       .settings-menu-item {
-        border-bottom: none;
-        border-right: 1px solid #e5e7eb;
+        border: none;
+        flex-shrink: 0;
       }
 
       .settings-menu-link {
         padding: 8px 12px;
         white-space: nowrap;
         font-size: 12px;
+        border-bottom: 2px solid transparent;
+      }
+
+      .settings-menu-link.active {
+        border-left: none;
+        border-bottom: 2px solid #667eea;
+        background: transparent;
       }
 
       .profile-section {
@@ -408,8 +506,18 @@
         text-align: center;
       }
 
-      .select-input {
-        min-width: 100%;
+      .setting-item {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .settings-content {
+        padding: 20px;
+      }
+
+      .connected-service {
+        flex-direction: column;
+        align-items: flex-start;
       }
     }
   </style>
@@ -426,7 +534,7 @@
         style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
         <span class="visually-hidden">Carregando...</span>
       </div>
-      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+      <p style="margin-top: 1rem;">Inicializando página...</p>
     </div>
   </div>
   <!-- ============================================================ -->
@@ -478,43 +586,43 @@
           <div class="settings-sidebar">
             <ul class="settings-menu">
               <li class="settings-menu-item">
-                <a href="#" class="settings-menu-link active" onclick="switchSettingsTab('profile', event)">
+                <a class="settings-menu-link active" onclick="switchSettingsTab('profile', event)">
                   <span class="settings-menu-icon"><i class="bi bi-person"></i></span>
                   <span>Perfil</span>
                 </a>
               </li>
               <li class="settings-menu-item">
-                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('notifications', event)">
+                <a class="settings-menu-link" onclick="switchSettingsTab('notifications', event)">
                   <span class="settings-menu-icon"><i class="bi bi-bell"></i></span>
                   <span>Notificações</span>
                 </a>
               </li>
               <li class="settings-menu-item">
-                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('security', event)">
+                <a class="settings-menu-link" onclick="switchSettingsTab('security', event)">
                   <span class="settings-menu-icon"><i class="bi bi-shield-lock"></i></span>
                   <span>Segurança</span>
                 </a>
               </li>
               <li class="settings-menu-item">
-                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('appearance', event)">
+                <a class="settings-menu-link" onclick="switchSettingsTab('appearance', event)">
                   <span class="settings-menu-icon"><i class="bi bi-palette"></i></span>
                   <span>Aparência</span>
                 </a>
               </li>
               <li class="settings-menu-item">
-                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('integrations', event)">
+                <a class="settings-menu-link" onclick="switchSettingsTab('integrations', event)">
                   <span class="settings-menu-icon"><i class="bi bi-diagram-3"></i></span>
                   <span>Integrações</span>
                 </a>
               </li>
               <li class="settings-menu-item">
-                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('billing', event)">
+                <a class="settings-menu-link" onclick="switchSettingsTab('billing', event)">
                   <span class="settings-menu-icon"><i class="bi bi-credit-card"></i></span>
                   <span>Faturamento</span>
                 </a>
               </li>
               <li class="settings-menu-item">
-                <a href="#" class="settings-menu-link" onclick="switchSettingsTab('advanced', event)">
+                <a class="settings-menu-link" onclick="switchSettingsTab('advanced', event)">
                   <span class="settings-menu-icon"><i class="bi bi-terminal"></i></span>
                   <span>Avançado</span>
                 </a>
@@ -535,12 +643,12 @@
                 <div class="group-title">Informações Pessoais</div>
 
                 <div class="profile-section">
-                  <div class="profile-avatar">JD</div>
+                  <div class="profile-avatar" id="profileAvatar">JD</div>
                   <div class="profile-info">
                     <div class="profile-name" id="profileName">João Daniel</div>
                     <div class="profile-email" id="profileEmail">joao.daniel@empresa.com</div>
                     <span class="profile-role" id="profileRole">Administrador</span>
-                    <button class="btn-secondary-custom" style="margin-top: 12px;">
+                    <button class="btn-secondary-custom" style="margin-top: 12px;" onclick="changeAvatar()">
                       <i class="bi bi-pencil"></i> Alterar Avatar
                     </button>
                   </div>
@@ -575,7 +683,7 @@
                   </select>
                 </div>
 
-                <button class="btn-primary-custom">
+                <button class="btn-primary-custom" onclick="saveProfile()">
                   <i class="bi bi-check-lg"></i> Salvar Alterações
                 </button>
               </div>
@@ -598,7 +706,7 @@
                   </div>
                   <div class="toggle-switch">
                     <label class="switch">
-                      <input type="checkbox" checked>
+                      <input type="checkbox" checked data-setting="emailTickets">
                       <span class="slider"></span>
                     </label>
                   </div>
@@ -611,7 +719,7 @@
                   </div>
                   <div class="toggle-switch">
                     <label class="switch">
-                      <input type="checkbox" checked>
+                      <input type="checkbox" checked data-setting="emailProjects">
                       <span class="slider"></span>
                     </label>
                   </div>
@@ -624,7 +732,7 @@
                   </div>
                   <div class="toggle-switch">
                     <label class="switch">
-                      <input type="checkbox" checked>
+                      <input type="checkbox" checked data-setting="emailTasks">
                       <span class="slider"></span>
                     </label>
                   </div>
@@ -641,7 +749,7 @@
                   </div>
                   <div class="toggle-switch">
                     <label class="switch">
-                      <input type="checkbox" checked>
+                      <input type="checkbox" checked data-setting="browserNotifications">
                       <span class="slider"></span>
                     </label>
                   </div>
@@ -654,14 +762,14 @@
                   </div>
                   <div class="toggle-switch">
                     <label class="switch">
-                      <input type="checkbox">
+                      <input type="checkbox" data-setting="notificationSound">
                       <span class="slider"></span>
                     </label>
                   </div>
                 </div>
               </div>
 
-              <button class="btn-primary-custom">
+              <button class="btn-primary-custom" onclick="saveNotifications()">
                 <i class="bi bi-check-lg"></i> Salvar Preferências
               </button>
             </div>
@@ -678,20 +786,20 @@
 
                 <div class="form-group-custom">
                   <label class="form-label-custom">Senha Atual</label>
-                  <input type="password" class="form-control-custom" placeholder="Digite sua senha atual" />
+                  <input type="password" class="form-control-custom" id="currentPassword" placeholder="Digite sua senha atual" />
                 </div>
 
                 <div class="form-group-custom">
                   <label class="form-label-custom">Nova Senha</label>
-                  <input type="password" class="form-control-custom" placeholder="Digite uma nova senha" />
+                  <input type="password" class="form-control-custom" id="newPassword" placeholder="Digite uma nova senha" />
                 </div>
 
                 <div class="form-group-custom">
                   <label class="form-label-custom">Confirmar Nova Senha</label>
-                  <input type="password" class="form-control-custom" placeholder="Confirme a nova senha" />
+                  <input type="password" class="form-control-custom" id="confirmPassword" placeholder="Confirme a nova senha" />
                 </div>
 
-                <button class="btn-primary-custom">
+                <button class="btn-primary-custom" onclick="changePassword()">
                   <i class="bi bi-shield-check"></i> Alterar Senha
                 </button>
               </div>
@@ -706,7 +814,7 @@
                   </div>
                   <div class="toggle-switch">
                     <label class="switch">
-                      <input type="checkbox">
+                      <input type="checkbox" id="twoFactorToggle">
                       <span class="slider"></span>
                     </label>
                   </div>
@@ -716,9 +824,9 @@
               <div class="settings-group">
                 <div class="group-title">Sessões Ativas</div>
                 <p style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">
-                  Você está conectado em 2 dispositivos
+                  Você está conectado em <strong>1 dispositivo</strong>
                 </p>
-                <button class="btn-secondary-custom" onclick="showAlert('Todas as outras sessões foram encerradas', 'warning')">
+                <button class="btn-secondary-custom" onclick="logoutAllSessions()">
                   <i class="bi bi-box-arrow-right"></i> Encerrar Outras Sessões
                 </button>
               </div>
@@ -741,7 +849,7 @@
                   </div>
                   <div class="toggle-switch">
                     <label class="switch">
-                      <input type="checkbox">
+                      <input type="checkbox" id="darkModeToggle" data-setting="darkMode">
                       <span class="slider"></span>
                     </label>
                   </div>
@@ -754,7 +862,7 @@
                   </div>
                   <div class="toggle-switch">
                     <label class="switch">
-                      <input type="checkbox">
+                      <input type="checkbox" id="compactModeToggle" data-setting="compactMode">
                       <span class="slider"></span>
                     </label>
                   </div>
@@ -766,8 +874,8 @@
 
                 <div class="form-group-custom">
                   <label class="form-label-custom">Selecionar Idioma</label>
-                  <select class="form-control-custom">
-                    <option>Português (Brasil)</option>
+                  <select class="form-control-custom" id="languageSelect">
+                    <option selected>Português (Brasil)</option>
                     <option>English (USA)</option>
                     <option>Español</option>
                     <option>Français</option>
@@ -780,8 +888,8 @@
 
                 <div class="form-group-custom">
                   <label class="form-label-custom">Fuso Horário</label>
-                  <select class="form-control-custom">
-                    <option>(UTC-3) Brasília</option>
+                  <select class="form-control-custom" id="timezoneSelect">
+                    <option selected>(UTC-3) Brasília</option>
                     <option>(UTC-5) Nova York</option>
                     <option>(UTC) Londres</option>
                     <option>(UTC+1) Berlim</option>
@@ -790,15 +898,15 @@
 
                 <div class="form-group-custom">
                   <label class="form-label-custom">Formato de Data</label>
-                  <select class="form-control-custom">
-                    <option>DD/MM/AAAA</option>
+                  <select class="form-control-custom" id="dateFormatSelect">
+                    <option selected>DD/MM/AAAA</option>
                     <option>MM/DD/AAAA</option>
                     <option>AAAA-MM-DD</option>
                   </select>
                 </div>
               </div>
 
-              <button class="btn-primary-custom">
+              <button class="btn-primary-custom" onclick="saveAppearance()">
                 <i class="bi bi-check-lg"></i> Salvar Preferências
               </button>
             </div>
@@ -811,14 +919,31 @@
               <p class="section-subtitle">Conecte ferramentas externas ao CPE Control</p>
 
               <div class="settings-group">
-                <div class="group-title">Serviços Disponíveis</div>
+                <div class="group-title">Serviços Conectados</div>
+
+                <div id="connectedServices" style="margin-bottom: 24px;">
+                  <div class="connected-service">
+                    <div class="service-info">
+                      <div class="service-icon"><i class="bi bi-check-circle"></i></div>
+                      <div class="service-details">
+                        <div class="service-name">Google Calendar</div>
+                        <div class="service-status">✓ Conectado</div>
+                      </div>
+                    </div>
+                    <button class="btn-secondary-custom" onclick="disconnectService('google')">
+                      <i class="bi bi-x-lg"></i> Desconectar
+                    </button>
+                  </div>
+                </div>
+
+                <div class="group-title" style="margin-top: 24px;">Serviços Disponíveis</div>
 
                 <div class="setting-item">
                   <div class="setting-label">
                     <div class="setting-name">Slack</div>
                     <div class="setting-description">Receber notificações no Slack</div>
                   </div>
-                  <button class="btn-secondary-custom">
+                  <button class="btn-secondary-custom" onclick="connectService('slack')">
                     <i class="bi bi-link"></i> Conectar
                   </button>
                 </div>
@@ -828,17 +953,7 @@
                     <div class="setting-name">Microsoft Teams</div>
                     <div class="setting-description">Integrar com Microsoft Teams</div>
                   </div>
-                  <button class="btn-secondary-custom">
-                    <i class="bi bi-link"></i> Conectar
-                  </button>
-                </div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Google Calendar</div>
-                    <div class="setting-description">Sincronizar com Google Calendar</div>
-                  </div>
-                  <button class="btn-secondary-custom">
+                  <button class="btn-secondary-custom" onclick="connectService('teams')">
                     <i class="bi bi-link"></i> Conectar
                   </button>
                 </div>
@@ -848,7 +963,7 @@
                     <div class="setting-name">Zapier</div>
                     <div class="setting-description">Automações com Zapier</div>
                   </div>
-                  <button class="btn-secondary-custom">
+                  <button class="btn-secondary-custom" onclick="connectService('zapier')">
                     <i class="bi bi-link"></i> Conectar
                   </button>
                 </div>
@@ -866,19 +981,19 @@
                 <div class="group-title">Plano Atual</div>
 
                 <div style="padding: 16px; background: #f9fafb; border-radius: 8px; margin-bottom: 16px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                     <div>
                       <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Plano Profissional</div>
                       <div style="font-size: 13px; color: #6b7280;">R$ 299,00/mês</div>
                     </div>
-                    <button class="btn-secondary-custom">
+                    <button class="btn-secondary-custom" onclick="changePlan()">
                       <i class="bi bi-pencil"></i> Alterar
                     </button>
                   </div>
                 </div>
 
                 <p style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">
-                  Próximo ciclo de faturamento: 15 de Abril de 2024
+                  <strong>Próximo ciclo de faturamento:</strong> 15 de Abril de 2026
                 </p>
               </div>
 
@@ -890,7 +1005,7 @@
                     <div class="setting-name">Cartão de Crédito</div>
                     <div class="setting-description">Visa terminado em 4242</div>
                   </div>
-                  <button class="btn-secondary-custom">
+                  <button class="btn-secondary-custom" onclick="editPaymentMethod()">
                     <i class="bi bi-pencil"></i> Editar
                   </button>
                 </div>
@@ -899,10 +1014,10 @@
               <div class="settings-group">
                 <div class="group-title">Ações</div>
 
-                <button class="btn-secondary-custom" style="margin-right: 8px;">
+                <button class="btn-secondary-custom" style="margin-right: 8px;" onclick="downloadReceipts()">
                   <i class="bi bi-download"></i> Baixar Recibos
                 </button>
-                <button class="btn-secondary-custom">
+                <button class="btn-secondary-custom" onclick="downloadInvoice()">
                   <i class="bi bi-file-earmark-pdf"></i> Fatura
                 </button>
               </div>
@@ -923,7 +1038,7 @@
                     <div class="setting-name">Chave de API</div>
                     <div class="setting-description">Use sua chave de API para integração programática</div>
                   </div>
-                  <button class="btn-secondary-custom">
+                  <button class="btn-secondary-custom" onclick="generateApiKey()">
                     <i class="bi bi-key"></i> Gerar
                   </button>
                 </div>
@@ -937,7 +1052,7 @@
                     <div class="setting-name">Exportar Dados</div>
                     <div class="setting-description">Baixe todos os seus dados em formato ZIP</div>
                   </div>
-                  <button class="btn-secondary-custom">
+                  <button class="btn-secondary-custom" onclick="exportData()">
                     <i class="bi bi-download"></i> Exportar
                   </button>
                 </div>
@@ -949,8 +1064,7 @@
                       Esta ação é permanente e não pode ser desfeita
                     </div>
                   </div>
-                  <button class="btn-secondary-custom" style="border-color: #ef4444; color: #ef4444;" 
-                    onclick="showAlert('Funcionalidade desativada para proteção', 'danger')">
+                  <button class="btn-secondary-custom danger" onclick="deleteAccount()">
                     <i class="bi bi-trash"></i> Deletar
                   </button>
                 </div>
@@ -966,20 +1080,42 @@
   <!-- 📦 SCRIPTS -->
   <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
   <!-- ============================================================ -->
   <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
   <!-- ============================================================ -->
   <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      const user = await initPageAuth("SETTINGS");
-      if (!user) return;
+    console.log("\n" + "=".repeat(80));
+    console.log("[SETTINGS/PAGE] 📄 Inicializando página de Configurações");
+    console.log("[SETTINGS/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
+    console.log("=".repeat(80) + "\n");
 
-      loadSettings(user);
+    document.addEventListener("DOMContentLoaded", async () => {
+      console.log("[SETTINGS/INIT] 📋 DOM Carregado");
+
+      try {
+        const loadingPage = document.getElementById("loadingPage");
+        const containerMain = document.querySelector(".container-main");
+
+        loadingPage.style.display = "none";
+        containerMain.style.display = "flex";
+
+        console.log("[SETTINGS/INIT] ✅ Página inicializada com sucesso");
+        console.log("=".repeat(80) + "\n");
+
+        await loadSettings();
+
+      } catch (err) {
+        console.error("[SETTINGS/INIT] ❌ ERRO NA INICIALIZAÇÃO");
+        console.error("[SETTINGS/INIT] 📍 Mensagem:", err.message);
+        console.error("[SETTINGS/INIT] 🔗 Stack:", err.stack);
+        console.error("=".repeat(80) + "\n");
+
+        showAlert("Erro ao inicializar página: " + err.message, "danger");
+      }
     });
   </script>
 
@@ -987,37 +1123,43 @@
   <!-- 🔧 FUNÇÕES DA PÁGINA -->
   <!-- ============================================================ -->
   <script>
+    // ===== DADOS DO USUÁRIO =====
+    let currentUser = {
+      name: "João Daniel",
+      email: "joao.daniel@empresa.com",
+      role: "Administrador",
+      phone: "",
+      department: "Tecnologia"
+    };
+
     /**
-     * Carrega as configurações
+     * ✅ Carrega as configurações
      */
-    function loadSettings(user) {
+    async function loadSettings() {
+      console.log("\n[SETTINGS/LOAD] ⚙️ Carregando configurações do usuário...");
+
       try {
-        console.log("[SETTINGS/LOAD] Carregando configurações...");
+        const initials = currentUser.name
+          ?.split(' ')
+          .map(n => n.charAt(0))
+          .join('')
+          .toUpperCase() || 'JD';
 
-        // Atualizar informações de perfil
-        if (user) {
-          const initials = user.name
-            ?.split(' ')
-            .map(n => n.charAt(0))
-            .join('')
-            .toUpperCase() || 'U';
+        document.getElementById("profileName").textContent = currentUser.name;
+        document.getElementById("profileEmail").textContent = currentUser.email;
+        document.getElementById("profileRole").textContent = currentUser.role;
+        document.getElementById("profileAvatar").textContent = initials;
 
-          document.getElementById("profileName").textContent = user.name || "Usuário";
-          document.getElementById("profileEmail").textContent = user.email || "email@empresa.com";
-          document.getElementById("profileRole").textContent = user.role || "Usuário";
-
-          // Atualizar campos do formulário
-          document.getElementById("fullName").value = user.name || "";
-          document.getElementById("email").value = user.email || "";
-
-          // Atualizar avatar
-          const avatarElement = document.querySelector(".profile-avatar");
-          if (avatarElement) {
-            avatarElement.textContent = initials;
-          }
-        }
+        document.getElementById("fullName").value = currentUser.name;
+        document.getElementById("email").value = currentUser.email;
+        document.getElementById("phone").value = currentUser.phone || "";
+        document.getElementById("department").value = currentUser.department;
 
         console.log("[SETTINGS/LOAD] ✓ Configurações carregadas");
+        console.log("[SETTINGS/LOAD] ├─ Usuário:", currentUser.name);
+        console.log("[SETTINGS/LOAD] ├─ E-mail:", currentUser.email);
+        console.log("[SETTINGS/LOAD] └─ Função:", currentUser.role);
+        console.log("[SETTINGS/LOAD] ✅ Tudo pronto\n");
 
       } catch (err) {
         console.error("[SETTINGS/LOAD] ✗ Erro:", err.message);
@@ -1026,12 +1168,12 @@
     }
 
     /**
-     * Alterna entre as abas de configurações
+     * ✅ Alterna entre as abas de configurações
      */
     function switchSettingsTab(tab, event) {
       event.preventDefault();
+      console.log("[SETTINGS/TAB] 📑 Alternando para aba:", tab);
 
-      // Remover active de todos
       document.querySelectorAll(".settings-section").forEach(section => {
         section.classList.remove("active");
       });
@@ -1040,69 +1182,316 @@
         link.classList.remove("active");
       });
 
-      // Adicionar active ao selecionado
       document.getElementById(tab + "-section").classList.add("active");
       event.target.closest(".settings-menu-link").classList.add("active");
+
+      console.log("[SETTINGS/TAB] ✓ Aba alterada para:", tab);
     }
 
     /**
-     * Mostra mensagem de alerta
+     * ✅ Mostra mensagem de alerta
      */
     function showAlert(message, type = "danger") {
-      const alertBox = document.getElementById("alertBox");
-      const alertMessage = document.getElementById("alertMessage");
+      console.log(`[SETTINGS/ALERT] ${type === 'success' ? '✅' : '❌'} ${message}`);
 
       if (type === "success") {
-        document.getElementById("successBox").classList.remove("d-none");
-        document.getElementById("successMessage").textContent = message;
-        setTimeout(() => {
-          document.getElementById("successBox").classList.add("d-none");
-        }, 5000);
-      } else {
-        alertBox.classList.remove("d-none");
-        alertMessage.textContent = message;
-
-        if (type === "warning") {
-          alertBox.classList.remove("alert-danger");
-          alertBox.classList.add("alert-warning");
-        } else {
-          alertBox.classList.remove("alert-warning");
-          alertBox.classList.add("alert-danger");
+        const successBox = document.getElementById("successBox");
+        const successMessage = document.getElementById("successMessage");
+        if (successBox && successMessage) {
+          successMessage.textContent = message;
+          successBox.classList.remove("d-none");
+          setTimeout(() => {
+            successBox.classList.add("d-none");
+          }, 4000);
         }
+      } else {
+        const alertBox = document.getElementById("alertBox");
+        const alertMessage = document.getElementById("alertMessage");
+        if (alertBox && alertMessage) {
+          alertMessage.textContent = message;
+          alertBox.classList.remove("d-none");
 
-        setTimeout(() => {
-          alertBox.classList.add("d-none");
-        }, 5000);
+          if (type === "warning") {
+            alertBox.classList.remove("alert-danger", "alert-info");
+            alertBox.classList.add("alert-warning");
+          } else if (type === "info") {
+            alertBox.classList.remove("alert-danger", "alert-warning");
+            alertBox.classList.add("alert-info");
+          } else {
+            alertBox.classList.remove("alert-warning", "alert-info");
+            alertBox.classList.add("alert-danger");
+          }
+
+          setTimeout(() => {
+            alertBox.classList.add("d-none");
+          }, 4000);
+        }
       }
     }
 
     /**
-     * Salvar alterações de perfil
+     * ✅ Salva alterações de perfil
      */
-    document.querySelectorAll(".btn-primary-custom").forEach(btn => {
-      btn.addEventListener("click", (e) => {
-        const section = e.target.closest(".settings-section");
+    function saveProfile() {
+      console.log("[SETTINGS/SAVE] 💾 Salvando perfil...");
 
-        if (section.id === "profile-section") {
-          const fullName = document.getElementById("fullName").value;
-          const email = document.getElementById("email").value;
+      const fullName = document.getElementById("fullName").value?.trim();
+      const email = document.getElementById("email").value?.trim();
+      const phone = document.getElementById("phone").value?.trim();
+      const department = document.getElementById("department").value;
 
-          if (!fullName || !email) {
-            showAlert("Preencha todos os campos obrigatórios", "danger");
-            return;
-          }
+      if (!fullName || !email) {
+        console.warn("[SETTINGS/SAVE] ⚠️ Campos obrigatórios não preenchidos");
+        showAlert("Preencha todos os campos obrigatórios (Nome e E-mail)", "danger");
+        return;
+      }
 
-          console.log("[SETTINGS/SAVE] Salvando perfil...");
-          showAlert("Perfil atualizado com sucesso!", "success");
-        } else if (section.id === "notifications-section") {
-          console.log("[SETTINGS/SAVE] Salvando preferências de notificações...");
-          showAlert("Preferências de notificações atualizadas!", "success");
-        } else if (section.id === "appearance-section") {
-          console.log("[SETTINGS/SAVE] Salvando preferências de aparência...");
-          showAlert("Preferências de aparência atualizadas!", "success");
-        }
-      });
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        console.warn("[SETTINGS/SAVE] ⚠️ E-mail inválido");
+        showAlert("E-mail inválido! Digite um e-mail válido.", "danger");
+        return;
+      }
+
+      try {
+        currentUser.name = fullName;
+        currentUser.email = email;
+        currentUser.phone = phone;
+        currentUser.department = department;
+
+        console.log("[SETTINGS/SAVE] ✓ Perfil atualizado");
+        console.log("[SETTINGS/SAVE] ├─ Nome:", fullName);
+        console.log("[SETTINGS/SAVE] ├─ E-mail:", email);
+        console.log("[SETTINGS/SAVE] └─ Departamento:", department);
+
+        showAlert("Perfil atualizado com sucesso!", "success");
+        loadSettings();
+
+      } catch (err) {
+        console.error("[SETTINGS/SAVE] ✗ Erro:", err.message);
+        showAlert("Erro ao salvar perfil: " + err.message, "danger");
+      }
+    }
+
+    /**
+     * ✅ Altera avatar
+     */
+    function changeAvatar() {
+      console.log("[SETTINGS/PROFILE] 🖼️ Alterando avatar...");
+      showAlert("Funcionalidade de alteração de avatar em desenvolvimento", "info");
+    }
+
+    /**
+     * ✅ Salva preferências de notificações
+     */
+    function saveNotifications() {
+      console.log("[SETTINGS/SAVE] 📬 Salvando preferências de notificações...");
+
+      try {
+        const emailTickets = document.querySelector('[data-setting="emailTickets"]')?.checked || false;
+        const emailProjects = document.querySelector('[data-setting="emailProjects"]')?.checked || false;
+        const emailTasks = document.querySelector('[data-setting="emailTasks"]')?.checked || false;
+        const browserNotif = document.querySelector('[data-setting="browserNotifications"]')?.checked || false;
+        const sound = document.querySelector('[data-setting="notificationSound"]')?.checked || false;
+
+        console.log("[SETTINGS/SAVE] ✓ Notificações salvas:");
+        console.log("[SETTINGS/SAVE] ├─ E-mail Tickets:", emailTickets);
+        console.log("[SETTINGS/SAVE] ├─ E-mail Projetos:", emailProjects);
+        console.log("[SETTINGS/SAVE] ├─ E-mail Tarefas:", emailTasks);
+        console.log("[SETTINGS/SAVE] ├─ Notificador Navegador:", browserNotif);
+        console.log("[SETTINGS/SAVE] └─ Som:", sound);
+
+        showAlert("Preferências de notificações atualizadas com sucesso!", "success");
+
+      } catch (err) {
+        console.error("[SETTINGS/SAVE] ✗ Erro:", err.message);
+        showAlert("Erro ao salvar notificações: " + err.message, "danger");
+      }
+    }
+
+    /**
+     * ✅ Altera a senha
+     */
+    function changePassword() {
+      console.log("[SETTINGS/SECURITY] 🔐 Alterando senha...");
+
+      const currentPassword = document.getElementById("currentPassword").value?.trim();
+      const newPassword = document.getElementById("newPassword").value?.trim();
+      const confirmPassword = document.getElementById("confirmPassword").value?.trim();
+
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        console.warn("[SETTINGS/SECURITY] ⚠️ Todos os campos de senha são obrigatórios");
+        showAlert("Preencha todos os campos de senha", "danger");
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        console.warn("[SETTINGS/SECURITY] ⚠️ Senhas não conferem");
+        showAlert("As senhas não conferem. Tente novamente.", "danger");
+        return;
+      }
+
+      if (newPassword.length < 8) {
+        console.warn("[SETTINGS/SECURITY] ⚠️ Senha muito curta");
+        showAlert("A nova senha deve ter no mínimo 8 caracteres", "danger");
+        return;
+      }
+
+      try {
+        console.log("[SETTINGS/SECURITY] ✓ Senha alterada com sucesso");
+        document.getElementById("currentPassword").value = "";
+        document.getElementById("newPassword").value = "";
+        document.getElementById("confirmPassword").value = "";
+        showAlert("Senha alterada com sucesso!", "success");
+
+      } catch (err) {
+        console.error("[SETTINGS/SECURITY] ✗ Erro:", err.message);
+        showAlert("Erro ao alterar senha: " + err.message, "danger");
+      }
+    }
+
+    /**
+     * ✅ Salva preferências de aparência
+     */
+    function saveAppearance() {
+      console.log("[SETTINGS/SAVE] 🎨 Salvando preferências de aparência...");
+
+      try {
+        const darkMode = document.getElementById("darkModeToggle").checked;
+        const compactMode = document.getElementById("compactModeToggle").checked;
+        const language = document.getElementById("languageSelect").value;
+        const timezone = document.getElementById("timezoneSelect").value;
+        const dateFormat = document.getElementById("dateFormatSelect").value;
+
+        console.log("[SETTINGS/SAVE] ✓ Aparência salva:");
+        console.log("[SETTINGS/SAVE] ├─ Modo Escuro:", darkMode);
+        console.log("[SETTINGS/SAVE] ├─ Modo Compacto:", compactMode);
+        console.log("[SETTINGS/SAVE] ├─ Idioma:", language);
+        console.log("[SETTINGS/SAVE] ├─ Fuso Horário:", timezone);
+        console.log("[SETTINGS/SAVE] └─ Formato Data:", dateFormat);
+
+        showAlert("Preferências de aparência atualizadas com sucesso!", "success");
+
+      } catch (err) {
+        console.error("[SETTINGS/SAVE] ✗ Erro:", err.message);
+        showAlert("Erro ao salvar aparência: " + err.message, "danger");
+      }
+    }
+
+    /**
+     * ✅ Encerra outras sessões
+     */
+    function logoutAllSessions() {
+      console.log("[SETTINGS/SECURITY] 🚪 Encerrando outras sessões...");
+      if (!confirm("Isso encerrará sua conta em todos os outros dispositivos. Continuar?")) {
+        console.log("[SETTINGS/SECURITY] ⏭️ Operação cancelada pelo usuário");
+        return;
+      }
+      showAlert("Todas as outras sessões foram encerradas com sucesso!", "success");
+    }
+
+    /**
+     * ✅ Conecta serviço de integração
+     */
+    function connectService(service) {
+      console.log("[SETTINGS/INTEGRATIONS] 🔗 Conectando serviço:", service);
+      showAlert(`Integração com ${service} em desenvolvimento`, "info");
+    }
+
+    /**
+     * ✅ Desconecta serviço de integração
+     */
+    function disconnectService(service) {
+      console.log("[SETTINGS/INTEGRATIONS] 🔌 Desconectando serviço:", service);
+      if (!confirm("Desconectar este serviço?")) {
+        console.log("[SETTINGS/INTEGRATIONS] ⏭️ Operação cancelada");
+        return;
+      }
+      showAlert(`Serviço ${service} desconectado com sucesso!`, "success");
+    }
+
+    /**
+     * ✅ Altera plano de faturamento
+     */
+    function changePlan() {
+      console.log("[SETTINGS/BILLING] 💳 Alterando plano...");
+      showAlert("Redirecionando para página de planos...", "info");
+    }
+
+    /**
+     * ✅ Edita método de pagamento
+     */
+    function editPaymentMethod() {
+      console.log("[SETTINGS/BILLING] 💳 Editando método de pagamento...");
+      showAlert("Redirecionando para atualizar cartão...", "info");
+    }
+
+    /**
+     * ✅ Baixa recibos
+     */
+    function downloadReceipts() {
+      console.log("[SETTINGS/BILLING] 📥 Baixando recibos...");
+      showAlert("Recibos foram baixados com sucesso!", "success");
+    }
+
+    /**
+     * ✅ Baixa fatura
+     */
+    function downloadInvoice() {
+      console.log("[SETTINGS/BILLING] 📄 Baixando fatura...");
+      showAlert("Fatura foi baixada com sucesso!", "success");
+    }
+
+    /**
+     * ✅ Gera chave de API
+     */
+    function generateApiKey() {
+      console.log("[SETTINGS/ADVANCED] 🔑 Gerando chave de API...");
+      const apiKey = "sk_live_" + Math.random().toString(36).substr(2, 24).toUpperCase();
+      showAlert(`Chave de API gerada: ${apiKey}`, "success");
+      console.log("[SETTINGS/ADVANCED] ✓ Chave:", apiKey);
+    }
+
+    /**
+     * ✅ Exporta dados do usuário
+     */
+    function exportData() {
+      console.log("[SETTINGS/ADVANCED] 📦 Exportando dados...");
+      showAlert("Seus dados estão sendo preparados para download. Você receberá um e-mail em breve!", "success");
+    }
+
+    /**
+     * ✅ Deleta conta do usuário
+     */
+    function deleteAccount() {
+      console.log("[SETTINGS/ADVANCED] 🗑️ Deletando conta...");
+      if (!confirm("Tem certeza? Esta ação é PERMANENTE e não pode ser desfeita!")) {
+        console.log("[SETTINGS/ADVANCED] ⏭️ Deleção cancelada");
+        return;
+      }
+      showAlert("Funcionalidade desativada para proteção de dados", "danger");
+      console.log("[SETTINGS/ADVANCED] ⛔ Deleção bloqueada por segurança");
+    }
+
+    /**
+     * ✅ Event Listeners - 2FA Toggle
+     */
+    document.addEventListener("DOMContentLoaded", () => {
+      console.log("[SETTINGS/EVENTS] 🎯 Inicializando event listeners...");
+
+      const twoFactorToggle = document.getElementById("twoFactorToggle");
+      if (twoFactorToggle) {
+        twoFactorToggle.addEventListener("change", (e) => {
+          console.log("[SETTINGS/SECURITY] 🔑 2FA toggled:", e.target.checked);
+          const status = e.target.checked ? "habilitada" : "desabilitada";
+          showAlert(`Autenticação de duas etapas ${status}`, "success");
+        });
+      }
+
+      console.log("[SETTINGS/EVENTS] ✓ Event listeners configurados");
     });
+
+    console.log("[SETTINGS] ✅ Script carregado sem autenticação");
   </script>
 
 </body>

@@ -2,28 +2,30 @@
 <html lang="pt-BR">
 
 <head>
+  <!-- ✅ CHARSET UTF-8 - IMPORTANTE PARA ACENTOS -->
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
   <title>Dashboard - CPE Control</title>
 
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
-    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
   <!-- Bootstrap 5 -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
-  <!-- Custom Styles -->
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/style.css">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/app.css">
-
+  <!-- Global Styles -->
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/components.css">
 </head>
 
 <body>
-  <!-- ✅ LOADING PAGE - Verificar sessão ANTES de renderizar -->
+  <!-- ✅ LOADING PAGE -->
   <div id="loadingPage" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
     <div style="text-align: center; color: white;">
       <div class="spinner-border" role="status" style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
@@ -33,69 +35,24 @@
     </div>
   </div>
 
-  <!-- Navbar de Autenticação -->
-  <nav class="navbar-auth">
-    <div class="container-fluid d-flex align-items-center">
-      <h5 class="mb-0" style="color: white; font-weight: 700;">
-        <i class="bi bi-shield-check"></i> CPE Control
-      </h5>
+  <!-- ============================================================ -->
+  <!-- NAVBAR - Carregada pelo nav.js -->
+  <!-- ============================================================ -->
+  <nav id="navbar-container"></nav>
 
-      <div class="user-menu">
-        <div class="user-info">
-          <span class="user-name" id="userName">Carregando...</span>
-          <span class="user-role" id="userRole">usuário</span>
-        </div>
-
-        <div class="dropdown">
-          <button class="avatar" id="avatarBtn" data-bs-toggle="dropdown" aria-expanded="false" title="Menu do Usuário">
-            <i class="bi bi-person-circle"></i>
-          </button>
-
-          <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="avatarBtn">
-            <li>
-              <h6 class="dropdown-header" id="dropdownEmail">email@example.com</h6>
-            </li>
-            <li>
-              <hr class="dropdown-divider">
-            </li>
-            <li><a class="dropdown-item" href="#" id="profileBtn">
-                <i class="bi bi-person"></i> Meu Perfil
-              </a></li>
-            <li><a class="dropdown-item" href="#" id="settingsBtn">
-                <i class="bi bi-gear"></i> Configurações
-              </a></li>
-            <li>
-              <hr class="dropdown-divider">
-            </li>
-            <li><a class="dropdown-item logout" href="#" id="logoutBtn">
-                <i class="bi bi-box-arrow-right"></i> Sair
-              </a></li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </nav>
-
-  <!-- Container Principal -->
-  <div class="container-main">
-    <!-- Sidebar -->
-    <div class="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">CPE</div>
-        <div class="sidebar-title">CONTROL</div>
-      </div>
-
-      <div class="search-box">
-        <input type="text" placeholder="Buscar">
-      </div>
-
-      <ul class="sidebar-menu"></ul>
-    </div>
+  <!-- ============================================================ -->
+  <!-- CONTAINER PRINCIPAL -->
+  <!-- ============================================================ -->
+  <div class="container-main" style="display: none;">
+    <!-- SIDEBAR - Carregada pelo nav.js -->
+    <div id="sidebar-container"></div>
 
     <!-- Main Content -->
     <div class="main-content">
       <div class="top-bar">
-        <button class="menu-toggle">☰</button>
+        <button class="menu-toggle" id="menuToggle">
+          <i class="bi bi-list"></i>
+        </button>
         <h1>Dashboard</h1>
       </div>
 
@@ -180,133 +137,202 @@
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+  
+  <!-- ✅ SCRIPTS DE NAVEGAÇÃO -->
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
-  <!-- ... resto do HTML ... -->
+  <!-- =========================================
+       🔐 SCRIPT DE AUTENTICAÇÃO E INICIALIZAÇÃO
+       ========================================= -->
 
-<script>
-  // ✅ BOOT: Verificar sessão com TIMEOUT e RETRY
-  (async () => {
-    console.log("\n" + "=".repeat(60));
-    console.log("[INDEX/BOOT] Verificando sessão...");
-    console.log("=".repeat(60));
+  <script>
+    // ============================================================
+    // 1️⃣ VERIFICAÇÃO DE AUTENTICAÇÃO (ao carregar a página)
+    // ============================================================
 
-    const maxRetries = 3;
-    let retryCount = 0;
-    let sessionValid = false;
+    async function checkAuthentication() {
+      console.log("\n" + "=".repeat(80));
+      console.log("[INDEX] 🔐 Verificando autenticação do localStorage...");
+      console.log("=".repeat(80));
 
-    while (retryCount < maxRetries && !sessionValid) {
       try {
-        console.log(`[INDEX/BOOT] Tentativa ${retryCount + 1} de ${maxRetries}...`);
-        
-        const user = await Promise.race([
-          getMe(),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Timeout")), 5000)
-          )
-        ]);
+        // ✅ VERIFICAR SE ESTÁ LOGADO USANDO LOCALSTORAGE
+        const isLoggedIn = localStorage.getItem("logged_in") === "true";
+        const token = localStorage.getItem("token");
+        const userStr = localStorage.getItem("user");
 
-        console.log("[INDEX/BOOT] ✓ Sessão válida, usuário:", user.name);
-        sessionValid = true;
+        console.log("[INDEX] 🔍 Verificação de localStorage:");
+        console.log("[INDEX]   • logged_in:", isLoggedIn ? "✓ true" : "✗ false");
+        console.log("[INDEX]   • token:", token ? "✓ EXISTE" : "✗ NÃO EXISTE");
+        console.log("[INDEX]   • user:", userStr ? "✓ EXISTE" : "✗ NÃO EXISTE");
 
-        // Remove a tela de loading
-        const loadingPage = document.getElementById("loadingPage");
-        if (loadingPage) {
-          loadingPage.style.display = "none";
+        // ✅ SE NÃO ESTÁ LOGADO, USAR DADOS GENÉRICOS
+        if (!isLoggedIn || !token) {
+          console.warn("[INDEX] ⚠️  Usuário não autenticado - Usando acesso público");
+          console.log("[INDEX] 🔓 Acesso direto permitido");
+
+          // Criar usuário genérico para interface
+          const publicUser = {
+            id: "public",
+            name: "Visitante",
+            email: "public@sistemacpe.local",
+            role: "USER",
+            username: "visitante"
+          };
+
+          console.log("[INDEX] ✅ Modo público ativado");
+          console.log("[INDEX] 👤 Usuário:", publicUser.name);
+
+          return publicUser;
         }
 
-        // Mostra o conteúdo principal
-        const containerMain = document.querySelector(".container-main");
-        if (containerMain) {
-          containerMain.style.display = "flex";
-        }
+        // ✅ RECUPERAR DADOS DO USUÁRIO DO LOCALSTORAGE
+        let user = null;
 
-      } catch (err) {
-        console.warn(`[INDEX/BOOT] ✗ Tentativa ${retryCount + 1} falhou:`, err.message);
-        retryCount++;
-
-        if (retryCount >= maxRetries) {
-          console.error("[INDEX/BOOT] ✗ Todas as tentativas falharam");
-          console.log("[INDEX/BOOT] ✗ Redirecionando para login em 2 segundos...");
-          
-          setTimeout(() => {
-            window.location.href = "/SistemaCPE/web/login.html";
-          }, 2000);
-        } else {
-          // Aguarda 1 segundo antes de tentar novamente
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-    }
-  })();
-</script>
-
-<script>
-  document.addEventListener("DOMContentLoaded", async function () {
-    console.log("\n" + "=".repeat(60));
-    console.log("[INDEX/PAGE] Inicializando Dashboard");
-    console.log("=".repeat(60));
-
-    try {
-      console.log("[INDEX/PAGE] Obtendo dados do usuário...");
-
-      // ✅ Obtém dados do usuário já autenticado
-      const user = await getMe();
-
-      console.log("[INDEX/PAGE] ✓ Usuário autenticado:", user.name);
-
-      // Atualiza as informações do usuário
-      const userNameEl = document.getElementById("userName");
-      const userRoleEl = document.getElementById("userRole");
-      const dropdownEmailEl = document.getElementById("dropdownEmail");
-
-      if (userNameEl) userNameEl.textContent = user.name;
-      if (userRoleEl) userRoleEl.textContent = user.role || "usuário";
-      if (dropdownEmailEl) dropdownEmailEl.textContent = user.email;
-
-      // ✅ Renderiza a navegação dinâmica
-      console.log("[INDEX/PAGE] Renderizando navegação...");
-      await renderNavigation(user.role || "USER");
-
-      console.log("[INDEX/PAGE] ✓ Dashboard carregado com sucesso");
-      console.log("=".repeat(60) + "\n");
-
-    } catch (err) {
-      console.error("[INDEX/PAGE] ✗ Erro:", err.message);
-    }
-
-    // Handler do botão Logout
-    const logoutBtn = document.getElementById("logoutBtn");
-    if (logoutBtn) {
-      logoutBtn.addEventListener("click", async (e) => {
-        e.preventDefault();
-        if (confirm("Tem certeza que deseja sair?")) {
+        if (userStr) {
           try {
-            console.log("[INDEX/LOGOUT] Executando logout...");
-            await logout();
-            console.log("[INDEX/LOGOUT] ✓ Logout bem-sucedido");
-            window.location.href = "/SistemaCPE/web/login.html";
+            user = JSON.parse(userStr);
+            console.log("[INDEX] ✓ Usuário recuperado de localStorage.user:", user.name);
           } catch (err) {
-            console.error("[INDEX/LOGOUT] ✗ Erro:", err.message);
-            window.location.href = "/SistemaCPE/web/login.html";
+            console.error("[INDEX] ❌ Erro ao fazer parse de user:", err.message);
+            
+            // ✅ Fallback para campos individuais
+            user = {
+              id: localStorage.getItem("user_id"),
+              name: localStorage.getItem("name"),
+              email: localStorage.getItem("email"),
+              role: localStorage.getItem("role"),
+              username: localStorage.getItem("username")
+            };
+            console.log("[INDEX] ✓ Usuário recuperado de campos individuais:", user.name);
           }
         }
-      });
+
+        if (!user || !user.id) {
+          throw new Error("Dados do usuário não encontrados no localStorage");
+        }
+
+        console.log("[INDEX] ✅ Sessão válida!");
+        console.log("[INDEX] 👤 Usuário:", {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role
+        });
+
+        return user;
+
+      } catch (err) {
+        console.error("[INDEX] ❌ ERRO:", err.message);
+        console.log("[INDEX] 🔓 Continuando com acesso público...");
+
+        // Retornar usuário genérico mesmo com erro
+        return {
+          id: "public",
+          name: "Visitante",
+          email: "public@sistemacpe.local",
+          role: "USER",
+          username: "visitante"
+        };
+      }
     }
 
-    // Toggle do menu mobile
-    const menuToggle = document.querySelector(".menu-toggle");
-    const sidebar = document.querySelector(".sidebar");
-    if (menuToggle) {
-      menuToggle.addEventListener("click", () => {
-        sidebar.classList.toggle("active");
-      });
+    // ============================================================
+    // 2️⃣ FUNÇÕES AUXILIARES DE UI
+    // ============================================================
+
+    function showLoadingMessage(title, message) {
+      const loadingPage = document.getElementById("loadingPage");
+      if (loadingPage) {
+        loadingPage.innerHTML = `
+          <div style="text-align: center; color: white;">
+            <h3>${title}</h3>
+            <p>${message}</p>
+          </div>
+        `;
+      }
     }
-  });
-</script>
+
+    function hideLoadingPage() {
+      const loadingPage = document.getElementById("loadingPage");
+      if (loadingPage) {
+        loadingPage.style.display = "none";
+      }
+    }
+
+    function showDashboard() {
+      const containerMain = document.querySelector(".container-main");
+      if (containerMain) {
+        containerMain.style.display = "flex";
+      }
+    }
+
+    function setupMenuToggle() {
+      const menuToggle = document.getElementById("menuToggle");
+      const sidebar = document.getElementById("sidebar-container");
+
+      if (menuToggle && sidebar) {
+        menuToggle.addEventListener("click", () => {
+          const sidebarEl = sidebar.querySelector(".sidebar-collapsed");
+          if (sidebarEl) {
+            sidebarEl.classList.toggle("show");
+            console.log("[INDEX] ☰ Menu toggled");
+          }
+        });
+      }
+    }
+
+    function setActiveMenu() {
+      // Marcar menu de dashboard como ativo
+      const dashboardLink = document.querySelector('a[href*="index.html"]');
+      if (dashboardLink) {
+        dashboardLink.parentElement.classList.add('active');
+        dashboardLink.classList.add('active');
+        console.log("[INDEX] ✅ Menu Dashboard marcado como ativo");
+      }
+    }
+
+    // ============================================================
+    // 3️⃣ INICIALIZAÇÃO PRINCIPAL (DOMContentLoaded)
+    // ============================================================
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      console.log("\n" + "=".repeat(80));
+      console.log("[INDEX] 🎬 DOMContentLoaded - Inicializando Dashboard");
+      console.log("=".repeat(80));
+
+      try {
+        // 1️⃣ Verificar autenticação
+        const user = await checkAuthentication();
+
+        if (!user) {
+          console.warn("[INDEX] ⚠️ Autenticação falhou");
+          return;
+        }
+
+        // 2️⃣ Aguardar nav.js carregar
+        setTimeout(() => {
+          // 3️⃣ Ocultar loading page
+          hideLoadingPage();
+
+          // 4️⃣ Mostrar dashboard
+          showDashboard();
+
+          // 5️⃣ Setup de handlers
+          setupMenuToggle();
+          setActiveMenu();
+
+          console.log("[INDEX] ✅ Dashboard inicializado com sucesso!");
+          console.log("=".repeat(80) + "\n");
+
+        }, 500);
+
+      } catch (err) {
+        console.error("[INDEX] ❌ ERRO NA INICIALIZAÇÃO:", err.message);
+        showLoadingMessage("❌ Erro", err.message);
+      }
+    });
+  </script>
 
 </body>
 

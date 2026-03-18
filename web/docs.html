@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="pt-br">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,27 +8,510 @@
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link href="./assets/css/app.css" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --primary-color: #667eea;
+      --secondary-color: #764ba2;
+      --light-bg: #f9fafb;
+      --border-color: #e5e7eb;
+      --text-primary: #1f2937;
+      --text-secondary: #6b7280;
+      --danger-color: #ef4444;
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+        'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      background-color: var(--light-bg);
+      color: var(--text-primary);
+    }
+
+    /* ============================================================ */
+    /* LAYOUT PRINCIPAL */
+    /* ============================================================ */
+    .app-shell {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .app-sidebar {
+      width: 280px;
+      background: var(--primary-gradient);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 0;
+      overflow-y: auto;
+      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+    }
+
+    .app-sidebar__brand {
+      padding: 0 20px 30px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .brand-dot {
+      width: 12px;
+      height: 12px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .app-nav {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 0 12px;
+    }
+
+    .app-nav__item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      color: rgba(255, 255, 255, 0.8);
+      text-decoration: none;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .app-nav__item:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .app-nav__item.active {
+      background: rgba(255, 255, 255, 0.25);
+      color: white;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.3);
+    }
+
+    .app-nav__item i {
+      width: 20px;
+      text-align: center;
+    }
+
+    .app-nav__section {
+      padding: 12px 16px;
+      margin-top: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .app-sidebar__footer {
+      padding: 0 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 20px;
+      margin-top: 20px;
+    }
+
+    /* ============================================================ */
+    /* MAIN CONTENT */
+    /* ============================================================ */
+    .app-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .app-header {
+      background: white;
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+      gap: 16px;
+    }
+
+    .app-search {
+      max-width: 400px;
+      width: 100%;
+    }
+
+    .app-search .input-group-text {
+      border-color: var(--border-color);
+      background: white;
+      color: var(--text-secondary);
+    }
+
+    .app-search .form-control {
+      border-color: var(--border-color);
+      padding: 8px 12px;
+    }
+
+    .app-search .form-control:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .app-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px 24px;
+    }
+
+    /* ============================================================ */
+    /* CARDS & BUTTONS */
+    /* ============================================================ */
+    .app-card {
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+      background: white;
+    }
+
+    .app-card:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    .btn-primary {
+      background: var(--primary-gradient);
+      border: none;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-outline-secondary {
+      border: 2px solid var(--border-color);
+      transition: all 0.2s ease;
+    }
+
+    .btn-outline-secondary:hover {
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+      background: rgba(102, 126, 234, 0.05);
+    }
+
+    .btn-outline-primary {
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+
+    .btn-outline-primary:hover {
+      background: rgba(102, 126, 234, 0.1);
+      border-color: var(--primary-color);
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    /* ============================================================ */
+    /* FORMS */
+    /* ============================================================ */
+    .form-label {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+
+    .form-control,
+    .form-select {
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 12px;
+      transition: all 0.2s ease;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      outline: none;
+    }
+
+    .form-text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* ============================================================ */
+    /* MODALS */
+    /* ============================================================ */
+    .modal-header {
+      background: var(--primary-gradient);
+      color: white;
+      border: none;
+      padding: 20px 24px;
+    }
+
+    .modal-header .btn-close {
+      filter: brightness(0) invert(1);
+    }
+
+    .modal-title {
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .modal-footer {
+      border-top: 1px solid var(--border-color);
+      padding: 16px 24px;
+      background: #fafbfc;
+    }
+
+    /* ============================================================ */
+    /* LISTS & BADGES */
+    /* ============================================================ */
+    .list-group-item {
+      border: 1px solid var(--border-color);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .list-group-item:hover {
+      background-color: #f3f4f6;
+      border-color: var(--primary-color);
+    }
+
+    .list-group-item.active {
+      background-color: rgba(102, 126, 234, 0.1);
+      border-color: var(--primary-color);
+      color: var(--text-primary);
+    }
+
+    .badge {
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
+    }
+
+    .text-bg-light {
+      background: var(--light-bg) !important;
+      color: var(--text-secondary) !important;
+      border: 1px solid var(--border-color);
+    }
+
+    /* ============================================================ */
+    /* ALERTS & MESSAGES */
+    /* ============================================================ */
+    .alert {
+      border: none;
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      animation: slideIn 0.3s ease;
+      margin-bottom: 16px;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .alert-danger {
+      background-color: rgba(220, 38, 38, 0.1);
+      color: #991b1b;
+    }
+
+    .alert-success {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: #065f46;
+    }
+
+    .alert-info {
+      background-color: rgba(59, 130, 246, 0.1);
+      color: #1e40af;
+    }
+
+    .alert i {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* ============================================================ */
+    /* UTILITIES */
+    /* ============================================================ */
+    .d-none {
+      display: none !important;
+    }
+
+    .loading-spinner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary-gradient);
+      z-index: 9999;
+      animation: fadeOut 0.3s ease 1.5s forwards;
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0;
+        pointer-events: none;
+      }
+    }
+
+    .spinner-border {
+      width: 3rem;
+      height: 3rem;
+      border: 0.3em solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+    }
+
+    /* ============================================================ */
+    /* RESPONSIVE */
+    /* ============================================================ */
+    @media (max-width: 768px) {
+      .app-sidebar {
+        position: fixed;
+        left: -280px;
+        top: 0;
+        height: 100vh;
+        z-index: 1000;
+        transition: left 0.3s ease;
+      }
+
+      .app-sidebar.show {
+        left: 0;
+      }
+
+      .app-header {
+        padding: 12px 16px;
+      }
+
+      .app-content {
+        padding: 20px 16px;
+      }
+
+      .app-search {
+        max-width: 100%;
+        flex: 1;
+      }
+
+      .h4 {
+        font-size: 18px;
+      }
+
+      .row.g-3 {
+        gap: 1.5rem !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .app-header {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .app-search {
+        order: 3;
+        width: 100%;
+        max-width: 100%;
+      }
+
+      .btn-group {
+        width: 100%;
+      }
+
+      .btn-group .btn {
+        flex: 1;
+      }
+
+      .d-flex.gap-2 {
+        flex-direction: column;
+      }
+
+      .d-flex.gap-2 > * {
+        width: 100%;
+      }
+    }
+  </style>
 </head>
 
 <body>
-    <!-- ============================================================ -->
+  <!-- ============================================================ -->
   <!-- 🔒 LOADING PAGE -->
   <!-- ============================================================ -->
-  <div id="loadingPage"
-    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
+  <div class="loading-spinner" id="loadingPage">
     <div style="text-align: center; color: white;">
-      <div class="spinner-border" role="status"
-        style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
+      <div class="spinner-border" role="status">
         <span class="visually-hidden">Carregando...</span>
       </div>
-      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+      <p style="margin-top: 1rem; font-weight: 500;">Carregando documentação...</p>
     </div>
   </div>
+
+  <!-- ============================================================ -->
+  <!-- MAIN SHELL -->
   <!-- ============================================================ -->
   <div class="app-shell">
     <!-- SIDEBAR -->
-    <aside class="app-sidebar">
+    <aside class="app-sidebar" id="sidebar">
       <div class="app-sidebar__brand">
         <div class="d-flex align-items-center gap-2">
           <div class="brand-dot"></div>
@@ -39,14 +523,26 @@
       </div>
 
       <nav class="app-nav">
-        <a class="app-nav__item" href="index.html"><i class="bi bi-grid"></i> Dashboard</a>
-        <a class="app-nav__item active" href="docs.html"><i class="bi bi-journal-text"></i> Documentação</a>
-        <a class="app-nav__item" href="vault.html"><i class="bi bi-shield-lock"></i> Cofre</a>
-        <a class="app-nav__item" href="inventory.html"><i class="bi bi-pc-display"></i> Inventário</a>
+        <a class="app-nav__item" href="/SistemaCPE/web/index.html" title="Dashboard">
+          <i class="bi bi-grid"></i> Dashboard
+        </a>
+        <a class="app-nav__item active" href="/SistemaCPE/web/docs.html" title="Documentação">
+          <i class="bi bi-journal-text"></i> Documentação
+        </a>
+        <a class="app-nav__item" href="/SistemaCPE/web/vault.html" title="Cofre">
+          <i class="bi bi-shield-lock"></i> Cofre
+        </a>
+        <a class="app-nav__item" href="/SistemaCPE/web/inventory.html" title="Inventário">
+          <i class="bi bi-pc-display"></i> Inventário
+        </a>
 
         <div class="app-nav__section">Administração</div>
-        <a class="app-nav__item" href="admin.html"><i class="bi bi-gear"></i> Painel Admin</a>
-        <a class="app-nav__item" href="audit.html"><i class="bi bi-clipboard-data"></i> Auditoria</a>
+        <a class="app-nav__item" href="/SistemaCPE/web/admin.html" title="Painel Admin">
+          <i class="bi bi-gear"></i> Painel Admin
+        </a>
+        <a class="app-nav__item" href="/SistemaCPE/web/audit.html" title="Auditoria">
+          <i class="bi bi-clipboard-data"></i> Auditoria
+        </a>
       </nav>
 
       <div class="app-sidebar__footer">
@@ -58,13 +554,13 @@
     <main class="app-main">
       <!-- HEADER -->
       <header class="app-header">
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-secondary d-md-none" id="btnToggleSidebar" type="button">
+        <div class="d-flex align-items-center gap-2" style="flex: 1;">
+          <button class="btn btn-outline-secondary d-md-none" id="btnToggleSidebar" type="button" title="Menu">
             <i class="bi bi-list"></i>
           </button>
           <div class="input-group app-search">
             <span class="input-group-text"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" placeholder="Buscar documentos..." />
+            <input type="text" class="form-control" id="searchInput" placeholder="Buscar documentos..." />
           </div>
         </div>
 
@@ -73,14 +569,18 @@
             <i class="bi bi-bell"></i>
           </button>
           <div class="dropdown">
-            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-              <i class="bi bi-person-circle me-1"></i> Usuário
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown"
+              aria-expanded="false">
+              <i class="bi bi-person-circle me-1"></i> <span class="d-none d-sm-inline">Usuário</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
-              <li><a class="dropdown-item" href="#">Meu Perfil</a></li>
-              <li><a class="dropdown-item" href="#">Configurações</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item text-danger" href="#">Sair</a></li>
+              <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i> Meu Perfil</a></li>
+              <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i> Configurações</a></li>
+              <li>
+                <hr class="dropdown-divider">
+              </li>
+              <li><a class="dropdown-item text-danger" href="#" id="btnLogout"><i class="bi bi-box-arrow-right me-2"></i>
+                  Sair</a></li>
             </ul>
           </div>
         </div>
@@ -89,59 +589,69 @@
       <!-- CONTENT -->
       <section class="app-content">
         <div class="container-fluid">
+          <!-- ALERTS -->
+          <div class="alert alert-danger d-none" id="alertBox" role="alert">
+            <i class="bi bi-exclamation-circle"></i>
+            <span id="alertMessage"></span>
+          </div>
 
+          <div class="alert alert-success d-none" id="successBox" role="alert">
+            <i class="bi bi-check-circle"></i>
+            <span id="successMessage"></span>
+          </div>
+
+          <!-- PAGE HEADER -->
           <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
             <div>
-              <h1 class="h4 mb-0">Documentação</h1>
+              <h1 class="h4 mb-0"><i class="bi bi-journal-text me-2"></i> Documentação</h1>
               <div class="text-muted small">Pastas, documentos, anexos e permissões</div>
             </div>
 
             <div class="d-flex gap-2">
-              <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoDoc">
+              <button class="btn btn-primary" id="btnNewDoc" data-bs-toggle="modal" data-bs-target="#modalNovoDoc"
+                title="Criar documento">
                 <i class="bi bi-plus-lg me-1"></i> Novo Documento
               </button>
-              <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNovaPasta">
+              <button class="btn btn-outline-primary" id="btnNewFolder" data-bs-toggle="modal"
+                data-bs-target="#modalNovaPasta" title="Criar pasta">
                 <i class="bi bi-folder-plus me-1"></i> Nova Pasta
               </button>
             </div>
           </div>
 
           <div class="row g-3">
-            <!-- Filters -->
+            <!-- FILTERS -->
             <div class="col-12">
               <div class="card app-card">
                 <div class="card-body">
                   <div class="row g-2">
                     <div class="col-12 col-md-3">
-                      <label class="form-label small text-muted">Pasta</label>
-                      <select class="form-select">
-                        <option>Todas</option>
-                        <option>TI</option>
-                        <option>RH</option>
-                        <option>Comercial</option>
+                      <label class="form-label">Pasta</label>
+                      <select class="form-select" id="filterFolder">
+                        <option value="">Todas</option>
                       </select>
                     </div>
                     <div class="col-12 col-md-3">
-                      <label class="form-label small text-muted">Unidade</label>
-                      <select class="form-select">
-                        <option>Todas</option>
-                        <option>Belo Horizonte</option>
-                        <option>São Paulo</option>
-                        <option>Outras</option>
+                      <label class="form-label">Unidade</label>
+                      <select class="form-select" id="filterUnit">
+                        <option value="">Todas</option>
+                        <option value="bh">Belo Horizonte</option>
+                        <option value="sp">São Paulo</option>
+                        <option value="other">Outras</option>
                       </select>
                     </div>
                     <div class="col-12 col-md-3">
-                      <label class="form-label small text-muted">Visibilidade</label>
-                      <select class="form-select">
-                        <option>Todas</option>
-                        <option>Público interno</option>
-                        <option>Setor</option>
-                        <option>Privado</option>
+                      <label class="form-label">Visibilidade</label>
+                      <select class="form-select" id="filterVisibility">
+                        <option value="">Todas</option>
+                        <option value="public">Público interno</option>
+                        <option value="sector">Setor</option>
+                        <option value="private">Privado</option>
                       </select>
                     </div>
                     <div class="col-12 col-md-3 d-flex align-items-end">
-                      <button class="btn btn-outline-secondary w-100">
-                        <i class="bi bi-funnel me-1"></i> Aplicar filtros
+                      <button class="btn btn-outline-secondary w-100" id="btnApplyFilters">
+                        <i class="bi bi-funnel me-1"></i> Aplicar
                       </button>
                     </div>
                   </div>
@@ -149,235 +659,776 @@
               </div>
             </div>
 
-            <!-- List -->
+            <!-- DOCUMENTS LIST -->
             <div class="col-12 col-lg-7">
               <div class="card app-card">
                 <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h2 class="h6 mb-0">Lista de documentos</h2>
-                    <div class="small text-muted">Exibindo 3 itens</div>
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h6 mb-0"><i class="bi bi-file-earmark me-2"></i> Lista de Documentos</h2>
+                    <div class="small text-muted" id="docCount">Carregando...</div>
                   </div>
 
-                  <div class="list-group list-group-flush">
-                    <a class="list-group-item list-group-item-action" href="#">
-                      <div class="d-flex justify-content-between">
-                        <div>
-                          <div class="fw-semibold">Procedimento – Onboarding TI</div>
-                          <div class="small text-muted">Pasta: TI • Visibilidade: Setor • Atualizado: hoje</div>
-                        </div>
-                        <span class="badge text-bg-light border">PDF</span>
-                      </div>
-                    </a>
-                    <a class="list-group-item list-group-item-action" href="#">
-                      <div class="d-flex justify-content-between">
-                        <div>
-                          <div class="fw-semibold">Checklist – Entrega Notebook</div>
-                          <div class="small text-muted">Pasta: RH • Visibilidade: Público interno • Atualizado: ontem</div>
-                        </div>
-                        <span class="badge text-bg-light border">IMG</span>
-                      </div>
-                    </a>
-                    <a class="list-group-item list-group-item-action" href="#">
-                      <div class="d-flex justify-content-between">
-                        <div>
-                          <div class="fw-semibold">Padrão – Senhas e Acessos</div>
-                          <div class="small text-muted">Pasta: Segurança • Visibilidade: TI • Atualizado: há 3 dias</div>
-                        </div>
-                        <span class="badge text-bg-light border">DOC</span>
-                      </div>
-                    </a>
+                  <div class="list-group list-group-flush" id="documentsList">
+                    <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                      <i class="bi bi-hourglass-split" style="font-size: 2rem;"></i>
+                      <p style="margin-top: 1rem;">Carregando documentos...</p>
+                    </div>
                   </div>
-
                 </div>
               </div>
             </div>
 
-            <!-- Preview -->
+            <!-- PREVIEW -->
             <div class="col-12 col-lg-5">
               <div class="card app-card">
                 <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-start mb-2">
+                  <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
-                      <h2 class="h6 mb-1">Pré-visualização</h2>
-                      <div class="small text-muted">Selecione um documento na lista</div>
+                      <h2 class="h6 mb-1"><i class="bi bi-eye me-2"></i> Pré-visualização</h2>
+                      <div class="small text-muted" id="previewEmpty">Selecione um documento na lista</div>
                     </div>
-                    <div class="d-flex gap-2">
-                      <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-pencil"></i></button>
-                      <button class="btn btn-sm btn-outline-secondary"><i class="bi bi-paperclip"></i></button>
-                      <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button>
+                    <div class="d-flex gap-2" id="previewActions" style="display: none;">
+                      <button class="btn btn-sm btn-outline-secondary" id="btnEdit" title="Editar">
+                        <i class="bi bi-pencil"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-secondary" id="btnAttachments" title="Anexos">
+                        <i class="bi bi-paperclip"></i>
+                      </button>
+                      <button class="btn btn-sm btn-outline-danger" id="btnDeleteDoc" title="Deletar">
+                        <i class="bi bi-trash"></i>
+                      </button>
                     </div>
                   </div>
 
-                  <div class="border rounded-3 p-3 bg-body-tertiary">
-                    <div class="fw-semibold">Procedimento – Onboarding TI</div>
-                    <div class="small text-muted mb-2">Visibilidade: Setor TI</div>
-                    <p class="mb-0 small">
-                      Conteúdo de exemplo: passo a passo para preparar máquina, configurar usuário,
-                      instalar softwares padrão e validar acesso.
+                  <div class="border rounded-3 p-3 bg-body-tertiary" id="previewContent">
+                    <p class="text-muted text-center" style="padding: 2rem 0;">
+                      Selecione um documento para visualizar
                     </p>
                   </div>
 
                   <div class="mt-3">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                      <div class="fw-semibold">Anexos</div>
-                      <button class="btn btn-sm btn-outline-primary">
+                      <div class="fw-semibold"><i class="bi bi-paperclip me-2"></i> Anexos</div>
+                      <button class="btn btn-sm btn-outline-primary" id="btnUploadAttachment">
                         <i class="bi bi-upload me-1"></i> Enviar
                       </button>
                     </div>
 
-                    <div class="list-group">
-                      <div class="list-group-item d-flex justify-content-between align-items-center">
-                        onboarding_ti.pdf
-                        <span class="badge text-bg-light border">PDF</span>
-                      </div>
-                      <div class="list-group-item d-flex justify-content-between align-items-center">
-                        checklist_entrega.png
-                        <span class="badge text-bg-light border">IMG</span>
+                    <div class="list-group" id="attachmentsList">
+                      <div style="text-align: center; padding: 1.5rem; color: var(--text-secondary); font-size: 12px;">
+                        Nenhum anexo
                       </div>
                     </div>
-
                   </div>
-
                 </div>
               </div>
             </div>
-
           </div>
-
         </div>
       </section>
     </main>
   </div>
 
+  <!-- ============================================================ -->
+  <!-- MODALS -->
+  <!-- ============================================================ -->
+
   <!-- Modal: Nova Pasta -->
-  <div class="modal fade" id="modalNovaPasta" tabindex="-1" aria-hidden="true">
+  <div class="modal fade" id="modalNovaPasta" tabindex="-1" aria-labelledby="modalNovaPastaLabel" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Nova Pasta</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          <h5 class="modal-title" id="modalNovaPastaLabel">
+            <i class="bi bi-folder-plus me-2"></i> Nova Pasta
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
         <div class="modal-body">
-          <label class="form-label">Nome</label>
-          <input class="form-control" placeholder="Ex.: TI, RH, Segurança..." />
+          <div class="alert alert-danger d-none" id="folderAlertBox" role="alert">
+            <i class="bi bi-exclamation-circle me-2"></i>
+            <span id="folderAlertMessage"></span>
+          </div>
+
+          <form id="folderForm">
+            <div class="mb-3">
+              <label class="form-label">Nome da Pasta <span style="color: #ef4444;">*</span></label>
+              <input type="text" class="form-control" id="folderName" placeholder="Ex.: TI, RH, Segurança..."
+                required />
+            </div>
+          </form>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button class="btn btn-primary">Criar</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btnCreateFolder">
+            <i class="bi bi-check-lg me-1"></i> Criar
+          </button>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Modal: Novo Documento -->
-  <div class="modal fade" id="modalNovoDoc" tabindex="-1" aria-hidden="true">
+  <div class="modal fade" id="modalNovoDoc" tabindex="-1" aria-labelledby="modalNovoDocLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">Novo Documento</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          <h5 class="modal-title" id="modalNovoDocLabel">
+            <i class="bi bi-file-earmark-plus me-2"></i> Novo Documento
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
         <div class="modal-body">
-          <div class="row g-2">
-            <div class="col-12">
-              <label class="form-label">Título</label>
-              <input class="form-control" placeholder="Ex.: Procedimento – Formatar notebook" />
-            </div>
-            <div class="col-12 col-md-4">
-              <label class="form-label">Pasta</label>
-              <select class="form-select">
-                <option>TI</option>
-                <option>RH</option>
-                <option>Comercial</option>
-              </select>
-            </div>
-            <div class="col-12 col-md-4">
-              <label class="form-label">Visibilidade</label>
-              <select class="form-select">
-                <option>Público interno</option>
-                <option>Setor</option>
-                <option>Privado</option>
-                <option>Somente TI</option>
-              </select>
-            </div>
-            <div class="col-12 col-md-4">
-              <label class="form-label">Unidade</label>
-              <select class="form-select">
-                <option>Todas</option>
-                <option>Belo Horizonte</option>
-                <option>São Paulo</option>
-              </select>
-            </div>
-            <div class="col-12">
-              <label class="form-label">Conteúdo</label>
-              <textarea class="form-control" rows="6" placeholder="Escreva aqui..."></textarea>
-              <div class="form-text">No backend você pode trocar por editor rich-text.</div>
-            </div>
+          <div class="alert alert-danger d-none" id="modalAlertBox" role="alert">
+            <i class="bi bi-exclamation-circle me-2"></i>
+            <span id="modalAlertMessage"></span>
           </div>
+
+          <form id="documentForm">
+            <div class="mb-3">
+              <label class="form-label">Título <span style="color: #ef4444;">*</span></label>
+              <input type="text" class="form-control" id="docTitle"
+                placeholder="Ex.: Procedimento – Formatar notebook" required />
+            </div>
+
+            <div class="row g-2">
+              <div class="col-12 col-md-4">
+                <label class="form-label">Pasta <span style="color: #ef4444;">*</span></label>
+                <select class="form-select" id="docFolder" required>
+                  <option value="">Selecione...</option>
+                </select>
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label">Visibilidade <span style="color: #ef4444;">*</span></label>
+                <select class="form-select" id="docVisibility" required>
+                  <option value="public">Público interno</option>
+                  <option value="sector">Setor</option>
+                  <option value="private">Privado</option>
+                </select>
+              </div>
+              <div class="col-12 col-md-4">
+                <label class="form-label">Unidade <span style="color: #ef4444;">*</span></label>
+                <select class="form-select" id="docUnit" required>
+                  <option value="">Selecione...</option>
+                  <option value="bh">Belo Horizonte</option>
+                  <option value="sp">São Paulo</option>
+                  <option value="other">Outras</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Conteúdo <span style="color: #ef4444;">*</span></label>
+              <textarea class="form-control" id="docContent" rows="6"
+                placeholder="Escreva aqui o conteúdo do documento..." required></textarea>
+              <div class="form-text">
+                <i class="bi bi-info-circle me-1"></i> Pode ser um editor rich-text no backend
+              </div>
+            </div>
+          </form>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button class="btn btn-primary">Salvar</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btnSaveDocument">
+            <i class="bi bi-check-lg me-1"></i> Salvar
+          </button>
         </div>
       </div>
     </div>
   </div>
-<!-- ============================================================ -->
-  <!-- 📦 SCRIPTS - ORDEM CORRETA -->
+
+  <!-- ============================================================ -->
+  <!-- 📦 SCRIPTS -->
   <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
-  <!-- ============================================================ -->
 
   <!-- ============================================================ -->
-  <!-- 🔐 VERIFICAÇÃO DE AUTENTICAÇÃO (SIMPLIFICADA) -->
+  <!-- 🔧 DADOS GLOBAIS E INICIALIZAÇÃO -->
   <!-- ============================================================ -->
   <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      console.log("\n" + "=".repeat(60));
-      console.log("[CHAT/INIT] Inicializando página de chat...");
-      console.log("=".repeat(60));
+    console.log("\n" + "=".repeat(80));
+    console.log("[DOCS/PAGE] 📄 Inicializando página de Documentação");
+    console.log("[DOCS/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso Público e Direto");
+    console.log("[DOCS/PAGE] ✅ Nenhuma verificação de permissão (REMOVIDA)");
+    console.log("[DOCS/PAGE] 🔗 Caminhos de URL corrigidos para /SistemaCPE/web/");
+    console.log("=".repeat(80) + "\n");
+
+    // ===== DADOS GLOBAIS =====
+    let folders = [];
+    let documents = [];
+    let selectedDocument = null;
+
+    /**
+     * ✅ Inicializa a página
+     */
+    document.addEventListener("DOMContentLoaded", () => {
+      console.log("[DOCS/INIT] 📋 DOM Carregado com sucesso");
+      console.log("[DOCS/INIT] ⏱️  Timestamp:", new Date().toLocaleString('pt-BR'));
+      console.log("[DOCS/INIT] 🌐 URL:", window.location.href);
 
       try {
-        // ✅ Verifica se o usuário está autenticado
-        console.log("[CHAT/INIT] Verificando autenticação...");
-        const user = await getMe();
+        // Carrega dados imediatamente sem verificação de autenticação
+        loadFolders();
+        loadDocuments();
+        setupEventListeners();
 
-        console.log("[CHAT/INIT] ✓ Sessão válida, usuário:", user.name);
-
-        // ✅ Remove a tela de loading
-        const loadingPage = document.getElementById("loadingPage");
-        if (loadingPage) {
-          loadingPage.style.display = "none";
+        // Remove loading page
+        const loading = document.getElementById("loadingPage");
+        if (loading) {
+          setTimeout(() => {
+            loading.style.display = "none";
+          }, 500);
         }
 
-        // ✅ Mostra o conteúdo principal
-        const containerMain = document.querySelector(".container-main");
-        if (containerMain) {
-          containerMain.style.display = "flex";
-        }
-
-        // ✅ Renderiza o menu dinâmico
-        console.log("[CHAT/INIT] Renderizando navegação...");
-        await renderNavigation(user.role || "USER");
-
-        console.log("[CHAT/INIT] ✓ Chat carregado com sucesso");
-        console.log("=".repeat(60) + "\n");
+        console.log("[DOCS/INIT] ✅ Página pronta para uso");
+        console.log("=".repeat(80) + "\n");
 
       } catch (err) {
-        console.error("[CHAT/INIT] ✗ Erro na autenticação:", err.message);
-        console.log("[CHAT/INIT] Redirecionando para login...");
-
-        // ✅ Redireciona para login
-        setTimeout(() => {
-          window.location.href = "/SistemaCPE/web/login.html";
-        }, 1000);
+        console.error("[DOCS/INIT] ❌ ERRO:", err.message);
+        showError("Erro ao inicializar página: " + err.message);
       }
     });
+
+    /**
+     * ✅ Carrega as pastas
+     */
+    function loadFolders() {
+      console.log("[DOCS/FOLDERS] 📂 Carregando pastas...");
+
+      folders = [
+        { id: 1, name: "TI" },
+        { id: 2, name: "RH" },
+        { id: 3, name: "Comercial" },
+        { id: 4, name: "Segurança" },
+        { id: 5, name: "Marketing" }
+      ];
+
+      console.log("[DOCS/FOLDERS] ✓", folders.length, "pastas carregadas");
+
+      // Popula selects de pasta
+      const folderSelect = document.getElementById("docFolder");
+      const folderFilter = document.getElementById("filterFolder");
+
+      if (folderSelect) {
+        folderSelect.innerHTML = '<option value="">Selecione...</option>' + 
+          folders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join("");
+      }
+
+      if (folderFilter) {
+        folderFilter.innerHTML = '<option value="">Todas</option>' + 
+          folders.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join("");
+      }
+
+      console.log("[DOCS/FOLDERS] ✓ Selects populados");
+    }
+
+    /**
+     * ✅ Carrega os documentos
+     */
+    function loadDocuments() {
+      console.log("[DOCS/LOAD] 📋 Carregando documentos...");
+
+      documents = [
+        {
+          id: 1,
+          title: "Procedimento – Onboarding TI",
+          folder_id: 1,
+          folder_name: "TI",
+          content: "Conteúdo de exemplo: passo a passo para preparar máquina, configurar usuário, instalar softwares padrão e validar acesso.",
+          visibility: "sector",
+          unit: "bh",
+          created_at: "Hoje",
+          attachments: [
+            { name: "onboarding_ti.pdf", type: "PDF" },
+            { name: "checklist.png", type: "IMG" }
+          ]
+        },
+        {
+          id: 2,
+          title: "Checklist – Entrega Notebook",
+          folder_id: 2,
+          folder_name: "RH",
+          content: "Checklist completo para entrega de notebooks novos aos colaboradores.",
+          visibility: "public",
+          unit: "sp",
+          created_at: "Ontem",
+          attachments: []
+        },
+        {
+          id: 3,
+          title: "Padrão – Senhas e Acessos",
+          folder_id: 4,
+          folder_name: "Segurança",
+          content: "Política de senhas, autenticação multi-fator e gerenciamento de acessos.",
+          visibility: "private",
+          unit: "bh",
+          created_at: "Há 3 dias",
+          attachments: []
+        },
+        {
+          id: 4,
+          title: "Guia – VPN e Acesso Remoto",
+          folder_id: 1,
+          folder_name: "TI",
+          content: "Instruções para configurar VPN e acessar recursos remotos com segurança.",
+          visibility: "sector",
+          unit: "bh",
+          created_at: "Há 5 dias",
+          attachments: []
+        },
+        {
+          id: 5,
+          title: "Processo – Recrutamento",
+          folder_id: 2,
+          folder_name: "RH",
+          content: "Processo completo de recrutamento e seleção de novos colaboradores.",
+          visibility: "public",
+          unit: "sp",
+          created_at: "Há 7 dias",
+          attachments: [
+            { name: "template_contrato.docx", type: "DOC" }
+          ]
+        },
+        {
+          id: 6,
+          title: "Política de Segurança da Informação",
+          folder_id: 4,
+          folder_name: "Segurança",
+          content: "Política corporativa de segurança da informação e conformidade com LGPD.",
+          visibility: "public",
+          unit: "bh",
+          created_at: "Há 10 dias",
+          attachments: []
+        }
+      ];
+
+      console.log("[DOCS/LOAD] ✓", documents.length, "documentos carregados");
+      renderDocuments(documents);
+      console.log("[DOCS/LOAD] ✅ Renderização completa");
+    }
+
+    /**
+     * ✅ Renderiza documentos na lista
+     */
+    function renderDocuments(list = documents) {
+      const docList = document.getElementById("documentsList");
+      const docCount = document.getElementById("docCount");
+
+      if (!list || list.length === 0) {
+        docList.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+            <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+            <p style="margin-top: 1rem;">Nenhum documento encontrado</p>
+            <p style="font-size: 12px;">Crie um novo documento ou ajuste os filtros</p>
+          </div>
+        `;
+        docCount.textContent = "Nenhum item";
+        return;
+      }
+
+      docCount.textContent = `Exibindo ${list.length} item${list.length !== 1 ? 's' : ''}`;
+
+      docList.innerHTML = list.map(doc => `
+        <a href="#" class="list-group-item list-group-item-action doc-item" data-doc-id="${doc.id}"
+          onclick="selectDocument(${doc.id}); return false;">
+          <div class="d-flex justify-content-between">
+            <div style="flex: 1;">
+              <div class="fw-semibold"><i class="bi bi-file-earmark me-2"></i>${escapeHtml(doc.title)}</div>
+              <div class="small text-muted">
+                Pasta: ${doc.folder_name} • Visibilidade: ${getVisibilityLabel(doc.visibility)} • Atualizado: ${doc.created_at}
+              </div>
+            </div>
+            <span class="badge text-bg-light border ms-2">DOC</span>
+          </div>
+        </a>
+      `).join("");
+    }
+
+    /**
+     * ✅ Seleciona um documento para preview
+     */
+    function selectDocument(docId) {
+      const doc = documents.find(d => d.id === docId);
+      if (!doc) return;
+
+      selectedDocument = doc;
+      console.log("[DOCS/SELECT] 📄 Documento selecionado:", docId, "-", doc.title);
+
+      // Marca como selecionado
+      document.querySelectorAll(".doc-item").forEach(el => {
+        el.classList.remove("active");
+      });
+      document.querySelector(`[data-doc-id="${docId}"]`)?.classList.add("active");
+
+      // Renderiza preview
+      const previewContent = document.getElementById("previewContent");
+      const previewEmpty = document.getElementById("previewEmpty");
+      const previewActions = document.getElementById("previewActions");
+
+      previewEmpty.style.display = "none";
+      previewActions.style.display = "flex";
+
+      previewContent.innerHTML = `
+        <div class="fw-semibold mb-2">${escapeHtml(doc.title)}</div>
+        <div class="small text-muted mb-3">Visibilidade: ${getVisibilityLabel(doc.visibility)}</div>
+        <p class="mb-0 small">${escapeHtml(doc.content)}</p>
+      `;
+
+      // Renderiza anexos
+      const attachmentsList = document.getElementById("attachmentsList");
+      if (doc.attachments && doc.attachments.length > 0) {
+        attachmentsList.innerHTML = doc.attachments.map(att => `
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-paperclip me-2"></i>${escapeHtml(att.name)}</span>
+            <span class="badge text-bg-light border">${att.type}</span>
+          </div>
+        `).join("");
+      } else {
+        attachmentsList.innerHTML = `
+          <div style="text-align: center; padding: 1.5rem; color: var(--text-secondary); font-size: 12px;">
+            <i class="bi bi-inbox" style="display: block; margin-bottom: 0.5rem; font-size: 1.5rem;"></i>
+            Nenhum anexo
+          </div>
+        `;
+      }
+
+      // Listeners dos botões
+      document.getElementById("btnEdit").onclick = () => editDocument(doc.id);
+      document.getElementById("btnDeleteDoc").onclick = () => deleteDocument(doc.id, doc.title);
+      document.getElementById("btnAttachments").onclick = () => {
+        showSuccess("Função de anexos será implementada no backend");
+      };
+    }
+
+    /**
+     * ✅ Configura todos os event listeners
+     */
+    function setupEventListeners() {
+      console.log("[DOCS/SETUP] 🔧 Configurando event listeners...");
+
+      // Menu mobile
+      const btnToggle = document.getElementById("btnToggleSidebar");
+      const sidebar = document.getElementById("sidebar");
+      if (btnToggle) {
+        btnToggle.addEventListener("click", () => {
+          sidebar.classList.toggle("show");
+        });
+      }
+
+      // Fechar sidebar ao clicar em um link
+      document.querySelectorAll(".app-nav__item").forEach(link => {
+        link.addEventListener("click", () => {
+          sidebar.classList.remove("show");
+        });
+      });
+
+      // Filtros
+      document.getElementById("btnApplyFilters")?.addEventListener("click", applyFilters);
+      document.getElementById("searchInput")?.addEventListener("input", () => applyFilters());
+
+      // Pastas
+      document.getElementById("btnCreateFolder")?.addEventListener("click", createFolder);
+      document.getElementById("folderForm")?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        createFolder();
+      });
+
+      // Documentos
+      document.getElementById("btnSaveDocument")?.addEventListener("click", saveDocument);
+      document.getElementById("documentForm")?.addEventListener("submit", (e) => {
+        e.preventDefault();
+        saveDocument();
+      });
+
+      // Reset dos modais
+      document.getElementById("modalNovaPasta")?.addEventListener("show.bs.modal", () => {
+        document.getElementById("folderForm").reset();
+        hideFolderAlert();
+      });
+
+      document.getElementById("modalNovoDoc")?.addEventListener("show.bs.modal", () => {
+        document.getElementById("documentForm").reset();
+        hideModalAlert();
+        // Reset do botão
+        const btn = document.getElementById("btnSaveDocument");
+        btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Salvar';
+        btn.dataset.editId = '';
+      });
+
+      // Logout
+      document.getElementById("btnLogout")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        console.log("[DOCS/LOGOUT] 👋 Usuário saiu");
+        alert("Logout realizado!");
+      });
+
+      console.log("[DOCS/SETUP] ✅ Event listeners configurados");
+    }
+
+    /**
+     * ✅ Aplica filtros
+     */
+    function applyFilters() {
+      const searchTerm = document.getElementById("searchInput")?.value?.toLowerCase() || "";
+      const folderFilter = document.getElementById("filterFolder")?.value || "";
+      const unitFilter = document.getElementById("filterUnit")?.value || "";
+      const visibilityFilter = document.getElementById("filterVisibility")?.value || "";
+
+      let filtered = documents.filter(doc => {
+        const matchSearch = searchTerm === "" || 
+          doc.title.toLowerCase().includes(searchTerm) ||
+          doc.content.toLowerCase().includes(searchTerm);
+        const matchFolder = folderFilter === "" || doc.folder_id == folderFilter;
+        const matchUnit = unitFilter === "" || doc.unit === unitFilter;
+        const matchVisibility = visibilityFilter === "" || doc.visibility === visibilityFilter;
+
+        return matchSearch && matchFolder && matchUnit && matchVisibility;
+      });
+
+      console.log("[DOCS/FILTER] 🔍 Filtros aplicados - Encontrados:", filtered.length, "documentos");
+      renderDocuments(filtered);
+    }
+
+    /**
+     * ✅ Cria uma nova pasta
+     */
+    function createFolder() {
+      const name = document.getElementById("folderName")?.value?.trim();
+
+      if (!name) {
+        showFolderAlert("Por favor, digite um nome para a pasta!");
+        return;
+      }
+
+      if (folders.some(f => f.name.toLowerCase() === name.toLowerCase())) {
+        showFolderAlert("Esta pasta já existe!");
+        return;
+      }
+
+      const newFolder = {
+        id: Math.max(...folders.map(f => f.id), 0) + 1,
+        name
+      };
+
+      folders.push(newFolder);
+      console.log("[DOCS/FOLDER] ✅ Nova pasta criada:", name);
+
+      // Atualiza selects
+      loadFolders();
+      showSuccess(`Pasta "${name}" criada com sucesso!`);
+
+      // Fecha modal
+      const modal = bootstrap.Modal.getInstance(document.getElementById("modalNovaPasta"));
+      if (modal) modal.hide();
+    }
+
+    /**
+     * ✅ Salva um novo documento
+     */
+    function saveDocument() {
+      const title = document.getElementById("docTitle")?.value?.trim();
+      const folder_id = document.getElementById("docFolder")?.value;
+      const visibility = document.getElementById("docVisibility")?.value;
+      const unit = document.getElementById("docUnit")?.value;
+      const content = document.getElementById("docContent")?.value?.trim();
+      const editId = document.getElementById("btnSaveDocument")?.dataset.editId;
+
+      if (!title || !folder_id || !visibility || !unit || !content) {
+        showModalAlert("Preencha todos os campos obrigatórios!");
+        return;
+      }
+
+      const folder = folders.find(f => f.id == folder_id);
+
+      if (editId) {
+        // Atualizar documento existente
+        const docIndex = documents.findIndex(d => d.id == editId);
+        if (docIndex !== -1) {
+          documents[docIndex] = {
+            ...documents[docIndex],
+            title,
+            folder_id: parseInt(folder_id),
+            folder_name: folder?.name || "Sem pasta",
+            content,
+            visibility,
+            unit,
+            created_at: "Agora"
+          };
+          console.log("[DOCS/UPDATE] ✅ Documento atualizado:", title);
+          showSuccess("Documento atualizado com sucesso!");
+        }
+      } else {
+        // Criar novo documento
+        const newDoc = {
+          id: Math.max(...documents.map(d => d.id), 0) + 1,
+          title,
+          folder_id: parseInt(folder_id),
+          folder_name: folder?.name || "Sem pasta",
+          content,
+          visibility,
+          unit,
+          created_at: "Agora",
+          attachments: []
+        };
+
+        documents.push(newDoc);
+        console.log("[DOCS/SAVE] ✅ Novo documento salvo:", title);
+        showSuccess("Documento criado com sucesso!");
+      }
+
+      // Atualiza lista
+      applyFilters();
+
+      // Fecha modal
+      const modal = bootstrap.Modal.getInstance(document.getElementById("modalNovoDoc"));
+      if (modal) modal.hide();
+    }
+
+    /**
+     * ✅ Edita um documento
+     */
+    function editDocument(docId) {
+      const doc = documents.find(d => d.id === docId);
+      if (!doc) return;
+
+      console.log("[DOCS/EDIT] ✏️ Editando documento:", docId, "-", doc.title);
+
+      // Popula formulário
+      document.getElementById("docTitle").value = doc.title;
+      document.getElementById("docFolder").value = doc.folder_id;
+      document.getElementById("docVisibility").value = doc.visibility;
+      document.getElementById("docUnit").value = doc.unit;
+      document.getElementById("docContent").value = doc.content;
+
+      // Muda botão
+      const btn = document.getElementById("btnSaveDocument");
+      btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Atualizar';
+      btn.dataset.editId = docId;
+
+      // Abre modal
+      const modal = new bootstrap.Modal(document.getElementById("modalNovoDoc"));
+      modal.show();
+    }
+
+    /**
+     * ✅ Deleta um documento
+     */
+    function deleteDocument(docId, title) {
+      if (!confirm(`Tem certeza que deseja deletar "${title}"?`)) {
+        return;
+      }
+
+      const index = documents.findIndex(d => d.id === docId);
+      if (index !== -1) {
+        documents.splice(index, 1);
+        console.log("[DOCS/DELETE] 🗑️ Documento deletado:", title);
+        showSuccess(`Documento "${title}" deletado!`);
+        selectedDocument = null;
+        applyFilters();
+      }
+    }
+
+    /**
+     * ✅ Retorna label de visibilidade
+     */
+    function getVisibilityLabel(visibility) {
+      const labels = {
+        "public": "Público interno",
+        "sector": "Setor",
+        "private": "Privado"
+      };
+      return labels[visibility] || visibility;
+    }
+
+    /**
+     * ✅ Escapa HTML
+     */
+    function escapeHtml(text) {
+      if (!text) return "";
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text.replace(/[&<>"']/g, char => map[char]);
+    }
+
+    /**
+     * ✅ Mostra erro
+     */
+    function showError(message) {
+      console.error("[DOCS/ERROR] ❌", message);
+      const box = document.getElementById("alertBox");
+      const msg = document.getElementById("alertMessage");
+      if (box && msg) {
+        msg.textContent = message;
+        box.classList.remove("d-none");
+        setTimeout(() => box.classList.add("d-none"), 5000);
+      }
+    }
+
+    /**
+     * ✅ Mostra sucesso
+     */
+    function showSuccess(message) {
+      console.log("[DOCS/SUCCESS] ✅", message);
+      const box = document.getElementById("successBox");
+      const msg = document.getElementById("successMessage");
+      if (box && msg) {
+        msg.textContent = message;
+        box.classList.remove("d-none");
+        setTimeout(() => box.classList.add("d-none"), 5000);
+      }
+    }
+
+    /**
+     * ✅ Mostra alerta no modal de pasta
+     */
+    function showFolderAlert(message) {
+      const box = document.getElementById("folderAlertBox");
+      const msg = document.getElementById("folderAlertMessage");
+      if (box && msg) {
+        msg.textContent = message;
+        box.classList.remove("d-none");
+      }
+    }
+
+    /**
+     * ✅ Esconde alerta no modal de pasta
+     */
+    function hideFolderAlert() {
+      const box = document.getElementById("folderAlertBox");
+      if (box) {
+        box.classList.add("d-none");
+      }
+    }
+
+    /**
+     * ✅ Mostra alerta no modal de documento
+     */
+    function showModalAlert(message) {
+      const box = document.getElementById("modalAlertBox");
+      const msg = document.getElementById("modalAlertMessage");
+      if (box && msg) {
+        msg.textContent = message;
+        box.classList.remove("d-none");
+      }
+    }
+
+    /**
+     * ✅ Esconde alerta no modal de documento
+     */
+    function hideModalAlert() {
+      const box = document.getElementById("modalAlertBox");
+      if (box) {
+        box.classList.add("d-none");
+      }
+    }
+
+    console.log("[DOCS] ✅ Script de documentação carregado com caminhos corrigidos\n");
   </script>
-  <!-- ============================================================ -->
+
 </body>
+
 </html>

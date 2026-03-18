@@ -13,6 +13,7 @@
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/style.css">
 
   <style>
@@ -38,17 +39,19 @@
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       gap: 24px;
+      margin-bottom: 2rem;
     }
 
     .group-card {
       background: white;
       border: 1px solid #e5e7eb;
       border-radius: 12px;
-      padding: 24px;
+      padding: 20px;
       transition: all 0.3s ease;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
       display: flex;
       flex-direction: column;
+      gap: 16px;
     }
 
     .group-card:hover {
@@ -60,79 +63,92 @@
     .group-icon {
       width: 48px;
       height: 48px;
-      border-radius: 10px;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
       color: white;
       font-size: 24px;
-      margin-bottom: 16px;
     }
 
     .group-header {
-      margin-bottom: 16px;
+      flex: 1;
     }
 
     .group-name {
-      font-size: 16px;
       font-weight: 600;
+      font-size: 18px;
       color: #1f2937;
-      margin-bottom: 4px;
+      margin-bottom: 8px;
     }
 
     .group-description {
       font-size: 13px;
       color: #6b7280;
       line-height: 1.5;
-      margin-bottom: 16px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
 
     .group-meta {
-      display: flex;
-      gap: 16px;
-      padding-top: 16px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      padding: 12px 0;
       border-top: 1px solid #e5e7eb;
-      margin-bottom: 16px;
-      font-size: 12px;
-      color: #6b7280;
+      border-bottom: 1px solid #e5e7eb;
     }
 
     .group-meta-item {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
+      font-size: 12px;
+      color: #6b7280;
+    }
+
+    .group-meta-item i {
+      color: #667eea;
     }
 
     .group-actions {
       display: flex;
       gap: 8px;
-      margin-top: auto;
     }
 
     .btn-group-action {
       flex: 1;
       padding: 0.6rem;
-      border-radius: 6px;
       border: 1px solid #e5e7eb;
+      border-radius: 6px;
       background: white;
       color: #1f2937;
       font-weight: 600;
       font-size: 13px;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
 
     .btn-group-action:hover {
-      background-color: #f3f4f6;
+      background: #f3f4f6;
       border-color: #667eea;
       color: #667eea;
     }
 
+    .btn-group-action.danger {
+      color: #dc2626;
+    }
+
     .btn-group-action.danger:hover {
-      background-color: rgba(239, 68, 68, 0.1);
-      border-color: #ef4444;
-      color: #ef4444;
+      background: rgba(220, 38, 38, 0.1);
+      border-color: #dc2626;
     }
 
     .btn-new-group {
@@ -144,6 +160,10 @@
       font-weight: 600;
       white-space: nowrap;
       transition: all 0.3s ease;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .btn-new-group:hover {
@@ -157,6 +177,7 @@
       text-align: center;
       padding: 3rem 2rem;
       color: #6b7280;
+      grid-column: 1 / -1;
     }
 
     .empty-state-icon {
@@ -191,12 +212,6 @@
       filter: brightness(0) invert(1);
     }
 
-    .form-control:focus,
-    .form-select:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
     .d-none {
       display: none;
     }
@@ -206,9 +221,12 @@
         grid-template-columns: 1fr;
       }
 
-      .page-header {
+      .group-meta {
+        grid-template-columns: 1fr;
+      }
+
+      .group-actions {
         flex-direction: column;
-        align-items: flex-start;
       }
     }
   </style>
@@ -225,11 +243,12 @@
         style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
         <span class="visually-hidden">Carregando...</span>
       </div>
-      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+      <p style="margin-top: 1rem;">Inicializando página...</p>
     </div>
   </div>
   <!-- ============================================================ -->
 
+  <!-- CONTAINER PRINCIPAL -->
   <div class="container-main" style="display: none;">
     <!-- SIDEBAR -->
     <div class="sidebar">
@@ -276,13 +295,11 @@
 
         <!-- GROUPS GRID -->
         <div class="groups-container" id="groupsList">
-          <div style="grid-column: 1 / -1;">
-            <div class="empty-state">
-              <div class="empty-state-icon">
-                <i class="bi bi-inbox"></i>
-              </div>
-              <p>Carregando grupos...</p>
+          <div class="empty-state">
+            <div class="empty-state-icon">
+              <i class="bi bi-inbox"></i>
             </div>
+            <p>Carregando grupos...</p>
           </div>
         </div>
       </div>
@@ -303,23 +320,21 @@
         </div>
 
         <div class="modal-body" style="padding: 2rem;">
-          <!-- Alert de Erro -->
           <div class="alert alert-danger d-none" id="modalAlertBox" role="alert">
             <i class="bi bi-exclamation-circle"></i>
             <span id="modalAlertMessage"></span>
           </div>
 
-          <!-- Formulário -->
           <form id="groupForm" novalidate>
+            <!-- Nome do Grupo -->
             <div class="mb-3">
               <label for="groupName" class="form-label">
                 <i class="bi bi-input-cursor"></i> Nome do Grupo
               </label>
-              <input type="text" class="form-control" id="groupName"
-                placeholder="Ex: Suporte Técnico" required />
-              <div class="invalid-feedback"></div>
+              <input type="text" class="form-control" id="groupName" placeholder="Ex: Suporte Técnico" required />
             </div>
 
+            <!-- Descrição -->
             <div class="mb-3">
               <label for="groupDescription" class="form-label">
                 <i class="bi bi-file-text"></i> Descrição
@@ -329,6 +344,7 @@
               <small class="form-text text-muted">Opcional</small>
             </div>
 
+            <!-- Nível de Permissão -->
             <div class="mb-3">
               <label for="groupPermission" class="form-label">
                 <i class="bi bi-shield-check"></i> Nível de Permissão
@@ -340,9 +356,9 @@
                 <option value="viewer">Visualizador</option>
                 <option value="custom">Personalizado</option>
               </select>
-              <div class="invalid-feedback"></div>
             </div>
 
+            <!-- Botões -->
             <div class="d-flex gap-2">
               <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
                 <i class="bi bi-check-lg"></i> Criar Grupo
@@ -361,31 +377,44 @@
   <!-- 📦 SCRIPTS -->
   <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
   <!-- ============================================================ -->
   <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
   <!-- ============================================================ -->
   <script>
+    console.log("\n" + "=".repeat(80));
+    console.log("[GROUPS/PAGE] 📄 Inicializando página de Gerenciamento de Grupos");
+    console.log("[GROUPS/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
+    console.log("=".repeat(80) + "\n");
+
     document.addEventListener("DOMContentLoaded", async () => {
-      const user = await initPageAuth("GROUPS");
-      if (!user) return;
+      console.log("[GROUPS/INIT] 📋 DOM Carregado");
 
-      // Verifica se é admin
-      if (user.role !== "ADMIN") {
-        console.warn("[GROUPS] Usuário não é admin, redirecionando...");
-        showError("Apenas administradores podem acessar esta página!");
-        setTimeout(() => {
-          window.location.href = "/SistemaCPE/web/pages/dashboard.html";
-        }, 2000);
-        return;
+      try {
+        // ===== Mostrar Conteúdo =====
+        const loadingPage = document.getElementById("loadingPage");
+        const containerMain = document.querySelector(".container-main");
+        
+        loadingPage.style.display = "none";
+        containerMain.style.display = "flex";
+        
+        console.log("[GROUPS/INIT] ✅ Página inicializada com sucesso");
+        console.log("=".repeat(80) + "\n");
+
+        // ===== Carregar Grupos =====
+        await loadGroups();
+
+      } catch (err) {
+        console.error("[GROUPS/INIT] ❌ ERRO NA INICIALIZAÇÃO");
+        console.error("[GROUPS/INIT] 📍 Mensagem:", err.message);
+        console.error("[GROUPS/INIT] 🔗 Stack:", err.stack);
+        console.error("=".repeat(80) + "\n");
+        
+        showError("Erro ao inicializar página: " + err.message);
       }
-
-      console.log("[GROUPS] ✓ Usuário é admin, carregando grupos...");
-      await loadGroups();
     });
   </script>
 
@@ -395,21 +424,20 @@
   <script>
     let groups = [];
     let selectedGroupId = null;
-    let groupModalInstance = null;
 
     /**
-     * Carrega os grupos
+     * ✅ Carrega os grupos
      */
     async function loadGroups() {
-      try {
-        console.log("[GROUPS/LOAD] Carregando grupos...");
+      console.log("\n[GROUPS/LOAD] 📥 Carregando grupos...");
 
+      try {
         // Simular dados de API - substitua pela chamada real
         groups = [
           {
             id: 1,
             name: "Suporte Técnico",
-            description: "Equipe responsável pelo suporte técnico aos clientes",
+            description: "Equipe responsável pelo suporte técnico aos clientes e resolução de problemas",
             permission: "admin",
             members: 5,
             created: "2024-01-15"
@@ -417,7 +445,7 @@
           {
             id: 2,
             name: "Vendas",
-            description: "Equipe comercial responsável pelas negociações",
+            description: "Equipe comercial responsável pelas negociações e prospecção de clientes",
             permission: "editor",
             members: 8,
             created: "2024-01-10"
@@ -425,31 +453,24 @@
           {
             id: 3,
             name: "Desenvolvimento",
-            description: "Equipe de desenvolvimento e manutenção de software",
+            description: "Equipe de desenvolvimento e manutenção de software com foco em inovação",
             permission: "admin",
             members: 12,
             created: "2023-12-20"
           },
           {
             id: 4,
-            name: "Gerência",
-            description: "Gestores e coordenadores de projeto",
-            permission: "admin",
-            members: 4,
-            created: "2023-12-15"
-          },
-          {
-            id: 5,
-            name: "Marketing",
-            description: "Equipe de marketing e comunicação",
-            permission: "viewer",
+            name: "Gestão de Projetos",
+            description: "Equipe responsável pelo planejamento e execução de projetos",
+            permission: "editor",
             members: 6,
-            created: "2023-11-01"
+            created: "2024-02-05"
           }
         ];
 
         console.log("[GROUPS/LOAD] ✓", groups.length, "grupos carregados");
-        renderGroups(groups);
+        renderGroups();
+        console.log("[GROUPS/LOAD] ✅ Grupos renderizados\n");
 
       } catch (err) {
         console.error("[GROUPS/LOAD] ✗ Erro:", err.message);
@@ -458,35 +479,35 @@
     }
 
     /**
-     * Renderiza os grupos
+     * ✅ Renderiza os grupos
      */
-    function renderGroups(list = groups) {
+    function renderGroups() {
+      console.log("[GROUPS/RENDER] 🎨 Renderizando grupos");
       const groupsList = document.getElementById("groupsList");
 
-      if (!list || list.length === 0) {
+      if (!groups || groups.length === 0) {
         groupsList.innerHTML = `
-          <div style="grid-column: 1 / -1;">
-            <div class="empty-state">
-              <div class="empty-state-icon">
-                <i class="bi bi-inbox"></i>
-              </div>
-              <p>Nenhum grupo encontrado</p>
-              <p style="font-size: 12px; margin-top: 1rem;">Clique em "Novo Grupo" para criar um</p>
+          <div class="empty-state">
+            <div class="empty-state-icon">
+              <i class="bi bi-inbox"></i>
             </div>
+            <p>Nenhum grupo encontrado</p>
+            <p style="font-size: 12px; margin-top: 1rem;">Clique em "Novo Grupo" para criar um</p>
           </div>
         `;
         return;
       }
 
-      groupsList.innerHTML = list.map(group => `
+      groupsList.innerHTML = groups.map(group => `
         <div class="group-card">
-          <div class="group-icon">
-            <i class="bi bi-people-fill"></i>
-          </div>
-
-          <div class="group-header">
-            <div class="group-name">${group.name}</div>
-            <div class="group-description">${group.description || "Sem descrição"}</div>
+          <div style="display: flex; gap: 12px;">
+            <div class="group-icon">
+              <i class="bi bi-people-fill"></i>
+            </div>
+            <div class="group-header">
+              <div class="group-name">${group.name}</div>
+              <div class="group-description">${group.description || "Sem descrição"}</div>
+            </div>
           </div>
 
           <div class="group-meta">
@@ -517,11 +538,11 @@
     }
 
     /**
-     * Retorna o label da permissão
+     * ✅ Retorna label da permissão
      */
     function getPermissionLabel(permission) {
       const labels = {
-        admin: "Admin",
+        admin: "Administrador",
         editor: "Editor",
         viewer: "Visualizador",
         custom: "Personalizado"
@@ -530,20 +551,22 @@
     }
 
     /**
-     * Formata data
+     * ✅ Formata data
      */
     function formatDate(dateString) {
       if (!dateString) return "Sem data";
       const date = new Date(dateString);
-      return date.toLocaleDateString("pt-BR", { month: "short", day: "numeric" });
+      return date.toLocaleDateString("pt-BR", { month: "short", day: "numeric", year: "numeric" });
     }
 
     /**
-     * Mostra mensagem de erro
+     * ✅ Mostra mensagem de erro
      */
     function showError(message) {
       const alertBox = document.getElementById("alertBox");
       const alertMessage = document.getElementById("alertMessage");
+      if (!alertBox || !alertMessage) return;
+
       alertMessage.textContent = message;
       alertBox.classList.remove("d-none");
       setTimeout(() => {
@@ -552,11 +575,13 @@
     }
 
     /**
-     * Mostra mensagem de sucesso
+     * ✅ Mostra mensagem de sucesso
      */
     function showSuccess(message) {
       const successBox = document.getElementById("successBox");
       const successMessage = document.getElementById("successMessage");
+      if (!successBox || !successMessage) return;
+
       successMessage.textContent = message;
       successBox.classList.remove("d-none");
       setTimeout(() => {
@@ -565,7 +590,7 @@
     }
 
     /**
-     * Mostra mensagem de erro no modal
+     * ✅ Mostra erro no modal
      */
     function showModalError(message) {
       const modalAlert = document.getElementById("modalAlertBox");
@@ -577,7 +602,7 @@
     }
 
     /**
-     * Esconde mensagem de erro no modal
+     * ✅ Esconde erro no modal
      */
     function hideModalError() {
       const modalAlert = document.getElementById("modalAlertBox");
@@ -587,14 +612,18 @@
     }
 
     /**
-     * Edita um grupo
+     * ✅ Edita um grupo
      */
     function editGroup(groupId, event) {
       event.preventDefault();
-      console.log("[GROUPS/EDIT] Editando grupo:", groupId);
+
+      console.log("[GROUPS/EDIT] ✏️ Editando grupo:", groupId);
 
       const group = groups.find(g => g.id === groupId);
-      if (!group) return;
+      if (!group) {
+        console.error("[GROUPS/EDIT] ✗ Grupo não encontrado");
+        return;
+      }
 
       selectedGroupId = groupId;
       document.getElementById("groupModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Grupo';
@@ -603,37 +632,32 @@
       document.getElementById("groupPermission").value = group.permission;
       document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Grupo';
 
-      groupModalInstance = new bootstrap.Modal(document.getElementById("groupModal"));
-      groupModalInstance.show();
+      hideModalError();
+      const modal = new bootstrap.Modal(document.getElementById("groupModal"));
+      modal.show();
     }
 
     /**
-     * Deleta um grupo
+     * ✅ Deleta um grupo
      */
-    async function deleteGroup(groupId, groupName, event) {
+    function deleteGroup(groupId, groupName, event) {
       event.preventDefault();
-      console.log("[GROUPS/DELETE] Deletando grupo:", groupId);
+
+      console.log("[GROUPS/DELETE] 🗑️ Deletando grupo:", groupId);
 
       if (!confirm(`Tem certeza que deseja deletar o grupo "${groupName}"?`)) {
+        console.log("[GROUPS/DELETE] ⏭️ Deleção cancelada pelo usuário");
         return;
       }
 
-      try {
-        // Simular API call
-        console.log("[GROUPS/DELETE] ✓ Grupo deletado com sucesso");
-
-        groups = groups.filter(g => g.id !== groupId);
-        showSuccess(`Grupo "${groupName}" deletado com sucesso!`);
-        renderGroups();
-
-      } catch (err) {
-        console.error("[GROUPS/DELETE] ✗ Erro:", err.message);
-        showError("Erro ao deletar grupo: " + err.message);
-      }
+      groups = groups.filter(g => g.id !== groupId);
+      console.log("[GROUPS/DELETE] ✓ Grupo deletado com sucesso");
+      showSuccess(`Grupo "${groupName}" deletado com sucesso!`);
+      renderGroups();
     }
 
     /**
-     * Submissão do formulário
+     * ✅ Submissão do formulário
      */
     document.getElementById("groupForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -642,9 +666,10 @@
       const description = document.getElementById("groupDescription")?.value?.trim();
       const permission = document.getElementById("groupPermission")?.value;
 
-      console.log("[GROUPS/SUBMIT]", selectedGroupId ? "Atualizando..." : "Criando novo grupo...");
+      console.log("[GROUPS/SUBMIT] 📝 Processando grupo:", { name, permission, selectedGroupId });
 
       if (!name || !permission) {
+        console.warn("[GROUPS/SUBMIT] ⚠️ Campos obrigatórios não preenchidos");
         showModalError("Preencha os campos obrigatórios!");
         return;
       }
@@ -654,18 +679,23 @@
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
 
+        // Simular delay de processamento
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         if (selectedGroupId) {
-          // Atualizar
+          // ===== ATUALIZAR =====
+          console.log("[GROUPS/SUBMIT] ✏️ Atualizando grupo:", selectedGroupId);
           const group = groups.find(g => g.id === selectedGroupId);
           if (group) {
             group.name = name;
             group.description = description;
             group.permission = permission;
+            console.log("[GROUPS/SUBMIT] ✓ Grupo atualizado com sucesso");
           }
-          console.log("[GROUPS/SUBMIT] ✓ Grupo atualizado");
           showSuccess("Grupo atualizado com sucesso!");
         } else {
-          // Criar
+          // ===== CRIAR =====
+          console.log("[GROUPS/SUBMIT] ➕ Criando novo grupo");
           const newGroup = {
             id: Math.max(...groups.map(g => g.id), 0) + 1,
             name,
@@ -675,20 +705,20 @@
             created: new Date().toISOString().split('T')[0]
           };
           groups.push(newGroup);
-          console.log("[GROUPS/SUBMIT] ✓ Grupo criado");
+          console.log("[GROUPS/SUBMIT] ✓ Grupo criado com sucesso:", newGroup);
           showSuccess("Grupo criado com sucesso!");
         }
 
         document.getElementById("groupForm").reset();
         const modal = bootstrap.Modal.getInstance(document.getElementById("groupModal"));
-        modal.hide();
+        if (modal) modal.hide();
 
         selectedGroupId = null;
         renderGroups();
 
       } catch (err) {
         console.error("[GROUPS/SUBMIT] ✗ Erro:", err.message);
-        showModalError(err.message || "Erro ao processar grupo!");
+        showModalError("Erro ao processar grupo: " + err.message);
       } finally {
         const submitBtn = document.getElementById("submitBtn");
         submitBtn.disabled = false;
@@ -697,9 +727,10 @@
     });
 
     /**
-     * Reset modal quando abrir
+     * ✅ Reset do modal ao abrir
      */
     document.getElementById("groupModal")?.addEventListener("show.bs.modal", () => {
+      console.log("[GROUPS/MODAL] 📂 Modal aberto");
       if (!selectedGroupId) {
         document.getElementById("groupModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Novo Grupo';
         document.getElementById("groupForm").reset();
@@ -709,9 +740,10 @@
     });
 
     /**
-     * Reset quando fechar
+     * ✅ Reset do modal ao fechar
      */
     document.getElementById("groupModal")?.addEventListener("hidden.bs.modal", () => {
+      console.log("[GROUPS/MODAL] 🔒 Modal fechado");
       selectedGroupId = null;
     });
   </script>

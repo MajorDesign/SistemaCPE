@@ -1,140 +1,860 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
+<!doctype html>
+<html lang="pt-br">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Página - Milvus Helpdesk</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="../css/style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Página Genérica • Sistema CPE</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --primary-color: #667eea;
+      --secondary-color: #764ba2;
+      --light-bg: #f9fafb;
+      --border-color: #e5e7eb;
+      --text-primary: #1f2937;
+      --text-secondary: #6b7280;
+      --danger-color: #ef4444;
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+        'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      background-color: var(--light-bg);
+      color: var(--text-primary);
+    }
+
+    /* ============================================================ */
+    /* LAYOUT PRINCIPAL */
+    /* ============================================================ */
+    .app-shell {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .app-sidebar {
+      width: 280px;
+      background: var(--primary-gradient);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 0;
+      overflow-y: auto;
+      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+    }
+
+    .app-sidebar__brand {
+      padding: 0 20px 30px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .brand-dot {
+      width: 12px;
+      height: 12px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .app-nav {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 0 12px;
+    }
+
+    .app-nav__item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      color: rgba(255, 255, 255, 0.8);
+      text-decoration: none;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .app-nav__item:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .app-nav__item.active {
+      background: rgba(255, 255, 255, 0.25);
+      color: white;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.3);
+    }
+
+    .app-nav__item i {
+      width: 20px;
+      text-align: center;
+    }
+
+    .app-nav__section {
+      padding: 12px 16px;
+      margin-top: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .app-sidebar__footer {
+      padding: 0 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 20px;
+      margin-top: 20px;
+    }
+
+    /* ============================================================ */
+    /* MAIN CONTENT */
+    /* ============================================================ */
+    .app-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .app-header {
+      background: white;
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+      gap: 16px;
+    }
+
+    .app-search {
+      max-width: 400px;
+      width: 100%;
+    }
+
+    .app-search .input-group-text {
+      border-color: var(--border-color);
+      background: white;
+      color: var(--text-secondary);
+    }
+
+    .app-search .form-control {
+      border-color: var(--border-color);
+      padding: 8px 12px;
+    }
+
+    .app-search .form-control:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .app-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px 24px;
+    }
+
+    /* ============================================================ */
+    /* CARDS & BUTTONS */
+    /* ============================================================ */
+    .app-card {
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+      background: white;
+    }
+
+    .app-card:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    .stat-card {
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      background: white;
+      transition: all 0.3s ease;
+      text-align: center;
+    }
+
+    .stat-card:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+      transform: translateY(-2px);
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--primary-color);
+      margin-bottom: 8px;
+    }
+
+    .stat-change {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .btn-primary {
+      background: var(--primary-gradient);
+      border: none;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-outline-secondary {
+      border: 2px solid var(--border-color);
+      transition: all 0.2s ease;
+    }
+
+    .btn-outline-secondary:hover {
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+      background: rgba(102, 126, 234, 0.05);
+    }
+
+    /* ============================================================ */
+    /* EMPTY STATE */
+    /* ============================================================ */
+    .empty-state {
+      text-align: center;
+      padding: 60px 24px;
+    }
+
+    .empty-state__icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      display: block;
+    }
+
+    .empty-state__title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: var(--text-primary);
+    }
+
+    .empty-state__description {
+      color: var(--text-secondary);
+      margin-bottom: 24px;
+      font-size: 14px;
+    }
+
+    .empty-state__actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* ============================================================ */
+    /* ALERTS & MESSAGES */
+    /* ============================================================ */
+    .alert {
+      border: none;
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      animation: slideIn 0.3s ease;
+      margin-bottom: 16px;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .alert-danger {
+      background-color: rgba(220, 38, 38, 0.1);
+      color: #991b1b;
+    }
+
+    .alert-success {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: #065f46;
+    }
+
+    .alert-info {
+      background-color: rgba(59, 130, 246, 0.1);
+      color: #1e40af;
+    }
+
+    .alert i {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* ============================================================ */
+    /* UTILITIES */
+    /* ============================================================ */
+    .d-none {
+      display: none !important;
+    }
+
+    .loading-spinner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary-gradient);
+      z-index: 9999;
+      animation: fadeOut 0.3s ease 1.5s forwards;
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0;
+        pointer-events: none;
+      }
+    }
+
+    .spinner-border {
+      width: 3rem;
+      height: 3rem;
+      border: 0.3em solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+    }
+
+    /* ============================================================ */
+    /* GRID */
+    /* ============================================================ */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 20px;
+      margin-top: 24px;
+    }
+
+    /* ============================================================ */
+    /* RESPONSIVE */
+    /* ============================================================ */
+    @media (max-width: 768px) {
+      .app-sidebar {
+        position: fixed;
+        left: -280px;
+        top: 0;
+        height: 100vh;
+        z-index: 1000;
+        transition: left 0.3s ease;
+      }
+
+      .app-sidebar.show {
+        left: 0;
+      }
+
+      .app-header {
+        padding: 12px 16px;
+      }
+
+      .app-content {
+        padding: 20px 16px;
+      }
+
+      .app-search {
+        max-width: 100%;
+        flex: 1;
+      }
+
+      .h4 {
+        font-size: 18px;
+      }
+
+      .stats-grid {
+        grid-template-columns: 1fr !important;
+      }
+
+      .empty-state {
+        padding: 40px 16px;
+      }
+
+      .empty-state__icon {
+        font-size: 48px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .app-header {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .app-search {
+        order: 3;
+        width: 100%;
+        max-width: 100%;
+      }
+
+      .empty-state__actions {
+        flex-direction: column;
+      }
+
+      .empty-state__actions .btn {
+        width: 100%;
+      }
+    }
+  </style>
 </head>
+
 <body>
-  <div class="container-main">
-    <div class="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">M</div>
-        <div class="sidebar-title">MILVUS</div>
+  <!-- ============================================================ -->
+  <!-- 🔒 LOADING PAGE -->
+  <!-- ============================================================ -->
+  <div class="loading-spinner" id="loadingPage">
+    <div style="text-align: center; color: white;">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Carregando...</span>
       </div>
-      
-      <div class="search-box">
-        <input type="text" placeholder="Buscar">
-      </div>
-      
-      <ul class="sidebar-menu">
-        <li class="menu-item">
-          <a href="../index.html" class="menu-link">
-            <span class="menu-icon">📊</span>
-            <span>Dashboards</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="tickets.html" class="menu-link">
-            <span class="menu-icon">🎫</span>
-            <span>Tickets</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="chat.html" class="menu-link">
-            <span class="menu-icon">💬</span>
-            <span>Chat</span>
-            <span class="menu-badge">BETA</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="tasks.html" class="menu-link">
-            <span class="menu-icon">✓</span>
-            <span>Tarefas</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="projects.html" class="menu-link">
-            <span class="menu-icon">📁</span>
-            <span>Projetos</span>
-            <span class="menu-badge">BETA</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="inventory.html" class="menu-link">
-            <span class="menu-icon">📦</span>
-            <span>Inventário</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="reports.html" class="menu-link">
-            <span class="menu-icon">📈</span>
-            <span>Relatórios</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="billing.html" class="menu-link">
-            <span class="menu-icon">💰</span>
-            <span>Faturamento</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="knowledge-base.html" class="menu-link">
-            <span class="menu-icon">📚</span>
-            <span>Base de conhecimento</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="registrations.html" class="menu-link">
-            <span class="menu-icon">👥</span>
-            <span>Cadastros</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="settings.html" class="menu-link">
-            <span class="menu-icon">⚙️</span>
-            <span>Configurações</span>
-          </a>
-        </li>
-        <li class="menu-item">
-          <a href="download-agents.html" class="menu-link">
-            <span class="menu-icon">⬇️</span>
-            <span>Download de Agentes</span>
-          </a>
-        </li>
-      </ul>
-    </div>
-
-    <div class="main-content">
-      <div class="top-bar">
-        <button class="menu-toggle">☰</button>
-        <h1>Página</h1>
-      </div>
-
-      <div class="content">
-        <div class="card" style="text-align: center; padding: 60px 24px;">
-          <div style="font-size: 64px; margin-bottom: 16px;">📋</div>
-          <h2 style="margin-bottom: 8px;">Conteúdo em Desenvolvimento</h2>
-          <p style="color: var(--text-muted); margin: 0;">Esta página está em desenvolvimento. Em breve você terá acesso a todas as funcionalidades.</p>
-        </div>
-
-        <div class="stats-grid" style="margin-top: 24px;">
-          <div class="stat-card">
-            <div class="stat-label">Total</div>
-            <div class="stat-value">0</div>
-            <div class="stat-change">Nenhum item registrado</div>
-          </div>
-          
-          <div class="stat-card">
-            <div class="stat-label">Ativos</div>
-            <div class="stat-value">0</div>
-            <div class="stat-change">Aguardando dados</div>
-          </div>
-          
-          <div class="stat-card">
-            <div class="stat-label">Inativos</div>
-            <div class="stat-value">0</div>
-            <div class="stat-change">Nenhum item inativo</div>
-          </div>
-        </div>
-      </div>
+      <p style="margin-top: 1rem; font-weight: 500;">Carregando página...</p>
     </div>
   </div>
 
-  <script src="../js/main.js"></script>
+  <!-- ============================================================ -->
+  <!-- MAIN SHELL -->
+  <!-- ============================================================ -->
+  <div class="app-shell">
+    <!-- SIDEBAR -->
+    <aside class="app-sidebar" id="sidebar">
+      <div class="app-sidebar__brand">
+        <div class="d-flex align-items-center gap-2">
+          <div class="brand-dot"></div>
+          <div>
+            <div class="brand-title">CPE Control</div>
+            <div class="brand-subtitle">Docs • Cofre • Inventário</div>
+          </div>
+        </div>
+      </div>
+
+      <nav class="app-nav">
+        <a class="app-nav__item" href="/SistemaCPE/web/index.html" title="Dashboard">
+          <i class="bi bi-grid"></i> Dashboard
+        </a>
+        <a class="app-nav__item" href="/SistemaCPE/web/docs.html" title="Documentação">
+          <i class="bi bi-journal-text"></i> Documentação
+        </a>
+        <a class="app-nav__item" href="/SistemaCPE/web/vault.html" title="Cofre">
+          <i class="bi bi-shield-lock"></i> Cofre
+        </a>
+        <a class="app-nav__item" href="/SistemaCPE/web/inventory.html" title="Inventário">
+          <i class="bi bi-pc-display"></i> Inventário
+        </a>
+
+        <div class="app-nav__section">Administração</div>
+        <a class="app-nav__item" href="/SistemaCPE/web/admin.html" title="Painel Admin">
+          <i class="bi bi-gear"></i> Painel Admin
+        </a>
+        <a class="app-nav__item" href="/SistemaCPE/web/audit.html" title="Auditoria">
+          <i class="bi bi-clipboard-data"></i> Auditoria
+        </a>
+      </nav>
+
+      <div class="app-sidebar__footer">
+        <div class="small text-muted">v0.1 • Interno CPE</div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="app-main">
+      <!-- HEADER -->
+      <header class="app-header">
+        <div class="d-flex align-items-center gap-2" style="flex: 1;">
+          <button class="btn btn-outline-secondary d-md-none" id="btnToggleSidebar" type="button" title="Menu">
+            <i class="bi bi-list"></i>
+          </button>
+          <div class="input-group app-search">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" id="searchInput" placeholder="Buscar..." />
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          <button class="btn btn-outline-secondary" type="button" title="Notificações">
+            <i class="bi bi-bell"></i>
+          </button>
+          <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown"
+              aria-expanded="false">
+              <i class="bi bi-person-circle me-1"></i> <span class="d-none d-sm-inline">Usuário</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i> Meu Perfil</a></li>
+              <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i> Configurações</a></li>
+              <li>
+                <hr class="dropdown-divider">
+              </li>
+              <li><a class="dropdown-item text-danger" href="#" id="btnLogout"><i class="bi bi-box-arrow-right me-2"></i>
+                  Sair</a></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+
+      <!-- CONTENT -->
+      <section class="app-content">
+        <div class="container-fluid">
+          <!-- PAGE HEADER -->
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+            <div>
+              <h1 class="h4 mb-0"><i class="bi bi-file-earmark me-2"></i> <span id="pageTitle">Página Genérica</span></h1>
+              <div class="text-muted small">Conteúdo customizável</div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button class="btn btn-outline-secondary" id="btnRefresh" title="Atualizar">
+                <i class="bi bi-arrow-clockwise me-1"></i> Atualizar
+              </button>
+              <button class="btn btn-primary" id="btnAction" title="Ação principal">
+                <i class="bi bi-plus-lg me-1"></i> Ação
+              </button>
+            </div>
+          </div>
+
+          <!-- MAIN CARD -->
+          <div class="app-card">
+            <div class="card-body">
+              <!-- EMPTY STATE -->
+              <div class="empty-state" id="emptyState">
+                <i class="bi bi-file-earmark empty-state__icon"></i>
+                <div class="empty-state__title">Conteúdo em Desenvolvimento</div>
+                <p class="empty-state__description">
+                  Esta página está sendo desenvolvida e será preenchida com funcionalidades em breve.
+                </p>
+                <div class="empty-state__actions">
+                  <button class="btn btn-primary" id="btnCreateNew">
+                    <i class="bi bi-plus-lg me-1"></i> Criar Novo
+                  </button>
+                  <a href="/SistemaCPE/web/index.html" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left me-1"></i> Voltar
+                  </a>
+                </div>
+              </div>
+
+              <!-- CONTENT PLACEHOLDER -->
+              <div id="contentArea" class="d-none">
+                <p class="text-muted">Conteúdo será exibido aqui...</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- STATS GRID -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label"><i class="bi bi-calculator me-1"></i> Total</div>
+              <div class="stat-value" id="statTotal">0</div>
+              <div class="stat-change">Nenhum item registrado</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label"><i class="bi bi-check-circle me-1"></i> Ativos</div>
+              <div class="stat-value" style="color: var(--success-color);" id="statActive">0</div>
+              <div class="stat-change">Aguardando dados</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label"><i class="bi bi-x-circle me-1"></i> Inativos</div>
+              <div class="stat-value" style="color: var(--danger-color);" id="statInactive">0</div>
+              <div class="stat-change">Nenhum item inativo</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label"><i class="bi bi-hourglass-split me-1"></i> Pendentes</div>
+              <div class="stat-value" style="color: var(--warning-color);" id="statPending">0</div>
+              <div class="stat-change">Nenhuma ação pendente</div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 📦 SCRIPTS -->
+  <!-- ============================================================ -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    console.log("\n" + "=".repeat(80));
+    console.log("[GENERIC/PAGE] 📄 Inicializando página genérica");
+    console.log("[GENERIC/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso Público e Direto");
+    console.log("[GENERIC/PAGE] ✅ Nenhuma verificação de permissão");
+    console.log("[GENERIC/PAGE] 💡 Esta é uma página template para desenvolvimento");
+    console.log("[GENERIC/PAGE] 🔗 Caminhos de URL corrigidos para /SistemaCPE/web/");
+    console.log("=".repeat(80) + "\n");
+
+    // ===== DADOS GLOBAIS =====
+    let pageConfig = {
+      title: "Página Genérica",
+      icon: "file-earmark",
+      stats: {
+        total: 0,
+        active: 0,
+        inactive: 0,
+        pending: 0
+      }
+    };
+
+    document.addEventListener("DOMContentLoaded", () => {
+      console.log("[GENERIC/INIT] 📋 DOM Carregado com sucesso");
+      console.log("[GENERIC/INIT] ⏱️  Timestamp:", new Date().toLocaleString('pt-BR'));
+      console.log("[GENERIC/INIT] 🌐 URL:", window.location.href);
+
+      try {
+        initializePage();
+        setupEventListeners();
+
+        // Remove loading page
+        const loading = document.getElementById("loadingPage");
+        if (loading) {
+          setTimeout(() => {
+            loading.style.display = "none";
+          }, 500);
+        }
+
+        console.log("[GENERIC/INIT] ✅ Página pronta para uso");
+        console.log("=".repeat(80) + "\n");
+
+      } catch (err) {
+        console.error("[GENERIC/INIT] ❌ ERRO:", err.message);
+        showError("Erro ao inicializar página: " + err.message);
+      }
+    });
+
+    /**
+     * ✅ Inicializa a página
+     */
+    function initializePage() {
+      console.log("[GENERIC/INIT] 🔧 Inicializando configurações da página...");
+
+      // Obtém parâmetros da URL
+      const params = new URLSearchParams(window.location.search);
+      const pageTitle = params.get("title") || pageConfig.title;
+      const pageIcon = params.get("icon") || pageConfig.icon;
+
+      // Atualiza título
+      document.getElementById("pageTitle").textContent = pageTitle;
+      document.title = pageTitle + " • Sistema CPE";
+
+      // Atualiza ícone
+      const titleElement = document.querySelector(".h4");
+      if (titleElement) {
+        titleElement.innerHTML = `<i class="bi bi-${pageIcon} me-2"></i> ${escapeHtml(pageTitle)}`;
+      }
+
+      // Carrega dados da página
+      loadPageData();
+
+      console.log("[GENERIC/INIT] ✅ Página configurada:", pageTitle);
+    }
+
+    /**
+     * ✅ Configura todos os event listeners
+     */
+    function setupEventListeners() {
+      console.log("[GENERIC/SETUP] 🔧 Configurando event listeners...");
+
+      // Menu mobile
+      const btnToggle = document.getElementById("btnToggleSidebar");
+      const sidebar = document.getElementById("sidebar");
+      if (btnToggle) {
+        btnToggle.addEventListener("click", () => {
+          sidebar.classList.toggle("show");
+        });
+      }
+
+      // Fechar sidebar ao clicar em um link
+      document.querySelectorAll(".app-nav__item").forEach(link => {
+        link.addEventListener("click", () => {
+          sidebar.classList.remove("show");
+        });
+      });
+
+      // Botões de ação
+      document.getElementById("btnRefresh")?.addEventListener("click", refreshPage);
+      document.getElementById("btnAction")?.addEventListener("click", performAction);
+      document.getElementById("btnCreateNew")?.addEventListener("click", createNew);
+
+      // Logout
+      document.getElementById("btnLogout")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        console.log("[GENERIC/LOGOUT] 👋 Usuário saiu");
+        alert("Logout realizado!");
+      });
+
+      // Search
+      document.getElementById("searchInput")?.addEventListener("input", searchContent);
+
+      console.log("[GENERIC/SETUP] ✅ Event listeners configurados");
+    }
+
+    /**
+     * ✅ Carrega dados da página
+     */
+    function loadPageData() {
+      console.log("[GENERIC/DATA] 📊 Carregando dados da página...");
+
+      // Dados simulados
+      const data = {
+        total: 0,
+        active: 0,
+        inactive: 0,
+        pending: 0
+      };
+
+      pageConfig.stats = data;
+
+      // Atualiza estatísticas
+      document.getElementById("statTotal").textContent = data.total;
+      document.getElementById("statActive").textContent = data.active;
+      document.getElementById("statInactive").textContent = data.inactive;
+      document.getElementById("statPending").textContent = data.pending;
+
+      console.log("[GENERIC/DATA] ✅ Dados carregados");
+    }
+
+    /**
+     * ✅ Atualiza a página
+     */
+    function refreshPage() {
+      console.log("[GENERIC/REFRESH] 🔄 Atualizando página...");
+      loadPageData();
+      showSuccess("Página atualizada com sucesso!");
+    }
+
+    /**
+     * ✅ Realiza ação principal
+     */
+    function performAction() {
+      console.log("[GENERIC/ACTION] ⚙️ Executando ação principal");
+      showSuccess("Funcionalidade será implementada no backend");
+    }
+
+    /**
+     * ✅ Cria novo item
+     */
+    function createNew() {
+      console.log("[GENERIC/CREATE] ✨ Criando novo item");
+      showSuccess("Formulário de criação será implementado no backend");
+    }
+
+    /**
+     * ✅ Busca conteúdo
+     */
+    function searchContent(e) {
+      const searchTerm = e.target.value?.toLowerCase() || "";
+      console.log("[GENERIC/SEARCH] 🔍 Buscando:", searchTerm);
+
+      if (searchTerm.length > 0) {
+        console.log("[GENERIC/SEARCH] ✓ Filtro aplicado");
+      } else {
+        console.log("[GENERIC/SEARCH] ✓ Filtro removido");
+      }
+    }
+
+    /**
+     * ✅ Escapa HTML
+     */
+    function escapeHtml(text) {
+      if (!text) return "";
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text.replace(/[&<>"']/g, char => map[char]);
+    }
+
+    /**
+     * ✅ Mostra erro
+     */
+    function showError(message) {
+      console.error("[GENERIC/ERROR] ❌", message);
+      alert("Erro: " + message);
+    }
+
+    /**
+     * ✅ Mostra sucesso
+     */
+    function showSuccess(message) {
+      console.log("[GENERIC/SUCCESS] ✅", message);
+      alert(message);
+    }
+
+    console.log("[GENERIC] ✅ Script de página genérica carregado com caminhos corrigidos\n");
+  </script>
+
 </body>
+
 </html>

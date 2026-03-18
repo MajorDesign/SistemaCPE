@@ -161,6 +161,11 @@
       color: white;
     }
 
+    .btn-download:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
     .btn-info {
       flex: 1;
       background: #f3f4f6;
@@ -280,7 +285,7 @@
         style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
         <span class="visually-hidden">Carregando...</span>
       </div>
-      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+      <p style="margin-top: 1rem;">Inicializando página...</p>
     </div>
   </div>
   <!-- ============================================================ -->
@@ -344,8 +349,8 @@
 
           <div class="stat-card">
             <div class="stat-label">Sistemas Suportados</div>
-            <div class="stat-value" id="totalSystems">3</div>
-            <div class="stat-change">Windows, Linux, macOS</div>
+            <div class="stat-value" id="totalSystems">6</div>
+            <div class="stat-change">Windows, Linux, macOS, Docker, IoT, Cloud</div>
           </div>
 
           <div class="stat-card">
@@ -397,21 +402,44 @@
   <!-- 📦 SCRIPTS -->
   <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
   <!-- ============================================================ -->
   <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
   <!-- ============================================================ -->
   <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      const user = await initPageAuth("DOWNLOAD-AGENTS");
-      if (!user) return;
+    console.log("\n" + "=".repeat(80));
+    console.log("[AGENTS/PAGE] 📄 Inicializando página de Download de Agentes");
+    console.log("[AGENTS/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
+    console.log("=".repeat(80) + "\n");
 
-      // Carrega os agentes
-      await loadAgents();
+    document.addEventListener("DOMContentLoaded", async () => {
+      console.log("[AGENTS/INIT] 📋 DOM Carregado");
+
+      try {
+        // ===== Mostrar Conteúdo =====
+        const loadingPage = document.getElementById("loadingPage");
+        const containerMain = document.querySelector(".container-main");
+        
+        loadingPage.style.display = "none";
+        containerMain.style.display = "flex";
+        
+        console.log("[AGENTS/INIT] ✅ Página inicializada com sucesso");
+        console.log("=".repeat(80) + "\n");
+
+        // ===== Carregar Agentes =====
+        await loadAgents();
+
+      } catch (err) {
+        console.error("[AGENTS/INIT] ❌ ERRO NA INICIALIZAÇÃO");
+        console.error("[AGENTS/INIT] 📍 Mensagem:", err.message);
+        console.error("[AGENTS/INIT] 🔗 Stack:", err.stack);
+        console.error("=".repeat(80) + "\n");
+        
+        showError("Erro ao inicializar página: " + err.message);
+      }
     });
   </script>
 
@@ -422,12 +450,12 @@
     let agents = [];
 
     /**
-     * Carrega os agentes disponíveis
+     * ✅ Carrega os agentes disponíveis
      */
     async function loadAgents() {
-      try {
-        console.log("[AGENTS/LOAD] Carregando agentes...");
+      console.log("\n[AGENTS/LOAD] 📥 Carregando agentes...");
 
+      try {
         // Simular dados de API - substitua pela chamada real
         agents = [
           {
@@ -507,6 +535,7 @@
         console.log("[AGENTS/LOAD] ✓", agents.length, "agentes carregados");
         renderAgents(agents);
         updateStatistics();
+        console.log("[AGENTS/LOAD] ✅ Agentes renderizados\n");
 
       } catch (err) {
         console.error("[AGENTS/LOAD] ✗ Erro:", err.message);
@@ -515,9 +544,10 @@
     }
 
     /**
-     * Renderiza os agentes
+     * ✅ Renderiza os agentes
      */
     function renderAgents(list = agents) {
+      console.log("[AGENTS/RENDER] 🎨 Renderizando", list.length, "agentes");
       const grid = document.getElementById("agentsGrid");
 
       if (!list || list.length === 0) {
@@ -555,7 +585,7 @@
     }
 
     /**
-     * Atualiza as estatísticas
+     * ✅ Atualiza as estatísticas
      */
     function updateStatistics() {
       const totalAgents = agents.length;
@@ -563,17 +593,22 @@
 
       document.getElementById("totalAgents").textContent = totalAgents;
       document.getElementById("latestVersion").textContent = "v" + latestVersion;
+
+      console.log("[AGENTS/STATS] 📊 Estatísticas atualizadas - Total:", totalAgents);
     }
 
     /**
-     * Download do agente
+     * ✅ Download do agente
      */
     async function downloadAgent(agentId, agentName) {
       const agent = agents.find(a => a.id === agentId);
-      if (!agent) return;
+      if (!agent) {
+        console.error("[AGENTS/DOWNLOAD] ✗ Agente não encontrado:", agentId);
+        return;
+      }
 
       try {
-        console.log("[AGENTS/DOWNLOAD] Iniciando download:", agentName);
+        console.log("[AGENTS/DOWNLOAD] ⬇️ Iniciando download:", agentName);
 
         const btnElement = event.target.closest(".btn-download");
         const originalText = btnElement.innerHTML;
@@ -600,13 +635,16 @@
     }
 
     /**
-     * Mostra detalhes do agente
+     * ✅ Mostra detalhes do agente
      */
     function showAgentDetails(agentId) {
       const agent = agents.find(a => a.id === agentId);
-      if (!agent) return;
+      if (!agent) {
+        console.error("[AGENTS/DETAILS] ✗ Agente não encontrado:", agentId);
+        return;
+      }
 
-      console.log("[AGENTS/DETAILS] Mostrando detalhes:", agent.name);
+      console.log("[AGENTS/DETAILS] ℹ️  Mostrando detalhes:", agent.name);
 
       const details = `
         <strong>Sistemas Suportados:</strong><br>
@@ -621,7 +659,7 @@
     }
 
     /**
-     * Mostra mensagem de erro
+     * ✅ Mostra mensagem de erro
      */
     function showError(message) {
       const alertBox = document.getElementById("alertBox");
@@ -634,7 +672,7 @@
     }
 
     /**
-     * Mostra mensagem de sucesso
+     * ✅ Mostra mensagem de sucesso
      */
     function showSuccess(message) {
       const successBox = document.getElementById("successBox");
@@ -647,7 +685,7 @@
     }
 
     /**
-     * Mostra mensagem de informação
+     * ✅ Mostra mensagem de informação
      */
     function showInfo(message) {
       const infoBox = document.getElementById("infoBox");

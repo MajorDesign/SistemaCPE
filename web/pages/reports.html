@@ -268,6 +268,12 @@
       color: #667eea;
     }
 
+    .btn-report-action.danger:hover {
+      background-color: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
     .btn-generate-report {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
@@ -277,6 +283,7 @@
       font-weight: 600;
       white-space: nowrap;
       transition: all 0.3s ease;
+      cursor: pointer;
     }
 
     .btn-generate-report:hover {
@@ -352,6 +359,14 @@
         flex-direction: column;
         align-items: flex-start;
       }
+
+      .report-footer {
+        flex-direction: column;
+      }
+
+      .btn-report-action {
+        width: 100%;
+      }
     }
   </style>
 </head>
@@ -367,7 +382,7 @@
         style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
         <span class="visually-hidden">Carregando...</span>
       </div>
-      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+      <p style="margin-top: 1rem;">Inicializando página...</p>
     </div>
   </div>
   <!-- ============================================================ -->
@@ -513,7 +528,7 @@
           <form id="reportForm" novalidate>
             <div class="mb-3">
               <label for="reportTitle" class="form-label">
-                <i class="bi bi-input-cursor"></i> Título do Relatório
+                <i class="bi bi-input-cursor"></i> Título do Relatório <span style="color: #dc2626;">*</span>
               </label>
               <input type="text" class="form-control" id="reportTitle"
                 placeholder="Ex: Relatório de Tickets - Março 2024" required />
@@ -522,7 +537,7 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label for="reportType" class="form-label">
-                  <i class="bi bi-tag"></i> Tipo
+                  <i class="bi bi-tag"></i> Tipo <span style="color: #dc2626;">*</span>
                 </label>
                 <select class="form-select" id="reportType" required>
                   <option value="">Selecione o tipo...</option>
@@ -535,9 +550,10 @@
 
               <div class="col-md-6 mb-3">
                 <label for="reportFormat" class="form-label">
-                  <i class="bi bi-file-pdf"></i> Formato
+                  <i class="bi bi-file-pdf"></i> Formato <span style="color: #dc2626;">*</span>
                 </label>
                 <select class="form-select" id="reportFormat" required>
+                  <option value="">Selecione o formato...</option>
                   <option value="pdf">PDF</option>
                   <option value="excel">Excel</option>
                   <option value="csv">CSV</option>
@@ -607,20 +623,44 @@
   <!-- 📦 SCRIPTS -->
   <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
   <!-- ============================================================ -->
   <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
   <!-- ============================================================ -->
   <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      const user = await initPageAuth("REPORTS");
-      if (!user) return;
+    console.log("\n" + "=".repeat(80));
+    console.log("[REPORTS/PAGE] 📄 Inicializando página de Relatórios");
+    console.log("[REPORTS/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
+    console.log("=".repeat(80) + "\n");
 
-      await loadReports();
+    document.addEventListener("DOMContentLoaded", async () => {
+      console.log("[REPORTS/INIT] 📋 DOM Carregado");
+
+      try {
+        // ===== Mostrar Conteúdo =====
+        const loadingPage = document.getElementById("loadingPage");
+        const containerMain = document.querySelector(".container-main");
+        
+        loadingPage.style.display = "none";
+        containerMain.style.display = "flex";
+        
+        console.log("[REPORTS/INIT] ✅ Página inicializada com sucesso");
+        console.log("=".repeat(80) + "\n");
+
+        // ===== Carregar Relatórios =====
+        await loadReports();
+
+      } catch (err) {
+        console.error("[REPORTS/INIT] ❌ ERRO NA INICIALIZAÇÃO");
+        console.error("[REPORTS/INIT] 📍 Mensagem:", err.message);
+        console.error("[REPORTS/INIT] 🔗 Stack:", err.stack);
+        console.error("=".repeat(80) + "\n");
+        
+        showError("Erro ao inicializar página: " + err.message);
+      }
     });
   </script>
 
@@ -633,12 +673,12 @@
     let currentTab = "all";
 
     /**
-     * Carrega os relatórios
+     * ✅ Carrega os relatórios
      */
     async function loadReports() {
-      try {
-        console.log("[REPORTS/LOAD] Carregando relatórios...");
+      console.log("\n[REPORTS/LOAD] 📥 Carregando relatórios...");
 
+      try {
         // Simular dados de API - substitua pela chamada real
         reports = [
           {
@@ -730,34 +770,69 @@
             createdBy: "Roberto Martins",
             created: "2024-03-05",
             records: 189
+          },
+          {
+            id: 7,
+            title: "Relatório de Inventário Trimestral",
+            type: "inventory",
+            format: "pdf",
+            description: "Análise completa do inventário do primeiro trimestre",
+            startDate: "2024-01-01",
+            endDate: "2024-03-31",
+            scheduled: false,
+            scheduleType: null,
+            shared: true,
+            createdBy: "Fernanda Gomes",
+            created: "2024-03-25",
+            records: 1203
+          },
+          {
+            id: 8,
+            title: "Projetos por Status",
+            type: "projects",
+            format: "csv",
+            description: "Distribuição de projetos por status de andamento",
+            startDate: "2024-03-01",
+            endDate: "2024-03-31",
+            scheduled: true,
+            scheduleType: "weekly",
+            shared: false,
+            createdBy: "Lucas Pereira",
+            created: "2024-03-18",
+            records: 6
           }
         ];
 
         console.log("[REPORTS/LOAD] ✓", reports.length, "relatórios carregados");
         renderReports(filterReports());
         updateStatistics();
+        console.log("[REPORTS/LOAD] ✅ Relatórios renderizados\n");
 
       } catch (err) {
         console.error("[REPORTS/LOAD] ✗ Erro:", err.message);
         showError("Erro ao carregar relatórios: " + err.message);
+        reports = [];
       }
     }
 
     /**
-     * Filtra os relatórios
+     * ✅ Filtra os relatórios
      */
     function filterReports() {
+      console.log("[REPORTS/FILTER] 🔍 Aplicando filtros");
       let filtered = reports;
 
       // Filtro por tipo/tab
       if (currentTab !== "all") {
         filtered = filtered.filter(r => r.type === currentTab);
+        console.log("[REPORTS/FILTER] ├─ Por tipo:", currentTab, "=", filtered.length);
       }
 
       // Filtro por tipo de relatório
       const typeFilter = document.getElementById("typeFilter")?.value || "";
       if (typeFilter) {
         filtered = filtered.filter(r => r.type === typeFilter);
+        console.log("[REPORTS/FILTER] ├─ Por tipo (dropdown):", typeFilter, "=", filtered.length);
       }
 
       // Filtro por busca
@@ -768,15 +843,18 @@
           r.description.toLowerCase().includes(searchTerm) ||
           r.createdBy.toLowerCase().includes(searchTerm)
         );
+        console.log("[REPORTS/FILTER] └─ Por busca:", searchTerm, "=", filtered.length);
       }
 
+      console.log("[REPORTS/FILTER] ✓ Filtro aplicado");
       return filtered;
     }
 
     /**
-     * Renderiza os relatórios
+     * ✅ Renderiza os relatórios
      */
     function renderReports(list = reports) {
+      console.log("[REPORTS/RENDER] 🎨 Renderizando", list.length, "relatórios");
       const grid = document.getElementById("reportsGrid");
 
       if (!list || list.length === 0) {
@@ -795,7 +873,7 @@
       grid.innerHTML = list.map(report => `
         <div class="report-card">
           <div class="report-header">
-            <div class="report-icon"><i class="bi bi-file-earmark-pdf"></i></div>
+            <div class="report-icon"><i class="bi bi-file-earmark-${report.format}"></i></div>
             <div class="report-title">${report.title}</div>
             <div class="report-description">${report.description}</div>
           </div>
@@ -803,8 +881,9 @@
           <div class="report-body">
             <div class="report-meta">
               <span class="meta-badge meta-active"><i class="bi bi-tag"></i> ${getTypeLabel(report.type)}</span>
-              <span class="meta-badge meta-monthly"><i class="bi bi-file-pdf"></i> ${report.format.toUpperCase()}</span>
+              <span class="meta-badge meta-monthly"><i class="bi bi-file"></i> ${report.format.toUpperCase()}</span>
               ${report.scheduled ? `<span class="meta-badge meta-weekly"><i class="bi bi-clock"></i> Agendado</span>` : ''}
+              ${report.shared ? `<span class="meta-badge meta-active"><i class="bi bi-share2"></i> Compartilhado</span>` : ''}
             </div>
 
             <div class="report-info">
@@ -820,12 +899,6 @@
                 <i class="bi bi-file"></i>
                 <span>${report.records} registros</span>
               </div>
-              ${report.shared ? `
-                <div class="report-info-item">
-                  <i class="bi bi-share2"></i>
-                  <span>Compartilhado</span>
-                </div>
-              ` : ''}
             </div>
           </div>
 
@@ -836,7 +909,7 @@
             <button class="btn-report-action" onclick="viewReport(${report.id})">
               <i class="bi bi-eye"></i> Visualizar
             </button>
-            <button class="btn-report-action" onclick="deleteReport(${report.id}, '${report.title.replace(/'/g, "\\'")}')">
+            <button class="btn-report-action danger" onclick="deleteReport(${report.id}, '${report.title.replace(/'/g, "\\'")}')">
               <i class="bi bi-trash"></i> Deletar
             </button>
           </div>
@@ -845,26 +918,29 @@
     }
 
     /**
-     * Retorna o label do tipo de relatório
+     * ✅ Retorna o label do tipo de relatório
      */
     function getTypeLabel(type) {
       const labels = {
-        tickets: "Tickets",
-        projects: "Projetos",
-        tasks: "Tarefas",
-        inventory: "Inventário"
+        tickets: "🎫 Tickets",
+        projects: "📁 Projetos",
+        tasks: "✓ Tarefas",
+        inventory: "📦 Inventário"
       };
       return labels[type] || type;
     }
 
     /**
-     * Atualiza as estatísticas
+     * ✅ Atualiza as estatísticas
      */
     function updateStatistics() {
+      console.log("[REPORTS/STATS] 📊 Atualizando estatísticas");
+
       const total = reports.length;
       const monthly = reports.filter(r => {
         const date = new Date(r.created);
-        return date.getMonth() === new Date().getMonth();
+        const now = new Date();
+        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
       }).length;
       const scheduled = reports.filter(r => r.scheduled).length;
       const shared = reports.filter(r => r.shared).length;
@@ -873,12 +949,15 @@
       document.getElementById("monthlyReports").textContent = monthly;
       document.getElementById("scheduledReports").textContent = scheduled;
       document.getElementById("sharedReports").textContent = shared;
+
+      console.log("[REPORTS/STATS] ✓ Total:", total, "| Mês:", monthly, "| Agendados:", scheduled, "| Compartilhados:", shared);
     }
 
     /**
-     * Alterna entre as abas
+     * ✅ Alterna entre as abas
      */
     function switchTab(tab) {
+      console.log("[REPORTS/TAB] 📑 Alternando para aba:", tab);
       currentTab = tab;
 
       // Atualiza buttons ativos
@@ -888,38 +967,46 @@
       event.target.closest(".tab-button")?.classList.add("active");
 
       renderReports(filterReports());
+      console.log("[REPORTS/TAB] ✓ Aba alterada com sucesso");
     }
 
     /**
-     * Mostra mensagem de erro
+     * ✅ Mostra mensagem de erro
      */
     function showError(message) {
+      console.log("[REPORTS/ALERT] ❌ Erro:", message);
       const alertBox = document.getElementById("alertBox");
       const alertMessage = document.getElementById("alertMessage");
-      alertMessage.textContent = message;
-      alertBox.classList.remove("d-none");
-      setTimeout(() => {
-        alertBox.classList.add("d-none");
-      }, 5000);
+      if (alertBox && alertMessage) {
+        alertMessage.textContent = message;
+        alertBox.classList.remove("d-none");
+        setTimeout(() => {
+          alertBox.classList.add("d-none");
+        }, 5000);
+      }
     }
 
     /**
-     * Mostra mensagem de sucesso
+     * ✅ Mostra mensagem de sucesso
      */
     function showSuccess(message) {
+      console.log("[REPORTS/ALERT] ✅ Sucesso:", message);
       const successBox = document.getElementById("successBox");
       const successMessage = document.getElementById("successMessage");
-      successMessage.textContent = message;
-      successBox.classList.remove("d-none");
-      setTimeout(() => {
-        successBox.classList.add("d-none");
-      }, 5000);
+      if (successBox && successMessage) {
+        successMessage.textContent = message;
+        successBox.classList.remove("d-none");
+        setTimeout(() => {
+          successBox.classList.add("d-none");
+        }, 5000);
+      }
     }
 
     /**
-     * Mostra mensagem de erro no modal
+     * ✅ Mostra mensagem de erro no modal
      */
     function showModalError(message) {
+      console.log("[REPORTS/MODAL] ⚠️ Erro no modal:", message);
       const modalAlert = document.getElementById("modalAlertBox");
       const modalAlertMsg = document.getElementById("modalAlertMessage");
       if (modalAlert && modalAlertMsg) {
@@ -929,39 +1016,57 @@
     }
 
     /**
-     * Download de relatório
+     * ✅ Limpa erros do modal
      */
-    function downloadReport(reportId, format) {
-      const report = reports.find(r => r.id === reportId);
-      if (!report) return;
-
-      console.log("[REPORTS/DOWNLOAD] Baixando relatório:", reportId, "em", format);
-      showSuccess(`Relatório "${report.title}" foi baixado com sucesso!`);
+    function clearModalError() {
+      const modalAlert = document.getElementById("modalAlertBox");
+      if (modalAlert) {
+        modalAlert.classList.add("d-none");
+      }
     }
 
     /**
-     * Visualiza um relatório
+     * ✅ Download de relatório
+     */
+    function downloadReport(reportId, format) {
+      const report = reports.find(r => r.id === reportId);
+      if (!report) {
+        console.error("[REPORTS/DOWNLOAD] ✗ Relatório não encontrado");
+        return;
+      }
+
+      console.log("[REPORTS/DOWNLOAD] 📥 Baixando relatório:", reportId, "em", format);
+      showSuccess(`Relatório "${report.title}" foi baixado com sucesso em ${format.toUpperCase()}!`);
+    }
+
+    /**
+     * ✅ Visualiza um relatório
      */
     function viewReport(reportId) {
       const report = reports.find(r => r.id === reportId);
-      if (!report) return;
+      if (!report) {
+        console.error("[REPORTS/VIEW] ✗ Relatório não encontrado");
+        return;
+      }
 
-      console.log("[REPORTS/VIEW] Visualizando relatório:", reportId);
+      console.log("[REPORTS/VIEW] 👁️ Visualizando relatório:", reportId);
       showSuccess(`Abrindo relatório "${report.title}"...`);
     }
 
     /**
-     * Deleta um relatório
+     * ✅ Deleta um relatório
      */
-    async function deleteReport(reportId, reportTitle) {
-      console.log("[REPORTS/DELETE] Deletando relatório:", reportId);
+    function deleteReport(reportId, reportTitle) {
+      console.log("[REPORTS/DELETE] 🗑️ Deletando relatório:", reportId);
 
-      if (!confirm(`Tem certeza que deseja deletar o relatório "${reportTitle}"?`)) {
+      if (!confirm(`Tem certeza que deseja deletar o relatório "${reportTitle}"?\n\nEsta ação não pode ser desfeita!`)) {
+        console.log("[REPORTS/DELETE] ⏭️ Deleção cancelada pelo usuário");
         return;
       }
 
       try {
         reports = reports.filter(r => r.id !== reportId);
+        console.log("[REPORTS/DELETE] ✓ Relatório deletado com sucesso");
         showSuccess(`Relatório "${reportTitle}" deletado com sucesso!`);
         renderReports(filterReports());
         updateStatistics();
@@ -973,7 +1078,7 @@
     }
 
     /**
-     * Submissão do formulário
+     * ✅ Submissão do formulário
      */
     document.getElementById("reportForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -987,8 +1092,11 @@
       const schedule = document.getElementById("reportSchedule")?.checked;
       const scheduleType = document.getElementById("reportScheduleType")?.value;
 
+      console.log("[REPORTS/SUBMIT] 📝 Processando relatório:", { title, type, format });
+
       if (!title || !type || !format) {
-        showModalError("Preencha os campos obrigatórios!");
+        console.warn("[REPORTS/SUBMIT] ⚠️ Campos obrigatórios não preenchidos");
+        showModalError("Preencha os campos obrigatórios (Título, Tipo e Formato)!");
         return;
       }
 
@@ -997,12 +1105,15 @@
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando...';
 
+        // Simular delay de processamento
+        await new Promise(resolve => setTimeout(resolve, 1200));
+
         const newReport = {
           id: Math.max(...reports.map(r => r.id), 0) + 1,
           title,
           type,
           format,
-          description: description || "",
+          description: description || "(Sem descrição)",
           startDate: startDate || new Date().toISOString().split('T')[0],
           endDate: endDate || new Date().toISOString().split('T')[0],
           scheduled: schedule,
@@ -1014,12 +1125,12 @@
         };
 
         reports.push(newReport);
-        console.log("[REPORTS/SUBMIT] ✓ Relatório criado");
+        console.log("[REPORTS/SUBMIT] ✓ Relatório gerado com sucesso:", newReport);
         showSuccess("Relatório gerado com sucesso!");
 
         document.getElementById("reportForm").reset();
         const modal = bootstrap.Modal.getInstance(document.getElementById("reportModal"));
-        modal.hide();
+        if (modal) modal.hide();
 
         renderReports(filterReports());
         updateStatistics();
@@ -1035,20 +1146,23 @@
     });
 
     /**
-     * Event listeners para filtros
+     * ✅ Event listeners para filtros
      */
     document.getElementById("searchInput")?.addEventListener("input", () => {
+      console.log("[REPORTS/SEARCH] 🔎 Buscando...");
       renderReports(filterReports());
     });
 
     document.getElementById("typeFilter")?.addEventListener("change", () => {
+      console.log("[REPORTS/SEARCH] 📋 Filtrando por tipo...");
       renderReports(filterReports());
     });
 
     /**
-     * Toggle agendamento
+     * ✅ Toggle agendamento
      */
     document.getElementById("reportSchedule")?.addEventListener("change", (e) => {
+      console.log("[REPORTS/SCHEDULE] ⏰ Toggle agendamento:", e.target.checked);
       const scheduleOptions = document.getElementById("scheduleOptions");
       if (e.target.checked) {
         scheduleOptions.classList.remove("d-none");
@@ -1058,15 +1172,27 @@
     });
 
     /**
-     * Reset modal quando abrir
+     * ✅ Reset modal quando abrir
      */
     document.getElementById("reportModal")?.addEventListener("show.bs.modal", () => {
+      console.log("[REPORTS/MODAL] 📂 Modal aberto");
       document.getElementById("reportForm").reset();
       document.getElementById("reportModalLabel").innerHTML = '<i class="bi bi-file-earmark-plus"></i> Gerar Novo Relatório';
       document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Gerar Relatório';
-      document.getElementById("modalAlertBox").classList.add("d-none");
+      clearModalError();
       document.getElementById("scheduleOptions").classList.add("d-none");
+      document.getElementById("reportSchedule").checked = false;
     });
+
+    /**
+     * ✅ Reset quando fechar
+     */
+    document.getElementById("reportModal")?.addEventListener("hidden.bs.modal", () => {
+      console.log("[REPORTS/MODAL] 🔒 Modal fechado");
+      selectedReportId = null;
+    });
+
+    console.log("[REPORTS] ✅ Script carregado sem autenticação");
   </script>
 
 </body>

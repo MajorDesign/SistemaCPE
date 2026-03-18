@@ -215,6 +215,7 @@
       font-weight: 600;
       white-space: nowrap;
       transition: all 0.3s ease;
+      cursor: pointer;
     }
 
     .btn-new-article:hover {
@@ -304,7 +305,7 @@
         style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
         <span class="visually-hidden">Carregando...</span>
       </div>
-      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+      <p style="margin-top: 1rem;">Inicializando página...</p>
     </div>
   </div>
   <!-- ============================================================ -->
@@ -383,7 +384,8 @@
         <!-- SEARCH SECTION -->
         <div class="search-section">
           <input type="text" id="searchInput" class="search-input" placeholder="Buscar artigos...">
-          <select id="sortFilter" style="padding: 0.75rem 1rem; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
+          <select id="sortFilter"
+            style="padding: 0.75rem 1rem; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px;">
             <option value="recent">Mais Recentes</option>
             <option value="popular">Mais Populares</option>
             <option value="views">Mais Visualizados</option>
@@ -437,7 +439,7 @@
           <form id="articleForm" novalidate>
             <div class="mb-3">
               <label for="articleTitle" class="form-label">
-                <i class="bi bi-input-cursor"></i> Título
+                <i class="bi bi-input-cursor"></i> Título <span style="color: #dc2626;">*</span>
               </label>
               <input type="text" class="form-control" id="articleTitle"
                 placeholder="Ex: Como configurar o agente Windows" required />
@@ -446,7 +448,7 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label for="articleCategory" class="form-label">
-                  <i class="bi bi-tag"></i> Categoria
+                  <i class="bi bi-tag"></i> Categoria <span style="color: #dc2626;">*</span>
                 </label>
                 <select class="form-select" id="articleCategory" required>
                   <option value="">Selecione a categoria...</option>
@@ -463,13 +465,13 @@
                 <label for="articleAuthor" class="form-label">
                   <i class="bi bi-person"></i> Autor
                 </label>
-                <input type="text" class="form-control" id="articleAuthor" readonly />
+                <input type="text" class="form-control" id="articleAuthor" placeholder="Seu nome" />
               </div>
             </div>
 
             <div class="mb-3">
               <label for="articleContent" class="form-label">
-                <i class="bi bi-file-text"></i> Conteúdo
+                <i class="bi bi-file-text"></i> Conteúdo <span style="color: #dc2626;">*</span>
               </label>
               <textarea class="form-control" id="articleContent" rows="6"
                 placeholder="Escreva o conteúdo do artigo..." required></textarea>
@@ -482,6 +484,7 @@
               </label>
               <input type="text" class="form-control" id="articleTags"
                 placeholder="Ex: windows, instalação, agente (separados por vírgula)" />
+              <small class="form-text text-muted">Opcional</small>
             </div>
 
             <div class="d-flex gap-2">
@@ -501,7 +504,8 @@
   <!-- ============================================================ -->
   <!-- MODAL: Ver Artigo Completo -->
   <!-- ============================================================ -->
-  <div class="modal fade" id="viewArticleModal" tabindex="-1" aria-labelledby="viewArticleModalLabel" aria-hidden="true">
+  <div class="modal fade" id="viewArticleModal" tabindex="-1" aria-labelledby="viewArticleModalLabel"
+    aria-hidden="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
@@ -512,7 +516,7 @@
         <div class="modal-body" style="padding: 2rem;">
           <div id="articleFullContent"></div>
 
-          <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e5e7eb; display: flex; gap: 1rem;">
+          <div style="margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e5e7eb; display: flex; gap: 1rem; flex-wrap: wrap;">
             <button class="btn btn-sm btn-outline-primary" onclick="markArticleHelpful(true)">
               <i class="bi bi-hand-thumbs-up"></i> Útil
             </button>
@@ -536,24 +540,44 @@
   <!-- 📦 SCRIPTS -->
   <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
   <!-- ============================================================ -->
   <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
   <!-- ============================================================ -->
   <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      const user = await initPageAuth("KNOWLEDGE-BASE");
-      if (!user) return;
+    console.log("\n" + "=".repeat(80));
+    console.log("[KB/PAGE] 📄 Inicializando página de Base de Conhecimento");
+    console.log("[KB/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
+    console.log("=".repeat(80) + "\n");
 
-      // Carrega os artigos
-      await loadArticles();
-      
-      // Preenche autor no formulário
-      document.getElementById("articleAuthor").value = user.name || "Anônimo";
+    document.addEventListener("DOMContentLoaded", async () => {
+      console.log("[KB/INIT] 📋 DOM Carregado");
+
+      try {
+        // ===== Mostrar Conteúdo =====
+        const loadingPage = document.getElementById("loadingPage");
+        const containerMain = document.querySelector(".container-main");
+        
+        loadingPage.style.display = "none";
+        containerMain.style.display = "flex";
+        
+        console.log("[KB/INIT] ✅ Página inicializada com sucesso");
+        console.log("=".repeat(80) + "\n");
+
+        // ===== Carregar Artigos =====
+        await loadArticles();
+
+      } catch (err) {
+        console.error("[KB/INIT] ❌ ERRO NA INICIALIZAÇÃO");
+        console.error("[KB/INIT] 📍 Mensagem:", err.message);
+        console.error("[KB/INIT] 🔗 Stack:", err.stack);
+        console.error("=".repeat(80) + "\n");
+        
+        showError("Erro ao inicializar página: " + err.message);
+      }
     });
   </script>
 
@@ -566,12 +590,12 @@
     let currentFilter = "";
 
     /**
-     * Carrega os artigos
+     * ✅ Carrega os artigos
      */
     async function loadArticles() {
-      try {
-        console.log("[KB/LOAD] Carregando artigos...");
+      console.log("\n[KB/LOAD] 📥 Carregando artigos...");
 
+      try {
         // Simular dados de API - substitua pela chamada real
         articles = [
           {
@@ -664,6 +688,7 @@
         renderArticles(articles);
         renderCategories();
         updateStatistics();
+        console.log("[KB/LOAD] ✅ Artigos renderizados\n");
 
       } catch (err) {
         console.error("[KB/LOAD] ✗ Erro:", err.message);
@@ -672,9 +697,10 @@
     }
 
     /**
-     * Renderiza os artigos
+     * ✅ Renderiza os artigos
      */
     function renderArticles(list = articles) {
+      console.log("[KB/RENDER] 🎨 Renderizando", list.length, "artigos");
       const articlesList = document.getElementById("articlesList");
 
       if (!list || list.length === 0) {
@@ -713,13 +739,14 @@
     }
 
     /**
-     * Renderiza as categorias
+     * ✅ Renderiza as categorias
      */
     function renderCategories() {
+      console.log("[KB/RENDER] 📂 Renderizando categorias");
       const categories = [...new Set(articles.map(a => a.category))];
       const pillsContainer = document.getElementById("categoryPills");
 
-      let html = '<div class="category-pill active" onclick="filterByCategory(\'\'">Todos <i class="bi bi-check-lg"></i></div>';
+      let html = '<div class="category-pill active" onclick="filterByCategory(\'\')">Todos <i class="bi bi-check-lg"></i></div>';
 
       categories.forEach(cat => {
         html += `
@@ -733,7 +760,7 @@
     }
 
     /**
-     * Retorna o label da categoria
+     * ✅ Retorna o label da categoria
      */
     function getCategoryLabel(category) {
       const labels = {
@@ -748,9 +775,11 @@
     }
 
     /**
-     * Atualiza as estatísticas
+     * ✅ Atualiza as estatísticas
      */
     function updateStatistics() {
+      console.log("[KB/STATS] 📊 Atualizando estatísticas");
+
       const totalViews = articles.reduce((sum, a) => sum + a.views, 0);
       const totalHelpful = articles.reduce((sum, a) => sum + a.helpful, 0);
       const totalUnhelpful = articles.reduce((sum, a) => sum + a.unhelpful, 0);
@@ -764,12 +793,15 @@
       document.getElementById("totalCategories").textContent = categories;
       document.getElementById("totalViews").textContent = totalViews.toLocaleString('pt-BR');
       document.getElementById("helpfulRate").textContent = helpfulRate + "%";
+
+      console.log("[KB/STATS] ✓ Estatísticas atualizadas");
     }
 
     /**
-     * Filtra por categoria
+     * ✅ Filtra por categoria
      */
     function filterByCategory(category) {
+      console.log("[KB/FILTER] 🔍 Filtrando por categoria:", category || "Todos");
       currentFilter = category;
 
       // Atualiza pills ativas
@@ -783,7 +815,7 @@
     }
 
     /**
-     * Filtra artigos
+     * ✅ Filtra artigos
      */
     function filterArticles() {
       const searchTerm = document.getElementById("searchInput")?.value?.toLowerCase() || "";
@@ -801,8 +833,6 @@
       // Ordena
       switch (sortBy) {
         case "popular":
-          filtered.sort((a, b) => b.views - a.views);
-          break;
         case "views":
           filtered.sort((a, b) => b.views - a.views);
           break;
@@ -814,17 +844,21 @@
           filtered.sort((a, b) => new Date(b.published) - new Date(a.published));
       }
 
+      console.log("[KB/FILTER] ✓ Filtro aplicado - Resultados:", filtered.length);
       renderArticles(filtered);
     }
 
     /**
-     * Visualiza um artigo completo
+     * ✅ Visualiza um artigo completo
      */
     function viewArticle(articleId) {
       const article = articles.find(a => a.id === articleId);
-      if (!article) return;
+      if (!article) {
+        console.error("[KB/VIEW] ✗ Artigo não encontrado:", articleId);
+        return;
+      }
 
-      console.log("[KB/VIEW] Visualizando artigo:", articleId);
+      console.log("[KB/VIEW] 👁️ Visualizando artigo:", articleId);
       selectedArticleId = articleId;
 
       document.getElementById("viewArticleModalLabel").textContent = article.title;
@@ -849,14 +883,20 @@
 
       // Incrementa views
       article.views++;
+      console.log("[KB/VIEW] ✓ Visualizações incrementadas");
     }
 
     /**
-     * Marca artigo como útil/não útil
+     * ✅ Marca artigo como útil/não útil
      */
     function markArticleHelpful(helpful) {
       const article = articles.find(a => a.id === selectedArticleId);
-      if (!article) return;
+      if (!article) {
+        console.error("[KB/RATE] ✗ Artigo não encontrado");
+        return;
+      }
+
+      console.log("[KB/RATE] 👍 Marcando artigo como", helpful ? "útil" : "não útil");
 
       if (helpful) {
         article.helpful++;
@@ -865,38 +905,51 @@
       }
 
       showSuccess(helpful ? "Artigo marcado como útil!" : "Obrigado pelo feedback!");
+      updateStatistics();
     }
 
     /**
-     * Edita o artigo atual
+     * ✅ Edita o artigo atual
      */
     function editCurrentArticle() {
       const article = articles.find(a => a.id === selectedArticleId);
-      if (!article) return;
+      if (!article) {
+        console.error("[KB/EDIT] ✗ Artigo não encontrado");
+        return;
+      }
+
+      console.log("[KB/EDIT] ✏️ Editando artigo:", selectedArticleId);
 
       const viewModal = bootstrap.Modal.getInstance(document.getElementById("viewArticleModal"));
       viewModal.hide();
 
-      selectedArticleId = article.id;
       document.getElementById("articleModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Artigo';
       document.getElementById("articleTitle").value = article.title;
       document.getElementById("articleCategory").value = article.category;
+      document.getElementById("articleAuthor").value = article.author;
       document.getElementById("articleContent").value = article.content;
       document.getElementById("articleTags").value = article.tags.join(", ");
       document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Artigo';
 
+      hideModalError();
       const editModal = new bootstrap.Modal(document.getElementById("articleModal"));
       editModal.show();
     }
 
     /**
-     * Deleta o artigo atual
+     * ✅ Deleta o artigo atual
      */
     function deleteCurrentArticle() {
       const article = articles.find(a => a.id === selectedArticleId);
-      if (!article) return;
+      if (!article) {
+        console.error("[KB/DELETE] ✗ Artigo não encontrado");
+        return;
+      }
+
+      console.log("[KB/DELETE] 🗑️ Deletando artigo:", selectedArticleId);
 
       if (!confirm(`Tem certeza que deseja deletar o artigo "${article.title}"?`)) {
+        console.log("[KB/DELETE] ⏭️ Deleção cancelada pelo usuário");
         return;
       }
 
@@ -904,17 +957,21 @@
       const modal = bootstrap.Modal.getInstance(document.getElementById("viewArticleModal"));
       modal.hide();
 
+      console.log("[KB/DELETE] ✓ Artigo deletado com sucesso");
       showSuccess("Artigo deletado com sucesso!");
       renderArticles(articles);
+      renderCategories();
       updateStatistics();
     }
 
     /**
-     * Mostra mensagem de erro
+     * ✅ Mostra mensagem de erro
      */
     function showError(message) {
       const alertBox = document.getElementById("alertBox");
       const alertMessage = document.getElementById("alertMessage");
+      if (!alertBox || !alertMessage) return;
+
       alertMessage.textContent = message;
       alertBox.classList.remove("d-none");
       setTimeout(() => {
@@ -923,11 +980,13 @@
     }
 
     /**
-     * Mostra mensagem de sucesso
+     * ✅ Mostra mensagem de sucesso
      */
     function showSuccess(message) {
       const successBox = document.getElementById("successBox");
       const successMessage = document.getElementById("successMessage");
+      if (!successBox || !successMessage) return;
+
       successMessage.textContent = message;
       successBox.classList.remove("d-none");
       setTimeout(() => {
@@ -936,7 +995,7 @@
     }
 
     /**
-     * Mostra mensagem de erro no modal
+     * ✅ Mostra mensagem de erro no modal
      */
     function showModalError(message) {
       const modalAlert = document.getElementById("modalAlertBox");
@@ -948,17 +1007,31 @@
     }
 
     /**
-     * Submissão do formulário
+     * ✅ Esconde erro no modal
+     */
+    function hideModalError() {
+      const modalAlert = document.getElementById("modalAlertBox");
+      if (modalAlert) {
+        modalAlert.classList.add("d-none");
+      }
+    }
+
+    /**
+     * ✅ Submissão do formulário
      */
     document.getElementById("articleForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
 
       const title = document.getElementById("articleTitle")?.value?.trim();
       const category = document.getElementById("articleCategory")?.value;
+      const author = document.getElementById("articleAuthor")?.value?.trim() || "Anônimo";
       const content = document.getElementById("articleContent")?.value?.trim();
       const tags = document.getElementById("articleTags")?.value?.split(",").map(t => t.trim()).filter(t => t) || [];
 
+      console.log("[KB/SUBMIT] 📝 Processando artigo:", { title, category });
+
       if (!title || !category || !content) {
+        console.warn("[KB/SUBMIT] ⚠️ Campos obrigatórios não preenchidos");
         showModalError("Preencha todos os campos obrigatórios!");
         return;
       }
@@ -968,27 +1041,34 @@
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
 
+        // Simular delay de processamento
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         if (selectedArticleId) {
-          // Atualizar
+          // ===== ATUALIZAR =====
+          console.log("[KB/SUBMIT] ✏️ Atualizando artigo:", selectedArticleId);
           const article = articles.find(a => a.id === selectedArticleId);
           if (article) {
             article.title = title;
             article.category = category;
+            article.author = author;
             article.content = content;
             article.tags = tags;
+            article.description = content.substring(0, 100) + "...";
             article.updated = new Date().toISOString().split('T')[0];
+            console.log("[KB/SUBMIT] ✓ Artigo atualizado com sucesso");
           }
-          console.log("[KB/SUBMIT] ✓ Artigo atualizado");
           showSuccess("Artigo atualizado com sucesso!");
         } else {
-          // Criar
+          // ===== CRIAR =====
+          console.log("[KB/SUBMIT] ➕ Criando novo artigo");
           const newArticle = {
             id: Math.max(...articles.map(a => a.id), 0) + 1,
             title,
             category,
             description: content.substring(0, 100) + "...",
             content,
-            author: document.getElementById("articleAuthor").value,
+            author,
             tags,
             views: 0,
             helpful: 0,
@@ -997,13 +1077,13 @@
             updated: new Date().toISOString().split('T')[0]
           };
           articles.push(newArticle);
-          console.log("[KB/SUBMIT] ✓ Artigo criado");
+          console.log("[KB/SUBMIT] ✓ Artigo criado com sucesso:", newArticle);
           showSuccess("Artigo publicado com sucesso!");
         }
 
         document.getElementById("articleForm").reset();
         const modal = bootstrap.Modal.getInstance(document.getElementById("articleModal"));
-        modal.hide();
+        if (modal) modal.hide();
 
         selectedArticleId = null;
         renderArticles(articles);
@@ -1021,27 +1101,29 @@
     });
 
     /**
-     * Event listeners para filtros
+     * ✅ Event listeners para filtros
      */
     document.getElementById("searchInput")?.addEventListener("input", filterArticles);
     document.getElementById("sortFilter")?.addEventListener("change", filterArticles);
 
     /**
-     * Reset modal quando abrir
+     * ✅ Reset modal quando abrir
      */
     document.getElementById("articleModal")?.addEventListener("show.bs.modal", () => {
+      console.log("[KB/MODAL] 📂 Modal aberto");
       if (!selectedArticleId) {
         document.getElementById("articleModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Novo Artigo';
         document.getElementById("articleForm").reset();
         document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Publicar Artigo';
       }
-      document.getElementById("modalAlertBox").classList.add("d-none");
+      hideModalError();
     });
 
     /**
-     * Reset quando fechar
+     * ✅ Reset quando fechar
      */
     document.getElementById("articleModal")?.addEventListener("hidden.bs.modal", () => {
+      console.log("[KB/MODAL] 🔒 Modal fechado");
       selectedArticleId = null;
     });
   </script>

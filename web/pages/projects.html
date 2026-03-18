@@ -256,6 +256,7 @@
       font-weight: 600;
       white-space: nowrap;
       transition: all 0.3s ease;
+      cursor: pointer;
     }
 
     .btn-new-project:hover {
@@ -370,7 +371,7 @@
         style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
         <span class="visually-hidden">Carregando...</span>
       </div>
-      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+      <p style="margin-top: 1rem;">Inicializando página...</p>
     </div>
   </div>
   <!-- ============================================================ -->
@@ -496,7 +497,7 @@
           <form id="projectForm" novalidate>
             <div class="mb-3">
               <label for="projectTitle" class="form-label">
-                <i class="bi bi-input-cursor"></i> Título do Projeto
+                <i class="bi bi-input-cursor"></i> Título do Projeto <span style="color: #dc2626;">*</span>
               </label>
               <input type="text" class="form-control" id="projectTitle"
                 placeholder="Ex: Redesign do Dashboard" required />
@@ -513,7 +514,7 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label for="projectStatus" class="form-label">
-                  <i class="bi bi-info-circle"></i> Status
+                  <i class="bi bi-info-circle"></i> Status <span style="color: #dc2626;">*</span>
                 </label>
                 <select class="form-select" id="projectStatus" required>
                   <option value="">Selecione o status...</option>
@@ -525,10 +526,10 @@
 
               <div class="col-md-6 mb-3">
                 <label for="projectProgress" class="form-label">
-                  <i class="bi bi-percent"></i> Progresso (%)
+                  <i class="bi bi-percent"></i> Progresso (%) <span style="color: #dc2626;">*</span>
                 </label>
                 <input type="number" class="form-control" id="projectProgress"
-                  placeholder="0" min="0" max="100" value="0" />
+                  placeholder="0" min="0" max="100" value="0" required />
               </div>
             </div>
 
@@ -574,20 +575,44 @@
   <!-- 📦 SCRIPTS -->
   <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
   <!-- ============================================================ -->
   <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
   <!-- ============================================================ -->
   <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      const user = await initPageAuth("PROJECTS");
-      if (!user) return;
+    console.log("\n" + "=".repeat(80));
+    console.log("[PROJECTS/PAGE] 📄 Inicializando página de Projetos");
+    console.log("[PROJECTS/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
+    console.log("=".repeat(80) + "\n");
 
-      await loadProjects();
+    document.addEventListener("DOMContentLoaded", async () => {
+      console.log("[PROJECTS/INIT] 📋 DOM Carregado");
+
+      try {
+        // ===== Mostrar Conteúdo =====
+        const loadingPage = document.getElementById("loadingPage");
+        const containerMain = document.querySelector(".container-main");
+        
+        loadingPage.style.display = "none";
+        containerMain.style.display = "flex";
+        
+        console.log("[PROJECTS/INIT] ✅ Página inicializada com sucesso");
+        console.log("=".repeat(80) + "\n");
+
+        // ===== Carregar Projetos =====
+        await loadProjects();
+
+      } catch (err) {
+        console.error("[PROJECTS/INIT] ❌ ERRO NA INICIALIZAÇÃO");
+        console.error("[PROJECTS/INIT] 📍 Mensagem:", err.message);
+        console.error("[PROJECTS/INIT] 🔗 Stack:", err.stack);
+        console.error("=".repeat(80) + "\n");
+        
+        showError("Erro ao inicializar página: " + err.message);
+      }
     });
   </script>
 
@@ -599,12 +624,12 @@
     let selectedProjectId = null;
 
     /**
-     * Carrega os projetos
+     * ✅ Carrega os projetos
      */
     async function loadProjects() {
-      try {
-        console.log("[PROJECTS/LOAD] Carregando projetos...");
+      console.log("\n[PROJECTS/LOAD] 📥 Carregando projetos...");
 
+      try {
         // Simular dados de API - substitua pela chamada real
         projects = [
           {
@@ -684,17 +709,20 @@
         console.log("[PROJECTS/LOAD] ✓", projects.length, "projetos carregados");
         renderProjects(filterProjects());
         updateStatistics();
+        console.log("[PROJECTS/LOAD] ✅ Projetos renderizados\n");
 
       } catch (err) {
         console.error("[PROJECTS/LOAD] ✗ Erro:", err.message);
         showError("Erro ao carregar projetos: " + err.message);
+        projects = [];
       }
     }
 
     /**
-     * Filtra os projetos
+     * ✅ Filtra os projetos
      */
     function filterProjects() {
+      console.log("[PROJECTS/FILTER] 🔍 Aplicando filtros");
       let filtered = projects;
 
       // Filtro por busca
@@ -713,13 +741,15 @@
         filtered = filtered.filter(p => p.status === statusFilter);
       }
 
+      console.log("[PROJECTS/FILTER] ✓ Filtro aplicado - Resultados:", filtered.length);
       return filtered;
     }
 
     /**
-     * Renderiza os projetos
+     * ✅ Renderiza os projetos
      */
     function renderProjects(list = projects) {
+      console.log("[PROJECTS/RENDER] 🎨 Renderizando", list.length, "projetos");
       const grid = document.getElementById("projectsGrid");
 
       if (!list || list.length === 0) {
@@ -786,7 +816,7 @@
     }
 
     /**
-     * Retorna o label do status
+     * ✅ Retorna o label do status
      */
     function getStatusLabel(status) {
       const labels = {
@@ -798,52 +828,63 @@
     }
 
     /**
-     * Atualiza as estatísticas
+     * ✅ Atualiza as estatísticas
      */
     function updateStatistics() {
+      console.log("[PROJECTS/STATS] 📊 Atualizando estatísticas");
+
       const total = projects.length;
       const active = projects.filter(p => p.status === "active").length;
       const completed = projects.filter(p => p.status === "completed").length;
-      const avgProgress = Math.round(
-        projects.reduce((sum, p) => sum + p.progress, 0) / total || 0
-      );
+      const avgProgress = total > 0
+        ? Math.round(projects.reduce((sum, p) => sum + p.progress, 0) / total)
+        : 0;
 
       document.getElementById("totalProjects").textContent = total;
       document.getElementById("activeProjects").textContent = active;
       document.getElementById("completedProjects").textContent = completed;
       document.getElementById("averageProgress").textContent = avgProgress + "%";
+
+      console.log("[PROJECTS/STATS] ✓ Total:", total, "| Ativos:", active, "| Concluídos:", completed, "| Prog Médio:", avgProgress + "%");
     }
 
     /**
-     * Mostra mensagem de erro
+     * ✅ Mostra mensagem de erro
      */
     function showError(message) {
+      console.log("[PROJECTS/ALERT] ❌ Erro:", message);
       const alertBox = document.getElementById("alertBox");
       const alertMessage = document.getElementById("alertMessage");
-      alertMessage.textContent = message;
-      alertBox.classList.remove("d-none");
-      setTimeout(() => {
-        alertBox.classList.add("d-none");
-      }, 5000);
+      if (alertBox && alertMessage) {
+        alertMessage.textContent = message;
+        alertBox.classList.remove("d-none");
+        setTimeout(() => {
+          alertBox.classList.add("d-none");
+        }, 5000);
+      }
     }
 
     /**
-     * Mostra mensagem de sucesso
+     * ✅ Mostra mensagem de sucesso
      */
     function showSuccess(message) {
+      console.log("[PROJECTS/ALERT] ✅ Sucesso:", message);
       const successBox = document.getElementById("successBox");
       const successMessage = document.getElementById("successMessage");
-      successMessage.textContent = message;
-      successBox.classList.remove("d-none");
-      setTimeout(() => {
-        successBox.classList.add("d-none");
-      }, 5000);
+      if (successBox && successMessage) {
+        successMessage.textContent = message;
+        successBox.classList.remove("d-none");
+        setTimeout(() => {
+          successBox.classList.add("d-none");
+        }, 5000);
+      }
     }
 
     /**
-     * Mostra mensagem de erro no modal
+     * ✅ Mostra mensagem de erro no modal
      */
     function showModalError(message) {
+      console.log("[PROJECTS/MODAL] ⚠️ Erro no modal:", message);
       const modalAlert = document.getElementById("modalAlertBox");
       const modalAlertMsg = document.getElementById("modalAlertMessage");
       if (modalAlert && modalAlertMsg) {
@@ -853,13 +894,26 @@
     }
 
     /**
-     * Edita um projeto
+     * ✅ Limpa erros do modal
+     */
+    function clearModalError() {
+      const modalAlert = document.getElementById("modalAlertBox");
+      if (modalAlert) {
+        modalAlert.classList.add("d-none");
+      }
+    }
+
+    /**
+     * ✅ Edita um projeto
      */
     function editProject(projectId) {
-      const project = projects.find(p => p.id === projectId);
-      if (!project) return;
+      console.log("[PROJECTS/EDIT] ✏️ Editando projeto:", projectId);
 
-      console.log("[PROJECTS/EDIT] Editando projeto:", projectId);
+      const project = projects.find(p => p.id === projectId);
+      if (!project) {
+        console.error("[PROJECTS/EDIT] ✗ Projeto não encontrado");
+        return;
+      }
 
       selectedProjectId = projectId;
       document.getElementById("projectModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Projeto';
@@ -872,22 +926,26 @@
       document.getElementById("projectManager").value = project.manager;
       document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Projeto';
 
+      clearModalError();
+
       const modal = new bootstrap.Modal(document.getElementById("projectModal"));
       modal.show();
     }
 
     /**
-     * Deleta um projeto
+     * ✅ Deleta um projeto
      */
-    async function deleteProject(projectId, projectTitle) {
-      console.log("[PROJECTS/DELETE] Deletando projeto:", projectId);
+    function deleteProject(projectId, projectTitle) {
+      console.log("[PROJECTS/DELETE] 🗑️ Deletando projeto:", projectId);
 
       if (!confirm(`Tem certeza que deseja deletar o projeto "${projectTitle}"?`)) {
+        console.log("[PROJECTS/DELETE] ⏭️ Deleção cancelada pelo usuário");
         return;
       }
 
       try {
         projects = projects.filter(p => p.id !== projectId);
+        console.log("[PROJECTS/DELETE] ✓ Projeto deletado com sucesso");
         showSuccess(`Projeto "${projectTitle}" deletado com sucesso!`);
         renderProjects(filterProjects());
         updateStatistics();
@@ -899,7 +957,7 @@
     }
 
     /**
-     * Submissão do formulário
+     * ✅ Submissão do formulário
      */
     document.getElementById("projectForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -912,13 +970,17 @@
       const endDate = document.getElementById("projectEndDate")?.value;
       const manager = document.getElementById("projectManager")?.value?.trim();
 
+      console.log("[PROJECTS/SUBMIT] 📝 Processando projeto:", { title, status, progress });
+
       if (!title || !status) {
-        showModalError("Preencha os campos obrigatórios (Título, Status)!");
+        console.warn("[PROJECTS/SUBMIT] ⚠️ Campos obrigatórios não preenchidos");
+        showModalError("Preencha os campos obrigatórios (Título e Status)!");
         return;
       }
 
       if (progress < 0 || progress > 100) {
-        showModalError("O progresso deve estar entre 0 e 100!");
+        console.warn("[PROJECTS/SUBMIT] ⚠️ Progresso inválido");
+        showModalError("O progresso deve estar entre 0 e 100%!");
         return;
       }
 
@@ -927,8 +989,12 @@
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
 
+        // Simular delay de processamento
+        await new Promise(resolve => setTimeout(resolve, 800));
+
         if (selectedProjectId) {
-          // Atualizar
+          // ===== ATUALIZAR =====
+          console.log("[PROJECTS/SUBMIT] ✏️ Atualizando projeto:", selectedProjectId);
           const project = projects.find(p => p.id === selectedProjectId);
           if (project) {
             project.title = title;
@@ -938,31 +1004,32 @@
             project.startDate = startDate;
             project.endDate = endDate;
             project.manager = manager || project.manager;
+            console.log("[PROJECTS/SUBMIT] ✓ Projeto atualizado com sucesso");
           }
-          console.log("[PROJECTS/SUBMIT] ✓ Projeto atualizado");
           showSuccess("Projeto atualizado com sucesso!");
         } else {
-          // Criar
+          // ===== CRIAR =====
+          console.log("[PROJECTS/SUBMIT] ➕ Criando novo projeto");
           const newProject = {
             id: Math.max(...projects.map(p => p.id), 0) + 1,
             title,
-            description,
+            description: description || "(Sem descrição)",
             status,
             progress,
-            startDate,
-            endDate,
+            startDate: startDate || new Date().toISOString().split('T')[0],
+            endDate: endDate || new Date().toISOString().split('T')[0],
             manager: manager || "Não atribuído",
             team: [],
             created: new Date().toISOString().split('T')[0]
           };
           projects.push(newProject);
-          console.log("[PROJECTS/SUBMIT] ✓ Projeto criado");
+          console.log("[PROJECTS/SUBMIT] ✓ Projeto criado com sucesso:", newProject);
           showSuccess("Projeto criado com sucesso!");
         }
 
         document.getElementById("projectForm").reset();
         const modal = bootstrap.Modal.getInstance(document.getElementById("projectModal"));
-        modal.hide();
+        if (modal) modal.hide();
 
         selectedProjectId = null;
         renderProjects(filterProjects());
@@ -979,34 +1046,40 @@
     });
 
     /**
-     * Event listeners para filtros
+     * ✅ Event listeners para filtros
      */
     document.getElementById("searchInput")?.addEventListener("input", () => {
+      console.log("[PROJECTS/SEARCH] 🔎 Buscando...");
       renderProjects(filterProjects());
     });
 
     document.getElementById("statusFilter")?.addEventListener("change", () => {
+      console.log("[PROJECTS/SEARCH] 📋 Filtrando por status...");
       renderProjects(filterProjects());
     });
 
     /**
-     * Reset modal quando abrir
+     * ✅ Reset modal quando abrir
      */
     document.getElementById("projectModal")?.addEventListener("show.bs.modal", () => {
+      console.log("[PROJECTS/MODAL] 📂 Modal aberto");
       if (!selectedProjectId) {
         document.getElementById("projectModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Novo Projeto';
         document.getElementById("projectForm").reset();
         document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Projeto';
       }
-      document.getElementById("modalAlertBox").classList.add("d-none");
+      clearModalError();
     });
 
     /**
-     * Reset quando fechar
+     * ✅ Reset quando fechar
      */
     document.getElementById("projectModal")?.addEventListener("hidden.bs.modal", () => {
+      console.log("[PROJECTS/MODAL] 🔒 Modal fechado");
       selectedProjectId = null;
     });
+
+    console.log("[PROJECTS] ✅ Script carregado sem autenticação");
   </script>
 
 </body>

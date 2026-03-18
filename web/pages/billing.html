@@ -232,7 +232,7 @@
         style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
         <span class="visually-hidden">Carregando...</span>
       </div>
-      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+      <p style="margin-top: 1rem;">Inicializando página...</p>
     </div>
   </div>
   <!-- ============================================================ -->
@@ -435,22 +435,44 @@
   <!-- 📦 SCRIPTS - ORDEM CORRETA -->
   <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
-  <!-- ============================================================ -->
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
   <!-- ============================================================ -->
   <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
   <!-- ============================================================ -->
   <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      const user = await initPageAuth("BILLING");
-      if (!user) return;
+    console.log("\n" + "=".repeat(80));
+    console.log("[BILLING/PAGE] 📄 Inicializando página de Faturamento");
+    console.log("[BILLING/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
+    console.log("=".repeat(80) + "\n");
 
-      // Carrega as faturas
-      await loadInvoices();
+    document.addEventListener("DOMContentLoaded", async () => {
+      console.log("[BILLING/INIT] 📋 DOM Carregado");
+
+      try {
+        // ===== Mostrar Conteúdo =====
+        const loadingPage = document.getElementById("loadingPage");
+        const containerMain = document.querySelector(".container-main");
+        
+        loadingPage.style.display = "none";
+        containerMain.style.display = "flex";
+        
+        console.log("[BILLING/INIT] ✅ Página inicializada com sucesso");
+        console.log("=".repeat(80) + "\n");
+
+        // ===== Carregar Faturas =====
+        await loadInvoices();
+
+      } catch (err) {
+        console.error("[BILLING/INIT] ❌ ERRO NA INICIALIZAÇÃO");
+        console.error("[BILLING/INIT] 📍 Mensagem:", err.message);
+        console.error("[BILLING/INIT] 🔗 Stack:", err.stack);
+        console.error("=".repeat(80) + "\n");
+        
+        showError("Erro ao inicializar página: " + err.message);
+      }
     });
   </script>
 
@@ -462,12 +484,12 @@
     let invoiceModalInstance = null;
 
     /**
-     * Carrega as faturas
+     * ✅ Carrega as faturas
      */
     async function loadInvoices() {
-      try {
-        console.log("[BILLING/LOAD] Carregando faturas...");
+      console.log("\n[BILLING/LOAD] 📥 Carregando faturas...");
 
+      try {
         // Simular dados de API - substitua pela chamada real
         invoices = [
           {
@@ -515,6 +537,7 @@
         console.log("[BILLING/LOAD] ✓", invoices.length, "faturas carregadas");
         renderInvoices(invoices);
         updateStatistics();
+        console.log("[BILLING/LOAD] ✅ Faturas renderizadas\n");
 
       } catch (err) {
         console.error("[BILLING/LOAD] ✗ Erro:", err.message);
@@ -523,7 +546,7 @@
     }
 
     /**
-     * Renderiza a tabela de faturas
+     * ✅ Renderiza a tabela de faturas
      */
     function renderInvoices(invoicesToRender = invoices) {
       const tbody = document.getElementById("invoicesTableBody");
@@ -575,7 +598,7 @@
     }
 
     /**
-     * Atualiza as estatísticas
+     * ✅ Atualiza as estatísticas
      */
     function updateStatistics() {
       let totalBilled = 0;
@@ -601,14 +624,14 @@
     }
 
     /**
-     * Formata moeda
+     * ✅ Formata moeda
      */
     function formatCurrency(value) {
       return value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
     /**
-     * Formata datas
+     * ✅ Formata datas
      */
     function formatDate(dateString) {
       if (!dateString) return "Sem data";
@@ -617,7 +640,7 @@
     }
 
     /**
-     * Retorna o label do status
+     * ✅ Retorna o label do status
      */
     function getStatusLabel(status) {
       const labels = {
@@ -629,7 +652,7 @@
     }
 
     /**
-     * Baixa fatura
+     * ✅ Baixa fatura
      */
     function downloadInvoice(invoiceId) {
       const invoice = invoices.find(i => i.id === invoiceId);
@@ -640,10 +663,10 @@
     }
 
     /**
-     * Deleta fatura
+     * ✅ Deleta fatura
      */
     async function deleteInvoice(invoiceId, invoiceNumber) {
-      console.log("[BILLING/DELETE] Deletando fatura:", invoiceId, invoiceNumber);
+      console.log("[BILLING/DELETE] 🗑️ Deletando fatura:", invoiceId, invoiceNumber);
 
       if (!confirm(`Tem certeza que deseja deletar a fatura "${invoiceNumber}"?`)) {
         return;
@@ -662,7 +685,7 @@
     }
 
     /**
-     * Mostra mensagem de erro
+     * ✅ Mostra mensagem de erro
      */
     function showError(message) {
       const alertBox = document.getElementById("alertBox");
@@ -675,7 +698,7 @@
     }
 
     /**
-     * Mostra mensagem de sucesso
+     * ✅ Mostra mensagem de sucesso
      */
     function showSuccess(message) {
       const successBox = document.getElementById("successBox");
@@ -688,7 +711,17 @@
     }
 
     /**
-     * Submissão do formulário
+     * ✅ Mostra erro no modal
+     */
+    function showModalError(message) {
+      const modalAlertBox = document.getElementById("modalAlertBox");
+      const modalAlertMessage = document.getElementById("modalAlertMessage");
+      modalAlertMessage.textContent = message;
+      modalAlertBox.classList.remove("d-none");
+    }
+
+    /**
+     * ✅ Submissão do formulário
      */
     document.getElementById("invoiceForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -699,7 +732,7 @@
       const dueDate = document.getElementById("invoiceDueDate")?.value;
       const status = document.getElementById("invoiceStatus")?.value;
 
-      console.log("[BILLING/CREATE] Criando nova fatura...");
+      console.log("[BILLING/CREATE] ➕ Criando nova fatura...");
 
       if (!client || !amount || !dueDate || !status) {
         showModalError("Por favor, preencha os campos obrigatórios!");
@@ -726,6 +759,7 @@
         invoices.push(newInvoice);
 
         console.log("[BILLING/CREATE] ✓ Fatura criada com sucesso");
+        console.log("[BILLING/CREATE] 📊 Nova fatura:", newInvoice);
 
         // Reseta o formulário
         document.getElementById("invoiceForm").reset();
@@ -750,9 +784,10 @@
     });
 
     /**
-     * Reset do modal quando abrir
+     * ✅ Reset do modal quando abrir
      */
     document.getElementById("invoiceModal")?.addEventListener("show.bs.modal", () => {
+      console.log("[BILLING/MODAL] 📂 Modal aberto");
       document.getElementById("invoiceForm").reset();
       document.getElementById("modalAlertBox").classList.add("d-none");
     });

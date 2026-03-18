@@ -308,7 +308,7 @@
         style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
         <span class="visually-hidden">Carregando...</span>
       </div>
-      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+      <p style="margin-top: 1rem;">Inicializando página...</p>
     </div>
   </div>
   <!-- ============================================================ -->
@@ -372,21 +372,44 @@
   <!-- 📦 SCRIPTS -->
   <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
   <!-- ============================================================ -->
   <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
   <!-- ============================================================ -->
   <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      const user = await initPageAuth("CHAT");
-      if (!user) return;
+    console.log("\n" + "=".repeat(80));
+    console.log("[CHAT/PAGE] 📄 Inicializando página de Chat");
+    console.log("[CHAT/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
+    console.log("=".repeat(80) + "\n");
 
-      // Carrega os chats
-      await loadChats();
+    document.addEventListener("DOMContentLoaded", async () => {
+      console.log("[CHAT/INIT] 📋 DOM Carregado");
+
+      try {
+        // ===== Mostrar Conteúdo =====
+        const loadingPage = document.getElementById("loadingPage");
+        const containerMain = document.querySelector(".container-main");
+        
+        loadingPage.style.display = "none";
+        containerMain.style.display = "flex";
+        
+        console.log("[CHAT/INIT] ✅ Página inicializada com sucesso");
+        console.log("=".repeat(80) + "\n");
+
+        // ===== Carregar Chats =====
+        await loadChats();
+
+      } catch (err) {
+        console.error("[CHAT/INIT] ❌ ERRO NA INICIALIZAÇÃO");
+        console.error("[CHAT/INIT] 📍 Mensagem:", err.message);
+        console.error("[CHAT/INIT] 🔗 Stack:", err.stack);
+        console.error("=".repeat(80) + "\n");
+        
+        showError("Erro ao inicializar página: " + err.message);
+      }
     });
   </script>
 
@@ -398,12 +421,12 @@
     let selectedChatId = null;
 
     /**
-     * Carrega os chats
+     * ✅ Carrega os chats
      */
     async function loadChats() {
-      try {
-        console.log("[CHAT/LOAD] Carregando chats...");
+      console.log("\n[CHAT/LOAD] 📥 Carregando chats...");
 
+      try {
         // Simular dados de API - substitua pela chamada real
         chats = [
           {
@@ -458,6 +481,8 @@
           selectChat(chats[0].id);
         }
 
+        console.log("[CHAT/LOAD] ✅ Chats renderizados\n");
+
       } catch (err) {
         console.error("[CHAT/LOAD] ✗ Erro:", err.message);
         showError("Erro ao carregar chats: " + err.message);
@@ -465,9 +490,10 @@
     }
 
     /**
-     * Renderiza a lista de chats
+     * ✅ Renderiza a lista de chats
      */
     function renderChatList() {
+      console.log("[CHAT/RENDER] 🎨 Renderizando lista de chats");
       const chatList = document.getElementById("chatList");
 
       if (!chats || chats.length === 0) {
@@ -493,23 +519,27 @@
     }
 
     /**
-     * Seleciona um chat
+     * ✅ Seleciona um chat
      */
     function selectChat(chatId) {
-      console.log("[CHAT/SELECT] Selecionando chat:", chatId);
+      console.log("[CHAT/SELECT] 🎯 Selecionando chat:", chatId);
       selectedChatId = chatId;
       const chat = chats.find(c => c.id === chatId);
 
-      if (!chat) return;
+      if (!chat) {
+        console.error("[CHAT/SELECT] ✗ Chat não encontrado");
+        return;
+      }
 
       renderChatList();
       renderChatArea(chat);
     }
 
     /**
-     * Renderiza a área de chat
+     * ✅ Renderiza a área de chat
      */
     function renderChatArea(chat) {
+      console.log("[CHAT/AREA] 📝 Renderizando área de chat para:", chat.name);
       const chatArea = document.getElementById("chatArea");
 
       chatArea.innerHTML = `
@@ -559,22 +589,25 @@
     }
 
     /**
-     * Envia uma mensagem
+     * ✅ Envia uma mensagem
      */
     async function sendMessage(chatId) {
       const input = document.getElementById("messageInput");
       const text = input?.value?.trim();
 
       if (!text) {
+        console.warn("[CHAT/SEND] ⚠️ Mensagem vazia");
         showError("Escreva uma mensagem!");
         return;
       }
 
       try {
-        console.log("[CHAT/SEND] Enviando mensagem para chat:", chatId);
+        console.log("[CHAT/SEND] ➡️ Enviando mensagem para chat:", chatId);
 
         const chat = chats.find(c => c.id === chatId);
-        if (!chat) return;
+        if (!chat) {
+          throw new Error("Chat não encontrado");
+        }
 
         // Adiciona a mensagem à conversa
         const newMessage = {
@@ -587,6 +620,8 @@
         chat.messages.push(newMessage);
         input.value = "";
 
+        console.log("[CHAT/SEND] ✓ Mensagem adicionada com sucesso");
+
         renderChatArea(chat);
         showSuccess("Mensagem enviada!");
 
@@ -597,7 +632,7 @@
     }
 
     /**
-     * Manipula Enter para enviar
+     * ✅ Manipula Enter para enviar
      */
     function handleKeyPress(event, chatId) {
       if (event.key === "Enter" && !event.shiftKey) {
@@ -607,7 +642,7 @@
     }
 
     /**
-     * Mostra mensagem de erro
+     * ✅ Mostra mensagem de erro
      */
     function showError(message) {
       const alertBox = document.getElementById("alertBox");
@@ -620,7 +655,7 @@
     }
 
     /**
-     * Mostra mensagem de sucesso
+     * ✅ Mostra mensagem de sucesso
      */
     function showSuccess(message) {
       const successBox = document.getElementById("successBox");

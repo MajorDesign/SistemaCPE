@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="pt-br">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,12 +8,560 @@
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link href="SistemaCpe/web/assets/css/app.css" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --primary-color: #667eea;
+      --secondary-color: #764ba2;
+      --light-bg: #f9fafb;
+      --border-color: #e5e7eb;
+      --text-primary: #1f2937;
+      --text-secondary: #6b7280;
+      --danger-color: #ef4444;
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+        'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      background-color: var(--light-bg);
+      color: var(--text-primary);
+    }
+
+    /* ============================================================ */
+    /* LAYOUT PRINCIPAL */
+    /* ============================================================ */
+    .app-shell {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .app-sidebar {
+      width: 280px;
+      background: var(--primary-gradient);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 0;
+      overflow-y: auto;
+      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+    }
+
+    .app-sidebar__brand {
+      padding: 0 20px 30px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .brand-dot {
+      width: 12px;
+      height: 12px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .app-nav {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 0 12px;
+    }
+
+    .app-nav__item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      color: rgba(255, 255, 255, 0.8);
+      text-decoration: none;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .app-nav__item:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .app-nav__item.active {
+      background: rgba(255, 255, 255, 0.25);
+      color: white;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.3);
+    }
+
+    .app-nav__item i {
+      width: 20px;
+      text-align: center;
+    }
+
+    .app-nav__section {
+      padding: 12px 16px;
+      margin-top: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .app-sidebar__footer {
+      padding: 0 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 20px;
+      margin-top: 20px;
+    }
+
+    /* ============================================================ */
+    /* MAIN CONTENT */
+    /* ============================================================ */
+    .app-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .app-header {
+      background: white;
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+      gap: 16px;
+    }
+
+    .app-search {
+      max-width: 400px;
+      width: 100%;
+    }
+
+    .app-search .input-group-text {
+      border-color: var(--border-color);
+      background: white;
+      color: var(--text-secondary);
+    }
+
+    .app-search .form-control {
+      border-color: var(--border-color);
+      padding: 8px 12px;
+    }
+
+    .app-search .form-control:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .app-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px 24px;
+    }
+
+    /* ============================================================ */
+    /* CARDS & BUTTONS */
+    /* ============================================================ */
+    .app-card {
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+      background: white;
+    }
+
+    .app-card:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    .btn-primary {
+      background: var(--primary-gradient);
+      border: none;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-outline-secondary {
+      border: 2px solid var(--border-color);
+      transition: all 0.2s ease;
+    }
+
+    .btn-outline-secondary:hover {
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+      background: rgba(102, 126, 234, 0.05);
+    }
+
+    .btn-outline-primary {
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+
+    .btn-outline-primary:hover {
+      background: rgba(102, 126, 234, 0.1);
+      border-color: var(--primary-color);
+    }
+
+    /* ============================================================ */
+    /* FORMS */
+    /* ============================================================ */
+    .form-label {
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .form-control,
+    .form-select {
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 12px;
+      transition: all 0.2s ease;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      outline: none;
+    }
+
+    /* ============================================================ */
+    /* TABLES */
+    /* ============================================================ */
+    .table {
+      margin-bottom: 0;
+    }
+
+    .table thead th {
+      border-bottom: 2px solid var(--border-color);
+      font-weight: 600;
+      color: var(--text-secondary);
+      background: transparent;
+      padding: 12px 8px;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    .table tbody td {
+      padding: 12px 8px;
+      vertical-align: middle;
+      border-color: var(--border-color);
+      font-size: 13px;
+    }
+
+    .table tbody tr:hover {
+      background-color: var(--light-bg);
+    }
+
+    .table-responsive {
+      border-radius: 8px;
+    }
+
+    /* ============================================================ */
+    /* BADGES */
+    /* ============================================================ */
+    .badge {
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
+    }
+
+    .badge-action-view {
+      background-color: rgba(59, 130, 246, 0.15);
+      color: #1e40af;
+    }
+
+    .badge-action-copy {
+      background-color: rgba(16, 185, 129, 0.15);
+      color: #065f46;
+    }
+
+    .badge-action-create {
+      background-color: rgba(16, 185, 129, 0.15);
+      color: #065f46;
+    }
+
+    .badge-action-edit {
+      background-color: rgba(245, 158, 11, 0.15);
+      color: #92400e;
+    }
+
+    .badge-action-delete {
+      background-color: rgba(220, 38, 38, 0.15);
+      color: #991b1b;
+    }
+
+    .badge-action-login {
+      background-color: rgba(59, 130, 246, 0.15);
+      color: #1e40af;
+    }
+
+    .badge-action-export {
+      background-color: rgba(139, 92, 246, 0.15);
+      color: #5b21b6;
+    }
+
+    /* ============================================================ */
+    /* ALERTS & MESSAGES */
+    /* ============================================================ */
+    .alert {
+      border: none;
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      animation: slideIn 0.3s ease;
+      margin-bottom: 16px;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .alert-danger {
+      background-color: rgba(220, 38, 38, 0.1);
+      color: #991b1b;
+    }
+
+    .alert-success {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: #065f46;
+    }
+
+    .alert-info {
+      background-color: rgba(59, 130, 246, 0.1);
+      color: #1e40af;
+    }
+
+    .alert-secondary {
+      background-color: rgba(107, 114, 128, 0.1);
+      color: #374151;
+      border: 1px solid var(--border-color);
+    }
+
+    .alert i {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* ============================================================ */
+    /* PAGINATION */
+    /* ============================================================ */
+    .pagination {
+      margin-top: 16px;
+    }
+
+    .pagination .page-link {
+      border-color: var(--border-color);
+      color: var(--primary-color);
+    }
+
+    .pagination .page-link:hover {
+      background-color: rgba(102, 126, 234, 0.1);
+      border-color: var(--primary-color);
+    }
+
+    .pagination .page-item.active .page-link {
+      background-color: var(--primary-color);
+      border-color: var(--primary-color);
+    }
+
+    /* ============================================================ */
+    /* UTILITIES */
+    /* ============================================================ */
+    .d-none {
+      display: none !important;
+    }
+
+    .loading-spinner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary-gradient);
+      z-index: 9999;
+      animation: fadeOut 0.3s ease 1.5s forwards;
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0;
+        pointer-events: none;
+      }
+    }
+
+    .spinner-border {
+      width: 3rem;
+      height: 3rem;
+      border: 0.3em solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+    }
+
+    /* ============================================================ */
+    /* RESPONSIVE */
+    /* ============================================================ */
+    @media (max-width: 768px) {
+      .app-sidebar {
+        position: fixed;
+        left: -280px;
+        top: 0;
+        height: 100vh;
+        z-index: 1000;
+        transition: left 0.3s ease;
+      }
+
+      .app-sidebar.show {
+        left: 0;
+      }
+
+      .app-header {
+        padding: 12px 16px;
+      }
+
+      .app-content {
+        padding: 20px 16px;
+      }
+
+      .app-search {
+        max-width: 100%;
+        flex: 1;
+      }
+
+      .h4 {
+        font-size: 18px;
+      }
+
+      .filter-row {
+        gap: 8px !important;
+      }
+
+      .table {
+        font-size: 12px;
+      }
+
+      .table thead th,
+      .table tbody td {
+        padding: 8px 4px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .app-header {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .app-search {
+        order: 3;
+        width: 100%;
+        max-width: 100%;
+      }
+
+      .d-flex.gap-2 {
+        flex-direction: column;
+      }
+
+      .d-flex.gap-2 > * {
+        width: 100%;
+      }
+
+      .filter-row {
+        flex-direction: column;
+      }
+
+      .filter-row .col-12 {
+        margin-bottom: 8px;
+      }
+
+      .table {
+        font-size: 11px;
+      }
+
+      .badge {
+        font-size: 10px;
+      }
+    }
+  </style>
 </head>
 
 <body>
+  <!-- ============================================================ -->
+  <!-- 🔒 LOADING PAGE -->
+  <!-- ============================================================ -->
+  <div class="loading-spinner" id="loadingPage">
+    <div style="text-align: center; color: white;">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Carregando...</span>
+      </div>
+      <p style="margin-top: 1rem; font-weight: 500;">Carregando auditoria...</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MAIN SHELL -->
+  <!-- ============================================================ -->
   <div class="app-shell">
-    <aside class="app-sidebar">
+    <!-- SIDEBAR -->
+    <aside class="app-sidebar" id="sidebar">
       <div class="app-sidebar__brand">
         <div class="d-flex align-items-center gap-2">
           <div class="brand-dot"></div>
@@ -24,14 +573,26 @@
       </div>
 
       <nav class="app-nav">
-        <a class="app-nav__item" href="index.html"><i class="bi bi-grid"></i> Dashboard</a>
-        <a class="app-nav__item" href="docs.html"><i class="bi bi-journal-text"></i> Documentação</a>
-        <a class="app-nav__item" href="vault.html"><i class="bi bi-shield-lock"></i> Cofre</a>
-        <a class="app-nav__item" href="inventory.html"><i class="bi bi-pc-display"></i> Inventário</a>
+        <a class="app-nav__item" href="index.html" title="Dashboard">
+          <i class="bi bi-grid"></i> Dashboard
+        </a>
+        <a class="app-nav__item" href="docs.html" title="Documentação">
+          <i class="bi bi-journal-text"></i> Documentação
+        </a>
+        <a class="app-nav__item" href="vault.html" title="Cofre">
+          <i class="bi bi-shield-lock"></i> Cofre
+        </a>
+        <a class="app-nav__item" href="inventory.html" title="Inventário">
+          <i class="bi bi-pc-display"></i> Inventário
+        </a>
 
         <div class="app-nav__section">Administração</div>
-        <a class="app-nav__item" href="admin.html"><i class="bi bi-gear"></i> Painel Admin</a>
-        <a class="app-nav__item active" href="audit.html"><i class="bi bi-clipboard-data"></i> Auditoria</a>
+        <a class="app-nav__item" href="admin.html" title="Painel Admin">
+          <i class="bi bi-gear"></i> Painel Admin
+        </a>
+        <a class="app-nav__item active" href="audit.html" title="Auditoria">
+          <i class="bi bi-clipboard-data"></i> Auditoria
+        </a>
       </nav>
 
       <div class="app-sidebar__footer">
@@ -39,15 +600,17 @@
       </div>
     </aside>
 
+    <!-- MAIN -->
     <main class="app-main">
+      <!-- HEADER -->
       <header class="app-header">
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-secondary d-md-none" id="btnToggleSidebar" type="button">
+        <div class="d-flex align-items-center gap-2" style="flex: 1;">
+          <button class="btn btn-outline-secondary d-md-none" id="btnToggleSidebar" type="button" title="Menu">
             <i class="bi bi-list"></i>
           </button>
           <div class="input-group app-search">
             <span class="input-group-text"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" placeholder="Buscar logs..." />
+            <input type="text" class="form-control" id="searchInput" placeholder="Buscar por usuário, IP, ação..." />
           </div>
         </div>
 
@@ -56,75 +619,93 @@
             <i class="bi bi-bell"></i>
           </button>
           <div class="dropdown">
-            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-              <i class="bi bi-person-circle me-1"></i> Usuário
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown"
+              aria-expanded="false">
+              <i class="bi bi-person-circle me-1"></i> <span class="d-none d-sm-inline">Usuário</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
-              <li><a class="dropdown-item" href="#">Meu Perfil</a></li>
-              <li><a class="dropdown-item" href="#">Configurações</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li><a class="dropdown-item text-danger" href="#">Sair</a></li>
+              <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i> Meu Perfil</a></li>
+              <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i> Configurações</a></li>
+              <li>
+                <hr class="dropdown-divider">
+              </li>
+              <li><a class="dropdown-item text-danger" href="#" id="btnLogout"><i class="bi bi-box-arrow-right me-2"></i>
+                  Sair</a></li>
             </ul>
           </div>
         </div>
       </header>
 
+      <!-- CONTENT -->
       <section class="app-content">
         <div class="container-fluid">
-
+          <!-- PAGE HEADER -->
           <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
             <div>
-              <h1 class="h4 mb-0">Auditoria</h1>
+              <h1 class="h4 mb-0"><i class="bi bi-clipboard-data me-2"></i> Auditoria</h1>
               <div class="text-muted small">Registro de ações críticas (cofre, docs, admin)</div>
             </div>
 
             <div class="d-flex gap-2">
-              <button class="btn btn-outline-primary">
+              <button class="btn btn-outline-primary" id="btnExport" title="Exportar dados">
                 <i class="bi bi-download me-1"></i> Exportar CSV
               </button>
             </div>
           </div>
 
-          <div class="card app-card">
+          <!-- MAIN CARD -->
+          <div class="app-card">
             <div class="card-body">
-              <div class="row g-2 mb-3">
+              <!-- FILTERS -->
+              <div class="row g-2 mb-3 filter-row">
                 <div class="col-12 col-md-3">
-                  <label class="form-label small text-muted">Módulo</label>
-                  <select class="form-select">
-                    <option>Todos</option>
-                    <option>Cofre</option>
-                    <option>Documentação</option>
-                    <option>Admin</option>
+                  <label class="form-label">Módulo</label>
+                  <select class="form-select" id="filterModule">
+                    <option value="">Todos</option>
+                    <option value="cofre">Cofre</option>
+                    <option value="documentacao">Documentação</option>
+                    <option value="admin">Admin</option>
+                    <option value="inventario">Inventário</option>
                   </select>
                 </div>
                 <div class="col-12 col-md-3">
-                  <label class="form-label small text-muted">Ação</label>
-                  <select class="form-select">
-                    <option>Todas</option>
-                    <option>Visualizar</option>
-                    <option>Copiar</option>
-                    <option>Criar</option>
-                    <option>Editar</option>
-                    <option>Excluir</option>
+                  <label class="form-label">Ação</label>
+                  <select class="form-select" id="filterAction">
+                    <option value="">Todas</option>
+                    <option value="visualizar">Visualizar</option>
+                    <option value="copiar">Copiar</option>
+                    <option value="criar">Criar</option>
+                    <option value="editar">Editar</option>
+                    <option value="excluir">Excluir</option>
+                    <option value="login">Login</option>
+                    <option value="export">Export</option>
                   </select>
                 </div>
                 <div class="col-12 col-md-3">
-                  <label class="form-label small text-muted">Período</label>
-                  <select class="form-select">
-                    <option>Últimas 24h</option>
-                    <option>7 dias</option>
-                    <option>30 dias</option>
+                  <label class="form-label">Período</label>
+                  <select class="form-select" id="filterPeriod">
+                    <option value="24h">Últimas 24h</option>
+                    <option value="7d">7 dias</option>
+                    <option value="30d">30 dias</option>
+                    <option value="all">Todos</option>
                   </select>
                 </div>
                 <div class="col-12 col-md-3 d-flex align-items-end">
-                  <button class="btn btn-outline-secondary w-100">
+                  <button class="btn btn-outline-secondary w-100" id="btnFilter">
                     <i class="bi bi-funnel me-1"></i> Filtrar
                   </button>
                 </div>
               </div>
 
+              <!-- ALERTS -->
+              <div class="alert alert-info d-none" id="alertBox" role="alert">
+                <i class="bi bi-info-circle"></i>
+                <span id="alertMessage"></span>
+              </div>
+
+              <!-- TABLE -->
               <div class="table-responsive">
-                <table class="table table-sm align-middle">
+                <table class="table table-sm align-middle" id="auditTable">
                   <thead>
                     <tr>
                       <th>Data/Hora</th>
@@ -136,46 +717,458 @@
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td>2026-02-09 10:12</td>
-                      <td>joao@cpe.com.br</td>
-                      <td>Cofre</td>
-                      <td>Copiar</td>
-                      <td>VPN – Acesso TI</td>
-                      <td>10.0.0.12</td>
-                    </tr>
-                    <tr>
-                      <td>2026-02-08 19:40</td>
-                      <td>maria@cpe.com.br</td>
-                      <td>Documentação</td>
-                      <td>Editar</td>
-                      <td>Checklist – Entrega Notebook</td>
-                      <td>10.0.1.21</td>
-                    </tr>
-                    <tr>
-                      <td>2026-02-08 18:02</td>
-                      <td>admin@cpe.com.br</td>
-                      <td>Admin</td>
-                      <td>Excluir</td>
-                      <td>Usuário – teste@cpe.com.br</td>
-                      <td>10.0.0.2</td>
-                    </tr>
+                    <!-- Populado por JavaScript -->
                   </tbody>
                 </table>
               </div>
 
-              <div class="alert alert-secondary small mb-0">
-                Recomendações: registrar também tentativas negadas (403), falhas de autenticação e exportações.
+              <!-- PAGINATION -->
+              <nav aria-label="Paginação" class="d-flex justify-content-between align-items-center mt-3">
+                <small class="text-muted" id="resultCount">Exibindo 0 registros</small>
+                <ul class="pagination mb-0" id="pagination">
+                  <!-- Populado por JavaScript -->
+                </ul>
+              </nav>
+
+              <!-- RECOMMENDATIONS -->
+              <div class="alert alert-secondary small mb-0 mt-3">
+                <i class="bi bi-lightbulb me-2"></i>
+                <strong>Recomendações:</strong> Registrar também tentativas negadas (403), falhas de autenticação,
+                exportações em massa e alterações de permissões para melhor rastreabilidade.
               </div>
             </div>
           </div>
-
         </div>
       </section>
     </main>
   </div>
 
+  <!-- ============================================================ -->
+  <!-- 📦 SCRIPTS -->
+  <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="./assets/js/app.js"></script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    console.log("\n" + "=".repeat(80));
+    console.log("[AUDIT/PAGE] 📋 Inicializando página de Auditoria");
+    console.log("[AUDIT/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso Público e Direto");
+    console.log("[AUDIT/PAGE] ✅ Nenhuma verificação de permissão");
+    console.log("=".repeat(80) + "\n");
+
+    // ===== DADOS GLOBAIS =====
+    let auditLogs = [];
+    let filteredLogs = [];
+    const itemsPerPage = 15;
+    let currentPage = 1;
+
+    document.addEventListener("DOMContentLoaded", () => {
+      console.log("[AUDIT/INIT] 📋 DOM Carregado com sucesso");
+      console.log("[AUDIT/INIT] ⏱️  Timestamp:", new Date().toLocaleString('pt-BR'));
+      console.log("[AUDIT/INIT] 🌐 URL:", window.location.href);
+
+      try {
+        loadAuditData();
+        setupEventListeners();
+
+        // Remove loading page
+        const loading = document.getElementById("loadingPage");
+        if (loading) {
+          setTimeout(() => {
+            loading.style.display = "none";
+          }, 500);
+        }
+
+        console.log("[AUDIT/INIT] ✅ Página pronta para uso");
+        console.log("=".repeat(80) + "\n");
+
+      } catch (err) {
+        console.error("[AUDIT/INIT] ❌ ERRO:", err.message);
+        showError("Erro ao inicializar página: " + err.message);
+      }
+    });
+
+    /**
+     * ✅ Configura todos os event listeners
+     */
+    function setupEventListeners() {
+      console.log("[AUDIT/SETUP] 🔧 Configurando event listeners...");
+
+      // Menu mobile
+      const btnToggle = document.getElementById("btnToggleSidebar");
+      const sidebar = document.getElementById("sidebar");
+      if (btnToggle) {
+        btnToggle.addEventListener("click", () => {
+          sidebar.classList.toggle("show");
+        });
+      }
+
+      // Fechar sidebar ao clicar em um link
+      document.querySelectorAll(".app-nav__item").forEach(link => {
+        link.addEventListener("click", () => {
+          sidebar.classList.remove("show");
+        });
+      });
+
+      // Filtros
+      document.getElementById("btnFilter")?.addEventListener("click", applyFilters);
+      document.getElementById("filterModule")?.addEventListener("change", applyFilters);
+      document.getElementById("filterAction")?.addEventListener("change", applyFilters);
+      document.getElementById("filterPeriod")?.addEventListener("change", applyFilters);
+
+      // Busca
+      document.getElementById("searchInput")?.addEventListener("input", handleSearch);
+
+      // Export
+      document.getElementById("btnExport")?.addEventListener("click", exportToCSV);
+
+      // Logout
+      document.getElementById("btnLogout")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        console.log("[AUDIT/LOGOUT] 👋 Usuário saiu");
+        alert("Logout realizado!");
+      });
+
+      console.log("[AUDIT/SETUP] ✅ Event listeners configurados");
+    }
+
+    /**
+     * ✅ Carrega dados de auditoria
+     */
+    function loadAuditData() {
+      console.log("\n[AUDIT/DATA] 📊 Carregando dados de auditoria...");
+
+      auditLogs = [
+        { timestamp: "2026-03-17 14:25", user: "joao@cpe.com.br", module: "cofre", action: "copiar", object: "VPN – Acesso TI", ip: "10.0.0.12" },
+        { timestamp: "2026-03-17 13:50", user: "maria@cpe.com.br", module: "documentacao", action: "editar", object: "Checklist – Entrega Notebook", ip: "10.0.1.21" },
+        { timestamp: "2026-03-17 12:30", user: "admin@cpe.com.br", module: "admin", action: "excluir", object: "Usuário – teste@cpe.com.br", ip: "10.0.0.2" },
+        { timestamp: "2026-03-17 11:15", user: "carlos@cpe.com.br", module: "cofre", action: "visualizar", object: "Senha – Banco de Dados", ip: "10.0.2.5" },
+        { timestamp: "2026-03-17 10:45", user: "ana@cpe.com.br", module: "documentacao", action: "criar", object: "Procedimento – Nova Policy", ip: "10.0.1.8" },
+        { timestamp: "2026-03-16 16:20", user: "pedro@cpe.com.br", module: "inventario", action: "editar", object: "Servidor Web 01", ip: "10.0.3.10" },
+        { timestamp: "2026-03-16 15:30", user: "joao@cpe.com.br", module: "admin", action: "criar", object: "Novo Usuário – novo@cpe.com.br", ip: "10.0.0.12" },
+        { timestamp: "2026-03-16 14:00", user: "maria@cpe.com.br", module: "cofre", action: "copiar", object: "Chave SSH – Production", ip: "10.0.1.21" },
+        { timestamp: "2026-03-16 13:15", user: "admin@cpe.com.br", module: "documentacao", action: "export", object: "Todos os Procedimentos", ip: "10.0.0.2" },
+        { timestamp: "2026-03-16 12:00", user: "carlos@cpe.com.br", module: "admin", action: "editar", object: "Permissões – Setor TI", ip: "10.0.2.5" },
+        { timestamp: "2026-03-16 11:30", user: "ana@cpe.com.br", module: "inventario", action: "visualizar", object: "Relatório – Ativos", ip: "10.0.1.8" },
+        { timestamp: "2026-03-15 16:45", user: "pedro@cpe.com.br", module: "cofre", action: "criar", object: "Senha – Nova Aplicação", ip: "10.0.3.10" },
+        { timestamp: "2026-03-15 15:20", user: "joao@cpe.com.br", module: "documentacao", action: "editar", object: "Guia de Segurança", ip: "10.0.0.12" },
+        { timestamp: "2026-03-15 14:00", user: "maria@cpe.com.br", module: "admin", action: "login", object: "Sistema CPE", ip: "10.0.1.21" },
+        { timestamp: "2026-03-15 13:30", user: "admin@cpe.com.br", module: "inventario", action: "excluir", object: "Notebook – Obsoleto", ip: "10.0.0.2" },
+        { timestamp: "2026-03-15 12:15", user: "carlos@cpe.com.br", module: "documentacao", action: "visualizar", object: "Procedimento – Onboarding", ip: "10.0.2.5" },
+        { timestamp: "2026-03-14 16:30", user: "ana@cpe.com.br", module: "cofre", action: "copiar", object: "Senha – Database Admin", ip: "10.0.1.8" },
+        { timestamp: "2026-03-14 15:00", user: "pedro@cpe.com.br", module: "admin", action: "editar", object: "Unidade – São Paulo", ip: "10.0.3.10" },
+        { timestamp: "2026-03-14 14:20", user: "joao@cpe.com.br", module: "inventario", action: "criar", object: "Impressora – HP LaserJet", ip: "10.0.0.12" },
+        { timestamp: "2026-03-14 13:45", user: "maria@cpe.com.br", module: "documentacao", action: "export", object: "Políticas de TI", ip: "10.0.1.21" }
+      ];
+
+      console.log("[AUDIT/DATA] ✓", auditLogs.length, "registros de auditoria carregados");
+
+      filteredLogs = [...auditLogs];
+      renderAuditTable();
+      updateResultCount();
+
+      console.log("[AUDIT/DATA] ✅ Dados carregados com sucesso\n");
+    }
+
+    /**
+     * ✅ Renderiza tabela de auditoria
+     */
+    function renderAuditTable() {
+      const tbody = document.querySelector("#auditTable tbody");
+      if (!tbody) return;
+
+      const startIdx = (currentPage - 1) * itemsPerPage;
+      const endIdx = startIdx + itemsPerPage;
+      const logsToShow = filteredLogs.slice(startIdx, endIdx);
+
+      if (logsToShow.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+              <i class="bi bi-inbox" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem;"></i>
+              Nenhum registro encontrado
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = logsToShow.map(log => `
+        <tr>
+          <td>
+            <code style="font-size: 11px; color: var(--text-secondary);">${log.timestamp}</code>
+          </td>
+          <td>
+            <div class="fw-semibold">${escapeHtml(log.user.split('@')[0])}</div>
+            <div class="small text-muted">${escapeHtml(log.user)}</div>
+          </td>
+          <td>
+            <span class="badge" style="background-color: rgba(102, 126, 234, 0.15); color: var(--primary-color);">
+              ${escapeHtml(log.module)}
+            </span>
+          </td>
+          <td>
+            <span class="badge ${getActionBadgeClass(log.action)}">
+              ${getActionLabel(log.action)}
+            </span>
+          </td>
+          <td>
+            <div class="text-truncate" title="${escapeHtml(log.object)}">
+              ${escapeHtml(log.object)}
+            </div>
+          </td>
+          <td>
+            <code style="font-size: 11px; color: var(--text-secondary);">${escapeHtml(log.ip)}</code>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    /**
+     * ✅ Aplica filtros
+     */
+    function applyFilters() {
+      console.log("[AUDIT/FILTER] 🔍 Aplicando filtros...");
+
+      const moduleFilter = document.getElementById("filterModule")?.value || "";
+      const actionFilter = document.getElementById("filterAction")?.value || "";
+      const periodFilter = document.getElementById("filterPeriod")?.value || "24h";
+
+      filteredLogs = auditLogs.filter(log => {
+        // Filtro de módulo
+        if (moduleFilter && log.module !== moduleFilter) return false;
+
+        // Filtro de ação
+        if (actionFilter && log.action !== actionFilter) return false;
+
+        // Filtro de período (simplificado)
+        if (periodFilter !== "all") {
+          // Em produção, seria necessário comparar datas reais
+          // Aqui estamos apenas demonstrando a funcionalidade
+        }
+
+        return true;
+      });
+
+      currentPage = 1;
+      renderAuditTable();
+      updateResultCount();
+      renderPagination();
+
+      console.log("[AUDIT/FILTER] ✅ Filtros aplicados - Encontrados:", filteredLogs.length, "registros");
+    }
+
+    /**
+     * ✅ Busca por texto
+     */
+    function handleSearch(e) {
+      const searchTerm = e.target.value?.toLowerCase() || "";
+      console.log("[AUDIT/SEARCH] 🔍 Buscando:", searchTerm);
+
+      if (searchTerm.length === 0) {
+        filteredLogs = [...auditLogs];
+      } else {
+        filteredLogs = auditLogs.filter(log =>
+          log.user.toLowerCase().includes(searchTerm) ||
+          log.module.toLowerCase().includes(searchTerm) ||
+          log.action.toLowerCase().includes(searchTerm) ||
+          log.object.toLowerCase().includes(searchTerm) ||
+          log.ip.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      currentPage = 1;
+      renderAuditTable();
+      updateResultCount();
+      renderPagination();
+
+      console.log("[AUDIT/SEARCH] ✓ Encontrados:", filteredLogs.length, "registros");
+    }
+
+    /**
+     * ✅ Atualiza contagem de resultados
+     */
+    function updateResultCount() {
+      const total = filteredLogs.length;
+      const startIdx = (currentPage - 1) * itemsPerPage;
+      const endIdx = Math.min(startIdx + itemsPerPage, total);
+
+      const resultCount = document.getElementById("resultCount");
+      if (resultCount) {
+        if (total === 0) {
+          resultCount.textContent = "Nenhum registro encontrado";
+        } else {
+          resultCount.textContent = `Exibindo ${startIdx + 1} - ${endIdx} de ${total} registros`;
+        }
+      }
+
+      renderPagination();
+    }
+
+    /**
+     * ✅ Renderiza paginação
+     */
+    function renderPagination() {
+      const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+      const pagination = document.getElementById("pagination");
+
+      if (!pagination || totalPages <= 1) {
+        if (pagination) pagination.innerHTML = "";
+        return;
+      }
+
+      let html = "";
+
+      // Botão anterior
+      html += `
+        <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+          <a class="page-link" href="#" onclick="changePage(${currentPage - 1}); return false;">
+            <i class="bi bi-chevron-left"></i>
+          </a>
+        </li>
+      `;
+
+      // Números de página
+      for (let i = 1; i <= totalPages; i++) {
+        if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+          html += `
+            <li class="page-item ${i === currentPage ? 'active' : ''}">
+              <a class="page-link" href="#" onclick="changePage(${i}); return false;">
+                ${i}
+              </a>
+            </li>
+          `;
+        } else if (i === 2 || i === totalPages - 1) {
+          html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+      }
+
+      // Botão próximo
+      html += `
+        <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+          <a class="page-link" href="#" onclick="changePage(${currentPage + 1}); return false;">
+            <i class="bi bi-chevron-right"></i>
+          </a>
+        </li>
+      `;
+
+      pagination.innerHTML = html;
+    }
+
+    /**
+     * ✅ Muda página
+     */
+    function changePage(page) {
+      const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
+      if (page >= 1 && page <= totalPages) {
+        currentPage = page;
+        renderAuditTable();
+        updateResultCount();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }
+
+    /**
+     * ✅ Exporta para CSV
+     */
+    function exportToCSV() {
+      console.log("[AUDIT/EXPORT] 📥 Exportando para CSV...");
+
+      const csvContent = [
+        ["Data/Hora", "Usuário", "Email", "Módulo", "Ação", "Objeto", "IP"].join(","),
+        ...filteredLogs.map(log =>
+          [
+            log.timestamp,
+            log.user.split('@')[0],
+            log.user,
+            log.module,
+            log.action,
+            `"${log.object}"`,
+            log.ip
+          ].join(",")
+        )
+      ].join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `auditoria-${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+
+      console.log("[AUDIT/EXPORT] ✅ Exportação concluída");
+      showSuccess(`${filteredLogs.length} registros exportados com sucesso!`);
+    }
+
+    /**
+     * ✅ Retorna classe de badge para ação
+     */
+    function getActionBadgeClass(action) {
+      const classes = {
+        "visualizar": "badge-action-view",
+        "copiar": "badge-action-copy",
+        "criar": "badge-action-create",
+        "editar": "badge-action-edit",
+        "excluir": "badge-action-delete",
+        "login": "badge-action-login",
+        "export": "badge-action-export"
+      };
+      return classes[action] || "badge-info";
+    }
+
+    /**
+     * ✅ Retorna label da ação
+     */
+    function getActionLabel(action) {
+      const labels = {
+        "visualizar": "Visualizar",
+        "copiar": "Copiar",
+        "criar": "Criar",
+        "editar": "Editar",
+        "excluir": "Excluir",
+        "login": "Login",
+        "export": "Export"
+      };
+      return labels[action] || action;
+    }
+
+    /**
+     * ✅ Escapa HTML
+     */
+    function escapeHtml(text) {
+      if (!text) return "";
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text.replace(/[&<>"']/g, char => map[char]);
+    }
+
+    /**
+     * ✅ Mostra erro
+     */
+    function showError(message) {
+      console.error("[AUDIT/ERROR] ❌", message);
+      alert("Erro: " + message);
+    }
+
+    /**
+     * ✅ Mostra sucesso
+     */
+    function showSuccess(message) {
+      console.log("[AUDIT/SUCCESS] ✅", message);
+      alert(message);
+    }
+
+    console.log("[AUDIT] ✅ Script de auditoria carregado\n");
+  </script>
+
 </body>
+
 </html>

@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="pt-br">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,42 +8,525 @@
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link href="./assets/css/app.css" rel="stylesheet">
 
   <style>
-    .chip{
-      display:inline-flex; align-items:center; gap:8px;
-      border:1px solid rgba(0,0,0,.1); border-radius:999px;
-      padding:6px 10px; background:#fff; font-size:12px;
+    :root {
+      --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --primary-color: #667eea;
+      --secondary-color: #764ba2;
+      --light-bg: #f9fafb;
+      --border-color: #e5e7eb;
+      --text-primary: #1f2937;
+      --text-secondary: #6b7280;
     }
-    .chip .dot{ width:8px; height:8px; border-radius:50%; background:#19c37d; }
-    .editor{
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu',
+        'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+      background-color: var(--light-bg);
+      color: var(--text-primary);
+    }
+
+    /* ============================================================ */
+    /* LAYOUT PRINCIPAL */
+    /* ============================================================ */
+    .app-shell {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .app-sidebar {
+      width: 280px;
+      background: var(--primary-gradient);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 0;
+      overflow-y: auto;
+      box-shadow: 0 10px 30px rgba(102, 126, 234, 0.2);
+    }
+
+    .app-sidebar__brand {
+      padding: 0 20px 30px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .brand-dot {
+      width: 12px;
+      height: 12px;
+      background: white;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      opacity: 0.8;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .app-nav {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 0 12px;
+    }
+
+    .app-nav__item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      color: rgba(255, 255, 255, 0.8);
+      text-decoration: none;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .app-nav__item:hover {
+      background: rgba(255, 255, 255, 0.15);
+      color: white;
+      transform: translateX(4px);
+    }
+
+    .app-nav__item.active {
+      background: rgba(255, 255, 255, 0.25);
+      color: white;
+      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.3);
+    }
+
+    .app-nav__item i {
+      width: 20px;
+      text-align: center;
+    }
+
+    .app-nav__section {
+      padding: 12px 16px;
+      margin-top: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: rgba(255, 255, 255, 0.5);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .app-sidebar__footer {
+      padding: 0 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      padding-top: 20px;
+      margin-top: 20px;
+    }
+
+    /* ============================================================ */
+    /* MAIN CONTENT */
+    /* ============================================================ */
+    .app-main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .app-header {
+      background: white;
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+      gap: 16px;
+    }
+
+    .app-search {
+      max-width: 400px;
+      width: 100%;
+    }
+
+    .app-search .input-group-text {
+      border-color: var(--border-color);
+      background: white;
+      color: var(--text-secondary);
+    }
+
+    .app-search .form-control {
+      border-color: var(--border-color);
+      padding: 8px 12px;
+    }
+
+    .app-search .form-control:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .app-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px 24px;
+    }
+
+    /* ============================================================ */
+    /* CARDS & BUTTONS */
+    /* ============================================================ */
+    .app-card {
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      transition: all 0.3s ease;
+    }
+
+    .app-card:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
+    }
+
+    .btn-primary {
+      background: var(--primary-gradient);
+      border: none;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+    }
+
+    .btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .btn-outline-secondary {
+      border: 2px solid var(--border-color);
+      transition: all 0.2s ease;
+    }
+
+    .btn-outline-secondary:hover {
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+      background: rgba(102, 126, 234, 0.05);
+    }
+
+    .btn-outline-primary {
+      border-color: var(--primary-color);
+      color: var(--primary-color);
+    }
+
+    .btn-outline-primary:hover {
+      background: rgba(102, 126, 234, 0.1);
+      border-color: var(--primary-color);
+    }
+
+    .btn-outline-danger {
+      border-color: #ef4444;
+      color: #ef4444;
+    }
+
+    .btn-outline-danger:hover {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    /* ============================================================ */
+    /* FORMS */
+    /* ============================================================ */
+    .form-label {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .form-control,
+    .form-select {
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 12px;
+      transition: all 0.2s ease;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      outline: none;
+    }
+
+    .form-text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* ============================================================ */
+    /* EDITOR */
+    /* ============================================================ */
+    .editor {
       min-height: 260px;
       resize: vertical;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 13px;
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .editor:focus {
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+      outline: none;
+    }
+
+    /* ============================================================ */
+    /* CHIPS & TAGS */
+    /* ============================================================ */
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 999px;
+      padding: 6px 12px;
+      background: white;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+    }
+
+    .chip .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+
+    .chip i {
+      font-size: 14px;
+    }
+
+    /* ============================================================ */
+    /* LISTS & BADGES */
+    /* ============================================================ */
+    .list-group-item {
+      border: 1px solid var(--border-color);
+      transition: all 0.2s ease;
+    }
+
+    .list-group-item:hover {
+      background-color: #f3f4f6;
+      border-color: var(--primary-color);
+    }
+
+    .badge {
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 4px;
+    }
+
+    /* ============================================================ */
+    /* ALERTS & MESSAGES */
+    /* ============================================================ */
+    .alert {
+      border: none;
+      border-radius: 8px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      animation: slideIn 0.3s ease;
+      margin-bottom: 16px;
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .alert-danger {
+      background-color: rgba(220, 38, 38, 0.1);
+      color: #991b1b;
+    }
+
+    .alert-success {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: #065f46;
+    }
+
+    .alert-info {
+      background-color: rgba(59, 130, 246, 0.1);
+      color: #1e40af;
+    }
+
+    .alert-secondary {
+      background-color: rgba(107, 114, 128, 0.1);
+      color: #374151;
+      border: 1px solid var(--border-color);
+    }
+
+    .alert i {
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    /* ============================================================ */
+    /* UTILITIES */
+    /* ============================================================ */
+    .d-none {
+      display: none !important;
+    }
+
+    .loading-spinner {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--primary-gradient);
+      z-index: 9999;
+      animation: fadeOut 0.3s ease 1.5s forwards;
+    }
+
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0;
+        pointer-events: none;
+      }
+    }
+
+    .spinner-border {
+      width: 3rem;
+      height: 3rem;
+      border: 0.3em solid rgba(255, 255, 255, 0.3);
+      border-top-color: white;
+    }
+
+    /* ============================================================ */
+    /* RESPONSIVE */
+    /* ============================================================ */
+    @media (max-width: 768px) {
+      .app-sidebar {
+        position: fixed;
+        left: -280px;
+        top: 0;
+        height: 100vh;
+        z-index: 1000;
+        transition: left 0.3s ease;
+      }
+
+      .app-sidebar.show {
+        left: 0;
+      }
+
+      .app-header {
+        padding: 12px 16px;
+      }
+
+      .app-content {
+        padding: 20px 16px;
+      }
+
+      .app-search {
+        max-width: 100%;
+        flex: 1;
+      }
+
+      .h4 {
+        font-size: 18px;
+      }
+
+      .row.g-3 {
+        gap: 1.5rem !important;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .app-header {
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .app-search {
+        order: 3;
+        width: 100%;
+        max-width: 100%;
+      }
+
+      .d-flex.gap-2 {
+        flex-direction: column;
+      }
+
+      .d-flex.gap-2 > * {
+        width: 100%;
+      }
+
+      .editor {
+        min-height: 200px;
+      }
+
+      .chip {
+        margin-right: 0;
+      }
     }
   </style>
 </head>
 
 <body>
-    <!-- ============================================================ -->
+  <!-- ============================================================ -->
   <!-- 🔒 LOADING PAGE -->
   <!-- ============================================================ -->
-  <div id="loadingPage"
-    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
+  <div class="loading-spinner" id="loadingPage">
     <div style="text-align: center; color: white;">
-      <div class="spinner-border" role="status"
-        style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
+      <div class="spinner-border" role="status">
         <span class="visually-hidden">Carregando...</span>
       </div>
-      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+      <p style="margin-top: 1rem; font-weight: 500;">Carregando documento...</p>
     </div>
   </div>
+
+  <!-- ============================================================ -->
+  <!-- MAIN SHELL -->
   <!-- ============================================================ -->
   <div class="app-shell">
-    <!-- SIDEBAR (igual às outras páginas) -->
-    <aside class="app-sidebar">
+    <!-- SIDEBAR -->
+    <aside class="app-sidebar" id="sidebar">
       <div class="app-sidebar__brand">
         <div class="d-flex align-items-center gap-2">
           <div class="brand-dot"></div>
@@ -54,14 +538,26 @@
       </div>
 
       <nav class="app-nav">
-        <a class="app-nav__item" href="index.html"><i class="bi bi-grid"></i> Dashboard</a>
-        <a class="app-nav__item active" href="docs.html"><i class="bi bi-journal-text"></i> Documentação</a>
-        <a class="app-nav__item" href="vault.html"><i class="bi bi-shield-lock"></i> Cofre</a>
-        <a class="app-nav__item" href="inventory.html"><i class="bi bi-pc-display"></i> Inventário</a>
+        <a class="app-nav__item" href="index.html" title="Dashboard">
+          <i class="bi bi-grid"></i> Dashboard
+        </a>
+        <a class="app-nav__item active" href="docs.html" title="Documentação">
+          <i class="bi bi-journal-text"></i> Documentação
+        </a>
+        <a class="app-nav__item" href="vault.html" title="Cofre">
+          <i class="bi bi-shield-lock"></i> Cofre
+        </a>
+        <a class="app-nav__item" href="inventory.html" title="Inventário">
+          <i class="bi bi-pc-display"></i> Inventário
+        </a>
 
         <div class="app-nav__section">Administração</div>
-        <a class="app-nav__item" href="admin.html"><i class="bi bi-gear"></i> Painel Admin</a>
-        <a class="app-nav__item" href="audit.html"><i class="bi bi-clipboard-data"></i> Auditoria</a>
+        <a class="app-nav__item" href="admin.html" title="Painel Admin">
+          <i class="bi bi-gear"></i> Painel Admin
+        </a>
+        <a class="app-nav__item" href="audit.html" title="Auditoria">
+          <i class="bi bi-clipboard-data"></i> Auditoria
+        </a>
       </nav>
 
       <div class="app-sidebar__footer">
@@ -69,82 +565,108 @@
       </div>
     </aside>
 
+    <!-- MAIN -->
     <main class="app-main">
       <!-- HEADER -->
       <header class="app-header">
-        <div class="d-flex align-items-center gap-2">
-          <button class="btn btn-outline-secondary d-md-none" id="btnToggleSidebar" type="button">
+        <div class="d-flex align-items-center gap-2" style="flex: 1;">
+          <button class="btn btn-outline-secondary d-md-none" id="btnToggleSidebar" type="button" title="Menu">
             <i class="bi bi-list"></i>
           </button>
           <div class="input-group app-search">
             <span class="input-group-text"><i class="bi bi-search"></i></span>
-            <input type="text" class="form-control" placeholder="Buscar documentos..." />
+            <input type="text" class="form-control" id="searchInput" placeholder="Buscar documentos..." />
           </div>
         </div>
 
         <div class="d-flex align-items-center gap-2">
-          <a class="btn btn-outline-secondary" href="docs.html"><i class="bi bi-arrow-left"></i></a>
-          <button class="btn btn-outline-secondary" title="Notificações"><i class="bi bi-bell"></i></button>
+          <a class="btn btn-outline-secondary" href="docs.html" title="Voltar">
+            <i class="bi bi-arrow-left"></i>
+          </a>
+          <button class="btn btn-outline-secondary" type="button" title="Notificações">
+            <i class="bi bi-bell"></i>
+          </button>
           <div class="dropdown">
-            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-              <i class="bi bi-person-circle me-1"></i> Usuário
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown"
+              aria-expanded="false">
+              <i class="bi bi-person-circle me-1"></i> <span class="d-none d-sm-inline">Usuário</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
-              <li><a class="dropdown-item" href="#">Meu Perfil</a></li>
-              <li><a class="dropdown-item text-danger" href="#">Sair</a></li>
+              <li><a class="dropdown-item" href="#"><i class="bi bi-person me-2"></i> Meu Perfil</a></li>
+              <li><a class="dropdown-item" href="#"><i class="bi bi-gear me-2"></i> Configurações</a></li>
+              <li>
+                <hr class="dropdown-divider">
+              </li>
+              <li><a class="dropdown-item text-danger" href="#" id="btnLogout"><i class="bi bi-box-arrow-right me-2"></i>
+                  Sair</a></li>
             </ul>
           </div>
         </div>
       </header>
 
+      <!-- CONTENT -->
       <section class="app-content">
         <div class="container-fluid">
+          <!-- ALERTS -->
+          <div class="alert alert-danger d-none" id="alertBox" role="alert">
+            <i class="bi bi-exclamation-circle"></i>
+            <span id="alertMessage"></span>
+          </div>
 
-          <!-- Topbar doc -->
+          <div class="alert alert-success d-none" id="successBox" role="alert">
+            <i class="bi bi-check-circle"></i>
+            <span id="successMessage"></span>
+          </div>
+
+          <!-- TOPBAR DOC -->
           <div class="d-flex align-items-start justify-content-between flex-wrap gap-2 mb-3">
             <div>
-              <h1 class="h4 mb-1">Procedimento – Onboarding TI</h1>
-              <div class="d-flex flex-wrap gap-2">
-                <span class="chip"><span class="dot"></span> Pasta: TI</span>
-                <span class="chip"><i class="bi bi-eye"></i> Visibilidade: Setor</span>
-                <span class="chip"><i class="bi bi-clock"></i> Atualizado: hoje 10:12</span>
+              <h1 class="h4 mb-2" id="docTitle">Carregando...</h1>
+              <div class="d-flex flex-wrap gap-2" id="docChips">
+                <span class="chip">
+                  <span class="dot"></span> Carregando...
+                </span>
               </div>
             </div>
 
             <div class="d-flex gap-2">
-              <button class="btn btn-outline-secondary"><i class="bi bi-clock-history me-1"></i> Versões</button>
-              <button class="btn btn-outline-danger"><i class="bi bi-trash me-1"></i> Excluir</button>
-              <button class="btn btn-primary"><i class="bi bi-save me-1"></i> Salvar</button>
+              <button class="btn btn-outline-secondary" id="btnVersions" title="Histórico de versões">
+                <i class="bi bi-clock-history me-1"></i> <span class="d-none d-sm-inline">Versões</span>
+              </button>
+              <button class="btn btn-outline-danger" id="btnDelete" title="Deletar documento">
+                <i class="bi bi-trash me-1"></i> <span class="d-none d-sm-inline">Excluir</span>
+              </button>
+              <button class="btn btn-primary" id="btnSave" title="Salvar alterações">
+                <i class="bi bi-save me-1"></i> <span class="d-none d-sm-inline">Salvar</span>
+              </button>
             </div>
           </div>
 
           <div class="row g-3">
-            <!-- Editor -->
+            <!-- EDITOR -->
             <div class="col-12 col-lg-8">
               <div class="card app-card">
                 <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div class="fw-semibold">Edição</div>
-                    <div class="small text-muted">MVP: textarea (depois troca por editor rich-text)</div>
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="fw-semibold">
+                      <i class="bi bi-pencil-square me-2"></i> Edição
+                    </div>
+                    <div class="small text-muted">Editor de texto</div>
                   </div>
 
                   <label class="form-label small text-muted">Título</label>
-                  <input class="form-control mb-3" value="Procedimento – Onboarding TI" />
+                  <input type="text" class="form-control mb-3" id="inputTitle"
+                    placeholder="Título do documento..." />
 
                   <label class="form-label small text-muted">Conteúdo</label>
-                  <textarea class="form-control editor" rows="12">
-1) Criar usuário no domínio
-2) Adicionar nos grupos necessários
-3) Instalar apps padrão
-4) Validar VPN e e-mail
-5) Registrar entrega do ativo
-                  </textarea>
+                  <textarea class="form-control editor" id="inputContent" rows="12"
+                    placeholder="Escreva o conteúdo aqui..."></textarea>
 
                   <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-outline-secondary">
+                    <button class="btn btn-outline-secondary" id="btnPreview">
                       <i class="bi bi-eye me-1"></i> Pré-visualizar
                     </button>
-                    <button class="btn btn-outline-primary">
+                    <button class="btn btn-outline-primary" id="btnRequestReview">
                       <i class="bi bi-person-check me-1"></i> Solicitar revisão
                     </button>
                   </div>
@@ -152,136 +674,429 @@
               </div>
             </div>
 
-            <!-- Side settings -->
+            <!-- SIDE SETTINGS -->
             <div class="col-12 col-lg-4">
-              <!-- Permissões -->
+              <!-- PERMISSÕES -->
               <div class="card app-card mb-3">
                 <div class="card-body">
-                  <div class="fw-semibold mb-2">Permissões</div>
+                  <div class="fw-semibold mb-3">
+                    <i class="bi bi-shield-check me-2"></i> Permissões
+                  </div>
 
                   <label class="form-label small text-muted">Visibilidade</label>
-                  <select class="form-select mb-2">
-                    <option>Público interno</option>
-                    <option selected>Setor</option>
-                    <option>Privado</option>
-                    <option>Somente TI</option>
+                  <select class="form-select mb-3" id="selectVisibility">
+                    <option value="public">Público interno</option>
+                    <option value="sector" selected>Setor</option>
+                    <option value="private">Privado</option>
+                    <option value="restricted">Restrito</option>
                   </select>
 
-                  <label class="form-label small text-muted">Setor (se “Setor”)</label>
-                  <select class="form-select mb-3">
-                    <option selected>TI</option>
-                    <option>Comercial</option>
-                    <option>RH</option>
-                    <option>Financeiro</option>
+                  <label class="form-label small text-muted">Setor (se "Setor")</label>
+                  <select class="form-select mb-3" id="selectSector">
+                    <option value="ti" selected>TI</option>
+                    <option value="comercial">Comercial</option>
+                    <option value="rh">RH</option>
+                    <option value="financeiro">Financeiro</option>
+                    <option value="marketing">Marketing</option>
                   </select>
 
                   <label class="form-label small text-muted">Permissões avançadas (Restrito)</label>
-                  <input class="form-control" placeholder="Multi-select de usuários (futuro)" />
+                  <input type="text" class="form-control" id="inputRestrictedUsers"
+                    placeholder="Selecione usuários..." />
 
                   <div class="form-text">
-                    Regra: “Privado” só criador; “Setor” só membros do setor; “Restrito” lista definida.
+                    <i class="bi bi-info-circle me-1"></i>
+                    <strong>Regras:</strong> "Privado" = só criador; "Setor" = membros do setor; "Restrito" = lista definida.
                   </div>
                 </div>
               </div>
 
-              <!-- Anexos -->
+              <!-- ANEXOS -->
               <div class="card app-card">
                 <div class="card-body">
-                  <div class="d-flex justify-content-between align-items-center mb-2">
-                    <div class="fw-semibold">Anexos</div>
-                    <label class="btn btn-sm btn-outline-primary mb-0">
+                  <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="fw-semibold">
+                      <i class="bi bi-paperclip me-2"></i> Anexos
+                    </div>
+                    <label class="btn btn-sm btn-outline-primary mb-0" title="Enviar arquivo">
                       <i class="bi bi-upload me-1"></i> Enviar
-                      <input type="file" multiple hidden>
+                      <input type="file" id="fileInput" multiple hidden />
                     </label>
                   </div>
 
-                  <div class="list-group">
-                    <div class="list-group-item d-flex justify-content-between align-items-center">
-                      onboarding_ti.pdf
-                      <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-outline-secondary" title="Baixar"><i class="bi bi-download"></i></button>
-                        <button class="btn btn-sm btn-outline-danger" title="Remover"><i class="bi bi-x-lg"></i></button>
-                      </div>
-                    </div>
-
-                    <div class="list-group-item d-flex justify-content-between align-items-center">
-                      checklist_entrega.png
-                      <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-outline-secondary" title="Baixar"><i class="bi bi-download"></i></button>
-                        <button class="btn btn-sm btn-outline-danger" title="Remover"><i class="bi bi-x-lg"></i></button>
-                      </div>
+                  <div class="list-group" id="attachmentsList">
+                    <div style="text-align: center; padding: 1.5rem; color: var(--text-secondary); font-size: 12px;">
+                      <i class="bi bi-inbox" style="display: block; margin-bottom: 0.5rem; font-size: 1.5rem;"></i>
+                      Nenhum anexo
                     </div>
                   </div>
 
                   <div class="alert alert-secondary small mt-3 mb-0">
-                    Anexos: PDF, imagens e documentos. Auditoria recomenda registrar download.
+                    <i class="bi bi-info-circle me-2"></i>
+                    Anexos: PDF, imagens e documentos. Downloads são registrados.
                   </div>
                 </div>
               </div>
-
             </div>
           </div>
-
         </div>
       </section>
     </main>
   </div>
-<!-- ============================================================ -->
-  <!-- 📦 SCRIPTS - ORDEM CORRETA -->
+
+  <!-- ============================================================ -->
+  <!-- 📦 SCRIPTS -->
   <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
-  <!-- ============================================================ -->
 
   <!-- ============================================================ -->
-  <!-- 🔐 VERIFICAÇÃO DE AUTENTICAÇÃO (SIMPLIFICADA) -->
+  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
   <!-- ============================================================ -->
   <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      console.log("\n" + "=".repeat(60));
-      console.log("[CHAT/INIT] Inicializando página de chat...");
-      console.log("=".repeat(60));
+    console.log("\n" + "=".repeat(80));
+    console.log("[DOCS_DETAIL/PAGE] 📄 Inicializando página de Detalhe de Documento");
+    console.log("[DOCS_DETAIL/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso Público e Direto");
+    console.log("[DOCS_DETAIL/PAGE] ✅ Nenhuma verificação de permissão");
+    console.log("=".repeat(80) + "\n");
+
+    // ===== DADOS GLOBAIS =====
+    let currentDocument = null;
+    let documentId = null;
+
+    document.addEventListener("DOMContentLoaded", () => {
+      console.log("[DOCS_DETAIL/INIT] 📋 DOM Carregado com sucesso");
+      console.log("[DOCS_DETAIL/INIT] ⏱️  Timestamp:", new Date().toLocaleString('pt-BR'));
+      console.log("[DOCS_DETAIL/INIT] 🌐 URL:", window.location.href);
 
       try {
-        // ✅ Verifica se o usuário está autenticado
-        console.log("[CHAT/INIT] Verificando autenticação...");
-        const user = await getMe();
+        // Obtém ID do documento da URL
+        const params = new URLSearchParams(window.location.search);
+        documentId = params.get("id") || 1;
 
-        console.log("[CHAT/INIT] ✓ Sessão válida, usuário:", user.name);
+        console.log("[DOCS_DETAIL/INIT] 📖 ID do documento:", documentId);
 
-        // ✅ Remove a tela de loading
-        const loadingPage = document.getElementById("loadingPage");
-        if (loadingPage) {
-          loadingPage.style.display = "none";
+        loadDocument(documentId);
+        setupEventListeners();
+
+        // Remove loading page
+        const loading = document.getElementById("loadingPage");
+        if (loading) {
+          setTimeout(() => {
+            loading.style.display = "none";
+          }, 500);
         }
 
-        // ✅ Mostra o conteúdo principal
-        const containerMain = document.querySelector(".container-main");
-        if (containerMain) {
-          containerMain.style.display = "flex";
-        }
-
-        // ✅ Renderiza o menu dinâmico
-        console.log("[CHAT/INIT] Renderizando navegação...");
-        await renderNavigation(user.role || "USER");
-
-        console.log("[CHAT/INIT] ✓ Chat carregado com sucesso");
-        console.log("=".repeat(60) + "\n");
+        console.log("[DOCS_DETAIL/INIT] ✅ Página pronta para uso");
+        console.log("=".repeat(80) + "\n");
 
       } catch (err) {
-        console.error("[CHAT/INIT] ✗ Erro na autenticação:", err.message);
-        console.log("[CHAT/INIT] Redirecionando para login...");
-
-        // ✅ Redireciona para login
-        setTimeout(() => {
-          window.location.href = "/SistemaCPE/web/login.html";
-        }, 1000);
+        console.error("[DOCS_DETAIL/INIT] ❌ ERRO:", err.message);
+        showError("Erro ao inicializar página: " + err.message);
       }
     });
+
+    /**
+     * ✅ Configura todos os event listeners
+     */
+    function setupEventListeners() {
+      console.log("[DOCS_DETAIL/SETUP] 🔧 Configurando event listeners...");
+
+      // Menu mobile
+      const btnToggle = document.getElementById("btnToggleSidebar");
+      const sidebar = document.getElementById("sidebar");
+      if (btnToggle) {
+        btnToggle.addEventListener("click", () => {
+          sidebar.classList.toggle("show");
+        });
+      }
+
+      // Fechar sidebar ao clicar em um link
+      document.querySelectorAll(".app-nav__item").forEach(link => {
+        link.addEventListener("click", () => {
+          sidebar.classList.remove("show");
+        });
+      });
+
+      // Botões principais
+      document.getElementById("btnSave")?.addEventListener("click", saveDocument);
+      document.getElementById("btnDelete")?.addEventListener("click", deleteDocument);
+      document.getElementById("btnVersions")?.addEventListener("click", () => {
+        showSuccess("Histórico de versões será implementado no backend");
+      });
+      document.getElementById("btnPreview")?.addEventListener("click", previewDocument);
+      document.getElementById("btnRequestReview")?.addEventListener("click", requestReview);
+
+      // Upload de anexos
+      document.getElementById("fileInput")?.addEventListener("change", handleFileUpload);
+
+      // Logout
+      document.getElementById("btnLogout")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        console.log("[DOCS_DETAIL/LOGOUT] 👋 Usuário saiu");
+        alert("Logout realizado!");
+      });
+
+      console.log("[DOCS_DETAIL/SETUP] ✅ Event listeners configurados");
+    }
+
+    /**
+     * ✅ Carrega um documento específico
+     */
+    function loadDocument(docId) {
+      console.log("[DOCS_DETAIL/LOAD] 📖 Carregando documento:", docId);
+
+      // Dados simulados
+      const documents = {
+        1: {
+          id: 1,
+          title: "Procedimento – Onboarding TI",
+          folder_name: "TI",
+          visibility: "sector",
+          sector: "ti",
+          content: `1) Criar usuário no domínio
+2) Adicionar nos grupos necessários
+3) Instalar apps padrão
+4) Validar VPN e e-mail
+5) Registrar entrega do ativo`,
+          updated_at: "Hoje às 10:12",
+          created_at: "2024-03-01",
+          author: "João Silva",
+          attachments: [
+            { id: 1, name: "onboarding_ti.pdf", type: "PDF", size: "2.4 MB" },
+            { id: 2, name: "checklist_entrega.png", type: "IMG", size: "1.1 MB" }
+          ]
+        },
+        2: {
+          id: 2,
+          title: "Checklist – Entrega Notebook",
+          folder_name: "RH",
+          visibility: "public",
+          sector: "rh",
+          content: `Checklist completo para entrega de notebooks novos aos colaboradores:
+
+☐ Verificar especificações do equipamento
+☐ Instalar software corporativo
+☐ Criar conta de usuário
+☐ Registrar no inventário
+☐ Entregar documentação
+☐ Obter assinatura de ciência`,
+          updated_at: "Ontem às 14:30",
+          created_at: "2024-02-28",
+          author: "Maria Santos",
+          attachments: []
+        }
+      };
+
+      currentDocument = documents[docId] || documents[1];
+
+      // Popula campos
+      document.getElementById("docTitle").textContent = currentDocument.title;
+      document.getElementById("inputTitle").value = currentDocument.title;
+      document.getElementById("inputContent").value = currentDocument.content;
+      document.getElementById("selectVisibility").value = currentDocument.visibility;
+      document.getElementById("selectSector").value = currentDocument.sector;
+
+      // Popula chips
+      const chips = document.getElementById("docChips");
+      chips.innerHTML = `
+        <span class="chip"><span class="dot"></span> Pasta: ${escapeHtml(currentDocument.folder_name)}</span>
+        <span class="chip"><i class="bi bi-eye"></i> Visibilidade: ${getVisibilityLabel(currentDocument.visibility)}</span>
+        <span class="chip"><i class="bi bi-clock"></i> Atualizado: ${currentDocument.updated_at}</span>
+        <span class="chip"><i class="bi bi-person"></i> Por: ${escapeHtml(currentDocument.author)}</span>
+      `;
+
+      // Popula anexos
+      renderAttachments();
+
+      console.log("[DOCS_DETAIL/LOAD] ✅ Documento carregado");
+    }
+
+    /**
+     * ✅ Renderiza anexos
+     */
+    function renderAttachments() {
+      const list = document.getElementById("attachmentsList");
+
+      if (!currentDocument.attachments || currentDocument.attachments.length === 0) {
+        list.innerHTML = `
+          <div style="text-align: center; padding: 1.5rem; color: var(--text-secondary); font-size: 12px;">
+            <i class="bi bi-inbox" style="display: block; margin-bottom: 0.5rem; font-size: 1.5rem;"></i>
+            Nenhum anexo
+          </div>
+        `;
+        return;
+      }
+
+      list.innerHTML = currentDocument.attachments.map(att => `
+        <div class="list-group-item d-flex justify-content-between align-items-center">
+          <div class="flex-grow-1">
+            <div class="small fw-semibold"><i class="bi bi-file-earmark me-2"></i>${escapeHtml(att.name)}</div>
+            <div class="text-muted small">${att.size}</div>
+          </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-secondary" title="Baixar">
+              <i class="bi bi-download"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger" title="Remover">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    /**
+     * ✅ Salva o documento
+     */
+    function saveDocument() {
+      const title = document.getElementById("inputTitle").value?.trim();
+      const content = document.getElementById("inputContent").value?.trim();
+      const visibility = document.getElementById("selectVisibility").value;
+      const sector = document.getElementById("selectSector").value;
+
+      if (!title || !content) {
+        showError("Preencha título e conteúdo!");
+        return;
+      }
+
+      console.log("[DOCS_DETAIL/SAVE] 💾 Salvando documento...");
+      console.log("[DOCS_DETAIL/SAVE] ├─ Título:", title);
+      console.log("[DOCS_DETAIL/SAVE] ├─ Visibilidade:", visibility);
+      console.log("[DOCS_DETAIL/SAVE] └─ Tamanho do conteúdo:", content.length, "caracteres");
+
+      // Atualiza objeto
+      currentDocument.title = title;
+      currentDocument.content = content;
+      currentDocument.visibility = visibility;
+      currentDocument.sector = sector;
+      currentDocument.updated_at = new Date().toLocaleString('pt-BR');
+
+      // Atualiza título na página
+      document.getElementById("docTitle").textContent = title;
+
+      showSuccess("Documento salvo com sucesso!");
+    }
+
+    /**
+     * ✅ Deleta o documento
+     */
+    function deleteDocument() {
+      if (!confirm(`Tem certeza que deseja deletar "${currentDocument.title}"?\n\nEsta ação é irreversível.`)) {
+        return;
+      }
+
+      console.log("[DOCS_DETAIL/DELETE] 🗑️ Deletando documento:", currentDocument.id);
+      showSuccess("Documento deletado com sucesso! Redirecionando...");
+
+      setTimeout(() => {
+        window.location.href = "docs.html";
+      }, 2000);
+    }
+
+    /**
+     * ✅ Pré-visualiza o documento
+     */
+    function previewDocument() {
+      console.log("[DOCS_DETAIL/PREVIEW] 👁️ Abrindo pré-visualização");
+      alert("Conteúdo:\n\n" + document.getElementById("inputContent").value);
+    }
+
+    /**
+     * ✅ Solicita revisão
+     */
+    function requestReview() {
+      console.log("[DOCS_DETAIL/REVIEW] 📋 Solicitando revisão");
+      showSuccess("Solicitação de revisão enviada para os revisores!");
+    }
+
+    /**
+     * ✅ Manipula upload de arquivos
+     */
+    function handleFileUpload(e) {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      console.log("[DOCS_DETAIL/UPLOAD] 📎 Arquivos selecionados:", files.length);
+
+      for (let file of files) {
+        const size = (file.size / 1024 / 1024).toFixed(1);
+        console.log(`[DOCS_DETAIL/UPLOAD] ├─ ${file.name} (${size} MB)`);
+
+        const newAttachment = {
+          id: Math.max(...currentDocument.attachments.map(a => a.id), 0) + 1,
+          name: file.name,
+          type: file.type || "FILE",
+          size: `${size} MB`
+        };
+
+        currentDocument.attachments.push(newAttachment);
+      }
+
+      console.log("[DOCS_DETAIL/UPLOAD] ✅ Arquivos adicionados");
+      renderAttachments();
+      showSuccess(`${files.length} arquivo(s) adicionado(s)`);
+
+      // Limpa input
+      e.target.value = "";
+    }
+
+    /**
+     * ✅ Retorna label de visibilidade
+     */
+    function getVisibilityLabel(visibility) {
+      const labels = {
+        "public": "Público interno",
+        "sector": "Setor",
+        "private": "Privado",
+        "restricted": "Restrito"
+      };
+      return labels[visibility] || visibility;
+    }
+
+    /**
+     * ✅ Escapa HTML
+     */
+    function escapeHtml(text) {
+      if (!text) return "";
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text.replace(/[&<>"']/g, char => map[char]);
+    }
+
+    /**
+     * ✅ Mostra erro
+     */
+    function showError(message) {
+      const box = document.getElementById("alertBox");
+      const msg = document.getElementById("alertMessage");
+      if (box && msg) {
+        msg.textContent = message;
+        box.classList.remove("d-none");
+        setTimeout(() => box.classList.add("d-none"), 5000);
+      }
+    }
+
+    /**
+     * ✅ Mostra sucesso
+     */
+    function showSuccess(message) {
+      const box = document.getElementById("successBox");
+      const msg = document.getElementById("successMessage");
+      if (box && msg) {
+        msg.textContent = message;
+        box.classList.remove("d-none");
+        setTimeout(() => box.classList.add("d-none"), 5000);
+      }
+    }
+
+    console.log("[DOCS_DETAIL] ✅ Script de detalhe de documento carregado\n");
   </script>
-  <!-- ============================================================ -->
+
 </body>
+
 </html>

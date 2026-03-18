@@ -247,6 +247,7 @@
       font-weight: 600;
       white-space: nowrap;
       transition: all 0.3s ease;
+      cursor: pointer;
     }
 
     .btn-new-record:hover {
@@ -343,7 +344,7 @@
         style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
         <span class="visually-hidden">Carregando...</span>
       </div>
-      <p style="margin-top: 1rem;">Verificando autenticação...</p>
+      <p style="margin-top: 1rem;">Inicializando página...</p>
     </div>
   </div>
   <!-- ============================================================ -->
@@ -500,7 +501,7 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label for="recordName" class="form-label">
-                  <i class="bi bi-person"></i> Nome Completo
+                  <i class="bi bi-person"></i> Nome Completo <span style="color: #dc2626;">*</span>
                 </label>
                 <input type="text" class="form-control" id="recordName"
                   placeholder="Ex: João Silva" required />
@@ -508,7 +509,7 @@
 
               <div class="col-md-6 mb-3">
                 <label for="recordType" class="form-label">
-                  <i class="bi bi-tag"></i> Tipo de Cadastro
+                  <i class="bi bi-tag"></i> Tipo de Cadastro <span style="color: #dc2626;">*</span>
                 </label>
                 <select class="form-select" id="recordType" required>
                   <option value="">Selecione o tipo...</option>
@@ -523,7 +524,7 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label for="recordEmail" class="form-label">
-                  <i class="bi bi-envelope"></i> E-mail
+                  <i class="bi bi-envelope"></i> E-mail <span style="color: #dc2626;">*</span>
                 </label>
                 <input type="email" class="form-control" id="recordEmail"
                   placeholder="email@example.com" required />
@@ -549,7 +550,7 @@
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label for="recordStatus" class="form-label">
-                  <i class="bi bi-info-circle"></i> Status
+                  <i class="bi bi-info-circle"></i> Status <span style="color: #dc2626;">*</span>
                 </label>
                 <select class="form-select" id="recordStatus" required>
                   <option value="active">Ativo</option>
@@ -593,20 +594,44 @@
   <!-- 📦 SCRIPTS -->
   <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/auth.js"></script>
-  <script src="/SistemaCPE/web/assests/css/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
   <!-- ============================================================ -->
   <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
   <!-- ============================================================ -->
   <script>
-    document.addEventListener("DOMContentLoaded", async () => {
-      const user = await initPageAuth("REGISTRATIONS");
-      if (!user) return;
+    console.log("\n" + "=".repeat(80));
+    console.log("[REGISTRATIONS/PAGE] 📄 Inicializando página de Cadastros");
+    console.log("[REGISTRATIONS/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
+    console.log("=".repeat(80) + "\n");
 
-      await loadRecords();
+    document.addEventListener("DOMContentLoaded", async () => {
+      console.log("[REGISTRATIONS/INIT] 📋 DOM Carregado");
+
+      try {
+        // ===== Mostrar Conteúdo =====
+        const loadingPage = document.getElementById("loadingPage");
+        const containerMain = document.querySelector(".container-main");
+        
+        loadingPage.style.display = "none";
+        containerMain.style.display = "flex";
+        
+        console.log("[REGISTRATIONS/INIT] ✅ Página inicializada com sucesso");
+        console.log("=".repeat(80) + "\n");
+
+        // ===== Carregar Cadastros =====
+        await loadRecords();
+
+      } catch (err) {
+        console.error("[REGISTRATIONS/INIT] ❌ ERRO NA INICIALIZAÇÃO");
+        console.error("[REGISTRATIONS/INIT] 📍 Mensagem:", err.message);
+        console.error("[REGISTRATIONS/INIT] 🔗 Stack:", err.stack);
+        console.error("=".repeat(80) + "\n");
+        
+        showError("Erro ao inicializar página: " + err.message);
+      }
     });
   </script>
 
@@ -620,12 +645,12 @@
     let currentStatusFilter = "";
 
     /**
-     * Carrega os cadastros
+     * ✅ Carrega os cadastros
      */
     async function loadRecords() {
-      try {
-        console.log("[REGISTRATIONS/LOAD] Carregando cadastros...");
+      console.log("\n[REGISTRATIONS/LOAD] 📥 Carregando cadastros...");
 
+      try {
         // Simular dados de API - substitua pela chamada real
         records = [
           {
@@ -637,7 +662,7 @@
             company: "Tech Solutions",
             city: "São Paulo",
             status: "active",
-            observation: "Cliente principal",
+            observation: "Cliente principal da carteira",
             created: "2024-01-15"
           },
           {
@@ -649,7 +674,7 @@
             company: "Consultoria XYZ",
             city: "Rio de Janeiro",
             status: "active",
-            observation: "Contato de negócios",
+            observation: "Contato de negócios estratégico",
             created: "2024-01-20"
           },
           {
@@ -661,7 +686,7 @@
             company: "Fornecedor ABC",
             city: "Belo Horizonte",
             status: "active",
-            observation: "Fornecedor de materiais",
+            observation: "Fornecedor de materiais e insumos",
             created: "2024-02-01"
           },
           {
@@ -673,7 +698,7 @@
             company: "CPE Control",
             city: "São Paulo",
             status: "active",
-            observation: "Desenvolvedora sênior",
+            observation: "Desenvolvedora sênior - Backend",
             created: "2024-01-10"
           },
           {
@@ -685,7 +710,7 @@
             company: "Fornecedor DEF",
             city: "Minas Gerais",
             status: "inactive",
-            observation: "Fornecedor secundário",
+            observation: "Fornecedor secundário - Inativo",
             created: "2024-02-10"
           },
           {
@@ -697,7 +722,7 @@
             company: "Startup Inovadora",
             city: "Fortaleza",
             status: "pending",
-            observation: "Novo cliente em análise",
+            observation: "Novo cliente em análise de crédito",
             created: "2024-02-20"
           },
           {
@@ -709,7 +734,7 @@
             company: "CPE Control",
             city: "São Paulo",
             status: "active",
-            observation: "Gerente de projetos",
+            observation: "Gerente de projetos - Scrum Master",
             created: "2024-01-05"
           },
           {
@@ -721,35 +746,64 @@
             company: "Agência Digital",
             city: "Santa Catarina",
             status: "inactive",
-            observation: "Contato inativo",
+            observation: "Contato inativo - Possível reativar",
             created: "2024-01-25"
+          },
+          {
+            id: 9,
+            name: "Rafael Costa",
+            type: "clients",
+            email: "rafael@cliente3.com",
+            phone: "(48) 99111-0000",
+            company: "E-commerce Brasil",
+            city: "Blumenau",
+            status: "active",
+            observation: "Grande cliente - Alto faturamento",
+            created: "2024-02-05"
+          },
+          {
+            id: 10,
+            name: "Juliana Mendes",
+            type: "employees",
+            email: "juliana@empresa.com",
+            phone: "(11) 98888-7777",
+            company: "CPE Control",
+            city: "São Paulo",
+            status: "pending",
+            observation: "Desenvolvedora - Aguardando contratação",
+            created: "2024-02-25"
           }
         ];
 
         console.log("[REGISTRATIONS/LOAD] ✓", records.length, "cadastros carregados");
         renderRecords(filterRecords());
         updateStatistics();
+        console.log("[REGISTRATIONS/LOAD] ✅ Cadastros renderizados\n");
 
       } catch (err) {
         console.error("[REGISTRATIONS/LOAD] ✗ Erro:", err.message);
         showError("Erro ao carregar cadastros: " + err.message);
+        records = [];
       }
     }
 
     /**
-     * Filtra os cadastros
+     * ✅ Filtra os cadastros
      */
     function filterRecords() {
+      console.log("[REGISTRATIONS/FILTER] 🔍 Aplicando filtros");
       let filtered = records;
 
       // Filtro por tipo/tab
       if (currentTab) {
         filtered = filtered.filter(r => r.type === currentTab);
+        console.log("[REGISTRATIONS/FILTER] ├─ Por tipo:", currentTab, "=", filtered.length);
       }
 
       // Filtro por status
       if (currentStatusFilter) {
         filtered = filtered.filter(r => r.status === currentStatusFilter);
+        console.log("[REGISTRATIONS/FILTER] ├─ Por status:", currentStatusFilter, "=", filtered.length);
       }
 
       // Filtro por busca
@@ -761,15 +815,18 @@
           r.phone.includes(searchTerm) ||
           r.company.toLowerCase().includes(searchTerm)
         );
+        console.log("[REGISTRATIONS/FILTER] └─ Por busca:", searchTerm, "=", filtered.length);
       }
 
+      console.log("[REGISTRATIONS/FILTER] ✓ Filtro aplicado");
       return filtered;
     }
 
     /**
-     * Renderiza os cadastros na tabela
+     * ✅ Renderiza os cadastros na tabela
      */
     function renderRecords(list = records) {
+      console.log("[REGISTRATIONS/RENDER] 🎨 Renderizando", list.length, "cadastros");
       const tableContent = document.getElementById("tableContent");
 
       if (!list || list.length === 0) {
@@ -790,7 +847,7 @@
       tableContent.innerHTML = list.map(record => `
         <tr>
           <td>
-            <div class="record-avatar">${record.name.charAt(0)}</div>
+            <div class="record-avatar">${record.name.charAt(0).toUpperCase()}</div>
           </td>
           <td>
             <div style="font-weight: 600;">${record.name}</div>
@@ -808,7 +865,7 @@
             </span>
           </td>
           <td>
-            <button class="btn-action" onclick="editRecord(${record.id})">
+            <button class="btn-action" onclick="editRecord(${record.id})" title="Editar cadastro">
               <i class="bi bi-pencil"></i> Editar
             </button>
             <button class="btn-action danger" onclick="deleteRecord(${record.id}, '${record.name.replace(/'/g, "\\'")}')">
@@ -820,20 +877,20 @@
     }
 
     /**
-     * Retorna o label do tipo de cadastro
+     * ✅ Retorna o label do tipo de cadastro
      */
     function getTypeLabel(type) {
       const labels = {
-        clients: "Cliente",
-        contacts: "Contato",
-        suppliers: "Fornecedor",
-        employees: "Funcionário"
+        clients: "🏢 Cliente",
+        contacts: "👤 Contato",
+        suppliers: "🚚 Fornecedor",
+        employees: "💼 Funcionário"
       };
       return labels[type] || type;
     }
 
     /**
-     * Retorna o label do status
+     * ✅ Retorna o label do status
      */
     function getStatusLabel(status) {
       const labels = {
@@ -845,9 +902,11 @@
     }
 
     /**
-     * Atualiza as estatísticas
+     * ✅ Atualiza as estatísticas
      */
     function updateStatistics() {
+      console.log("[REGISTRATIONS/STATS] 📊 Atualizando estatísticas");
+
       const total = records.length;
       const active = records.filter(r => r.status === "active").length;
       const inactive = records.filter(r => r.status === "inactive").length;
@@ -857,12 +916,15 @@
       document.getElementById("activeRecords").textContent = active;
       document.getElementById("inactiveRecords").textContent = inactive;
       document.getElementById("pendingRecords").textContent = pending;
+
+      console.log("[REGISTRATIONS/STATS] ✓ Total:", total, "| Ativos:", active, "| Inativos:", inactive, "| Pendentes:", pending);
     }
 
     /**
-     * Alterna entre as abas
+     * ✅ Alterna entre as abas
      */
     function switchTab(tab) {
+      console.log("[REGISTRATIONS/TAB] 📑 Alternando para aba:", tab);
       currentTab = tab;
 
       // Atualiza buttons ativos
@@ -872,38 +934,46 @@
       event.target.closest(".tab-button")?.classList.add("active");
 
       renderRecords(filterRecords());
+      console.log("[REGISTRATIONS/TAB] ✓ Aba alterada com sucesso");
     }
 
     /**
-     * Mostra mensagem de erro
+     * ✅ Mostra mensagem de erro
      */
     function showError(message) {
+      console.log("[REGISTRATIONS/ALERT] ❌ Erro:", message);
       const alertBox = document.getElementById("alertBox");
       const alertMessage = document.getElementById("alertMessage");
-      alertMessage.textContent = message;
-      alertBox.classList.remove("d-none");
-      setTimeout(() => {
-        alertBox.classList.add("d-none");
-      }, 5000);
+      if (alertBox && alertMessage) {
+        alertMessage.textContent = message;
+        alertBox.classList.remove("d-none");
+        setTimeout(() => {
+          alertBox.classList.add("d-none");
+        }, 5000);
+      }
     }
 
     /**
-     * Mostra mensagem de sucesso
+     * ✅ Mostra mensagem de sucesso
      */
     function showSuccess(message) {
+      console.log("[REGISTRATIONS/ALERT] ✅ Sucesso:", message);
       const successBox = document.getElementById("successBox");
       const successMessage = document.getElementById("successMessage");
-      successMessage.textContent = message;
-      successBox.classList.remove("d-none");
-      setTimeout(() => {
-        successBox.classList.add("d-none");
-      }, 5000);
+      if (successBox && successMessage) {
+        successMessage.textContent = message;
+        successBox.classList.remove("d-none");
+        setTimeout(() => {
+          successBox.classList.add("d-none");
+        }, 5000);
+      }
     }
 
     /**
-     * Mostra mensagem de erro no modal
+     * ✅ Mostra mensagem de erro no modal
      */
     function showModalError(message) {
+      console.log("[REGISTRATIONS/MODAL] ⚠️ Erro no modal:", message);
       const modalAlert = document.getElementById("modalAlertBox");
       const modalAlertMsg = document.getElementById("modalAlertMessage");
       if (modalAlert && modalAlertMsg) {
@@ -913,13 +983,26 @@
     }
 
     /**
-     * Edita um cadastro
+     * ✅ Limpa erros do modal
+     */
+    function clearModalError() {
+      const modalAlert = document.getElementById("modalAlertBox");
+      if (modalAlert) {
+        modalAlert.classList.add("d-none");
+      }
+    }
+
+    /**
+     * ✅ Edita um cadastro
      */
     function editRecord(recordId) {
-      const record = records.find(r => r.id === recordId);
-      if (!record) return;
+      console.log("[REGISTRATIONS/EDIT] ✏️ Editando cadastro:", recordId);
 
-      console.log("[REGISTRATIONS/EDIT] Editando cadastro:", recordId);
+      const record = records.find(r => r.id === recordId);
+      if (!record) {
+        console.error("[REGISTRATIONS/EDIT] ✗ Cadastro não encontrado");
+        return;
+      }
 
       selectedRecordId = recordId;
       document.getElementById("recordModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Cadastro';
@@ -933,22 +1016,26 @@
       document.getElementById("recordObservation").value = record.observation;
       document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Cadastro';
 
+      clearModalError();
+
       const modal = new bootstrap.Modal(document.getElementById("recordModal"));
       modal.show();
     }
 
     /**
-     * Deleta um cadastro
+     * ✅ Deleta um cadastro
      */
-    async function deleteRecord(recordId, recordName) {
-      console.log("[REGISTRATIONS/DELETE] Deletando cadastro:", recordId);
+    function deleteRecord(recordId, recordName) {
+      console.log("[REGISTRATIONS/DELETE] 🗑️ Deletando cadastro:", recordId);
 
-      if (!confirm(`Tem certeza que deseja deletar o cadastro de "${recordName}"?`)) {
+      if (!confirm(`Tem certeza que deseja deletar o cadastro de "${recordName}"?\n\nEsta ação não pode ser desfeita!`)) {
+        console.log("[REGISTRATIONS/DELETE] ⏭️ Deleção cancelada pelo usuário");
         return;
       }
 
       try {
         records = records.filter(r => r.id !== recordId);
+        console.log("[REGISTRATIONS/DELETE] ✓ Cadastro deletado com sucesso");
         showSuccess(`Cadastro de "${recordName}" deletado com sucesso!`);
         renderRecords(filterRecords());
         updateStatistics();
@@ -960,7 +1047,7 @@
     }
 
     /**
-     * Submissão do formulário
+     * ✅ Submissão do formulário
      */
     document.getElementById("recordForm")?.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -974,8 +1061,19 @@
       const status = document.getElementById("recordStatus")?.value;
       const observation = document.getElementById("recordObservation")?.value?.trim();
 
+      console.log("[REGISTRATIONS/SUBMIT] 📝 Processando cadastro:", { name, type, email });
+
       if (!name || !type || !email || !status) {
-        showModalError("Preencha os campos obrigatórios!");
+        console.warn("[REGISTRATIONS/SUBMIT] ⚠️ Campos obrigatórios não preenchidos");
+        showModalError("Preencha os campos obrigatórios (Nome, Tipo, E-mail e Status)!");
+        return;
+      }
+
+      // Validação básica de email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        console.warn("[REGISTRATIONS/SUBMIT] ⚠️ E-mail inválido");
+        showModalError("E-mail inválido! Digite um e-mail válido.");
         return;
       }
 
@@ -984,8 +1082,12 @@
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
 
+        // Simular delay de processamento
+        await new Promise(resolve => setTimeout(resolve, 800));
+
         if (selectedRecordId) {
-          // Atualizar
+          // ===== ATUALIZAR =====
+          console.log("[REGISTRATIONS/SUBMIT] ✏️ Atualizando cadastro:", selectedRecordId);
           const record = records.find(r => r.id === selectedRecordId);
           if (record) {
             record.name = name;
@@ -996,31 +1098,32 @@
             record.city = city;
             record.status = status;
             record.observation = observation;
+            console.log("[REGISTRATIONS/SUBMIT] ✓ Cadastro atualizado com sucesso");
           }
-          console.log("[REGISTRATIONS/SUBMIT] ✓ Cadastro atualizado");
           showSuccess("Cadastro atualizado com sucesso!");
         } else {
-          // Criar
+          // ===== CRIAR =====
+          console.log("[REGISTRATIONS/SUBMIT] ➕ Criando novo cadastro");
           const newRecord = {
             id: Math.max(...records.map(r => r.id), 0) + 1,
             name,
             type,
             email,
-            phone,
-            company,
-            city,
+            phone: phone || null,
+            company: company || "(Sem empresa)",
+            city: city || "(Sem cidade)",
             status,
-            observation,
+            observation: observation || "(Sem observações)",
             created: new Date().toISOString().split('T')[0]
           };
           records.push(newRecord);
-          console.log("[REGISTRATIONS/SUBMIT] ✓ Cadastro criado");
+          console.log("[REGISTRATIONS/SUBMIT] ✓ Cadastro criado com sucesso:", newRecord);
           showSuccess("Cadastro criado com sucesso!");
         }
 
         document.getElementById("recordForm").reset();
         const modal = bootstrap.Modal.getInstance(document.getElementById("recordModal"));
-        modal.hide();
+        if (modal) modal.hide();
 
         selectedRecordId = null;
         renderRecords(filterRecords());
@@ -1037,35 +1140,41 @@
     });
 
     /**
-     * Event listeners para filtros
+     * ✅ Event listeners para filtros
      */
     document.getElementById("searchInput")?.addEventListener("input", () => {
+      console.log("[REGISTRATIONS/SEARCH] 🔎 Buscando...");
       renderRecords(filterRecords());
     });
 
     document.getElementById("statusFilter")?.addEventListener("change", (e) => {
+      console.log("[REGISTRATIONS/SEARCH] 📋 Filtrando por status:", e.target.value);
       currentStatusFilter = e.target.value;
       renderRecords(filterRecords());
     });
 
     /**
-     * Reset modal quando abrir
+     * ✅ Reset modal quando abrir
      */
     document.getElementById("recordModal")?.addEventListener("show.bs.modal", () => {
+      console.log("[REGISTRATIONS/MODAL] 📂 Modal aberto");
       if (!selectedRecordId) {
         document.getElementById("recordModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Novo Cadastro';
         document.getElementById("recordForm").reset();
         document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Salvar Cadastro';
       }
-      document.getElementById("modalAlertBox").classList.add("d-none");
+      clearModalError();
     });
 
     /**
-     * Reset quando fechar
+     * ✅ Reset quando fechar
      */
     document.getElementById("recordModal")?.addEventListener("hidden.bs.modal", () => {
+      console.log("[REGISTRATIONS/MODAL] 🔒 Modal fechado");
       selectedRecordId = null;
     });
+
+    console.log("[REGISTRATIONS] ✅ Script carregado sem autenticação");
   </script>
 
 </body>
