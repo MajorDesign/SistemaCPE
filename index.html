@@ -22,316 +22,416 @@
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/components.css">
+
+  <!-- 🔐 PROTEÇÃO DE ROTAS (DEVE SER O PRIMEIRO SCRIPT!) -->
+  <script src="/SistemaCPE/web/assests/js/route-protection.js"></script>
 </head>
 
 <body>
-  <!-- ✅ LOADING PAGE -->
-  <div id="loadingPage" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
+  <!-- ============================================================ -->
+  <!-- LOADING PAGE -->
+  <!-- ============================================================ -->
+  <div id="loadingPage" style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  ">
     <div style="text-align: center; color: white;">
-      <div class="spinner-border" role="status" style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
-        <span class="visually-hidden">Carregando...</span>
-      </div>
-      <p style="margin-top: 1rem; font-size: 1rem;">Verificando autenticação...</p>
+      <div class="spinner-border mb-3"></div>
+      <p style="margin-top: 1rem; font-size: 1.1rem;">Verificando autenticação...</p>
     </div>
   </div>
-
-  <!-- ============================================================ -->
-  <!-- NAVBAR - Carregada pelo nav.js -->
-  <!-- ============================================================ -->
-  <nav id="navbar-container"></nav>
 
   <!-- ============================================================ -->
   <!-- CONTAINER PRINCIPAL -->
   <!-- ============================================================ -->
   <div class="container-main" style="display: none;">
-    <!-- SIDEBAR - Carregada pelo nav.js -->
-    <div id="sidebar-container"></div>
+    
+    <!-- ============================================================ -->
+    <!-- NAVBAR - Carregada pelo nav.js -->
+    <!-- ============================================================ -->
+    <nav id="navbar-container"></nav>
 
-    <!-- Main Content -->
-    <div class="main-content">
-      <div class="top-bar">
-        <button class="menu-toggle" id="menuToggle">
-          <i class="bi bi-list"></i>
-        </button>
-        <h1>Dashboard</h1>
-      </div>
+    <!-- ============================================================ -->
+    <!-- LAYOUT PRINCIPAL -->
+    <!-- ============================================================ -->
+    <div style="display: flex; width: 100%; flex: 1;">
+      
+      <!-- SIDEBAR - Carregada pelo nav.js -->
+      <div id="sidebar-container"></div>
 
-      <div class="content">
-        <!-- Stats Grid -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-label">Total de Tickets</div>
-            <div class="stat-value">1,234</div>
-            <div class="stat-change">+12% em relação ao mês anterior</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-label">Resolvidos</div>
-            <div class="stat-value">856</div>
-            <div class="stat-change">Taxa de resolução: 69%</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-label">Pendentes</div>
-            <div class="stat-value" style="color: var(--danger);">378</div>
-            <div class="stat-change" style="color: var(--danger);">Requerem atenção</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-label">Satisfação</div>
-            <div class="stat-value" style="color: var(--success);">4.8/5</div>
-            <div class="stat-change" style="color: var(--success);">Baseado em 234 avaliações</div>
-          </div>
+      <!-- Main Content -->
+      <div class="main-content" style="flex: 1;">
+        
+        <!-- TOP BAR -->
+        <div class="top-bar">
+          <button class="menu-toggle" id="menuToggle">
+            <i class="bi bi-list"></i>
+          </button>
+          <h1>Dashboard</h1>
         </div>
 
-        <!-- Tabela de Atividade Recente -->
-        <div class="card">
-          <h2 class="card-title">Atividade Recente</h2>
-          <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Título</th>
-                  <th>Cliente</th>
-                  <th>Status</th>
-                  <th>Atualizado</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>#1234</strong></td>
-                  <td>Problema com login</td>
-                  <td>João Silva</td>
-                  <td><span class="badge badge-success">Resolvido</span></td>
-                  <td>2 horas atrás</td>
-                </tr>
-                <tr>
-                  <td><strong>#1233</strong></td>
-                  <td>Erro ao processar pagamento</td>
-                  <td>Maria Santos</td>
-                  <td><span class="badge badge-primary">Em Andamento</span></td>
-                  <td>4 horas atrás</td>
-                </tr>
-                <tr>
-                  <td><strong>#1232</strong></td>
-                  <td>Dúvida sobre funcionalidade</td>
-                  <td>Pedro Costa</td>
-                  <td><span class="badge badge-warning">Aberto</span></td>
-                  <td>6 horas atrás</td>
-                </tr>
-                <tr>
-                  <td><strong>#1231</strong></td>
-                  <td>Solicitação de feature</td>
-                  <td>Ana Oliveira</td>
-                  <td><span class="badge badge-warning">Aberto</span></td>
-                  <td>1 dia atrás</td>
-                </tr>
-              </tbody>
-            </table>
+        <!-- CONTENT -->
+        <div class="content">
+          
+          <!-- Stats Grid -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Total de Tickets</div>
+              <div class="stat-value" id="totalTickets">1,234</div>
+              <div class="stat-change">+12% em relação ao mês anterior</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">Resolvidos</div>
+              <div class="stat-value" id="resolvedTickets">856</div>
+              <div class="stat-change">Taxa de resolução: 69%</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">Pendentes</div>
+              <div class="stat-value" id="pendingTickets" style="color: var(--danger);">378</div>
+              <div class="stat-change" style="color: var(--danger);">Requerem atenção</div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-label">Satisfação</div>
+              <div class="stat-value" id="satisfactionRate" style="color: var(--success);">4.8/5</div>
+              <div class="stat-change" style="color: var(--success);">Baseado em 234 avaliações</div>
+            </div>
           </div>
+
+          <!-- Tabela de Atividade Recente -->
+          <div class="card">
+            <h2 class="card-title">Atividade Recente</h2>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Título</th>
+                    <th>Cliente</th>
+                    <th>Status</th>
+                    <th>Atualizado</th>
+                  </tr>
+                </thead>
+                <tbody id="activityTableBody">
+                  <tr>
+                    <td colspan="5" style="text-align: center; padding: 2rem;">
+                      <span style="color: var(--muted);">Carregando dados...</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
         </div>
       </div>
+
     </div>
   </div>
 
-  <!-- Scripts -->
+  <!-- ============================================================ -->
+  <!-- SCRIPTS -->
+  <!-- ============================================================ -->
+
+  <!-- Bootstrap -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  
-  <!-- ✅ SCRIPTS DE NAVEGAÇÃO -->
+
+  <!-- Navegação -->
   <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
-  <!-- =========================================
-       🔐 SCRIPT DE AUTENTICAÇÃO E INICIALIZAÇÃO
-       ========================================= -->
+  <!-- API Utilities -->
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
 
+  <!-- 🔐 INICIALIZAÇÃO PÓS-AUTENTICAÇÃO -->
   <script>
-    // ============================================================
-    // 1️⃣ VERIFICAÇÃO DE AUTENTICAÇÃO (ao carregar a página)
-    // ============================================================
+    /**
+     * 🎬 INICIALIZAÇÃO DO DASHBOARD
+     * Aguarda o evento authenticationSuccess do route-protection.js
+     */
 
-    async function checkAuthentication() {
+    console.log("\n" + "=".repeat(80));
+    console.log("[INDEX] Aguardando autenticação...");
+    console.log("=".repeat(80) + "\n");
+
+    // [INICIO] Event Listener: authenticationSuccess
+    document.addEventListener("authenticationSuccess", (e) => {
+      const user = e.detail?.user;
+
+      if (!user) {
+        console.error("[INDEX] ❌ Usuário não encontrado no evento de autenticação");
+        return;
+      }
+
       console.log("\n" + "=".repeat(80));
-      console.log("[INDEX] 🔐 Verificando autenticação do localStorage...");
+      console.log("[INDEX] 🎬 INICIALIZANDO DASHBOARD");
       console.log("=".repeat(80));
+      console.log(`[INDEX] 👤 Usuário: ${user.name}`);
+      console.log(`[INDEX] 📧 Email: ${user.email}`);
+      console.log(`[INDEX] 🎭 Role: ${user.role}`);
+      console.log(`[INDEX] 🆔 ID: ${user.id}`);
 
+      // ====================================
+      // VERIFICAR PERMISSÕES
+      // ====================================
+      if (window.authProtection?.hasRole) {
+        if (window.authProtection.hasRole("ADMIN")) {
+          console.log("[INDEX] ✅ Acesso como ADMIN - Todos os dados visíveis");
+        } else if (window.authProtection.hasRole("MANAGER")) {
+          console.log("[INDEX] ℹ️  Acesso como MANAGER - Dados restritos");
+        } else {
+          console.log("[INDEX] ℹ️  Acesso como USER - Visão limitada");
+        }
+      } else {
+        console.warn("[INDEX] ⚠️  Objeto authProtection não encontrado");
+      }
+
+      // ====================================
+      // INICIALIZAR COMPONENTES
+      // ====================================
       try {
-        // ✅ VERIFICAR SE ESTÁ LOGADO USANDO LOCALSTORAGE
-        const isLoggedIn = localStorage.getItem("logged_in") === "true";
-        const token = localStorage.getItem("token");
-        const userStr = localStorage.getItem("user");
+        // Mostrar container principal
+        const containerMain = document.querySelector(".container-main");
+        const loadingPage = document.getElementById("loadingPage");
 
-        console.log("[INDEX] 🔍 Verificação de localStorage:");
-        console.log("[INDEX]   • logged_in:", isLoggedIn ? "✓ true" : "✗ false");
-        console.log("[INDEX]   • token:", token ? "✓ EXISTE" : "✗ NÃO EXISTE");
-        console.log("[INDEX]   • user:", userStr ? "✓ EXISTE" : "✗ NÃO EXISTE");
-
-        // ✅ SE NÃO ESTÁ LOGADO, USAR DADOS GENÉRICOS
-        if (!isLoggedIn || !token) {
-          console.warn("[INDEX] ⚠️  Usuário não autenticado - Usando acesso público");
-          console.log("[INDEX] 🔓 Acesso direto permitido");
-
-          // Criar usuário genérico para interface
-          const publicUser = {
-            id: "public",
-            name: "Visitante",
-            email: "public@sistemacpe.local",
-            role: "USER",
-            username: "visitante"
-          };
-
-          console.log("[INDEX] ✅ Modo público ativado");
-          console.log("[INDEX] 👤 Usuário:", publicUser.name);
-
-          return publicUser;
+        if (containerMain) {
+          containerMain.style.display = "flex";
+          console.log("[INDEX] ✓ Container principal exibido");
         }
 
-        // ✅ RECUPERAR DADOS DO USUÁRIO DO LOCALSTORAGE
-        let user = null;
-
-        if (userStr) {
-          try {
-            user = JSON.parse(userStr);
-            console.log("[INDEX] ✓ Usuário recuperado de localStorage.user:", user.name);
-          } catch (err) {
-            console.error("[INDEX] ❌ Erro ao fazer parse de user:", err.message);
-            
-            // ✅ Fallback para campos individuais
-            user = {
-              id: localStorage.getItem("user_id"),
-              name: localStorage.getItem("name"),
-              email: localStorage.getItem("email"),
-              role: localStorage.getItem("role"),
-              username: localStorage.getItem("username")
-            };
-            console.log("[INDEX] ✓ Usuário recuperado de campos individuais:", user.name);
-          }
+        if (loadingPage) {
+          loadingPage.style.display = "none";
+          console.log("[INDEX] ✓ Loading page ocultada");
         }
 
-        if (!user || !user.id) {
-          throw new Error("Dados do usuário não encontrados no localStorage");
-        }
-
-        console.log("[INDEX] ✅ Sessão válida!");
-        console.log("[INDEX] 👤 Usuário:", {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role
-        });
-
-        return user;
+        setupMenuToggle();
+        setActiveMenu();
+        loadDashboardData(user);
+        
+        console.log("[INDEX] ✅ Dashboard inicializado com sucesso!");
+        console.log("=".repeat(80) + "\n");
 
       } catch (err) {
-        console.error("[INDEX] ❌ ERRO:", err.message);
-        console.log("[INDEX] 🔓 Continuando com acesso público...");
+        console.error("[INDEX] ❌ Erro na inicialização:", err.message);
+        console.error("[INDEX] Stack:", err.stack);
+        showError("Erro ao inicializar dashboard", err.message);
+      }
+    });
+    // [FIM] Event Listener: authenticationSuccess
 
-        // Retornar usuário genérico mesmo com erro
-        return {
-          id: "public",
-          name: "Visitante",
-          email: "public@sistemacpe.local",
-          role: "USER",
-          username: "visitante"
-        };
+    // [INICIO] Fallback: Se não houver autenticação após 5 segundos
+    setTimeout(() => {
+      const loadingPage = document.getElementById("loadingPage");
+      if (loadingPage && loadingPage.style.display !== "none") {
+        console.warn("[INDEX] ⚠️  Autenticação não completada em 5 segundos");
+        showError(
+          "Erro de Autenticação",
+          "Não conseguimos verificar suas credenciais. Tente fazer login novamente."
+        );
+      }
+    }, 5000);
+    // [FIM] Fallback
+
+    // ====================================
+    // FUNÇÃO: Setup Menu Toggle
+    // ====================================
+    // [INICIO] setupMenuToggle()
+    function setupMenuToggle() {
+      const menuToggle = document.getElementById("menuToggle");
+      const sidebarContainer = document.getElementById("sidebar-container");
+
+      if (!menuToggle || !sidebarContainer) {
+        console.warn("[INDEX] ⚠️  Elementos do menu não encontrados");
+        return;
+      }
+
+      menuToggle.addEventListener("click", () => {
+        const sidebar = sidebarContainer.querySelector(".sidebar");
+        if (sidebar) {
+          sidebar.classList.toggle("collapsed");
+          console.log("[INDEX] ☰ Menu toggled");
+        }
+      });
+
+      console.log("[INDEX] ✓ Menu toggle configurado");
+    }
+    // [FIM] setupMenuToggle()
+
+    // ====================================
+    // FUNÇÃO: Marcar Menu Ativo
+    // ====================================
+    // [INICIO] setActiveMenu()
+    function setActiveMenu() {
+      try {
+        const dashboardLink = document.querySelector('a[href*="index.html"]');
+        if (dashboardLink) {
+          // Remover classe active de todos os links
+          document.querySelectorAll(".sidebar a").forEach(link => {
+            link.classList.remove("active");
+            link.parentElement?.classList.remove("active");
+          });
+
+          // Adicionar ao dashboard
+          dashboardLink.classList.add("active");
+          dashboardLink.parentElement?.classList.add("active");
+          console.log("[INDEX] ✓ Menu Dashboard marcado como ativo");
+        } else {
+          console.warn("[INDEX] ⚠️  Link do dashboard não encontrado");
+        }
+      } catch (err) {
+        console.warn("[INDEX] ⚠️  Erro ao marcar menu ativo:", err.message);
       }
     }
+    // [FIM] setActiveMenu()
 
-    // ============================================================
-    // 2️⃣ FUNÇÕES AUXILIARES DE UI
-    // ============================================================
+    // ====================================
+    // FUNÇÃO: Carregar Dados do Dashboard
+    // ====================================
+    // [INICIO] loadDashboardData()
+    function loadDashboardData(user) {
+      console.log("[INDEX] 📊 Carregando dados do dashboard...");
 
-    function showLoadingMessage(title, message) {
+      // Dados de exemplo
+      const sampleData = [
+        {
+          id: "#1234",
+          titulo: "Problema com login",
+          cliente: "João Silva",
+          status: "Resolvido",
+          statusClass: "badge-success",
+          atualizado: "2 horas atrás"
+        },
+        {
+          id: "#1233",
+          titulo: "Erro ao processar pagamento",
+          cliente: "Maria Santos",
+          status: "Em Andamento",
+          statusClass: "badge-primary",
+          atualizado: "4 horas atrás"
+        },
+        {
+          id: "#1232",
+          titulo: "Dúvida sobre funcionalidade",
+          cliente: "Pedro Costa",
+          status: "Aberto",
+          statusClass: "badge-warning",
+          atualizado: "6 horas atrás"
+        },
+        {
+          id: "#1231",
+          titulo: "Solicitação de feature",
+          cliente: "Ana Oliveira",
+          status: "Aberto",
+          statusClass: "badge-warning",
+          atualizado: "1 dia atrás"
+        }
+      ];
+
+      // Preencher tabela
+      try {
+        const tableBody = document.getElementById("activityTableBody");
+        if (tableBody) {
+          tableBody.innerHTML = sampleData.map(item => `
+            <tr>
+              <td><strong>${item.id}</strong></td>
+              <td>${item.titulo}</td>
+              <td>${item.cliente}</td>
+              <td><span class="badge ${item.statusClass}">${item.status}</span></td>
+              <td>${item.atualizado}</td>
+            </tr>
+          `).join("");
+          
+          console.log("[INDEX] ✓ Tabela de atividades carregada");
+        } else {
+          console.warn("[INDEX] ⚠️  Elemento activityTableBody não encontrado");
+        }
+      } catch (err) {
+        console.error("[INDEX] ❌ Erro ao carregar tabela:", err.message);
+      }
+
+      // Atualizar stats
+      updateStats(user);
+
+      console.log("[INDEX] ✓ Dados carregados com sucesso");
+    }
+    // [FIM] loadDashboardData()
+
+    // ====================================
+    // FUNÇÃO: Atualizar Stats
+    // ====================================
+    // [INICIO] updateStats()
+    function updateStats(user) {
+      console.log("[INDEX] 📈 Atualizando estatísticas...");
+
+      // Em produção, fazer requisições à API:
+      // fetch(`/api/dashboard/stats?userId=${user.id}`)
+      //   .then(res => res.json())
+      //   .then(data => {
+      //     document.getElementById("totalTickets").textContent = data.total;
+      //     document.getElementById("resolvedTickets").textContent = data.resolved;
+      //     document.getElementById("pendingTickets").textContent = data.pending;
+      //     document.getElementById("satisfactionRate").textContent = data.satisfaction;
+      //   })
+      //   .catch(err => console.error("[INDEX] Erro ao carregar stats:", err));
+
+      console.log("[INDEX] ✓ Estatísticas carregadas");
+    }
+    // [FIM] updateStats()
+
+    // ====================================
+    // FUNÇÃO: Mostrar Erro
+    // ====================================
+    // [INICIO] showError()
+    function showError(title, message) {
+      console.error(`[INDEX] ❌ ${title}: ${message}`);
+
       const loadingPage = document.getElementById("loadingPage");
       if (loadingPage) {
         loadingPage.innerHTML = `
           <div style="text-align: center; color: white;">
-            <h3>${title}</h3>
-            <p>${message}</p>
+            <h3 style="margin-bottom: 1rem;">⚠️ ${title}</h3>
+            <p style="font-size: 1rem; margin-bottom: 2rem; max-width: 400px;">${message}</p>
+            <button onclick="location.href='/SistemaCPE/web/login.html'" style="
+              padding: 0.75rem 1.5rem;
+              background: rgba(255, 255, 255, 0.2);
+              color: white;
+              border: 1px solid rgba(255, 255, 255, 0.3);
+              border-radius: 6px;
+              cursor: pointer;
+              font-weight: 600;
+              transition: all 0.3s ease;
+            " onmouseover="this.style.background = 'rgba(255, 255, 255, 0.3)'" onmouseout="this.style.background = 'rgba(255, 255, 255, 0.2)'">
+              🔐 Ir para Login
+            </button>
           </div>
         `;
       }
     }
+    // [FIM] showError()
 
-    function hideLoadingPage() {
-      const loadingPage = document.getElementById("loadingPage");
-      if (loadingPage) {
-        loadingPage.style.display = "none";
-      }
-    }
-
-    function showDashboard() {
-      const containerMain = document.querySelector(".container-main");
-      if (containerMain) {
-        containerMain.style.display = "flex";
-      }
-    }
-
-    function setupMenuToggle() {
-      const menuToggle = document.getElementById("menuToggle");
-      const sidebar = document.getElementById("sidebar-container");
-
-      if (menuToggle && sidebar) {
-        menuToggle.addEventListener("click", () => {
-          const sidebarEl = sidebar.querySelector(".sidebar-collapsed");
-          if (sidebarEl) {
-            sidebarEl.classList.toggle("show");
-            console.log("[INDEX] ☰ Menu toggled");
-          }
-        });
-      }
-    }
-
-    function setActiveMenu() {
-      // Marcar menu de dashboard como ativo
-      const dashboardLink = document.querySelector('a[href*="index.html"]');
-      if (dashboardLink) {
-        dashboardLink.parentElement.classList.add('active');
-        dashboardLink.classList.add('active');
-        console.log("[INDEX] ✅ Menu Dashboard marcado como ativo");
-      }
-    }
-
-    // ============================================================
-    // 3️⃣ INICIALIZAÇÃO PRINCIPAL (DOMContentLoaded)
-    // ============================================================
-
-    document.addEventListener("DOMContentLoaded", async () => {
-      console.log("\n" + "=".repeat(80));
-      console.log("[INDEX] 🎬 DOMContentLoaded - Inicializando Dashboard");
-      console.log("=".repeat(80));
-
-      try {
-        // 1️⃣ Verificar autenticação
-        const user = await checkAuthentication();
-
-        if (!user) {
-          console.warn("[INDEX] ⚠️ Autenticação falhou");
-          return;
-        }
-
-        // 2️⃣ Aguardar nav.js carregar
-        setTimeout(() => {
-          // 3️⃣ Ocultar loading page
-          hideLoadingPage();
-
-          // 4️⃣ Mostrar dashboard
-          showDashboard();
-
-          // 5️⃣ Setup de handlers
-          setupMenuToggle();
-          setActiveMenu();
-
-          console.log("[INDEX] ✅ Dashboard inicializado com sucesso!");
-          console.log("=".repeat(80) + "\n");
-
-        }, 500);
-
-      } catch (err) {
-        console.error("[INDEX] ❌ ERRO NA INICIALIZAÇÃO:", err.message);
-        showLoadingMessage("❌ Erro", err.message);
-      }
+    // ====================================
+    // TRATAMENTO DE ERROS GLOBAIS
+    // ====================================
+    // [INICIO] Error Handlers
+    window.addEventListener("error", (e) => {
+      console.error("[INDEX] 🔴 ERRO GLOBAL:", e.message);
+      console.error("[INDEX] Stack:", e.stack);
     });
+
+    window.addEventListener("unhandledrejection", (e) => {
+      console.error("[INDEX] 🔴 PROMISE REJECTION:", e.reason);
+    });
+    // [FIM] Error Handlers
+
   </script>
 
 </body>

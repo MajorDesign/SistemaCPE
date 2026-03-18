@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CPE Control — Inicializando...</title>
+  <title>CPE Control — Login</title>
 
   <style>
     * {
@@ -18,25 +18,167 @@
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       min-height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: 2rem 1rem;
     }
 
-    .loading-container {
-      text-align: center;
-      color: white;
+    .login-container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      width: 100%;
+      max-width: 450px;
+      padding: 3rem 2rem;
+      animation: slideUp 0.5s ease-out;
     }
 
-    .spinner {
-      width: 60px;
-      height: 60px;
-      border: 4px solid rgba(255, 255, 255, 0.3);
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .login-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .login-logo {
+      font-size: 2.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .login-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #1f2937;
+      margin-bottom: 0.5rem;
+    }
+
+    .login-subtitle {
+      font-size: 0.9rem;
+      color: #6b7280;
+    }
+
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .form-label {
+      font-weight: 600;
+      color: #374151;
+      font-size: 0.95rem;
+    }
+
+    .form-input {
+      padding: 0.875rem 1rem;
+      border: 2px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-family: inherit;
+      transition: all 0.3s ease;
+      background: #f9fafb;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: #667eea;
+      background: white;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-input::placeholder {
+      color: #9ca3af;
+    }
+
+    .form-error {
+      display: none;
+      padding: 1rem;
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      border-radius: 8px;
+      color: #dc2626;
+      font-size: 0.9rem;
+      animation: slideDown 0.3s ease-out;
+    }
+
+    .form-error.show {
+      display: block;
+    }
+
+    @keyframes slideDown {
+      from {
+        opacity: 0;
+        transform: translateY(-10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .login-button {
+      padding: 0.875rem 1rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      min-height: 44px;
+    }
+
+    .login-button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .login-button:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .login-button:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .button-spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
       border-top-color: white;
       border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 2rem;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+
+    .login-button:disabled .button-spinner {
+      display: block;
+    }
+
+    .login-button:disabled .button-text {
+      display: none;
     }
 
     @keyframes spin {
@@ -45,162 +187,125 @@
       }
     }
 
-    .loading-text {
-      font-size: 1.25rem;
-      font-weight: 600;
-      margin-bottom: 0.5rem;
+    .login-divider {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 1rem 0;
+      color: #d1d5db;
     }
 
-    .loading-subtext {
-      font-size: 0.95rem;
-      opacity: 0.8;
+    .login-divider::before,
+    .login-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e5e7eb;
     }
 
-    .error-message {
-      margin-top: 2rem;
-      padding: 1.5rem;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      max-width: 400px;
-      display: none;
+    .login-footer {
+      text-align: center;
+      color: #6b7280;
+      font-size: 0.85rem;
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid #e5e7eb;
     }
 
-    .error-message.show {
-      display: block;
+    .input-group-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
 
-    .error-title {
-      color: #fca5a5;
-      font-weight: 700;
-      margin-bottom: 0.5rem;
-    }
-
-    .error-text {
-      color: #fecaca;
-      font-size: 0.9rem;
-      line-height: 1.6;
-    }
-
-    .retry-button {
-      margin-top: 1rem;
-      padding: 0.75rem 1.5rem;
-      background: rgba(255, 255, 255, 0.2);
-      border: 2px solid white;
-      color: white;
-      border-radius: 8px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .retry-button:hover {
-      background: rgba(255, 255, 255, 0.3);
-      transform: translateY(-2px);
+    .input-helper {
+      font-size: 0.8rem;
+      color: #9ca3af;
+      margin-top: 0.25rem;
     }
   </style>
 </head>
 
 <body>
-  <div class="loading-container">
-    <div class="spinner"></div>
-    <div class="loading-text">CPE Control</div>
-    <div class="loading-subtext">Inicializando sistema...</div>
-
-    <div class="error-message" id="errorBox">
-      <div class="error-title">❌ Erro ao Inicializar</div>
-      <div class="error-text" id="errorText"></div>
-      <button class="retry-button" onclick="location.reload()">
-        🔄 Tentar Novamente
-      </button>
+  <div class="login-container">
+    <!-- [INICIO] Header do Login -->
+    <div class="login-header">
+      <div class="login-logo">🔐</div>
+      <h1 class="login-title">CPE Control</h1>
+      <p class="login-subtitle">Sistema de Gerenciamento</p>
     </div>
+    <!-- [FIM] Header do Login -->
+
+    <!-- [INICIO] Formulario de Login -->
+    <form class="login-form" id="loginForm" novalidate>
+      
+      <!-- [INICIO] Caixa de Erro -->
+      <div class="form-error" id="loginError">
+        <span id="errorMessage"></span>
+      </div>
+      <!-- [FIM] Caixa de Erro -->
+
+      <!-- [INICIO] Campo de Email ou Username -->
+      <div class="form-group">
+        <label class="form-label" for="credential">
+          <span class="input-group-label">
+            Email ou Usuario
+          </span>
+        </label>
+        <input
+          type="text"
+          id="credential"
+          class="form-input"
+          placeholder="seu@email.com ou seu_usuario"
+          autocomplete="username"
+          required
+          autofocus
+        />
+        <div class="input-helper">Use seu email ou nome de usuario cadastrado</div>
+      </div>
+      <!-- [FIM] Campo de Email ou Username -->
+
+      <!-- [INICIO] Campo de Senha -->
+      <div class="form-group">
+        <label class="form-label" for="password">
+          <span class="input-group-label">
+            Senha
+          </span>
+        </label>
+        <input
+          type="password"
+          id="password"
+          class="form-input"
+          placeholder="Digite sua senha"
+          autocomplete="current-password"
+          required
+        />
+        <div class="input-helper">Minimo 6 caracteres</div>
+      </div>
+      <!-- [FIM] Campo de Senha -->
+
+      <!-- [INICIO] Botao de Envio -->
+      <button type="submit" class="login-button" id="submitBtn">
+        <span class="button-spinner"></span>
+        <span class="button-text">Entrar no Sistema</span>
+      </button>
+      <!-- [FIM] Botao de Envio -->
+
+    </form>
+    <!-- [FIM] Formulario de Login -->
+
+    <!-- [INICIO] Rodape -->
+    <div class="login-footer">
+      <p>CPE Control 2026 - Sistema de Gerenciamento Inteligente</p>
+    </div>
+    <!-- [FIM] Rodape -->
+
   </div>
 
-  <!-- ============================================================ -->
-  <!-- 📦 SCRIPTS -->
-  <!-- ============================================================ -->
-
+  <!-- [INICIO] Scripts -->
   <script src="/SistemaCPE/web/assests/js/api.js"></script>
-
-  <script>
-    console.log("\n" + "=".repeat(80));
-    console.log("[AUTO-LOGIN] 🔐 Inicializando auto-login automático");
-    console.log("[AUTO-LOGIN] ℹ️  Modo: BYPASS DE AUTENTICAÇÃO - Sem seleção de usuário");
-    console.log("=".repeat(80) + "\n");
-
-    document.addEventListener("DOMContentLoaded", async () => {
-      console.log("[AUTO-LOGIN/INIT] 📋 DOM Carregado");
-
-      try {
-        // ===== Carregar Usuários =====
-        console.log("[AUTO-LOGIN/INIT] 👥 Buscando usuários disponíveis...");
-        const users = await apiGetUsers();
-
-        if (!Array.isArray(users) || users.length === 0) {
-          throw new Error("Nenhum usuário encontrado no sistema");
-        }
-
-        console.log("[AUTO-LOGIN/INIT] ✓ Usuários encontrados:", users.length);
-
-        // ===== Usar Primeiro Usuário =====
-        const firstUser = users[0];
-        console.log("[AUTO-LOGIN/INIT] 🎯 Auto-selecionando primeiro usuário");
-        console.log("[AUTO-LOGIN/INIT]   • Nome:", firstUser.name);
-        console.log("[AUTO-LOGIN/INIT]   • Email:", firstUser.email);
-        console.log("[AUTO-LOGIN/INIT]   • ID:", firstUser.id);
-
-        // ===== Carregar Dados do Usuário =====
-        console.log("[AUTO-LOGIN/INIT] 📥 Carregando dados do usuário...");
-        const result = await loadUser(firstUser.id);
-
-        if (!result || !result.success) {
-          throw new Error("Falha ao carregar dados do usuário");
-        }
-
-        console.log("[AUTO-LOGIN/INIT] ✅ Usuário carregado com sucesso!");
-
-        // ===== Verificar Armazenamento =====
-        console.log("[AUTO-LOGIN/INIT] 🔍 Verificando armazenamento...");
-        const userLS = localStorage.getItem("user");
-        const userIdLS = localStorage.getItem("user_id");
-        const loggedInLS = localStorage.getItem("logged_in");
-
-        console.log("[AUTO-LOGIN/INIT] 📦 Verificação de localStorage:");
-        console.log("[AUTO-LOGIN/INIT]   • user:", userLS ? "✓ EXISTE" : "✗ NÃO EXISTE");
-        console.log("[AUTO-LOGIN/INIT]   • user_id:", userIdLS || "✗ NÃO EXISTE");
-        console.log("[AUTO-LOGIN/INIT]   • logged_in:", loggedInLS || "✗ NÃO EXISTE");
-
-        if (!userIdLS || !loggedInLS) {
-          throw new Error("Falha ao salvar dados de sessão");
-        }
-
-        // ===== Redirecionar =====
-        console.log("[AUTO-LOGIN/INIT] ✅ INICIALIZAÇÃO CONCLUÍDA COM SUCESSO");
-        console.log("[AUTO-LOGIN/INIT] ⏳ Redirecionando para dashboard...");
-        console.log("=".repeat(80) + "\n");
-
-        // Aguarda 1 segundo para mostrar a animação
-        setTimeout(() => {
-          window.location.href = "/SistemaCPE/index.html";
-        }, 1000);
-
-      } catch (err) {
-        console.error("[AUTO-LOGIN/INIT] ❌ ERRO NA INICIALIZAÇÃO");
-        console.error("[AUTO-LOGIN/INIT] 📍 Mensagem:", err.message);
-        console.error("[AUTO-LOGIN/INIT] 🔗 Stack:", err.stack);
-        console.error("=".repeat(80) + "\n");
-
-        // Mostrar erro
-        const errorBox = document.getElementById("errorBox");
-        const errorText = document.getElementById("errorText");
-
-        errorText.textContent = err.message || "Erro desconhecido ao inicializar o sistema.";
-        errorBox.classList.add("show");
-
-        // Aguardar antes de permitir novo carregamento
-        console.log("[AUTO-LOGIN/INIT] ⏳ Aguardando para tentar novamente...");
-      }
-    });
-  </script>
+  <script src="/SistemaCPE/web/assests/js/login.js"></script>
+  <!-- [FIM] Scripts -->
 
 </body>
 
