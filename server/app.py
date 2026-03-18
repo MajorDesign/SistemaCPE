@@ -80,7 +80,7 @@ except Exception as err:
     logger.error(f"[DB] ❌ FALHA NA CONEXÃO: {str(err)}")
 
 # =========================================
-# MODELOS PYDANTIC
+# MODELOS PYDANTIC - USUÁRIOS
 # =========================================
 
 class UserBase(BaseModel):
@@ -120,6 +120,39 @@ class UserResponse(BaseModel):
     created_at: Optional[str] = None
 
 
+# =========================================
+# MODELOS PYDANTIC - GRUPOS
+# =========================================
+
+class GroupBase(BaseModel):
+    """Modelo base de grupo"""
+    name: str = Field(..., min_length=3, max_length=255, description="Nome do grupo")
+    description: Optional[str] = Field(None, max_length=500, description="Descrição do grupo")
+
+
+class GroupCreate(GroupBase):
+    """Modelo para criar grupo"""
+    pass
+
+
+class GroupUpdate(BaseModel):
+    """Modelo para atualizar grupo"""
+    name: Optional[str] = Field(None, min_length=3, max_length=255)
+    description: Optional[str] = Field(None, max_length=500)
+
+
+class GroupResponse(BaseModel):
+    """Modelo de resposta do grupo"""
+    id: int
+    name: str
+    description: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+# =========================================
+# MODELOS PYDANTIC - HEALTH CHECK
+# =========================================
+
 class HealthCheckResponse(BaseModel):
     """Modelo para health check"""
     status: str
@@ -145,16 +178,16 @@ def get_db_or_404():
         )
 
 
-def convert_datetime_to_string(user: dict) -> dict:
-    """✅ Converte datetime para string ISO em um dicionário de usuário"""
-    if user and user.get('created_at'):
-        user['created_at'] = user['created_at'].isoformat()
-    return user
+def convert_datetime_to_string(obj: dict) -> dict:
+    """✅ Converte datetime para string ISO em um dicionário"""
+    if obj and obj.get('created_at'):
+        obj['created_at'] = obj['created_at'].isoformat()
+    return obj
 
 
-def convert_users_datetime(users: list) -> list:
-    """✅ Converte datetime para string ISO em lista de usuários"""
-    return [convert_datetime_to_string(user) for user in users]
+def convert_datetime_list(objects: list) -> list:
+    """✅ Converte datetime para string ISO em lista"""
+    return [convert_datetime_to_string(obj) for obj in objects]
 
 
 def validate_group_exists(cursor, group_id: int) -> bool:
@@ -212,12 +245,17 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 90)
     logger.info("\n📌 ENDPOINTS DISPONÍVEIS:")
     logger.info("   " + "─" * 80)
-    logger.info("   📋 GET    /api/users                → Listar todos os usuários")
-    logger.info("   📄 GET    /api/users/{id}           → Obter usuário específico")
-    logger.info("   ➕ POST   /api/users                → Criar novo usuário")
-    logger.info("   ✏️  PUT    /api/users/{id}           → Atualizar usuário")
-    logger.info("   🗑️  DELETE /api/users/{id}           → Deletar usuário")
-    logger.info("   ❤️  GET    /health                  → Verificar saúde da API")
+    logger.info("   📋 GET    /api/groups                → Listar grupos")
+    logger.info("   📄 GET    /api/groups/{id}           → Obter grupo específico")
+    logger.info("   ➕ POST   /api/groups                → Criar novo grupo")
+    logger.info("   ✏️  PUT    /api/groups/{id}           → Atualizar grupo")
+    logger.info("   🗑️  DELETE /api/groups/{id}           → Deletar grupo")
+    logger.info("   📋 GET    /api/users                 → Listar usuários")
+    logger.info("   📄 GET    /api/users/{id}            → Obter usuário específico")
+    logger.info("   ➕ POST   /api/users                 → Criar novo usuário")
+    logger.info("   ✏️  PUT    /api/users/{id}            → Atualizar usuário")
+    logger.info("   🗑️  DELETE /api/users/{id}            → Deletar usuário")
+    logger.info("   ❤️  GET    /health                   → Verificar saúde da API")
     logger.info("   " + "─" * 80)
     logger.info("\n📊 DOCUMENTAÇÃO:")
     logger.info("   • Swagger UI: http://localhost:8000/docs")
@@ -275,18 +313,321 @@ app.add_middleware(
 
 logger.info("✅ CORS CONFIGURADO COM SUCESSO!\n")
 
+
+# =========================================
+# ROUTER DE GRUPOS
+# =========================================
+
+groups_router = APIRouter(prefix="/api/groups", tags=["groups"])
+
+
+@groups_router.get(
+    "/",
+    response_model=list,
+    summary="Listar grupos",
+    description="Obtém lista completa de todos os grupos cadastrados"
+)
+async def get_groups():
+    """📋 Obtém todos os grupos"""
+    logger.info("\n" + "=" * 90)
+    logger.info("[GROUPS] 📋 Listando todos os grupos...")
+    logger.info("=" * 90)
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        query = """
+            SELECT 
+                id,
+                name,
+                created_at
+            FROM password_groups
+            ORDER BY created_at DESC
+        """
+        
+        cursor.execute(query)
+        groups = cursor.fetchall()
+        groups = convert_datetime_list(groups)
+        
+        logger.info(f"[GROUPS] ✓ {len(groups)} grupo(s) encontrado(s)")
+        logger.info("=" * 90 + "\n")
+        
+        return groups or []
+        
+    except Exception as err:
+        logger.error(f"[GROUPS] ✗ Erro: {str(err)}")
+        logger.error("=" * 90 + "\n")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao listar grupos: {str(err)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@groups_router.get(
+    "/{group_id}",
+    response_model=GroupResponse,
+    summary="Obter grupo",
+    description="Obtém informações detalhadas de um grupo específico"
+)
+async def get_group(group_id: int):
+    """📄 Obtém um grupo específico pelo ID"""
+    logger.info(f"\n[GROUPS] 📄 Obtendo grupo #{group_id}...")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        query = """
+            SELECT 
+                id,
+                name,
+                created_at
+            FROM password_groups
+            WHERE id = %s
+        """
+        
+        cursor.execute(query, (group_id,))
+        group = cursor.fetchone()
+        
+        if not group:
+            logger.warning(f"[GROUPS] ✗ Grupo #{group_id} não encontrado")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Grupo com ID {group_id} não encontrado"
+            )
+        
+        group = convert_datetime_to_string(group)
+        logger.info(f"[GROUPS] ✓ Grupo encontrado: {group['name']}\n")
+        return group
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[GROUPS] ✗ Erro: {str(err)}\n")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao obter grupo: {str(err)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@groups_router.post(
+    "/",
+    status_code=status.HTTP_201_CREATED,
+    response_model=GroupResponse,
+    summary="Criar grupo",
+    description="Cria um novo grupo"
+)
+async def create_group(group: GroupCreate):
+    """➕ Cria um novo grupo"""
+    logger.info("\n" + "=" * 90)
+    logger.info("[GROUPS] ➕ CRIANDO NOVO GRUPO")
+    logger.info("=" * 90)
+    logger.info(f"[GROUPS]   • Nome: {group.name}")
+    if group.description:
+        logger.info(f"[GROUPS]   • Descrição: {group.description}")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        insert_query = """
+            INSERT INTO password_groups (name)
+            VALUES (%s)
+        """
+        
+        cursor.execute(insert_query, (group.name,))
+        
+        conn.commit()
+        new_group_id = cursor.lastrowid
+        logger.info(f"[GROUPS] ✓ Grupo criado com ID: {new_group_id}")
+        
+        cursor.execute(
+            """SELECT id, name, created_at 
+               FROM password_groups WHERE id = %s""",
+            (new_group_id,)
+        )
+        new_group = cursor.fetchone()
+        new_group = convert_datetime_to_string(new_group)
+        
+        logger.info("[GROUPS] ✓ SUCESSO!")
+        logger.info("=" * 90 + "\n")
+        
+        return new_group
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[GROUPS] ✗ ERRO: {str(err)}")
+        logger.error("=" * 90 + "\n")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao criar grupo: {str(err)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@groups_router.put(
+    "/{group_id}",
+    response_model=GroupResponse,
+    summary="Atualizar grupo",
+    description="Atualiza dados de um grupo"
+)
+async def update_group(group_id: int, group: GroupUpdate):
+    """✏️ Atualiza um grupo"""
+    logger.info("\n" + "=" * 90)
+    logger.info(f"[GROUPS] ✏️ ATUALIZANDO GRUPO #{group_id}")
+    logger.info("=" * 90)
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("SELECT id FROM password_groups WHERE id = %s", (group_id,))
+        if not cursor.fetchone():
+            logger.warning(f"[GROUPS] ✗ Grupo #{group_id} não encontrado")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Grupo com ID {group_id} não encontrado"
+            )
+        
+        updates = []
+        params = []
+        
+        if group.name is not None:
+            updates.append("name = %s")
+            params.append(group.name)
+            logger.info(f"[GROUPS]   • Nome: {group.name}")
+        
+        if group.description is not None:
+            updates.append("user_group_id = %s")
+            params.append(group.description)
+            logger.info(f"[GROUPS]   • Descrição: {group.description}")
+        
+        if not updates:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Nenhum campo fornecido para atualizar"
+            )
+        
+        update_query = f"""
+            UPDATE password_groups
+            SET {', '.join(updates)}
+            WHERE id = %s
+        """
+        
+        params.append(group_id)
+        cursor.execute(update_query, params)
+        conn.commit()
+        
+        logger.info(f"[GROUPS] ✓ SUCESSO!")
+        
+        cursor.execute(
+            """SELECT id, name, created_at 
+               FROM password_groups WHERE id = %s""",
+            (group_id,)
+        )
+        updated_group = cursor.fetchone()
+        updated_group = convert_datetime_to_string(updated_group)
+        
+        logger.info("=" * 90 + "\n")
+        
+        return updated_group
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[GROUPS] ✗ ERRO: {str(err)}")
+        logger.error("=" * 90 + "\n")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao atualizar grupo: {str(err)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@groups_router.delete(
+    "/{group_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Deletar grupo",
+    description="Remove um grupo do sistema"
+)
+async def delete_group(group_id: int):
+    """🗑️ Deleta um grupo do sistema"""
+    logger.info(f"\n[GROUPS] 🗑️ DELETANDO GRUPO #{group_id}...")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("SELECT name FROM password_groups WHERE id = %s", (group_id,))
+        group = cursor.fetchone()
+        
+        if not group:
+            logger.warning(f"[GROUPS] ✗ Grupo #{group_id} não encontrado")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Grupo com ID {group_id} não encontrado"
+            )
+        
+        logger.info(f"[GROUPS] ✓ Deletando: {group['name']}")
+        
+        cursor.execute("DELETE FROM password_groups WHERE id = %s", (group_id,))
+        conn.commit()
+        
+        logger.info(f"[GROUPS] ✓ DELETADO COM SUCESSO!\n")
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[GROUPS] ✗ ERRO: {str(err)}\n")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao deletar grupo: {str(err)}"
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 # =========================================
 # ROUTER DE USUÁRIOS
 # =========================================
 
-router = APIRouter(prefix="/api/users", tags=["users"])
+users_router = APIRouter(prefix="/api/users", tags=["users"])
 
 
-# =========================================
-# 📋 GET - LISTAR TODOS OS USUÁRIOS
-# =========================================
-
-@router.get(
+@users_router.get(
     "/",
     response_model=list,
     summary="Listar usuários",
@@ -320,9 +661,7 @@ async def get_users():
         
         cursor.execute(query)
         users = cursor.fetchall()
-        
-        # ✅ Converter datetime para string ISO
-        users = convert_users_datetime(users)
+        users = convert_datetime_list(users)
         
         logger.info(f"[USERS] ✓ {len(users)} usuário(s) encontrado(s)")
         logger.info("=" * 90 + "\n")
@@ -343,11 +682,7 @@ async def get_users():
             conn.close()
 
 
-# =========================================
-# 📄 GET - OBTER USUÁRIO ESPECÍFICO
-# =========================================
-
-@router.get(
+@users_router.get(
     "/{user_id}",
     response_model=UserResponse,
     summary="Obter usuário",
@@ -387,9 +722,7 @@ async def get_user(user_id: int):
                 detail=f"Usuário com ID {user_id} não encontrado"
             )
         
-        # ✅ Converter datetime para string ISO
         user = convert_datetime_to_string(user)
-        
         logger.info(f"[USERS] ✓ Usuário encontrado: {user['name']}\n")
         return user
         
@@ -408,11 +741,7 @@ async def get_user(user_id: int):
             conn.close()
 
 
-# =========================================
-# ➕ POST - CRIAR NOVO USUÁRIO
-# =========================================
-
-@router.post(
+@users_router.post(
     "/",
     status_code=status.HTTP_201_CREATED,
     response_model=UserResponse,
@@ -437,7 +766,6 @@ async def create_user(user: UserCreate):
     try:
         cursor = conn.cursor(dictionary=True)
         
-        # Validar email único
         if not validate_email_unique(cursor, user.email):
             logger.warning(f"[USERS] ✗ Email já registrado: {user.email}")
             raise HTTPException(
@@ -445,7 +773,6 @@ async def create_user(user: UserCreate):
                 detail=f"Email '{user.email}' já está registrado"
             )
         
-        # Validar username único
         if not validate_username_unique(cursor, user.username):
             logger.warning(f"[USERS] ✗ Username já registrado: {user.username}")
             raise HTTPException(
@@ -453,7 +780,6 @@ async def create_user(user: UserCreate):
                 detail=f"Username '{user.username}' já está registrado"
             )
         
-        # Validar grupo se fornecido
         if user.group_id:
             if not validate_group_exists(cursor, user.group_id):
                 logger.warning(f"[USERS] ✗ Grupo #{user.group_id} não encontrado")
@@ -462,7 +788,6 @@ async def create_user(user: UserCreate):
                     detail=f"Grupo com ID {user.group_id} não encontrado"
                 )
         
-        # Inserir usuário (SEM SENHA)
         insert_query = """
             INSERT INTO users (name, email, username, role, group_id, is_active)
             VALUES (%s, %s, %s, %s, %s, %s)
@@ -481,15 +806,12 @@ async def create_user(user: UserCreate):
         new_user_id = cursor.lastrowid
         logger.info(f"[USERS] ✓ Usuário criado com ID: {new_user_id}")
         
-        # Recuperar usuário criado
         cursor.execute(
             """SELECT id, name, email, username, role, group_id, is_active, created_at 
                FROM users WHERE id = %s""",
             (new_user_id,)
         )
         new_user = cursor.fetchone()
-        
-        # ✅ Converter datetime para string ISO
         new_user = convert_datetime_to_string(new_user)
         
         logger.info("[USERS] ✓ SUCESSO!")
@@ -513,11 +835,7 @@ async def create_user(user: UserCreate):
             conn.close()
 
 
-# =========================================
-# ✏️ PUT - ATUALIZAR USUÁRIO
-# =========================================
-
-@router.put(
+@users_router.put(
     "/{user_id}",
     response_model=UserResponse,
     summary="Atualizar usuário",
@@ -535,18 +853,14 @@ async def update_user(user_id: int, user: UserUpdate):
     try:
         cursor = conn.cursor(dictionary=True)
         
-        # Verificar existência
         cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
-        existing_user = cursor.fetchone()
-        
-        if not existing_user:
+        if not cursor.fetchone():
             logger.warning(f"[USERS] ✗ Usuário #{user_id} não encontrado")
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Usuário com ID {user_id} não encontrado"
             )
         
-        # Construir query dinamicamente
         updates = []
         params = []
         
@@ -595,14 +909,12 @@ async def update_user(user_id: int, user: UserUpdate):
             params.append(user.is_active)
             logger.info(f"[USERS]   • Status: {'Ativo' if user.is_active else 'Inativo'}")
         
-        # Se nada para atualizar
         if not updates:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Nenhum campo fornecido para atualizar"
             )
         
-        # Executar UPDATE
         update_query = f"""
             UPDATE users
             SET {', '.join(updates)}
@@ -615,15 +927,12 @@ async def update_user(user_id: int, user: UserUpdate):
         
         logger.info(f"[USERS] ✓ SUCESSO!")
         
-        # Recuperar usuário atualizado
         cursor.execute(
             """SELECT id, name, email, username, role, group_id, is_active, created_at 
                FROM users WHERE id = %s""",
             (user_id,)
         )
         updated_user = cursor.fetchone()
-        
-        # ✅ Converter datetime para string ISO
         updated_user = convert_datetime_to_string(updated_user)
         
         logger.info("=" * 90 + "\n")
@@ -646,11 +955,7 @@ async def update_user(user_id: int, user: UserUpdate):
             conn.close()
 
 
-# =========================================
-# 🗑️ DELETE - DELETAR USUÁRIO
-# =========================================
-
-@router.delete(
+@users_router.delete(
     "/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Deletar usuário",
@@ -666,7 +971,6 @@ async def delete_user(user_id: int):
     try:
         cursor = conn.cursor(dictionary=True)
         
-        # Verificar existência
         cursor.execute("SELECT name, email FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         
@@ -679,7 +983,6 @@ async def delete_user(user_id: int):
         
         logger.info(f"[USERS] ✓ Deletando: {user['name']}")
         
-        # Deletar
         cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
         conn.commit()
         
@@ -729,12 +1032,15 @@ async def health():
 
 
 # =========================================
-# REGISTRAR ROTAS
+# REGISTRAR ROUTERS
 # =========================================
 
-app.include_router(router)
+app.include_router(groups_router)
+app.include_router(users_router)
 
-logger.info("✓ Router de usuários registrado")
+logger.info("✅ Routers registrados com sucesso!")
+logger.info("   • Router de Grupos: /api/groups")
+logger.info("   • Router de Usuários: /api/users\n")
 
 # =========================================
 # MAIN - INICIALIZAR SERVIDOR
