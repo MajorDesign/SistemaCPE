@@ -70,31 +70,35 @@
     }
   </style>
 
-  <!-- 🔐 PROTEÇÃO DE ROTAS (PRIMEIRO!) -->
+  <!-- [INICIO] Script de Protecao de Rotas -->
   <script src="/SistemaCPE/web/assests/js/route-protection.js"></script>
+  <!-- [FIM] Script de Protecao de Rotas -->
 </head>
 
 <body>
-  <!-- NAVBAR - RENDERIZADO POR nav.js -->
+  <!-- [INICIO] Navbar Container -->
   <div id="navbar-container"></div>
+  <!-- [FIM] Navbar Container -->
 
-  <!-- CONTAINER PRINCIPAL -->
+  <!-- [INICIO] Container Principal -->
   <div class="container-main">
-    <!-- SIDEBAR - RENDERIZADO POR nav.js -->
+    <!-- [INICIO] Sidebar Container -->
     <div id="sidebar-container"></div>
+    <!-- [FIM] Sidebar Container -->
 
-    <!-- MAIN CONTENT -->
+    <!-- [INICIO] Main Content -->
     <div class="main-content">
-      <!-- TOP BAR -->
+      <!-- [INICIO] Top Bar -->
       <div class="top-bar">
         <h1>
           <i class="bi bi-people"></i> Usuários
         </h1>
       </div>
+      <!-- [FIM] Top Bar -->
 
-      <!-- CONTENT -->
+      <!-- [INICIO] Content -->
       <div class="content">
-        <!-- ALERTS -->
+        <!-- [INICIO] Alerts -->
         <div class="alert alert-danger d-none" id="alertBox" role="alert">
           <i class="bi bi-exclamation-circle"></i>
           <span id="alertMessage"></span>
@@ -104,8 +108,9 @@
           <i class="bi bi-check-circle"></i>
           <span id="successMessage">Operação realizada com sucesso!</span>
         </div>
+        <!-- [FIM] Alerts -->
 
-        <!-- PAGE HEADER -->
+        <!-- [INICIO] Page Header -->
         <div class="page-header">
           <h2 class="page-title">
             <i class="bi bi-people-fill"></i> Gerenciamento de Usuários
@@ -115,8 +120,9 @@
             <i class="bi bi-plus-lg"></i> Novo Usuário
           </button>
         </div>
+        <!-- [FIM] Page Header -->
 
-        <!-- STATISTICS -->
+        <!-- [INICIO] Statistics -->
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-label">Total de Usuários</div>
@@ -142,8 +148,9 @@
             <div class="stat-change">Status ativo no sistema</div>
           </div>
         </div>
+        <!-- [FIM] Statistics -->
 
-        <!-- SEARCH AND FILTER -->
+        <!-- [INICIO] Search and Filter -->
         <div class="search-filter">
           <input type="text" id="searchInput" placeholder="Buscar por nome, e-mail ou username...">
           <select id="roleFilter">
@@ -160,8 +167,9 @@
             <option value="">Todos os Grupos</option>
           </select>
         </div>
+        <!-- [FIM] Search and Filter -->
 
-        <!-- USERS TABLE -->
+        <!-- [INICIO] Users Table -->
         <div class="users-table">
           <table>
             <thead>
@@ -190,13 +198,18 @@
             </tbody>
           </table>
         </div>
+        <!-- [FIM] Users Table -->
       </div>
+      <!-- [FIM] Content -->
     </div>
+    <!-- [FIM] Main Content -->
   </div>
+  <!-- [FIM] Container Principal -->
 
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
   <!-- MODAL: Novo/Editar Usuário -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- [INICIO] User Modal -->
   <div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="userModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
@@ -214,7 +227,7 @@
           </div>
 
           <form id="addUserForm" novalidate>
-            <!-- Nome Completo -->
+            <!-- [INICIO] Campo Nome Completo -->
             <div class="mb-3">
               <label for="inputName" class="form-label">
                 <i class="bi bi-person"></i> Nome Completo <span style="color: #ef4444;">*</span>
@@ -222,8 +235,9 @@
               <input type="text" class="form-control" id="inputName" placeholder="Ex: João da Silva" required />
               <div class="help-text">Digite o nome completo do usuário</div>
             </div>
+            <!-- [FIM] Campo Nome Completo -->
 
-            <!-- E-mail -->
+            <!-- [INICIO] Campo E-mail -->
             <div class="mb-3">
               <label for="inputEmail" class="form-label">
                 <i class="bi bi-envelope"></i> E-mail <span style="color: #ef4444;">*</span>
@@ -231,8 +245,9 @@
               <input type="email" class="form-control" id="inputEmail" placeholder="seu.email@example.com" required />
               <div class="help-text">O e-mail deve ser único no sistema</div>
             </div>
+            <!-- [FIM] Campo E-mail -->
 
-            <!-- Username -->
+            <!-- [INICIO] Campo Username -->
             <div class="mb-3">
               <label for="inputUsername" class="form-label">
                 <i class="bi bi-at"></i> Username (Usuário) <span style="color: #ef4444;">*</span>
@@ -240,8 +255,9 @@
               <input type="text" class="form-control" id="inputUsername" placeholder="nomedousuario" required />
               <div class="help-text">Será usado para login (sem espaços ou caracteres especiais)</div>
             </div>
+            <!-- [FIM] Campo Username -->
 
-            <!-- ✅ NOVO: Senha -->
+            <!-- [INICIO] Campo Senha -->
             <div class="mb-3" id="passwordField">
               <label for="inputPassword" class="form-label">
                 <i class="bi bi-lock"></i> Senha <span style="color: #ef4444;">*</span>
@@ -259,32 +275,34 @@
                 </button>
               </div>
               
-              <!-- Requisitos de Senha -->
+              <!-- [INICIO] Requisitos de Senha -->
               <div class="password-requirements">
                 <div class="requirement unmet" id="req-length">
-                  <span class="requirement-icon">✓</span>
+                  <span class="requirement-icon">Check</span>
                   <span>Mínimo 8 caracteres</span>
                 </div>
                 <div class="requirement unmet" id="req-uppercase">
-                  <span class="requirement-icon">✓</span>
+                  <span class="requirement-icon">Check</span>
                   <span>Pelo menos 1 letra maiúscula</span>
                 </div>
                 <div class="requirement unmet" id="req-lowercase">
-                  <span class="requirement-icon">✓</span>
+                  <span class="requirement-icon">Check</span>
                   <span>Pelo menos 1 letra minúscula</span>
                 </div>
                 <div class="requirement unmet" id="req-number">
-                  <span class="requirement-icon">✓</span>
+                  <span class="requirement-icon">Check</span>
                   <span>Pelo menos 1 número</span>
                 </div>
                 <div class="requirement unmet" id="req-special">
-                  <span class="requirement-icon">✓</span>
+                  <span class="requirement-icon">Check</span>
                   <span>Pelo menos 1 caractere especial (@, #, $, %, &, etc)</span>
                 </div>
               </div>
+              <!-- [FIM] Requisitos de Senha -->
             </div>
+            <!-- [FIM] Campo Senha -->
 
-            <!-- Grupo -->
+            <!-- [INICIO] Campo Grupo -->
             <div class="mb-3">
               <label for="inputGroup" class="form-label">
                 <i class="bi bi-folder"></i> Grupo
@@ -294,8 +312,9 @@
               </select>
               <div class="help-text">Selecione um grupo para vincular este usuário</div>
             </div>
+            <!-- [FIM] Campo Grupo -->
 
-            <!-- Permissão e Status -->
+            <!-- [INICIO] Campos Permissão e Status -->
             <div class="row">
               <div class="col-md-6 mb-3">
                 <label for="inputRole" class="form-label">
@@ -318,8 +337,9 @@
                 </select>
               </div>
             </div>
+            <!-- [FIM] Campos Permissão e Status -->
 
-            <!-- Botões -->
+            <!-- [INICIO] Botões do Formulário -->
             <div class="d-flex gap-2">
               <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
                 <i class="bi bi-check-lg"></i> Criar Usuário
@@ -328,43 +348,66 @@
                 <i class="bi bi-x-lg"></i> Cancelar
               </button>
             </div>
+            <!-- [FIM] Botões do Formulário -->
           </form>
         </div>
       </div>
     </div>
   </div>
+  <!-- [FIM] User Modal -->
 
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
   <!-- SCRIPTS -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
   
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
   <!-- DADOS GLOBAIS -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- [INICIO] Dados Globais -->
   <script>
     let users = [];
     let groups = [];
     let selectedUserId = null;
-    const API_USERS_URL = 'http://localhost:8000/api/users/';
-    const API_GROUPS_URL = 'http://localhost:8000/api/groups/';
+    
+    const API_USERS_URL = 'http://localhost:8000/api/users';
+    const API_GROUPS_URL = 'http://localhost:8000/api/groups';
 
     console.log("\n" + "=".repeat(80));
-    console.log("[USERS] 📄 Página de Gerenciamento de Usuários");
-    console.log("[USERS] 🔌 APIs:");
+    console.log("[USERS] Pagina de Gerenciamento de Usuarios");
+    console.log("[USERS] APIs:");
     console.log("[USERS]   - Users: " + API_USERS_URL);
     console.log("[USERS]   - Groups: " + API_GROUPS_URL);
     console.log("=".repeat(80) + "\n");
   </script>
+  <!-- [FIM] Dados Globais -->
 
-  <!-- ============================================================ -->
-  <!-- INICIALIZAÇÃO -->
-  <!-- ============================================================ -->
+  <!-- [INICIO] Debug de Autenticacao -->
   <script>
-    document.addEventListener("authenticationSuccess", () => {
-      console.log("[USERS] ✅ Autenticação confirmada");
+    console.log("[DEBUG] Verificando autenticacao...");
+    
+    const token = localStorage.getItem('token');
+    console.log("[DEBUG] Token encontrado:", !!token);
+    
+    if (!token) {
+      console.warn("[DEBUG] Nenhum token encontrado - redirecionando para login");
+      window.location.href = '/SistemaCPE/web/login.html';
+    } else {
+      console.log("[DEBUG] Token validado: " + token.substring(0, 20) + "...");
+    }
+  </script>
+  <!-- [FIM] Debug de Autenticacao -->
+
+
+  <!-- ================================================== -->
+  <!-- INICIALIZACAO -->
+  <!-- ================================================== -->
+  <!-- [INICIO] Event Listener de Autenticacao -->
+  <script>
+    function initializeUsers() {
+      console.log("[USERS] Inicializando...");
       try {
         loadGroups();
         loadUsers();
@@ -372,18 +415,30 @@
         setupPasswordToggle();
         setupPasswordValidation();
       } catch (err) {
-        console.error("[USERS] ❌ Erro ao inicializar:", err.message);
-        showError("Erro ao inicializar página: " + err.message);
+        console.error("[USERS] Erro ao inicializar:", err.message);
+        showError("Erro ao inicializar pagina: " + err.message);
       }
-    });
-  </script>
+    }
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: loadGroups() -->
-  <!-- ============================================================ -->
+    document.addEventListener("authenticationSuccess", initializeUsers);
+    
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(initializeUsers, 100);
+      });
+    } else {
+      setTimeout(initializeUsers, 100);
+    }
+  </script>
+  <!-- [FIM] Event Listener de Autenticacao -->
+
+  <!-- ================================================== -->
+  <!-- FUNCAO: loadGroups() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] loadGroups() -->
   <script>
     async function loadGroups() {
-      console.log("[USERS/GROUPS] 📂 Carregando grupos...");
+      console.log("[USERS/GROUPS] Carregando grupos...");
 
       try {
         const response = await fetch(API_GROUPS_URL, {
@@ -392,39 +447,64 @@
         });
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          throw new Error("HTTP " + response.status);
         }
 
         groups = await response.json();
-        console.log(`[USERS/GROUPS] ✓ ${groups.length} grupo(s) carregado(s)`);
+        console.log("[USERS/GROUPS] " + groups.length + " grupo(s) carregado(s)");
+        
+        if (groups.length > 0) {
+          console.log("[USERS/GROUPS] Grupos disponíveis:");
+          groups.forEach(g => {
+            console.log("[USERS/GROUPS]   - ID: " + g.id + ", Nome: " + g.name);
+          });
+        } else {
+          console.warn("[USERS/GROUPS] Nenhum grupo encontrado na API");
+        }
         
         populateGroupSelect();
       } catch (err) {
-        console.error("[USERS/GROUPS] ❌ Erro:", err.message);
+        console.error("[USERS/GROUPS] Erro:", err.message);
+        console.error("[USERS/GROUPS] Verifique se:");
+        console.error("[USERS/GROUPS]   1. O servidor FastAPI esta rodando em http://localhost:8000");
+        console.error("[USERS/GROUPS]   2. Existem grupos cadastrados em groups.html");
+        console.error("[USERS/GROUPS]   3. A API esta respondendo corretamente");
         groups = [];
+        populateGroupSelect();
       }
     }
   </script>
+  <!-- [FIM] loadGroups() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: populateGroupSelect() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: populateGroupSelect() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] populateGroupSelect() -->
   <script>
     function populateGroupSelect() {
-      console.log("[USERS/GROUPS] 🔄 Atualizando selects de grupos...");
+      console.log("[USERS/GROUPS] Atualizando selects de grupos...");
 
       // Modal select
       const groupSelect = document.getElementById("inputGroup");
       if (groupSelect) {
         const currentValue = groupSelect.value;
         groupSelect.innerHTML = '<option value="">-- Sem Grupo --</option>';
-        groups.forEach(group => {
-          const option = document.createElement("option");
-          option.value = group.id;
-          option.textContent = group.name;
-          groupSelect.appendChild(option);
-        });
+        
+        if (groups && groups.length > 0) {
+          groups.forEach(group => {
+            const option = document.createElement("option");
+            option.value = group.id;
+            option.textContent = group.name;
+            groupSelect.appendChild(option);
+          });
+          console.log("[USERS/GROUPS] " + groups.length + " grupo(s) adicionado(s) ao select");
+        } else {
+          console.warn("[USERS/GROUPS] Nenhum grupo para adicionar ao select");
+        }
+        
         if (currentValue) groupSelect.value = currentValue;
+      } else {
+        console.error("[USERS/GROUPS] Elemento #inputGroup nao encontrado");
       }
 
       // Filter select
@@ -432,25 +512,31 @@
       if (groupFilter) {
         const currentFilter = groupFilter.value;
         groupFilter.innerHTML = '<option value="">Todos os Grupos</option>';
-        groups.forEach(group => {
-          const option = document.createElement("option");
-          option.value = group.id;
-          option.textContent = group.name;
-          groupFilter.appendChild(option);
-        });
+        
+        if (groups && groups.length > 0) {
+          groups.forEach(group => {
+            const option = document.createElement("option");
+            option.value = group.id;
+            option.textContent = group.name;
+            groupFilter.appendChild(option);
+          });
+        }
+        
         if (currentFilter) groupFilter.value = currentFilter;
       }
 
-      console.log("[USERS/GROUPS] ✓ Selects atualizados");
+      console.log("[USERS/GROUPS] Selects atualizados");
     }
   </script>
+  <!-- [FIM] populateGroupSelect() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: loadUsers() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: loadUsers() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] loadUsers() -->
   <script>
     async function loadUsers() {
-      console.log("[USERS/LOAD] 📋 Carregando usuários...");
+      console.log("[USERS/LOAD] Carregando usuarios...");
 
       try {
         const response = await fetch(API_USERS_URL, {
@@ -458,7 +544,7 @@
           headers: { 'Content-Type': 'application/json' }
         });
 
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        if (!response.ok) throw new Error("HTTP " + response.status);
 
         const data = await response.json();
         users = data.map(user => ({
@@ -472,31 +558,35 @@
           created_at: user.created_at || ''
         }));
 
-        console.log(`[USERS/LOAD] ✓ ${users.length} usuário(s) carregado(s)`);
+        console.log("[USERS/LOAD] " + users.length + " usuario(s) carregado(s)");
         
         renderUsers(filterUsers());
         updateStatistics();
       } catch (err) {
-        console.error("[USERS/LOAD] ❌ Erro:", err.message);
-        showError("Erro ao carregar usuários: " + err.message);
+        console.error("[USERS/LOAD] Erro:", err.message);
+        showError("Erro ao carregar usuarios: " + err.message);
       }
     }
   </script>
+  <!-- [FIM] loadUsers() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: getGroupName() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: getGroupName() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] getGroupName() -->
   <script>
     function getGroupName(groupId) {
       if (!groupId) return "Sem Grupo";
       const group = groups.find(g => g.id === parseInt(groupId));
-      return group ? group.name : `Grupo #${groupId}`;
+      return group ? group.name : "Grupo #" + groupId;
     }
   </script>
+  <!-- [FIM] getGroupName() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: filterUsers() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: filterUsers() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] filterUsers() -->
   <script>
     function filterUsers() {
       let filtered = [...users];
@@ -529,10 +619,12 @@
       return filtered;
     }
   </script>
+  <!-- [FIM] filterUsers() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: escapeHtml() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: escapeHtml() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] escapeHtml() -->
   <script>
     function escapeHtml(text) {
       if (!text || typeof text !== 'string') return '';
@@ -543,10 +635,12 @@
       return text.replace(/[&<>"']/g, char => map[char]);
     }
   </script>
+  <!-- [FIM] escapeHtml() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: renderUsers() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: renderUsers() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] renderUsers() -->
   <script>
     function renderUsers(list = users) {
       const tbody = document.getElementById("usersTableBody");
@@ -557,7 +651,7 @@
             <td colspan="8">
               <div class="empty-state">
                 <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
-                <p>Nenhum usuário encontrado</p>
+                <p>Nenhum usuario encontrado</p>
               </div>
             </td>
           </tr>
@@ -593,12 +687,12 @@
             </td>
             <td>
               <span class="badge ${user.role === 'ADMIN' ? 'bg-danger' : 'bg-info'}">
-                ${user.role === 'ADMIN' ? '👑 Admin' : '👤 Usuário'}
+                ${user.role === 'ADMIN' ? 'Admin' : 'Usuario'}
               </span>
             </td>
             <td>
               <span class="badge ${user.is_active ? 'bg-success' : 'bg-secondary'}">
-                ${user.is_active ? '✓ Ativo' : '✗ Inativo'}
+                ${user.is_active ? 'Ativo' : 'Inativo'}
               </span>
             </td>
             <td>${createdDate}</td>
@@ -615,10 +709,12 @@
       }).join("");
     }
   </script>
+  <!-- [FIM] renderUsers() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: updateStatistics() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: updateStatistics() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] updateStatistics() -->
   <script>
     function updateStatistics() {
       const total = users.length;
@@ -632,36 +728,38 @@
       document.getElementById("activeUsers").textContent = active;
     }
   </script>
+  <!-- [FIM] updateStatistics() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: openNewUserModal() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: openNewUserModal() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] openNewUserModal() -->
   <script>
     function openNewUserModal() {
       selectedUserId = null;
       resetModal();
     }
   </script>
+  <!-- [FIM] openNewUserModal() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: editUser() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: editUser() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] editUser() -->
   <script>
     function editUser(userId) {
       const user = users.find(u => u.id === userId);
       if (!user) {
-        showError("Usuário não encontrado");
+        showError("Usuario nao encontrado");
         return;
       }
 
-      console.log("[USERS/EDIT] ✏️ Editando usuário:", userId, "-", user.name);
+      console.log("[USERS/EDIT] Editando usuario: " + userId + " - " + user.name);
 
       selectedUserId = userId;
 
-      // Atualizar título
-      document.getElementById("userModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Usuário';
+      document.getElementById("userModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Usuario';
 
-      // Preencher formulário
       document.getElementById("inputName").value = user.name || '';
       document.getElementById("inputEmail").value = user.email || '';
       document.getElementById("inputUsername").value = user.username || '';
@@ -669,30 +767,29 @@
       document.getElementById("inputRole").value = user.role || 'USER';
       document.getElementById("inputStatus").value = user.is_active ? "true" : "false";
 
-      // Limpar e ocultar campo de senha na edição
       document.getElementById("inputPassword").value = '';
       document.getElementById("passwordField").style.display = 'none';
 
-      // Atualizar botão
-      document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Usuário';
+      document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Usuario';
 
       hideModalError();
     }
   </script>
+  <!-- [FIM] editUser() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: resetModal() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: resetModal() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] resetModal() -->
   <script>
     function resetModal() {
       if (!selectedUserId) {
-        console.log("[USERS/MODAL] 🔄 Resetando modal para novo usuário");
+        console.log("[USERS/MODAL] Resetando modal para novo usuario");
         
-        document.getElementById("userModalLabel").innerHTML = '<i class="bi bi-person-plus"></i> Novo Usuário';
+        document.getElementById("userModalLabel").innerHTML = '<i class="bi bi-person-plus"></i> Novo Usuario';
         document.getElementById("addUserForm").reset();
-        document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Usuário';
+        document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Usuario';
         
-        // Mostrar campo de senha
         document.getElementById("passwordField").style.display = 'block';
         document.getElementById("inputPassword").required = true;
       }
@@ -700,10 +797,12 @@
       hideModalError();
     }
   </script>
+  <!-- [FIM] resetModal() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: setupPasswordToggle() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: setupPasswordToggle() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] setupPasswordToggle() -->
   <script>
     function setupPasswordToggle() {
       const toggleBtn = document.getElementById("togglePassword");
@@ -721,10 +820,12 @@
       }
     }
   </script>
+  <!-- [FIM] setupPasswordToggle() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: setupPasswordValidation() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: setupPasswordValidation() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] setupPasswordValidation() -->
   <script>
     function setupPasswordValidation() {
       const passwordInput = document.getElementById("inputPassword");
@@ -733,14 +834,12 @@
         passwordInput.addEventListener("input", () => {
           const password = passwordInput.value;
 
-          // Validações
           const hasLength = password.length >= 8;
           const hasUppercase = /[A-Z]/.test(password);
           const hasLowercase = /[a-z]/.test(password);
           const hasNumber = /[0-9]/.test(password);
           const hasSpecial = /[@#$%&!]/.test(password);
 
-          // Atualizar UI
           updateRequirement('req-length', hasLength);
           updateRequirement('req-uppercase', hasUppercase);
           updateRequirement('req-lowercase', hasLowercase);
@@ -758,37 +857,38 @@
       }
     }
   </script>
+  <!-- [FIM] setupPasswordValidation() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: validatePassword() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: validatePassword() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] validatePassword() -->
   <script>
     function validatePassword(password) {
-      // Apenas validar se está sendo criado novo usuário
       if (selectedUserId) return true;
 
       if (!password) {
-        showModalError("Senha é obrigatória!");
+        showModalError("Senha e obrigatoria!");
         return false;
       }
 
       if (password.length < 8) {
-        showModalError("Senha deve ter no mínimo 8 caracteres!");
+        showModalError("Senha deve ter no minimo 8 caracteres!");
         return false;
       }
 
       if (!/[A-Z]/.test(password)) {
-        showModalError("Senha deve ter pelo menos 1 letra maiúscula!");
+        showModalError("Senha deve ter pelo menos 1 letra maiuscula!");
         return false;
       }
 
       if (!/[a-z]/.test(password)) {
-        showModalError("Senha deve ter pelo menos 1 letra minúscula!");
+        showModalError("Senha deve ter pelo menos 1 letra minuscula!");
         return false;
       }
 
       if (!/[0-9]/.test(password)) {
-        showModalError("Senha deve ter pelo menos 1 número!");
+        showModalError("Senha deve ter pelo menos 1 numero!");
         return false;
       }
 
@@ -800,10 +900,12 @@
       return true;
     }
   </script>
+  <!-- [FIM] validatePassword() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: handleFormSubmit() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: handleFormSubmit() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] handleFormSubmit() -->
   <script>
     async function handleFormSubmit(e) {
       e.preventDefault();
@@ -816,27 +918,23 @@
       const status = document.getElementById("inputStatus")?.value;
       const groupIdValue = document.getElementById("inputGroup")?.value;
 
-      // VALIDAÇÕES BÁSICAS
       if (!name || !email || !username || !role) {
-        showModalError("Preencha todos os campos obrigatórios!");
+        showModalError("Preencha todos os campos obrigatorios!");
         return;
       }
 
-      // Validar email
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
-        showModalError("E-mail inválido!");
+        showModalError("E-mail invalido!");
         return;
       }
 
-      // Validar username
       const usernameRegex = /^[a-zA-Z0-9._-]+$/;
       if (!usernameRegex.test(username)) {
-        showModalError("Username inválido (use apenas letras, números, ponto, hífen e underscore)!");
+        showModalError("Username invalido (use apenas letras, numeros, ponto, hifen e underscore)!");
         return;
       }
 
-      // ✅ NOVO: Validar senha (apenas para novos usuários)
       if (!selectedUserId) {
         if (!validatePassword(password)) {
           return;
@@ -859,10 +957,9 @@
         let url, method, body;
 
         if (selectedUserId) {
-          // ATUALIZAR USUÁRIO
-          console.log("[USERS/FORM] 📤 Atualizando usuário:", selectedUserId);
+          console.log("[USERS/FORM] Atualizando usuario: " + selectedUserId);
           
-          url = `${API_USERS_URL}${selectedUserId}`;
+          url = API_USERS_URL + "/" + selectedUserId;
           method = 'PUT';
           body = {
             name,
@@ -874,8 +971,7 @@
           };
 
         } else {
-          // CRIAR NOVO USUÁRIO
-          console.log("[USERS/FORM] 📤 Criando novo usuário");
+          console.log("[USERS/FORM] Criando novo usuario");
           
           url = API_USERS_URL;
           method = 'POST';
@@ -883,14 +979,14 @@
             name,
             email,
             username,
-            password,  // ✅ Incluir senha
+            password,
             role,
             is_active: status === "true",
             group_id: groupId
           };
         }
 
-        console.log("[USERS/FORM] 📨 Payload:", JSON.stringify(body, null, 2));
+        console.log("[USERS/FORM] Payload: " + JSON.stringify(body, null, 2));
 
         const response = await fetch(url, {
           method: method,
@@ -898,41 +994,38 @@
           body: JSON.stringify(body)
         });
 
-        console.log("[USERS/FORM] 📥 Status:", response.status);
+        console.log("[USERS/FORM] Status: " + response.status);
 
         const result = await response.json();
 
         if (response.ok) {
-          console.log("[USERS/FORM] ✅ Sucesso!");
+          console.log("[USERS/FORM] Sucesso!");
 
           const message = selectedUserId
-            ? 'Usuário atualizado com sucesso!'
-            : 'Usuário criado com sucesso!';
+            ? 'Usuario atualizado com sucesso!'
+            : 'Usuario criado com sucesso!';
 
           showSuccess(message);
 
-          // Fechar modal
           const modal = bootstrap.Modal.getInstance(document.getElementById("userModal"));
           if (modal) modal.hide();
 
-          // Reset
           document.getElementById("addUserForm").reset();
           selectedUserId = null;
 
-          // Recarregar
           setTimeout(() => {
             loadUsers();
           }, 500);
 
         } else {
-          console.error("[USERS/FORM] ❌ Erro:", result);
+          console.error("[USERS/FORM] Erro: " + JSON.stringify(result));
 
-          let errorMessage = 'Erro ao processar usuário!';
+          let errorMessage = 'Erro ao processar usuario!';
 
           if (result.detail) {
             if (Array.isArray(result.detail)) {
               errorMessage = result.detail.map(err => {
-                return `${err.loc[err.loc.length - 1]}: ${err.msg}`;
+                return err.loc[err.loc.length - 1] + ": " + err.msg;
               }).join(', ');
             } else if (typeof result.detail === 'string') {
               errorMessage = result.detail;
@@ -945,38 +1038,40 @@
         }
 
       } catch (err) {
-        console.error("[USERS/FORM] ❌ Erro:", err.message);
+        console.error("[USERS/FORM] Erro: " + err.message);
         showModalError('Erro ao enviar dados: ' + err.message);
 
       } finally {
         const submitBtn = document.getElementById("submitBtn");
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Criar Usuário';
+        submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Criar Usuario';
       }
     }
 
     document.getElementById("addUserForm")?.addEventListener("submit", handleFormSubmit);
   </script>
+  <!-- [FIM] handleFormSubmit() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÃO: deleteUser() -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: deleteUser() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] deleteUser() -->
   <script>
     function deleteUser(userId, userName) {
-      console.log("[USERS/DELETE] 🗑️ Deletando usuário:", userId);
+      console.log("[USERS/DELETE] Deletando usuario: " + userId);
 
-      if (!confirm(`Tem certeza que deseja deletar o usuário "${userName}"?`)) {
+      if (!confirm("Tem certeza que deseja deletar o usuario \"" + userName + "\"?")) {
         return;
       }
 
-      fetch(`${API_USERS_URL}${userId}`, {
+      fetch(API_USERS_URL + "/" + userId, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' }
       })
         .then(response => {
           if (response.status === 204 || response.ok) {
-            console.log("[USERS/DELETE] ✓ Usuário deletado");
-            showSuccess(`Usuário "${userName}" deletado com sucesso!`);
+            console.log("[USERS/DELETE] Usuario deletado");
+            showSuccess("Usuario \"" + userName + "\" deletado com sucesso!");
             loadUsers();
           } else {
             return response.json().then(result => {
@@ -985,18 +1080,20 @@
           }
         })
         .catch(err => {
-          console.error("[USERS/DELETE] ❌ Erro:", err.message);
-          showError("Erro ao deletar usuário: " + err.message);
+          console.error("[USERS/DELETE] Erro: " + err.message);
+          showError("Erro ao deletar usuario: " + err.message);
         });
     }
   </script>
+  <!-- [FIM] deleteUser() -->
 
-  <!-- ============================================================ -->
-  <!-- FUNÇÕES: Alerts -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCOES: showError() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] showError() -->
   <script>
     function showError(message) {
-      console.log(`[USERS/ALERT] ❌ ${message}`);
+      console.log("[USERS/ALERT] Erro: " + message);
       const alertBox = document.getElementById("alertBox");
       const alertMessage = document.getElementById("alertMessage");
       if (alertBox && alertMessage) {
@@ -1007,9 +1104,16 @@
         }, 5000);
       }
     }
+  </script>
+  <!-- [FIM] showError() -->
 
+  <!-- ================================================== -->
+  <!-- FUNCOES: showSuccess() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] showSuccess() -->
+  <script>
     function showSuccess(message) {
-      console.log(`[USERS/ALERT] ✅ ${message}`);
+      console.log("[USERS/ALERT] Sucesso: " + message);
       const successBox = document.getElementById("successBox");
       const successMessage = document.getElementById("successMessage");
       if (successBox && successMessage) {
@@ -1020,9 +1124,16 @@
         }, 5000);
       }
     }
+  </script>
+  <!-- [FIM] showSuccess() -->
 
+  <!-- ================================================== -->
+  <!-- FUNCOES: showModalError() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] showModalError() -->
+  <script>
     function showModalError(message) {
-      console.log(`[USERS/MODAL/ERROR] ⚠️ ${message}`);
+      console.log("[USERS/MODAL/ERROR] " + message);
       const modalAlert = document.getElementById("modalAlertBox");
       const modalAlertMsg = document.getElementById("modalAlertMessage");
       if (modalAlert && modalAlertMsg) {
@@ -1030,7 +1141,14 @@
         modalAlert.classList.remove("d-none");
       }
     }
+  </script>
+  <!-- [FIM] showModalError() -->
 
+  <!-- ================================================== -->
+  <!-- FUNCOES: hideModalError() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] hideModalError() -->
+  <script>
     function hideModalError() {
       const modalAlert = document.getElementById("modalAlertBox");
       if (modalAlert) {
@@ -1038,15 +1156,16 @@
       }
     }
   </script>
+  <!-- [FIM] hideModalError() -->
 
-  <!-- ============================================================ -->
-  <!-- SETUP EVENT LISTENERS -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- FUNCAO: setupEventListeners() -->
+  <!-- ================================================== -->
+  <!-- [INICIO] setupEventListeners() -->
   <script>
     function setupEventListeners() {
-      console.log("[USERS/SETUP] 🔧 Configurando event listeners...");
+      console.log("[USERS/SETUP] Configurando event listeners...");
 
-      // Filtros
       document.getElementById("searchInput")?.addEventListener("input", () => {
         renderUsers(filterUsers());
       });
@@ -1063,32 +1182,34 @@
         renderUsers(filterUsers());
       });
 
-      // Modal
       document.getElementById("userModal")?.addEventListener("show.bs.modal", resetModal);
       document.getElementById("userModal")?.addEventListener("hidden.bs.modal", () => {
         selectedUserId = null;
       });
 
-      console.log("[USERS/SETUP] ✅ Event listeners configurados");
+      console.log("[USERS/SETUP] Event listeners configurados");
     }
   </script>
+  <!-- [FIM] setupEventListeners() -->
 
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
   <!-- LOG FINAL -->
-  <!-- ============================================================ -->
+  <!-- ================================================== -->
+  <!-- [INICIO] Log Final -->
   <script>
-    console.log("\n[USERS] ✅ Script carregado com sucesso!");
-    console.log("[USERS] 📝 Funções disponíveis:");
-    console.log("[USERS]   ✓ loadGroups()");
-    console.log("[USERS]   ✓ loadUsers()");
-    console.log("[USERS]   ✓ filterUsers()");
-    console.log("[USERS]   ✓ renderUsers()");
-    console.log("[USERS]   ✓ editUser()");
-    console.log("[USERS]   ✓ deleteUser()");
-    console.log("[USERS]   ✓ validatePassword()");
-    console.log("[USERS]   ✓ setupPasswordValidation()");
+    console.log("\n[USERS] Script carregado com sucesso!");
+    console.log("[USERS] Funcoes disponiveis:");
+    console.log("[USERS]   - loadGroups()");
+    console.log("[USERS]   - loadUsers()");
+    console.log("[USERS]   - filterUsers()");
+    console.log("[USERS]   - renderUsers()");
+    console.log("[USERS]   - editUser()");
+    console.log("[USERS]   - deleteUser()");
+    console.log("[USERS]   - validatePassword()");
+    console.log("[USERS]   - setupPasswordValidation()");
     console.log("[USERS]\n" + "=".repeat(80) + "\n");
   </script>
+  <!-- [FIM] Log Final -->
 
 </body>
 

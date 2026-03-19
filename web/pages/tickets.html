@@ -2,764 +2,513 @@
 <html lang="pt-BR">
 
 <head>
-  <!-- Google Fonts -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-
-  <!-- Bootstrap 5 -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-
-  <!-- Global Styles -->
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/components.css">
-  
-  <!-- Page Specific - CAMINHO CORRIGIDO -->
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css">
- 
   <title>Tickets - CPE Control</title>
 </head>
 
 <body>
-  <!-- ============================================================ -->
-  <!-- NAVBAR - Carregada pelo nav.js -->
-  <!-- ============================================================ -->
   <nav id="navbar-container"></nav>
 
-  <!-- ============================================================ -->
-  <!-- CONTAINER PRINCIPAL -->
-  <!-- ============================================================ -->
   <div class="container-main">
-    <!-- SIDEBAR - Carregada pelo nav.js -->
     <div id="sidebar-container"></div>
 
-    <!-- MAIN CONTENT -->
     <div class="main-content">
-      <!-- TOP BAR -->
       <div class="top-bar">
-        <button class="menu-toggle" id="menuToggle">
-          <i class="bi bi-list"></i>
-        </button>
         <h1><i class="bi bi-ticket"></i> Tickets</h1>
+        <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
       </div>
 
-      <!-- CONTENT -->
       <div class="content">
-        <!-- Alerts -->
+        <!-- ALERTAS -->
         <div class="alert alert-danger d-none" id="alertBox" role="alert">
-          <i class="bi bi-exclamation-circle"></i>
-          <span id="alertMessage"></span>
+          <i class="bi bi-exclamation-circle"></i> <span id="alertMessage"></span>
         </div>
-
         <div class="alert alert-success d-none" id="successBox" role="alert">
-          <i class="bi bi-check-circle"></i>
-          <span id="successMessage">Operação realizada com sucesso!</span>
+          <i class="bi bi-check-circle"></i> <span id="successMessage"></span>
         </div>
 
-        <!-- Page Header -->
-        <div class="page-header">
-          <h2 class="page-title">
-            <i class="bi bi-ticket-detailed"></i> Gerenciamento de Tickets
-          </h2>
-          <button class="btn-new-ticket" onclick="openNewTicketModal()">
-            <i class="bi bi-plus-lg"></i> Novo Ticket
-          </button>
-        </div>
-
-        <!-- Statistics -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-label">Total de Tickets</div>
-            <div class="stat-value" id="totalTickets">0</div>
-            <div class="stat-change">Tickets criados</div>
+        <!-- ACTION BAR -->
+        <div class="action-bar mb-3">
+          <div class="btn-group">
+            <button class="btn btn-primary btn-sm" onclick="openNewTicketModal()" title="Criar novo ticket">
+              <i class="bi bi-plus-circle"></i> Novo
+            </button>
+            <button class="btn btn-warning btn-sm" onclick="editSelected()" title="Editar ticket selecionado">
+              <i class="bi bi-pencil-square"></i> Alterar
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="deleteSelected()" title="Deletar ticket(s) selecionado(s)">
+              <i class="bi bi-trash"></i> Apagar
+            </button>
+            <button class="btn btn-info btn-sm" onclick="assignSelected()" title="Atribuir ticket(s) selecionado(s)">
+              <i class="bi bi-person-check"></i> Atribuir
+            </button>
+            <button class="btn btn-success btn-sm" id="respondBtn" onclick="respondSelected()" title="Responder ao ticket selecionado" style="display:none;">
+              <i class="bi bi-chat-dots"></i> Responder
+            </button>
           </div>
 
-          <div class="stat-card">
-            <div class="stat-label">Abertos</div>
-            <div class="stat-value" id="openTickets">0</div>
-            <div class="stat-change">Aguardando atendimento</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-label">Em Andamento</div>
-            <div class="stat-value" id="inProgressTickets">0</div>
-            <div class="stat-change">Sendo resolvidos</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-label">Resolvidos</div>
-            <div class="stat-value" id="resolvedTickets">0</div>
-            <div class="stat-change">Problemas solucionados</div>
+          <div class="search-filters">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input type="text" id="searchInput" class="form-control" placeholder="Buscar...">
+            </div>
+            <div class="input-group input-group-sm">
+              <span class="input-group-text"><i class="bi bi-calendar"></i></span>
+              <input type="date" id="dateFilter" class="form-control">
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" onclick="toggleAdvancedFilters()">
+              <i class="bi bi-funnel"></i> Filtros
+            </button>
           </div>
         </div>
 
-        <!-- Search and Filters -->
-        <div class="search-filter">
-          <input type="text" id="searchInput" placeholder="Buscar tickets...">
-          <select id="statusFilter">
-            <option value="">Todos os Status</option>
-            <option value="open">Abertos</option>
-            <option value="in-progress">Em Andamento</option>
-            <option value="resolved">Resolvidos</option>
-            <option value="closed">Fechados</option>
-          </select>
-          <select id="priorityFilter">
-            <option value="">Todas as Prioridades</option>
-            <option value="low">Baixa</option>
-            <option value="medium">Média</option>
-            <option value="high">Alta</option>
-            <option value="urgent">Urgente</option>
-          </select>
+        <!-- ADVANCED FILTERS -->
+        <div class="advanced-filters d-none mb-3" id="advancedFilters">
+          <div class="row g-2">
+            <div class="col-md-3">
+              <select id="statusFilter" class="form-select form-select-sm" onchange="applyFilters()">
+                <option value="">Status</option>
+                <option value="open">Abertos</option>
+                <option value="in-progress">Em Andamento</option>
+                <option value="resolved">Resolvidos</option>
+                <option value="closed">Fechados</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select id="priorityFilter" class="form-select form-select-sm" onchange="applyFilters()">
+                <option value="">Prioridade</option>
+                <option value="low">Baixa</option>
+                <option value="medium">Média</option>
+                <option value="high">Alta</option>
+                <option value="urgent">Urgente</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select id="groupFilter" class="form-select form-select-sm" onchange="applyFilters()">
+                <option value="">Grupo</option>
+                <option value="suporte">Suporte Técnico</option>
+                <option value="vendas">Vendas</option>
+                <option value="financeiro">Financeiro</option>
+                <option value="administrativo">Administrativo</option>
+                <option value="desenvolvimento">Desenvolvimento</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <button class="btn btn-outline-danger btn-sm w-100" onclick="clearFilters()">
+                <i class="bi bi-arrow-counterclockwise"></i> Limpar
+              </button>
+            </div>
+          </div>
         </div>
 
-        <!-- Tickets Table -->
-        <div class="tickets-table">
-          <table id="ticketsTable">
+        <!-- STATS -->
+        <div class="stats-bar mb-3">
+          <div class="stat-item">
+            <span class="stat-label">Total</span>
+            <span class="stat-value" id="totalTickets">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Abertos</span>
+            <span class="stat-value" id="openTickets">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Andamento</span>
+            <span class="stat-value" id="inProgressTickets">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Resolvidos</span>
+            <span class="stat-value" id="resolvedTickets">0</span>
+          </div>
+        </div>
+
+        <!-- TABLE -->
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle">
             <thead>
               <tr>
-                <th>ID</th>
+                <th style="width:40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
+                <th>Usuário</th>
                 <th>Título</th>
-                <th>Cliente</th>
                 <th>Prioridade</th>
                 <th>Status</th>
-                <th>Criado em</th>
-                <th>Ações</th>
+                <th>Atribuído a</th>
+                <th>Data</th>
+                <th style="width:120px;">Ações</th>
               </tr>
             </thead>
             <tbody id="ticketsBody">
-              <tr>
-                <td colspan="7" style="text-align: center; padding: 2rem;">
-                  <div class="empty-state">
-                    <div class="empty-state-icon">
-                      <i class="bi bi-inbox"></i>
-                    </div>
-                    <p>Carregando tickets...</p>
-                  </div>
-                </td>
-              </tr>
+              <tr><td colspan="8" class="text-center text-muted py-4">Carregando...</td></tr>
             </tbody>
           </table>
         </div>
+
+        <!-- PAGINATION -->
+        <div class="pagination-bar mt-3">
+          <div>
+            <span>Mostrando</span>
+            <select id="itemsPerPage" class="form-select form-select-sm d-inline-block w-auto" onchange="changeItemsPerPage(this.value)">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <span>de <strong id="totalItems">0</strong></span>
+          </div>
+          <div class="page-controls">
+            <button class="btn btn-sm btn-outline-secondary" onclick="previousPage()"><i class="bi bi-chevron-left"></i></button>
+            <input type="number" id="currentPage" class="form-control form-control-sm text-center" value="1" min="1" onchange="goToPage(this.value)" style="width:60px;">
+            <span>/ <span id="totalPages">1</span></span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="nextPage()"><i class="bi bi-chevron-right"></i></button>
+          </div>
+          <div><span id="paginationText">1 a 25 de 0</span></div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- ============================================================ -->
-  <!-- MODAL - NOVO/EDITAR TICKET -->
-  <!-- ============================================================ -->
-  <div class="modal fade" id="ticketModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+  <!-- MODAL - DETALHE DO TICKET -->
+  <div class="modal fade" id="ticketDetailModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
       <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="ticketModalLabel">
-            <i class="bi bi-plus-square"></i> Novo Ticket
-          </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        <div class="ticket-detail-header">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <h4 class="mb-1" id="detailTitle"></h4>
+              <small id="detailId"></small>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
         </div>
 
-        <div class="modal-body">
-          <div class="alert alert-danger d-none" id="modalAlertBox" role="alert">
-            <i class="bi bi-exclamation-circle"></i>
-            <span id="modalAlertMessage"></span>
+        <div class="modal-body ticket-modal-body">
+          <!-- ABAS PRINCIPAIS -->
+          <div class="ticket-detail-tabs">
+            <button class="ticket-detail-tab active" onclick="switchTab(event, 'chat')">
+              <i class="bi bi-chat-dots"></i> Chat & Resposta
+            </button>
+            <button class="ticket-detail-tab" onclick="switchTab(event, 'details')">
+              <i class="bi bi-info-circle"></i> Detalhes
+            </button>
+            <button class="ticket-detail-tab" onclick="switchTab(event, 'actions')">
+              <i class="bi bi-sliders"></i> Ações
+            </button>
           </div>
 
-          <form id="ticketForm" novalidate>
-            <div class="mb-3">
-              <label for="ticketTitle" class="form-label">
-                <i class="bi bi-input-cursor"></i> Título <span style="color: #ef4444;">*</span>
-              </label>
-              <input type="text" class="form-control" id="ticketTitle"
-                placeholder="Ex: Problema com login na plataforma" required />
-            </div>
+          <!-- TAB: CHAT & RESPOSTA (LAYOUT LADO A LADO) -->
+          <div class="ticket-detail-content active" id="tab-chat">
+            <div class="chat-layout">
+              <!-- COLUNA ESQUERDA - DESCRIÇÃO E COMENTÁRIOS -->
+              <div class="chat-left">
+                <div class="description-section">
+                  <h6 class="section-title"><i class="bi bi-file-text"></i> Descrição do Chamado</h6>
+                  <div class="description-box" id="detailDescription"></div>
+                </div>
 
-            <div class="mb-3">
-              <label for="ticketDescription" class="form-label">
-                <i class="bi bi-file-text"></i> Descrição
-              </label>
-              <textarea class="form-control" id="ticketDescription" rows="4"
-                placeholder="Descreva o problema em detalhes..."></textarea>
-            </div>
-
-            <div class="row">
-              <div class="col-md-6 mb-3">
-                <label for="ticketClient" class="form-label">
-                  <i class="bi bi-person"></i> Cliente <span style="color: #ef4444;">*</span>
-                </label>
-                <input type="text" class="form-control" id="ticketClient"
-                  placeholder="Nome do cliente" required />
+                <div class="comments-section">
+                  <h6 class="section-title"><i class="bi bi-chat-dots"></i> Histórico de Comentários</h6>
+                  <div id="detailCommentsList" class="comments-list"></div>
+                </div>
               </div>
 
-              <div class="col-md-6 mb-3">
-                <label for="ticketEmail" class="form-label">
-                  <i class="bi bi-envelope"></i> E-mail <span style="color: #ef4444;">*</span>
-                </label>
-                <input type="email" class="form-control" id="ticketEmail"
-                  placeholder="email@cliente.com" required />
+              <!-- COLUNA DIREITA - FORMULÁRIO DE RESPOSTA -->
+              <div class="chat-right">
+                <!-- INFO RÁPIDA DO TICKET -->
+                <div class="ticket-quick-info">
+                  <div class="info-row">
+                    <span class="label">Usuário:</span>
+                    <strong id="chatUserName"></strong>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">Email:</span>
+                    <span id="chatEmail" class="text-break"></span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">Status:</span>
+                    <span id="chatStatus"></span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">Atribuído:</span>
+                    <strong id="chatAssigned"></strong>
+                  </div>
+                </div>
+
+                <!-- MENU DE ABAS DO RESPONDER -->
+                <div class="reply-menu-tabs">
+                  <button class="reply-menu-tab active" onclick="switchReplyMode(event, 'respond')">
+                    <i class="bi bi-chat-left-quote"></i> Responder
+                  </button>
+                  <button class="reply-menu-tab" onclick="switchReplyMode(event, 'internal')">
+                    <i class="bi bi-eye-slash"></i> Comentário Interno
+                  </button>
+                </div>
+
+                <!-- MODO RESPONDER -->
+                <div class="reply-mode active" id="reply-respond">
+                  <form id="detailReplyForm">
+                    <input type="hidden" id="replyModeType" value="public">
+                    <div class="mb-3">
+                      <label class="form-label"><i class="bi bi-chat"></i> Resposta para o Usuário</label>
+                      <textarea class="form-control" id="detailReplyText" placeholder="Digite sua resposta que será enviada para o usuário..." required></textarea>
+                      <small class="text-muted d-block mt-2">O usuário receberá uma notificação desta resposta</small>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-sm w-100">
+                      <i class="bi bi-send"></i> Enviar Resposta
+                    </button>
+                  </form>
+                </div>
+
+                <!-- MODO COMENTÁRIO INTERNO -->
+                <div class="reply-mode" id="reply-internal">
+                  <form id="detailInternalForm">
+                    <input type="hidden" id="internalModeType" value="internal">
+                    <div class="mb-3">
+                      <label class="form-label"><i class="bi bi-eye-slash"></i> Comentário Interno</label>
+                      <textarea class="form-control" id="detailInternalText" placeholder="Apenas você verá este comentário..." required></textarea>
+                      <small class="text-muted d-block mt-2">Não será visível para o usuário</small>
+                    </div>
+                    <button type="submit" class="btn btn-warning btn-sm w-100">
+                      <i class="bi bi-bookmark"></i> Salvar Comentário
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB: DETALHES -->
+          <div class="ticket-detail-content" id="tab-details">
+            <div class="details-grid">
+              <div class="detail-row">
+                <div class="detail-col">
+                  <span class="detail-label">Usuário</span>
+                  <span class="detail-value" id="detailUserName"></span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Email</span>
+                  <span class="detail-value" id="detailEmail"></span>
+                </div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-col">
+                  <span class="detail-label">Grupo</span>
+                  <span class="detail-value" id="detailGroup"></span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Prioridade</span>
+                  <span id="detailPriority"></span>
+                </div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-col">
+                  <span class="detail-label">Status</span>
+                  <span id="detailStatus"></span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Atribuído a</span>
+                  <span class="detail-value" id="detailAssignedTo"></span>
+                </div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-col">
+                  <span class="detail-label">Criado em</span>
+                  <span class="detail-value" id="detailCreatedAt"></span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Atualizado em</span>
+                  <span class="detail-value" id="detailUpdatedAt"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- TAB: AÇÕES -->
+          <div class="ticket-detail-content" id="tab-actions">
+            <div class="actions-grid">
+              <div class="action-section">
+                <div class="action-section-title"><i class="bi bi-gear"></i> Alterar Status</div>
+                <div class="select-action">
+                  <label>Novo Status</label>
+                  <select id="detailStatusSelect" class="form-select form-select-sm" onchange="updateTicketStatus()">
+                    <option value="open">Aberto</option>
+                    <option value="in-progress">Em Andamento</option>
+                    <option value="resolved">Resolvido</option>
+                    <option value="closed">Fechado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="action-section">
+                <div class="action-section-title"><i class="bi bi-arrow-left-right"></i> Transferir para outro setor</div>
+                <div class="select-action">
+                  <label>Selecione o setor</label>
+                  <select id="detailGroupSelect" class="form-select form-select-sm" onchange="updateTicketGroup()">
+                    <option value="">Selecione...</option>
+                    <option value="suporte">Suporte Técnico</option>
+                    <option value="vendas">Vendas</option>
+                    <option value="financeiro">Financeiro</option>
+                    <option value="administrativo">Administrativo</option>
+                    <option value="desenvolvimento">Desenvolvimento</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="action-section">
+                <div class="action-section-title"><i class="bi bi-person-check"></i> Atribuir a</div>
+                <div class="select-action">
+                  <label>Responsável</label>
+                  <select id="detailAssignSelect" class="form-select form-select-sm" onchange="updateTicketAssign()">
+                    <option value="">Não atribuído</option>
+                    <option value="joao.silva">João Silva</option>
+                    <option value="maria.santos">Maria Santos</option>
+                    <option value="pedro.costa">Pedro Costa</option>
+                    <option value="ana.oliveira">Ana Oliveira</option>
+                    <option value="carlos.mendes">Carlos Mendes</option>
+                    <option value="me">Mim mesmo</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" class="btn btn-sm btn-danger" onclick="deleteViewingTicket()">
+            <i class="bi bi-trash"></i> Deletar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL - NOVO/EDITAR TICKET -->
+  <div class="modal fade" id="ticketModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content ticket-form-content">
+        <div class="modal-header ticket-form-header">
+          <h5 class="modal-title" id="ticketModalLabel"><i class="bi bi-plus-square"></i> Novo Ticket</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body ticket-form-body">
+          <form id="ticketForm">
+            <div class="form-row">
+              <div class="form-col">
+                <div class="mb-3">
+                  <label class="form-label">Título <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="ticketTitle" required>
+                </div>
               </div>
             </div>
 
-            <div class="row">
-              <div class="col-md-6 mb-3">
-                <label for="ticketPriority" class="form-label">
-                  <i class="bi bi-exclamation-lg"></i> Prioridade <span style="color: #ef4444;">*</span>
-                </label>
-                <select class="form-select" id="ticketPriority" required>
-                  <option value="">Selecione a prioridade...</option>
-                  <option value="low">Baixa</option>
-                  <option value="medium">Média</option>
-                  <option value="high">Alta</option>
-                  <option value="urgent">Urgente</option>
-                </select>
-              </div>
-
-              <div class="col-md-6 mb-3">
-                <label for="ticketAssignee" class="form-label">
-                  <i class="bi bi-person-check"></i> Atribuído a
-                </label>
-                <select class="form-select" id="ticketAssignee">
-                  <option value="">Não atribuído</option>
-                  <option value="me">Mim</option>
-                  <option value="user1">João Silva</option>
-                  <option value="user2">Maria Santos</option>
-                  <option value="user3">Carlos Oliveira</option>
-                </select>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="mb-3">
+                  <label class="form-label">Descrição</label>
+                  <textarea class="form-control" id="ticketDescription" rows="3"></textarea>
+                </div>
               </div>
             </div>
 
-            <div class="d-flex gap-2">
-              <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
-                <i class="bi bi-check-lg"></i> Criar Ticket
-              </button>
-              <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">
-                <i class="bi bi-x-lg"></i> Cancelar
-              </button>
+            <div class="form-row">
+              <div class="form-col">
+                <div class="mb-3">
+                  <label class="form-label">Usuário <span class="text-danger">*</span></label>
+                  <input type="text" class="form-control" id="ticketClient" required>
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="mb-3">
+                  <label class="form-label">Email <span class="text-danger">*</span></label>
+                  <input type="email" class="form-control" id="ticketEmail" required>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-col">
+                <div class="mb-3">
+                  <label class="form-label">Grupo <span class="text-danger">*</span></label>
+                  <select class="form-select" id="ticketGroup" required>
+                    <option value="">Selecione...</option>
+                    <option value="suporte">Suporte Técnico</option>
+                    <option value="vendas">Vendas</option>
+                    <option value="financeiro">Financeiro</option>
+                    <option value="administrativo">Administrativo</option>
+                    <option value="desenvolvimento">Desenvolvimento</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-col">
+                <div class="mb-3">
+                  <label class="form-label">Prioridade <span class="text-danger">*</span></label>
+                  <select class="form-select" id="ticketPriority" required>
+                    <option value="">Selecione...</option>
+                    <option value="low">Baixa</option>
+                    <option value="medium">Média</option>
+                    <option value="high">Alta</option>
+                    <option value="urgent">Urgente</option>
+                  </select>
+                </div>
+              </div>
             </div>
           </form>
         </div>
+        <div class="modal-footer ticket-form-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-sm btn-primary" id="submitBtn" onclick="document.getElementById('ticketForm').dispatchEvent(new Event('submit'))">Criar</button>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- SCRIPTS - CAMINHOS CORRIGIDOS -->
-  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
-
-  <script>
-    console.log("\n" + "=".repeat(80));
-    console.log("[TICKETS/PAGE] 📄 Inicializando página de Tickets");
-    console.log("[TICKETS/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso Público e Direto");
-    console.log("[TICKETS/PAGE] ✅ Nenhuma verificação de permissão");
-    console.log("=".repeat(80) + "\n");
-
-    document.addEventListener("DOMContentLoaded", () => {
-      console.log("[TICKETS/INIT] 📋 DOM Carregado com sucesso");
-      console.log("[TICKETS/INIT] ⏱️  Timestamp:", new Date().toLocaleString('pt-BR'));
-      console.log("[TICKETS/INIT] 🌐 URL:", window.location.href);
-
-      try {
-        // Aguardar nav.js carregar
-        setTimeout(() => {
-          loadTickets();
-          setupEventListeners();
-          setActiveMenu();
-          console.log("[TICKETS/INIT] ✅ Página pronta para uso");
-          console.log("=".repeat(80) + "\n");
-        }, 500);
-      } catch (err) {
-        console.error("[TICKETS/INIT] ❌ ERRO:", err.message);
-        showError("Erro ao inicializar página: " + err.message);
-      }
-    });
-
-    function setActiveMenu() {
-      // Marcar menu de tickets como ativo
-      const ticketsLink = document.querySelector('a[href*="tickets.html"]');
-      if (ticketsLink) {
-        ticketsLink.parentElement.classList.add('active');
-        ticketsLink.classList.add('active');
-      }
-    }
-
-    function setupEventListeners() {
-      console.log("[TICKETS/SETUP] 🔧 Configurando event listeners...");
-
-      const menuToggle = document.getElementById("menuToggle");
-      const sidebar = document.getElementById("sidebar-container");
-      
-      if (menuToggle && sidebar) {
-        menuToggle.addEventListener("click", () => {
-          const sidebarEl = sidebar.querySelector(".sidebar");
-          if (sidebarEl) {
-            sidebarEl.classList.toggle("show");
-          }
-        });
-      }
-
-      document.querySelectorAll(".sidebar-menu-link").forEach(link => {
-        link.addEventListener("click", () => {
-          const sidebarEl = sidebar?.querySelector(".sidebar");
-          if (sidebarEl) {
-            sidebarEl.classList.remove("show");
-          }
-        });
-      });
-
-      document.getElementById("searchInput")?.addEventListener("input", () => {
-        renderTickets(filterTickets());
-      });
-
-      document.getElementById("statusFilter")?.addEventListener("change", () => {
-        renderTickets(filterTickets());
-      });
-
-      document.getElementById("priorityFilter")?.addEventListener("change", () => {
-        renderTickets(filterTickets());
-      });
-
-      document.getElementById("ticketForm")?.addEventListener("submit", handleFormSubmit);
-
-      document.getElementById("ticketModal")?.addEventListener("show.bs.modal", resetModal);
-      document.getElementById("ticketModal")?.addEventListener("hidden.bs.modal", () => {
-        selectedTicketId = null;
-      });
-
-      console.log("[TICKETS/SETUP] ✅ Event listeners configurados");
-    }
-  </script>
-
-  <script>
-    let tickets = [];
-    let selectedTicketId = null;
-
-    async function loadTickets() {
-      console.log("\n[TICKETS/LOAD] 📦 Carregando tickets...");
-
-      try {
-        tickets = [
-          {
-            id: 1234,
-            title: "Problema com login na plataforma",
-            description: "Usuário não consegue fazer login após reset de senha",
-            client: "João Silva",
-            email: "joao.silva@empresa.com",
-            priority: "high",
-            status: "open",
-            assignee: "me",
-            createdAt: "2026-03-09 10:30",
-            updatedAt: "2026-03-09 10:30"
-          },
-          {
-            id: 1233,
-            title: "Erro ao processar pagamento",
-            description: "Gateway de pagamento retornando erro 500",
-            client: "Maria Santos",
-            email: "maria.santos@empresa.com",
-            priority: "urgent",
-            status: "in-progress",
-            assignee: "user1",
-            createdAt: "2026-03-09 09:15",
-            updatedAt: "2026-03-09 11:20"
-          },
-          {
-            id: 1232,
-            title: "Dúvida sobre funcionalidade de relatórios",
-            description: "Cliente questionando como exportar relatórios em Excel",
-            client: "Pedro Costa",
-            email: "pedro.costa@empresa.com",
-            priority: "medium",
-            status: "open",
-            assignee: null,
-            createdAt: "2026-03-07 14:20",
-            updatedAt: "2026-03-07 14:20"
-          },
-          {
-            id: 1231,
-            title: "Solicitação de integração com Zapier",
-            description: "Cliente solicitou integração com Zapier para automações",
-            client: "Ana Oliveira",
-            email: "ana.oliveira@empresa.com",
-            priority: "low",
-            status: "resolved",
-            assignee: "user2",
-            createdAt: "2026-03-08 16:45",
-            updatedAt: "2026-03-09 08:00"
-          },
-          {
-            id: 1230,
-            title: "Exportação de dados não funciona",
-            description: "Função de exportação gerando erro ao processar grande volume",
-            client: "Carlos Mendes",
-            email: "carlos.mendes@empresa.com",
-            priority: "high",
-            status: "in-progress",
-            assignee: "user3",
-            createdAt: "2026-03-09 08:00",
-            updatedAt: "2026-03-09 10:15"
-          },
-          {
-            id: 1229,
-            title: "Solicitação de novo relatório customizado",
-            description: "Cliente quer relatório com campos específicos da empresa",
-            client: "Beatriz Lima",
-            email: "beatriz.lima@empresa.com",
-            priority: "medium",
-            status: "open",
-            assignee: null,
-            createdAt: "2026-03-06 13:30",
-            updatedAt: "2026-03-06 13:30"
-          },
-          {
-            id: 1228,
-            title: "Performance lenta no relatório mensal",
-            description: "Relatório de vendas demora mais de 5 minutos para gerar",
-            client: "Roberto Dias",
-            email: "roberto.dias@empresa.com",
-            priority: "high",
-            status: "in-progress",
-            assignee: "me",
-            createdAt: "2026-03-05 11:45",
-            updatedAt: "2026-03-09 09:30"
-          },
-          {
-            id: 1227,
-            title: "Erro ao importar dados CSV",
-            description: "Sistema rejeitando arquivo CSV com dados válidos",
-            client: "Fernanda Costa",
-            email: "fernanda.costa@empresa.com",
-            priority: "high",
-            status: "open",
-            assignee: "user1",
-            createdAt: "2026-03-04 15:20",
-            updatedAt: "2026-03-04 15:20"
-          }
-        ];
-
-        console.log("[TICKETS/LOAD] ✓ Tickets carregados:");
-        console.log("[TICKETS/LOAD] ├─ Total:", tickets.length);
-        console.log("[TICKETS/LOAD] ├─ Abertos:", tickets.filter(t => t.status === 'open').length);
-        console.log("[TICKETS/LOAD] ├─ Em progresso:", tickets.filter(t => t.status === 'in-progress').length);
-        console.log("[TICKETS/LOAD] └─ Resolvidos:", tickets.filter(t => t.status === 'resolved').length);
-
-        renderTickets(filterTickets());
-        updateStatistics();
-
-        console.log("[TICKETS/LOAD] ✅ Renderização completa\n");
-
-      } catch (err) {
-        console.error("[TICKETS/LOAD] ❌ Erro:", err.message);
-        showError("Erro ao carregar tickets: " + err.message);
-      }
-    }
-
-    function filterTickets() {
-      let filtered = [...tickets];
-
-      const statusFilter = document.getElementById("statusFilter")?.value || "";
-      if (statusFilter) {
-        filtered = filtered.filter(t => t.status === statusFilter);
-      }
-
-      const priorityFilter = document.getElementById("priorityFilter")?.value || "";
-      if (priorityFilter) {
-        filtered = filtered.filter(t => t.priority === priorityFilter);
-      }
-
-      const searchTerm = document.getElementById("searchInput")?.value?.toLowerCase() || "";
-      if (searchTerm) {
-        filtered = filtered.filter(t =>
-          t.title.toLowerCase().includes(searchTerm) ||
-          t.description.toLowerCase().includes(searchTerm) ||
-          t.client.toLowerCase().includes(searchTerm) ||
-          t.id.toString().includes(searchTerm)
-        );
-      }
-
-      return filtered;
-    }
-
-    function renderTickets(list = tickets) {
-      const ticketsBody = document.getElementById("ticketsBody");
-
-      if (!list || list.length === 0) {
-        ticketsBody.innerHTML = `
-          <tr>
-            <td colspan="7">
-              <div class="empty-state">
-                <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
-                <p>Nenhum ticket encontrado</p>
-                <p style="font-size: 12px; margin-top: 1rem; color: #9ca3af;">
-                  Clique em "Novo Ticket" para criar um ou ajuste os filtros
-                </p>
-              </div>
-            </td>
-          </tr>
-        `;
-        return;
-      }
-
-      ticketsBody.innerHTML = list.map(ticket => `
-        <tr>
-          <td><span class="ticket-id">#${ticket.id}</span></td>
-          <td><span class="ticket-title" title="${escapeHtml(ticket.title)}">${escapeHtml(ticket.title)}</span></td>
-          <td>${escapeHtml(ticket.client)}</td>
-          <td>
-            <span class="priority-badge priority-${ticket.priority}">
-              ${getPriorityLabel(ticket.priority)}
-            </span>
-          </td>
-          <td>
-            <span class="status-badge status-${ticket.status.replace('-', '-')}">
-              ${getStatusLabel(ticket.status)}
-            </span>
-          </td>
-          <td>${ticket.createdAt}</td>
-          <td>
-            <div style="display: flex; gap: 6px;">
-              <button class="btn-ticket-action" onclick="viewTicket(${ticket.id})" title="Ver detalhes">
-                <i class="bi bi-eye"></i> Ver
-              </button>
-              <button class="btn-ticket-action" onclick="editTicket(${ticket.id})" title="Editar">
-                <i class="bi bi-pencil"></i> Editar
-              </button>
-              <button class="btn-ticket-action danger" onclick="deleteTicket(${ticket.id}, '${escapeHtml(ticket.title)}')" title="Deletar">
-                <i class="bi bi-trash"></i> Deletar
-              </button>
+  <!-- MODAL - ATRIBUIR -->
+  <div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content ticket-form-content">
+        <div class="modal-header ticket-form-header">
+          <h5 class="modal-title"><i class="bi bi-person-check"></i> Atribuir Ticket</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body ticket-form-body">
+          <form id="assignForm">
+            <div class="mb-3">
+              <label class="form-label">Atribuir para <span class="text-danger">*</span></label>
+              <select class="form-select" id="assignUser" required>
+                <option value="">Selecione um usuário...</option>
+                <option value="joao.silva">João Silva</option>
+                <option value="maria.santos">Maria Santos</option>
+                <option value="pedro.costa">Pedro Costa</option>
+                <option value="ana.oliveira">Ana Oliveira</option>
+                <option value="carlos.mendes">Carlos Mendes</option>
+                <option value="me">Mim mesmo</option>
+              </select>
             </div>
-          </td>
-        </tr>
-      `).join("");
-    }
+          </form>
+        </div>
+        <div class="modal-footer ticket-form-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-sm btn-primary" onclick="document.getElementById('assignForm').dispatchEvent(new Event('submit'))">
+            <i class="bi bi-check-lg"></i> Atribuir
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    function getStatusLabel(status) {
-      const labels = {
-        "open": "Aberto",
-        "in-progress": "Em Andamento",
-        "resolved": "Resolvido",
-        "closed": "Fechado",
-        "pending": "Pendente"
-      };
-      return labels[status] || status;
-    }
-
-    function getPriorityLabel(priority) {
-      const labels = {
-        low: "Baixa",
-        medium: "Média",
-        high: "Alta",
-        urgent: "Urgente"
-      };
-      return labels[priority] || priority;
-    }
-
-    function escapeHtml(text) {
-      const map = {
-        '&': '&amp;',
-        '<': '&lt;',
-        '>': '&gt;',
-        '"': '&quot;',
-        "'": '&#039;'
-      };
-      return text.replace(/[&<>"']/g, char => map[char]);
-    }
-
-    function updateStatistics() {
-      const total = tickets.length;
-      const open = tickets.filter(t => t.status === "open").length;
-      const inProgress = tickets.filter(t => t.status === "in-progress").length;
-      const resolved = tickets.filter(t => t.status === "resolved").length;
-
-      document.getElementById("totalTickets").textContent = total;
-      document.getElementById("openTickets").textContent = open;
-      document.getElementById("inProgressTickets").textContent = inProgress;
-      document.getElementById("resolvedTickets").textContent = resolved;
-    }
-
-    function viewTicket(ticketId) {
-      const ticket = tickets.find(t => t.id === ticketId);
-      if (!ticket) return;
-
-      console.log("[TICKETS/VIEW] 👁️ Visualizando ticket:", ticketId, "-", ticket.title);
-      showSuccess(`Abrindo detalhes do ticket #${ticket.id}`);
-    }
-
-    function editTicket(ticketId) {
-      const ticket = tickets.find(t => t.id === ticketId);
-      if (!ticket) return;
-
-      console.log("[TICKETS/EDIT] ✏️ Editando ticket:", ticketId, "-", ticket.title);
-
-      selectedTicketId = ticketId;
-      document.getElementById("ticketModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Ticket #' + ticket.id;
-      document.getElementById("ticketTitle").value = ticket.title;
-      document.getElementById("ticketDescription").value = ticket.description;
-      document.getElementById("ticketClient").value = ticket.client;
-      document.getElementById("ticketEmail").value = ticket.email;
-      document.getElementById("ticketPriority").value = ticket.priority;
-      document.getElementById("ticketAssignee").value = ticket.assignee || "";
-      document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Ticket';
-
-      const modal = new bootstrap.Modal(document.getElementById("ticketModal"));
-      modal.show();
-    }
-
-    function deleteTicket(ticketId, ticketTitle) {
-      console.log("[TICKETS/DELETE] 🗑️ Deletando ticket:", ticketId, "-", ticketTitle);
-
-      if (!confirm(`Tem certeza que deseja deletar o ticket "${ticketTitle}"?`)) {
-        console.log("[TICKETS/DELETE] ⏭️ Deleção cancelada pelo usuário");
-        return;
-      }
-
-      try {
-        const index = tickets.findIndex(t => t.id === ticketId);
-        if (index !== -1) {
-          tickets.splice(index, 1);
-          console.log("[TICKETS/DELETE] ✓ Ticket deletado com sucesso");
-          showSuccess(`Ticket "${ticketTitle}" deletado com sucesso!`);
-          renderTickets(filterTickets());
-          updateStatistics();
-        }
-
-      } catch (err) {
-        console.error("[TICKETS/DELETE] ❌ Erro:", err.message);
-        showError("Erro ao deletar ticket: " + err.message);
-      }
-    }
-
-    function openNewTicketModal() {
-      selectedTicketId = null;
-      const modal = new bootstrap.Modal(document.getElementById("ticketModal"));
-      modal.show();
-    }
-
-    function resetModal() {
-      if (!selectedTicketId) {
-        document.getElementById("ticketModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Novo Ticket';
-        document.getElementById("ticketForm").reset();
-        document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Ticket';
-      }
-      document.getElementById("modalAlertBox").classList.add("d-none");
-    }
-
-    async function handleFormSubmit(e) {
-      e.preventDefault();
-
-      const title = document.getElementById("ticketTitle")?.value?.trim();
-      const description = document.getElementById("ticketDescription")?.value?.trim();
-      const client = document.getElementById("ticketClient")?.value?.trim();
-      const email = document.getElementById("ticketEmail")?.value?.trim();
-      const priority = document.getElementById("ticketPriority")?.value;
-      const assignee = document.getElementById("ticketAssignee")?.value || null;
-
-      if (!title || !client || !email || !priority) {
-        console.warn("[TICKETS/FORM] ⚠️ Campos obrigatórios não preenchidos");
-        showModalError("Preencha todos os campos obrigatórios: Título, Cliente, E-mail e Prioridade");
-        return;
-      }
-
-      try {
-        const submitBtn = document.getElementById("submitBtn");
-        submitBtn.disabled = true;
-
-        const now = new Date();
-        const timestamp = now.toLocaleString('pt-BR').replace(',', '');
-
-        if (selectedTicketId) {
-          const ticket = tickets.find(t => t.id === selectedTicketId);
-          if (ticket) {
-            ticket.title = title;
-            ticket.description = description;
-            ticket.client = client;
-            ticket.email = email;
-            ticket.priority = priority;
-            ticket.assignee = assignee;
-            ticket.updatedAt = timestamp;
-
-            console.log("[TICKETS/FORM] ✓ Ticket atualizado");
-            showSuccess("Ticket atualizado com sucesso!");
-          }
-        } else {
-          const newTicket = {
-            id: Math.max(...tickets.map(t => t.id), 0) + 1,
-            title,
-            description,
-            client,
-            email,
-            priority,
-            status: "open",
-            assignee,
-            createdAt: timestamp,
-            updatedAt: timestamp
-          };
-
-          tickets.push(newTicket);
-
-          console.log("[TICKETS/FORM] ✓ Novo ticket criado");
-          showSuccess("Ticket criado com sucesso!");
-        }
-
-        document.getElementById("ticketForm").reset();
-        const modal = bootstrap.Modal.getInstance(document.getElementById("ticketModal"));
-        if (modal) modal.hide();
-
-        selectedTicketId = null;
-        renderTickets(filterTickets());
-        updateStatistics();
-
-      } catch (err) {
-        console.error("[TICKETS/FORM] ❌ Erro:", err.message);
-        showModalError(err.message || "Erro ao processar ticket!");
-      } finally {
-        const submitBtn = document.getElementById("submitBtn");
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Criar Ticket';
-      }
-    }
-
-    function showError(message) {
-      console.log(`[TICKETS/ALERT] ❌ Erro: ${message}`);
-
-      const alertBox = document.getElementById("alertBox");
-      const alertMessage = document.getElementById("alertMessage");
-      if (alertBox && alertMessage) {
-        alertMessage.textContent = message;
-        alertBox.classList.remove("d-none");
-        setTimeout(() => {
-          alertBox.classList.add("d-none");
-        }, 5000);
-      }
-    }
-
-    function showSuccess(message) {
-      console.log(`[TICKETS/ALERT] ✅ Sucesso: ${message}`);
-
-      const successBox = document.getElementById("successBox");
-      const successMessage = document.getElementById("successMessage");
-      if (successBox && successMessage) {
-        successMessage.textContent = message;
-        successBox.classList.remove("d-none");
-        setTimeout(() => {
-          successBox.classList.add("d-none");
-        }, 5000);
-      }
-    }
-
-    function showModalError(message) {
-      console.log(`[TICKETS/MODAL/ERROR] ⚠️ ${message}`);
-
-      const modalAlert = document.getElementById("modalAlertBox");
-      const modalAlertMsg = document.getElementById("modalAlertMessage");
-      if (modalAlert && modalAlertMsg) {
-        modalAlertMsg.textContent = message;
-        modalAlert.classList.remove("d-none");
-      }
-    }
-
-    console.log("[TICKETS] ✅ Script carregado e pronto para uso\n");
-  </script>
+  <!-- SCRIPTS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/js/route-protection.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/tickets.js"></script>
 
 </body>
 

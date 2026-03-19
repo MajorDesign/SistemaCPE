@@ -81,16 +81,14 @@ function renderNavbar() {
     <div class="navbar-top">
       <div class="navbar-left">
         <img 
-          src="/SistemaCPE/web/assests/images/favicon.png" 
+          src="" 
           alt="CPE" 
           class="navbar-favicon"
           onerror="this.style.display='none';"
         >
       </div>
 
-      <div class="navbar-center">
-        <span class="navbar-page-title" id="pageTitle">Dashboard</span>
-      </div>
+     
 
       <div class="navbar-right">
         <button class="navbar-icon-btn" title="Menu" onclick="toggleSidebarMobile()">

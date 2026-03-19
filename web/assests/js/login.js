@@ -127,6 +127,8 @@
       const data = await response.json();
 
       console.log("[LOGIN] ✓ Resposta recebida da API");
+      console.log("[LOGIN] 📦 Estrutura da resposta:");
+      console.log(data);
       // [FIM] Fazer requisicao para API
 
       // [INICIO] Processar resposta
@@ -162,23 +164,85 @@
       console.log(`[LOGIN]   - Role: ${data.user.role}`);
       console.log(`[LOGIN]   - Ativo: ${data.user.is_active}`);
 
+      // [INICIO] Extrair token CORRETO da resposta
+      console.log("[LOGIN] 🔑 Extraindo token da resposta...");
+      
+      let token = null;
+      
+      // Tentar diferentes chaves de token
+      if (data.access_token) {
+        token = data.access_token;
+        console.log("[LOGIN]   ✓ Token encontrado em: access_token");
+      } else if (data.token) {
+        token = data.token;
+        console.log("[LOGIN]   ✓ Token encontrado em: token");
+      } else if (data.jwt) {
+        token = data.jwt;
+        console.log("[LOGIN]   ✓ Token encontrado em: jwt");
+      } else {
+        // Se não houver token, usar o ID como fallback (menos seguro, mas funciona)
+        console.warn("[LOGIN]   ⚠️  Nenhum token encontrado! Usando ID como fallback");
+        token = data.user.id.toString();
+      }
+      
+      console.log("[LOGIN] Token extraido:", token ? token.substring(0, 30) + "..." : "NÃO ENCONTRADO");
+      // [FIM] Extrair token CORRETO da resposta
+
       // [INICIO] Salvar dados no localStorage - CHAVES CORRETAS!
       console.log("[LOGIN] 💾 Salvando dados no localStorage...");
       
-      // ✅ CHAVE CORRIGIDA: "cpe_user" (não "user")
-      localStorage.setItem("cpe_user", JSON.stringify(data.user));
-      console.log("[LOGIN]   ✓ cpe_user salvo");
+      // ✅ Salvar objeto completo do usuario
+      const userObject = {
+        id: data.user.id,
+        name: data.user.name,
+        email: data.user.email,
+        username: data.user.username,
+        role: data.user.role,
+        group_id: data.user.group_id,
+        is_active: data.user.is_active,
+        created_at: data.user.created_at
+      };
       
-      // ✅ CHAVE CORRIGIDA: "cpe_token" (não "user_id")
-      localStorage.setItem("cpe_token", data.user.id);
-      console.log("[LOGIN]   ✓ cpe_token salvo");
+      localStorage.setItem("cpe_user", JSON.stringify(userObject));
+      console.log("[LOGIN]   ✓ localStorage.cpe_user salvo");
       
-      // ✅ SALVAR TAMBÉM EM sessionStorage
-      sessionStorage.setItem("cpe_user", JSON.stringify(data.user));
-      console.log("[LOGIN]   ✓ cpe_user (sessionStorage) salvo");
+      // ✅ Salvar token CORRETO (não ID!)
+      localStorage.setItem("cpe_token", token);
+      console.log("[LOGIN]   ✓ localStorage.cpe_token salvo");
       
-      sessionStorage.setItem("cpe_token", data.user.id);
-      console.log("[LOGIN]   ✓ cpe_token (sessionStorage) salvo");
+      // ✅ SALVAR TAMBÉM EM sessionStorage (para compatibilidade)
+      sessionStorage.setItem("cpe_user", JSON.stringify(userObject));
+      console.log("[LOGIN]   ✓ sessionStorage.cpe_user salvo");
+      
+      sessionStorage.setItem("cpe_token", token);
+      console.log("[LOGIN]   ✓ sessionStorage.cpe_token salvo");
+
+      // ✅ FALLBACK para formato antigo (compatibilidade com código antigo)
+      localStorage.setItem("user", JSON.stringify(userObject));
+      localStorage.setItem("token", token);
+      localStorage.setItem("user_id", data.user.id.toString());
+      localStorage.setItem("logged_in", "true");
+      localStorage.setItem("login_time", new Date().toISOString());
+      console.log("[LOGIN]   ✓ Formato antigo (user/token) salvo");
+
+      // [INICIO] Verificacao final dos dados salvos
+      console.log("[LOGIN] 🔍 Verificando dados salvos...");
+      const savedUser = localStorage.getItem("cpe_user");
+      const savedToken = localStorage.getItem("cpe_token");
+      
+      if (!savedUser) {
+        console.error("[LOGIN] ❌ ERRO: cpe_user NÃO foi salvo!");
+        throw new Error("Falha ao salvar dados de usuario");
+      }
+      if (!savedToken) {
+        console.error("[LOGIN] ❌ ERRO: cpe_token NÃO foi salvo!");
+        throw new Error("Falha ao salvar token de autenticacao");
+      }
+      
+      console.log("[LOGIN]   ✓ cpe_user existe:", !!savedUser);
+      console.log("[LOGIN]   ✓ cpe_token existe:", !!savedToken);
+      console.log("[LOGIN]   ✓ cpe_token valor:", savedToken.substring(0, 30) + "...");
+      // [FIM] Verificacao final dos dados salvos
 
       console.log("[LOGIN] ✓ Todos os dados salvos com sucesso!");
       console.log("[LOGIN] 🔄 Redirecionando para dashboard...");
@@ -192,7 +256,7 @@
 
       setTimeout(() => {
         window.location.href = redirectUrl;
-      }, 500);
+      }, 1000);
       // [FIM] Redirecionar
 
     } catch (err) {
@@ -229,5 +293,14 @@
     }
   }
   // [FIM] showError()
+
+  // ====================================
+  // LOG DE CARREGAMENTO
+  // ====================================
+  console.log("\n" + "=".repeat(80));
+  console.log("[LOGIN] ✓ Script login.js carregado com sucesso!");
+  console.log("[LOGIN] API: http://127.0.0.1:8000/api/auth/login");
+  console.log("[LOGIN] Aguardando submissao do formulario...");
+  console.log("=".repeat(80) + "\n");
 
 })();
