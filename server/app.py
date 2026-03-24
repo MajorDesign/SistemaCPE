@@ -1,12 +1,12 @@
 """
 CPE Control API - Aplicacao Principal
-Gerenciamento de Usuarios com Vinculacao de Grupos e Autenticacao com Bcrypt
+Gerenciamento de Usuarios, Grupos, Tickets e Notificacoes com Autenticacao Bcrypt
 """
 
 # =========================================
-# 1. IMPORTS
+# 1. IMPORTACOES
 # =========================================
-from fastapi import FastAPI, HTTPException, APIRouter, status
+from fastapi import FastAPI, HTTPException, APIRouter, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional
@@ -14,11 +14,13 @@ import mysql.connector
 import logging
 import uvicorn
 import bcrypt
+import hashlib
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 # =========================================
-# 2. CONFIGURAR LOGGING (PRIMEIRO!)
+# 2. CONFIGURAR LOGGING
 # =========================================
 logging.basicConfig(
     level=logging.INFO,
@@ -48,7 +50,6 @@ logger.info("=" * 90 + "\n")
 # 4. FUNCOES DE BANCO DE DADOS
 # =========================================
 
-# [INICIO] get_db_connection()
 def get_db_connection():
     """Estabelece conexao com o banco de dados"""
     try:
@@ -69,7 +70,7 @@ def get_db_connection():
     except Exception as err:
         logger.error(f"[DB] Erro desconhecido ao conectar: {str(err)}")
         raise
-# [FIM] get_db_connection()
+
 
 # Testar conexao ao iniciar
 try:
@@ -78,11 +79,11 @@ try:
     test_cursor = test_conn.cursor()
     test_cursor.execute("SELECT VERSION()")
     version = test_cursor.fetchone()
-    logger.info(f"[DB] MySQL version: {version[0]}")
+    logger.info(f"[DB] ✅ MySQL version: {version[0]}")
     test_cursor.close()
     test_conn.close()
 except Exception as err:
-    logger.error(f"[DB] FALHA NA CONEXAO: {str(err)}")
+    logger.error(f"[DB] ❌ FALHA NA CONEXAO: {str(err)}")
 
 # =========================================
 # 5. MODELOS PYDANTIC
@@ -90,20 +91,17 @@ except Exception as err:
 
 # --- USUARIOS ---
 class UserBase(BaseModel):
-    """Modelo base de usuario"""
-    name: str = Field(..., min_length=3, max_length=255, description="Nome completo")
-    email: EmailStr = Field(..., description="Email do usuario")
-    username: str = Field(..., min_length=3, max_length=100, description="Nome de usuario")
-    role: str = Field(default="USER", pattern="^(USER|ADMIN|MANAGER|TI)$", description="Papel do usuario")
-    group_id: Optional[int] = Field(None, description="ID do grupo vinculado")
-    is_active: bool = Field(True, description="Status do usuario")
+    name: str = Field(..., min_length=3, max_length=255)
+    email: EmailStr = Field(...)
+    username: str = Field(..., min_length=3, max_length=100)
+    role: str = Field(default="USER", pattern="^(USER|ADMIN|MANAGER|TI)$")
+    group_id: Optional[int] = None
+    is_active: bool = Field(True)
 
 class UserCreate(UserBase):
-    """Modelo para criar usuario"""
-    password: str = Field(..., min_length=8, description="Senha do usuario (min 8 caracteres)")
+    password: str = Field(..., min_length=8)
 
 class UserUpdate(BaseModel):
-    """Modelo para atualizar usuario"""
     name: Optional[str] = Field(None, min_length=3, max_length=255)
     email: Optional[EmailStr] = None
     username: Optional[str] = Field(None, min_length=3, max_length=100)
@@ -111,9 +109,7 @@ class UserUpdate(BaseModel):
     group_id: Optional[int] = None
     is_active: Optional[bool] = None
 
-# [INICIO] class UserResponse
 class UserResponse(BaseModel):
-    """Modelo de resposta do usuario"""
     id: int
     name: str
     email: str
@@ -122,58 +118,120 @@ class UserResponse(BaseModel):
     group_id: Optional[int] = None
     is_active: bool
     created_at: Optional[str] = None
-# [FIM] class UserResponse
 
 # --- GRUPOS ---
 class GroupBase(BaseModel):
-    """Modelo base de grupo"""
-    name: str = Field(..., min_length=3, max_length=255, description="Nome do grupo")
-    description: Optional[str] = Field(None, max_length=500, description="Descricao do grupo")
+    name: str = Field(..., min_length=3, max_length=255)
+    description: Optional[str] = Field(None, max_length=500)
 
 class GroupCreate(GroupBase):
-    """Modelo para criar grupo"""
     pass
 
 class GroupUpdate(BaseModel):
-    """Modelo para atualizar grupo"""
     name: Optional[str] = Field(None, min_length=3, max_length=255)
     description: Optional[str] = Field(None, max_length=500)
 
 class GroupResponse(BaseModel):
-    """Modelo de resposta do grupo"""
     id: int
     name: str
     description: Optional[str] = None
     created_at: Optional[str] = None
 
 # --- AUTENTICACAO ---
-# [INICIO] class LoginRequest
 class LoginRequest(BaseModel):
-    """Modelo para requisicao de login"""
-    credential: str = Field(..., min_length=3, description="Email ou username")
-    password: str = Field(..., min_length=6, description="Senha do usuario")
-# [FIM] class LoginRequest
+    credential: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=6)
 
 class LoginResponse(BaseModel):
-    """Modelo para resposta de login"""
     success: bool
     message: str
     user: UserResponse
+    access_token: str
+    token_type: str = Field(default="bearer")
+
+# --- NOTIFICACOES ---
+class NotificacaoCreate(BaseModel):
+    ticket_id: int = Field(...)
+    usuario_id: int = Field(...)
+    mensagem: str = Field(..., min_length=1)
+    tipo: str = Field(default="info")
+    lido: Optional[bool] = Field(False)
+
+class NotificacaoUpdate(BaseModel):
+    lido: Optional[bool] = None
+    mensagem: Optional[str] = None
+
+class NotificacaoResponse(BaseModel):
+    id: int
+    ticket_id: int
+    usuario_id: int
+    mensagem: str
+    tipo: str
+    lido: bool
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 # --- HEALTH CHECK ---
 class HealthCheckResponse(BaseModel):
-    """Modelo para health check"""
     status: str
     api: str
     version: str
     timestamp: str
     database: Optional[str] = None
 
+# --- TICKETS ---
+class TicketCreate(BaseModel):
+    assunto: str = Field(..., min_length=5)
+    descricao_inicial: str = Field(..., min_length=10)
+    solicitante_id: int = Field(...)
+    responsavel_id: Optional[int] = None
+    group_id: Optional[int] = None
+    categoria_id: Optional[int] = None
+    prioridade_id: int = Field(default=2)
+    origem: Optional[str] = None
+
+class TicketUpdate(BaseModel):
+    assunto: Optional[str] = Field(None, min_length=5)
+    descricao_inicial: Optional[str] = Field(None, min_length=10)
+    responsavel_id: Optional[int] = None
+    group_id: Optional[int] = None
+    categoria_id: Optional[int] = None
+    status_id: Optional[int] = None
+    prioridade_id: Optional[int] = None
+
+class TicketResponse(BaseModel):
+    id: int
+    numero: str
+    assunto: str
+    solicitante_id: int
+    responsavel_id: Optional[int] = None
+    group_id: Optional[int] = None
+    status_id: int
+    prioridade_id: int
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+# --- INTERACOES DE TICKET ---
+class TicketInteracaoCreate(BaseModel):
+    ticket_id: int = Field(...)
+    usuario_id: int = Field(...)
+    mensagem: str = Field(..., min_length=1)
+    tipo: str = Field(default="resposta")
+    publico: int = Field(default=1)
+
+class TicketInteracaoResponse(BaseModel):
+    id: int
+    ticket_id: int
+    usuario_id: int
+    mensagem: str
+    tipo: str
+    publico: int
+    created_at: Optional[str] = None
+
 # =========================================
 # 6. FUNCOES UTILITARIAS
 # =========================================
 
-# [INICIO] get_db_or_404()
 def get_db_or_404():
     """Obtem conexao ou lanca erro 500"""
     try:
@@ -184,31 +242,27 @@ def get_db_or_404():
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Erro ao conectar ao banco de dados"
         )
-# [FIM] get_db_or_404()
 
-# [INICIO] convert_datetime_to_string()
 def convert_datetime_to_string(obj: dict) -> dict:
     """Converte datetime para string ISO em um dicionario"""
     if not obj:
         return obj
-    
     try:
         if 'created_at' in obj and obj['created_at']:
             if hasattr(obj['created_at'], 'isoformat'):
                 obj['created_at'] = obj['created_at'].isoformat()
+        if 'updated_at' in obj and obj['updated_at']:
+            if hasattr(obj['updated_at'], 'isoformat'):
+                obj['updated_at'] = obj['updated_at'].isoformat()
         return obj
     except Exception as err:
         logger.error(f"[CONVERT] Erro ao converter: {str(err)}")
         return obj
-# [FIM] convert_datetime_to_string()
 
-# [INICIO] convert_datetime_list()
 def convert_datetime_list(objects: list) -> list:
     """Converte datetime para string ISO em lista"""
     return [convert_datetime_to_string(obj) for obj in objects]
-# [FIM] convert_datetime_list()
 
-# [INICIO] validate_group_exists()
 def validate_group_exists(cursor, group_id: int) -> bool:
     """Valida se um grupo existe"""
     try:
@@ -217,81 +271,155 @@ def validate_group_exists(cursor, group_id: int) -> bool:
     except Exception as err:
         logger.error(f"[VALIDATE] Erro ao validar grupo: {str(err)}")
         return False
-# [FIM] validate_group_exists()
 
-# [INICIO] validate_email_unique()
 def validate_email_unique(cursor, email: str, exclude_user_id: Optional[int] = None) -> bool:
     """Valida se um email e unico"""
     try:
         if exclude_user_id:
-            cursor.execute(
-                "SELECT id FROM users WHERE email = %s AND id != %s",
-                (email, exclude_user_id)
-            )
+            cursor.execute("SELECT id FROM users WHERE email = %s AND id != %s", (email, exclude_user_id))
         else:
             cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
         return cursor.fetchone() is None
     except Exception as err:
         logger.error(f"[VALIDATE] Erro ao validar email: {str(err)}")
         return False
-# [FIM] validate_email_unique()
 
-# [INICIO] validate_username_unique()
 def validate_username_unique(cursor, username: str, exclude_user_id: Optional[int] = None) -> bool:
     """Valida se um username e unico"""
     try:
         if exclude_user_id:
-            cursor.execute(
-                "SELECT id FROM users WHERE username = %s AND id != %s",
-                (username, exclude_user_id)
-            )
+            cursor.execute("SELECT id FROM users WHERE username = %s AND id != %s", (username, exclude_user_id))
         else:
             cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
         return cursor.fetchone() is None
     except Exception as err:
         logger.error(f"[VALIDATE] Erro ao validar username: {str(err)}")
         return False
-# [FIM] validate_username_unique()
+
+def gerar_numero_ticket(cursor) -> str:
+    """Gera numero unico para ticket formato YYYY-XXXXX"""
+    try:
+        ano_atual = datetime.now().year
+        cursor.execute("""
+            SELECT numero FROM tickets 
+            WHERE numero LIKE CONCAT(%s, '-%')
+            ORDER BY numero DESC LIMIT 1
+        """, (str(ano_atual),))
+        resultado = cursor.fetchone()
+        
+        if resultado and resultado['numero']:
+            numero_atual = resultado['numero']
+            sequencial = int(numero_atual.split('-')[1]) + 1
+        else:
+            sequencial = 1
+        
+        numero_ticket = f"{ano_atual}-{sequencial:05d}"
+        logger.info(f"[TICKET] Numero gerado: {numero_ticket}")
+        return numero_ticket
+    
+    except Exception as err:
+        logger.error(f"[NUMERO] Erro ao gerar numero: {str(err)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao gerar numero do ticket: {str(err)}"
+        )
+
+def mapa_dados_ticket(ticket: dict, cursor) -> dict:
+    """Mapeia dados do ticket com informacoes relacionadas"""
+    try:
+        # Buscar nome do solicitante
+        cursor.execute("SELECT name, email FROM users WHERE id = %s", (ticket['solicitante_id'],))
+        solicitante = cursor.fetchone()
+        
+        # Buscar nome do responsavel
+        responsavel = None
+        if ticket['responsavel_id']:
+            cursor.execute("SELECT name FROM users WHERE id = %s", (ticket['responsavel_id'],))
+            responsavel = cursor.fetchone()
+        
+        # Buscar nome do grupo
+        grupo = None
+        if ticket['group_id']:
+            cursor.execute("SELECT name FROM password_groups WHERE id = %s", (ticket['group_id'],))
+            grupo = cursor.fetchone()
+        
+        return {
+            **ticket,
+            "solicitante_nome": solicitante['name'] if solicitante else "Desconhecido",
+            "solicitante_email": solicitante['email'] if solicitante else "sem-email",
+            "responsavel_nome": responsavel['name'] if responsavel else "Nao atribuido",
+            "group_name": grupo['name'] if grupo else "Sem setor"
+        }
+    
+    except Exception as err:
+        logger.error(f"[MAPA] Erro ao mapear dados: {str(err)}")
+        return ticket
 
 # =========================================
 # 7. LIFESPAN - EVENTOS DE CICLO DE VIDA
 # =========================================
 
-# [INICIO] lifespan()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gerencia o ciclo de vida da aplicacao"""
     # ===== STARTUP =====
     logger.info("\n" + "=" * 90)
-    logger.info("CPE CONTROL API v2.0.0 INICIADA COM SUCESSO")
+    logger.info("✅ CPE CONTROL API v2.0.0 INICIADA COM SUCESSO")
     logger.info("=" * 90)
-    logger.info("\nENDPOINTS DISPONIVEIS:")
+    logger.info("\n📋 ENDPOINTS DISPONIVEIS:")
     logger.info("   " + "-" * 80)
-    logger.info("   POST   /api/auth/login                   -> Login do usuario")
-    logger.info("   GET    /api/groups                       -> Listar grupos")
-    logger.info("   GET    /api/groups/{id}                  -> Obter grupo especifico")
-    logger.info("   POST   /api/groups                       -> Criar novo grupo")
-    logger.info("   PUT    /api/groups/{id}                  -> Atualizar grupo")
-    logger.info("   DELETE /api/groups/{id}                  -> Deletar grupo")
-    logger.info("   GET    /api/users                        -> Listar usuarios")
-    logger.info("   GET    /api/users/{id}                   -> Obter usuario especifico")
-    logger.info("   POST   /api/users                        -> Criar novo usuario")
-    logger.info("   PUT    /api/users/{id}                   -> Atualizar usuario")
-    logger.info("   DELETE /api/users/{id}                   -> Deletar usuario")
-    logger.info("   GET    /health                           -> Verificar saude da API")
+    logger.info("   [AUTH]")
+    logger.info("   POST   /api/auth/login                      -> Login do usuario")
+    logger.info("   ")
+    logger.info("   [GRUPOS]")
+    logger.info("   GET    /api/groups                          -> Listar grupos")
+    logger.info("   GET    /api/groups/{id}                     -> Obter grupo especifico")
+    logger.info("   POST   /api/groups                          -> Criar novo grupo")
+    logger.info("   PUT    /api/groups/{id}                     -> Atualizar grupo")
+    logger.info("   DELETE /api/groups/{id}                     -> Deletar grupo")
+    logger.info("   ")
+    logger.info("   [USUARIOS]")
+    logger.info("   GET    /api/users                           -> Listar usuarios")
+    logger.info("   GET    /api/users/{id}                      -> Obter usuario especifico")
+    logger.info("   POST   /api/users                           -> Criar novo usuario")
+    logger.info("   PUT    /api/users/{id}                      -> Atualizar usuario")
+    logger.info("   DELETE /api/users/{id}                      -> Deletar usuario")
+    logger.info("   ")
+    logger.info("   [TICKETS]")
+    logger.info("   GET    /api/tickets                         -> Listar tickets")
+    logger.info("   GET    /api/tickets/{id}                    -> Obter ticket especifico")
+    logger.info("   POST   /api/tickets                         -> Criar novo ticket")
+    logger.info("   PUT    /api/tickets/{id}                    -> Atualizar ticket")
+    logger.info("   DELETE /api/tickets/{id}                    -> Deletar ticket")
+    logger.info("   ")
+    logger.info("   [INTERACOES]")
+    logger.info("   GET    /api/ticket-interacoes/{ticket_id}   -> Listar comentarios")
+    logger.info("   POST   /api/ticket-interacoes               -> Criar comentario/resposta")
+    logger.info("   ")
+    logger.info("   [NOTIFICACOES]")
+    logger.info("   GET    /api/notificacoes                    -> Listar notificacoes")
+    logger.info("   POST   /api/notificacoes                    -> Criar notificacao")
+    logger.info("   GET    /api/notificacoes/nao-lidas/{id}     -> Contar nao lidas")
+    logger.info("   PUT    /api/notificacoes/{id}               -> Marcar como lida")
+    logger.info("   DELETE /api/notificacoes/{id}               -> Deletar notificacao")
+    logger.info("   ")
+    logger.info("   [HEALTH]")
+    logger.info("   GET    /health                              -> Verificar saude da API")
     logger.info("   " + "-" * 80)
-    logger.info("\nDOCUMENTACAO:")
-    logger.info("   - Swagger UI: http://localhost:8000/docs")
-    logger.info("   - ReDoc: http://localhost:8000/redoc")
+    logger.info("\n📚 DOCUMENTACAO:")
+    logger.info("   🌐 Swagger UI: http://localhost:8000/docs")
+    logger.info("   🌐 ReDoc: http://localhost:8000/redoc")
+    logger.info("\n🌐 SERVIDOR:")
+    logger.info("   HTTP: http://localhost:8000")
+    logger.info("   HTTP: http://127.0.0.1:8000")
     logger.info("\n" + "=" * 90 + "\n")
     
     yield
     
     # ===== SHUTDOWN =====
     logger.info("\n" + "=" * 90)
-    logger.info("CPE CONTROL API DESLIGADA COM SUCESSO")
+    logger.info("🛑 CPE CONTROL API DESLIGADA COM SUCESSO")
     logger.info("=" * 90 + "\n")
-# [FIM] lifespan()
 
 # =========================================
 # 8. CRIAR APLICACAO FASTAPI
@@ -300,7 +428,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="CPE Control API",
     version="2.0.0",
-    description="Sistema de Gerenciamento de Usuarios com Vinculacao de Grupos",
+    description="Sistema de Gerenciamento de Usuarios, Grupos, Tickets e Notificacoes",
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -325,7 +453,11 @@ app.add_middleware(
         "http://127.0.0.1:5500",
         "http://127.0.0.1:8000",
         "http://localhost/SistemaCPE",
+        "http://localhost/SistemaCPE/",
+        "http://localhost/SistemaCPE/web",
         "http://127.0.0.1/SistemaCPE",
+        "http://127.0.0.1/SistemaCPE/",
+        "http://127.0.0.1/SistemaCPE/web",
     ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -334,7 +466,7 @@ app.add_middleware(
     max_age=3600
 )
 
-logger.info("CORS CONFIGURADO COM SUCESSO!\n")
+logger.info("✅ CORS CONFIGURADO COM SUCESSO!\n")
 
 # =========================================
 # 10. ROUTER DE AUTENTICACAO
@@ -342,93 +474,58 @@ logger.info("CORS CONFIGURADO COM SUCESSO!\n")
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-# [INICIO] POST /api/auth/login
-@auth_router.post(
-    "/login",
-    response_model=LoginResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Login do Usuario",
-    description="Autentica um usuario usando email ou username e senha"
-)
+@auth_router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
 async def login(login_data: LoginRequest):
-    """Realiza login do usuario com validacao de senha usando bcrypt"""
+    """Realiza login do usuario"""
     logger.info("\n" + "=" * 90)
-    logger.info("[AUTH] TENTATIVA DE LOGIN")
+    logger.info("[AUTH] 🔐 TENTATIVA DE LOGIN")
     logger.info("=" * 90)
     logger.info(f"[AUTH]   - Credencial: {login_data.credential}")
-    logger.info("=" * 90)
 
     credential = login_data.credential.strip()
     password = login_data.password.strip()
 
-    if not credential:
-        logger.warning("[AUTH] Credencial vazia")
+    if not credential or not password:
+        logger.warning("[AUTH] ❌ Credencial ou senha vazia")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Credencial invalida"
-        )
-
-    if not password:
-        logger.warning("[AUTH] Senha vazia")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Senha invalida"
+            detail="Credencial e senha sao obrigatorios"
         )
 
     conn = None
     cursor = None
 
     try:
-        logger.info("[AUTH] Conectando ao banco de dados...")
+        logger.info("[AUTH] 🔌 Conectando ao banco de dados...")
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
-        logger.info("[AUTH] Conexao estabelecida")
+        logger.info("[AUTH] ✅ Conexao estabelecida")
 
-        logger.info("[AUTH] Identificando tipo de credencial...")
         is_email = "@" in credential
+        logger.info(f"[AUTH]   - Tipo: {'EMAIL' if is_email else 'USERNAME'}")
 
         if is_email:
-            logger.info("[AUTH]   - Tipo: EMAIL")
-            query = """
-                SELECT id, name, email, username, role, group_id, is_active, created_at, password_hash
-                FROM users
-                WHERE email = %s AND is_active = TRUE
-                LIMIT 1
-            """
+            query = "SELECT id, name, email, username, role, group_id, is_active, created_at, password_hash FROM users WHERE email = %s AND is_active = TRUE LIMIT 1"
         else:
-            logger.info("[AUTH]   - Tipo: USERNAME")
-            query = """
-                SELECT id, name, email, username, role, group_id, is_active, created_at, password_hash
-                FROM users
-                WHERE username = %s AND is_active = TRUE
-                LIMIT 1
-            """
+            query = "SELECT id, name, email, username, role, group_id, is_active, created_at, password_hash FROM users WHERE username = %s AND is_active = TRUE LIMIT 1"
 
-        logger.info(f"[AUTH] Executando query para: {credential}")
+        logger.info(f"[AUTH] 🔎 Buscando usuario: {credential}")
         cursor.execute(query, (credential,))
         user = cursor.fetchone()
 
         if not user:
-            logger.warning(f"[AUTH] Usuario nao encontrado: {credential}")
+            logger.warning(f"[AUTH] ❌ Usuario nao encontrado: {credential}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email/username ou senha invalidos"
             )
 
-        logger.info(f"[AUTH] Usuario encontrado!")
-        logger.info(f"[AUTH]   - ID: {user['id']}")
-        logger.info(f"[AUTH]   - Nome: {user['name']}")
-        logger.info(f"[AUTH]   - Email: {user['email']}")
-        logger.info(f"[AUTH]   - Username: {user['username'] or 'N/A'}")
-        logger.info(f"[AUTH]   - Role: {user['role']}")
-        logger.info(f"[AUTH]   - Grupo: {user['group_id'] or 'Nao vinculado'}")
-        logger.info(f"[AUTH]   - Status: {'Ativo' if user['is_active'] else 'Inativo'}")
+        logger.info(f"[AUTH] ✅ Usuario encontrado: {user['name']}")
+        logger.info("[AUTH] 🔐 Validando senha com bcrypt...")
 
-        logger.info("[AUTH] Validando senha com bcrypt...")
         password_hash = user.get('password_hash')
-
         if not password_hash:
-            logger.warning("[AUTH] Usuario nao tem senha definida")
+            logger.warning("[AUTH] ❌ Usuario nao tem senha definida")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email/username ou senha invalidos"
@@ -437,77 +534,73 @@ async def login(login_data: LoginRequest):
         try:
             senha_valida = bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
         except Exception as err:
-            logger.error(f"[AUTH] Erro ao validar hash: {str(err)}")
+            logger.error(f"[AUTH] ❌ Erro ao validar hash: {str(err)}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email/username ou senha invalidos"
             )
 
         if not senha_valida:
-            logger.warning(f"[AUTH] Senha incorreta para: {credential}")
+            logger.warning(f"[AUTH] ❌ Senha incorreta para: {credential}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Email/username ou senha invalidos"
             )
 
-        logger.info("[AUTH] Senha validada com sucesso!")
+        logger.info("[AUTH] ✅ Senha validada com sucesso!")
 
-        logger.info("[AUTH] Validando dados do usuario...")
-        
+        # Validar dados do usuario
         if not user.get('username'):
-            logger.warning(f"[AUTH] Username e NULL, usando email como fallback")
             user['username'] = user['email']
-        
         if not user.get('name'):
-            logger.warning(f"[AUTH] Name e NULL, usando email como fallback")
             user['name'] = user['email']
-        
         if not user.get('role'):
-            logger.warning(f"[AUTH] Role e NULL, usando 'USER' como padrao")
             user['role'] = 'USER'
 
-        logger.info("[AUTH] Validacao concluida")
-
-        logger.info("[AUTH] Convertendo dados de datetime...")
+        logger.info("[AUTH] 📅 Convertendo dados de datetime...")
         user = convert_datetime_to_string(user)
-        logger.info(f"[AUTH]   - created_at: {user.get('created_at', 'N/A')}")
 
         if 'password_hash' in user:
             del user['password_hash']
 
-        logger.info("[AUTH] Construindo resposta...")
+        logger.info("[AUTH] 📦 Construindo resposta...")
         
         try:
             user_response = UserResponse(**user)
-            logger.info("[AUTH] UserResponse criado com sucesso")
+            logger.info("[AUTH] ✅ UserResponse criado com sucesso")
         except Exception as validation_err:
-            logger.error(f"[AUTH] ERRO DE VALIDACAO: {str(validation_err)}")
-            logger.error(f"[AUTH]    - Dados do usuario: {user}")
+            logger.error(f"[AUTH] ❌ ERRO DE VALIDACAO: {str(validation_err)}")
             raise
+
+        # GERAR TOKEN PARA WEBSOCKET
+        logger.info("[AUTH] 🔐 Gerando token de autenticacao...")
         
-        logger.info("[AUTH] LOGIN BEM-SUCEDIDO!")
+        try:
+            token_data = f"{user['id']}:{int(time.time())}"
+            access_token = hashlib.sha256(token_data.encode()).hexdigest()
+            logger.info(f"[AUTH]   ✓ Token gerado: {access_token[:30]}...")
+        except Exception as token_err:
+            logger.error(f"[AUTH] ❌ Erro ao gerar token: {str(token_err)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Erro ao gerar token: {str(token_err)}"
+            )
+        
+        logger.info("[AUTH] ✅ LOGIN BEM-SUCEDIDO!")
         logger.info("=" * 90 + "\n")
 
         return LoginResponse(
             success=True,
             message=f"Bem-vindo, {user['name']}!",
-            user=user_response
+            user=user_response,
+            access_token=access_token,
+            token_type="bearer"
         )
 
-    except HTTPException as http_err:
-        logger.error(f"[AUTH] HTTP Error: {http_err.detail}")
-        logger.error("=" * 90 + "\n")
+    except HTTPException:
         raise
-
     except Exception as err:
-        logger.error(f"[AUTH] ERRO INESPERADO!")
-        logger.error(f"[AUTH]    - Tipo: {type(err).__name__}")
-        logger.error(f"[AUTH]    - Mensagem: {str(err)}")
-        logger.error("[AUTH]    - Stack trace:")
-        import traceback
-        for line in traceback.format_exc().split('\n'):
-            if line.strip():
-                logger.error(f"[AUTH]      {line}")
+        logger.error(f"[AUTH] ❌ ERRO INESPERADO: {str(err)}")
         logger.error("=" * 90 + "\n")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -518,17 +611,13 @@ async def login(login_data: LoginRequest):
         if cursor:
             try:
                 cursor.close()
-                logger.debug("[AUTH] Cursor fechado")
-            except Exception as err:
-                logger.warning(f"[AUTH] Erro ao fechar cursor: {str(err)}")
-        
+            except:
+                pass
         if conn:
             try:
                 conn.close()
-                logger.debug("[AUTH] Conexao fechada")
-            except Exception as err:
-                logger.warning(f"[AUTH] Erro ao fechar conexao: {str(err)}")
-# [FIM] POST /api/auth/login
+            except:
+                pass
 
 # =========================================
 # 11. ROUTER DE GRUPOS
@@ -536,125 +625,68 @@ async def login(login_data: LoginRequest):
 
 groups_router = APIRouter(prefix="/api/groups", tags=["groups"])
 
-# [INICIO] GET /api/groups
-@groups_router.get(
-    "/",
-    response_model=list,
-    summary="Listar grupos",
-    description="Obtem lista completa de todos os grupos cadastrados"
-)
+@groups_router.get("/")
 async def get_groups():
     """Obtem todos os grupos"""
-    logger.info("\n" + "=" * 90)
-    logger.info("[GROUPS] Listando todos os grupos...")
-    logger.info("=" * 90)
+    logger.info("\n[GROUPS] 📋 Listando todos os grupos...")
     
     conn = get_db_or_404()
     cursor = None
     
     try:
         cursor = conn.cursor(dictionary=True)
-        
-        query = """
-            SELECT 
-                id,
-                name,
-                created_at
-            FROM password_groups
-            ORDER BY created_at DESC
-        """
-        
-        cursor.execute(query)
+        cursor.execute("SELECT id, name, created_at FROM password_groups ORDER BY created_at DESC")
         groups = cursor.fetchall()
         groups = convert_datetime_list(groups)
         
-        logger.info(f"[GROUPS] {len(groups)} grupo(s) encontrado(s)")
-        logger.info("=" * 90 + "\n")
-        
+        logger.info(f"[GROUPS] ✅ {len(groups)} grupo(s) encontrado(s)\n")
         return groups or []
         
     except Exception as err:
-        logger.error(f"[GROUPS] Erro: {str(err)}")
-        logger.error("=" * 90 + "\n")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao listar grupos: {str(err)}"
-        )
+        logger.error(f"[GROUPS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao listar grupos: {str(err)}")
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
-# [FIM] GET /api/groups
 
-# [INICIO] GET /api/groups/{group_id}
-@groups_router.get(
-    "/{group_id}",
-    response_model=GroupResponse,
-    summary="Obter grupo",
-    description="Obtem informacoes detalhadas de um grupo especifico"
-)
+@groups_router.get("/{group_id}")
 async def get_group(group_id: int):
-    """Obtem um grupo especifico pelo ID"""
-    logger.info(f"\n[GROUPS] Obtendo grupo #{group_id}...")
+    """Obtem um grupo especifico"""
+    logger.info(f"\n[GROUPS] 🔍 Obtendo grupo #{group_id}...")
     
     conn = get_db_or_404()
     cursor = None
     
     try:
         cursor = conn.cursor(dictionary=True)
-        
-        query = """
-            SELECT 
-                id,
-                name,
-                created_at
-            FROM password_groups
-            WHERE id = %s
-        """
-        
-        cursor.execute(query, (group_id,))
+        cursor.execute("SELECT id, name, created_at FROM password_groups WHERE id = %s", (group_id,))
         group = cursor.fetchone()
         
         if not group:
-            logger.warning(f"[GROUPS] Grupo #{group_id} nao encontrado")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Grupo com ID {group_id} nao encontrado"
-            )
+            logger.warning(f"[GROUPS] ❌ Grupo #{group_id} nao encontrado")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grupo nao encontrado")
         
         group = convert_datetime_to_string(group)
-        logger.info(f"[GROUPS] Grupo encontrado: {group['name']}\n")
+        logger.info(f"[GROUPS] ✅ Grupo encontrado: {group['name']}\n")
         return group
         
     except HTTPException:
         raise
     except Exception as err:
-        logger.error(f"[GROUPS] Erro: {str(err)}\n")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao obter grupo: {str(err)}"
-        )
+        logger.error(f"[GROUPS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao obter grupo: {str(err)}")
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
-# [FIM] GET /api/groups/{group_id}
 
-# [INICIO] POST /api/groups
-@groups_router.post(
-    "/",
-    status_code=status.HTTP_201_CREATED,
-    response_model=GroupResponse,
-    summary="Criar grupo",
-    description="Cria um novo grupo"
-)
+@groups_router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_group(group: GroupCreate):
     """Cria um novo grupo"""
-    logger.info("\n" + "=" * 90)
-    logger.info("[GROUPS] CRIANDO NOVO GRUPO")
-    logger.info("=" * 90)
+    logger.info("\n[GROUPS] ➕ CRIANDO NOVO GRUPO")
     logger.info(f"[GROUPS]   - Nome: {group.name}")
     
     conn = get_db_or_404()
@@ -662,71 +694,40 @@ async def create_group(group: GroupCreate):
     
     try:
         cursor = conn.cursor(dictionary=True)
-        
-        insert_query = """
-            INSERT INTO password_groups (name)
-            VALUES (%s)
-        """
-        
-        cursor.execute(insert_query, (group.name,))
-        
+        cursor.execute("INSERT INTO password_groups (name) VALUES (%s)", (group.name,))
         conn.commit()
         new_group_id = cursor.lastrowid
-        logger.info(f"[GROUPS] Grupo criado com ID: {new_group_id}")
+        logger.info(f"[GROUPS]   ✅ Grupo criado com ID: {new_group_id}")
         
-        cursor.execute(
-            """SELECT id, name, created_at 
-               FROM password_groups WHERE id = %s""",
-            (new_group_id,)
-        )
+        cursor.execute("SELECT id, name, created_at FROM password_groups WHERE id = %s", (new_group_id,))
         new_group = cursor.fetchone()
         new_group = convert_datetime_to_string(new_group)
         
-        logger.info("[GROUPS] SUCESSO!")
-        logger.info("=" * 90 + "\n")
-        
+        logger.info("[GROUPS] ✅ SUCESSO!\n")
         return new_group
         
     except Exception as err:
-        logger.error(f"[GROUPS] ERRO: {str(err)}")
-        logger.error("=" * 90 + "\n")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao criar grupo: {str(err)}"
-        )
+        logger.error(f"[GROUPS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao criar grupo: {str(err)}")
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
-# [FIM] POST /api/groups
 
-# [INICIO] PUT /api/groups/{group_id}
-@groups_router.put(
-    "/{group_id}",
-    response_model=GroupResponse,
-    summary="Atualizar grupo",
-    description="Atualiza dados de um grupo"
-)
+@groups_router.put("/{group_id}")
 async def update_group(group_id: int, group: GroupUpdate):
     """Atualiza um grupo"""
-    logger.info("\n" + "=" * 90)
-    logger.info(f"[GROUPS] ATUALIZANDO GRUPO #{group_id}")
-    logger.info("=" * 90)
+    logger.info(f"\n[GROUPS] ✏️ ATUALIZANDO GRUPO #{group_id}")
     
     conn = get_db_or_404()
     cursor = None
     
     try:
         cursor = conn.cursor(dictionary=True)
-        
         cursor.execute("SELECT id FROM password_groups WHERE id = %s", (group_id,))
         if not cursor.fetchone():
-            logger.warning(f"[GROUPS] Grupo #{group_id} nao encontrado")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Grupo com ID {group_id} nao encontrado"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grupo nao encontrado")
         
         updates = []
         params = []
@@ -734,102 +735,63 @@ async def update_group(group_id: int, group: GroupUpdate):
         if group.name is not None:
             updates.append("name = %s")
             params.append(group.name)
-            logger.info(f"[GROUPS]   - Nome: {group.name}")
         
         if not updates:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Nenhum campo fornecido para atualizar"
-            )
-        
-        update_query = f"""
-            UPDATE password_groups
-            SET {', '.join(updates)}
-            WHERE id = %s
-        """
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
         
         params.append(group_id)
-        cursor.execute(update_query, params)
+        cursor.execute(f"UPDATE password_groups SET {', '.join(updates)} WHERE id = %s", params)
         conn.commit()
         
-        logger.info(f"[GROUPS] SUCESSO!")
-        
-        cursor.execute(
-            """SELECT id, name, created_at 
-               FROM password_groups WHERE id = %s""",
-            (group_id,)
-        )
+        cursor.execute("SELECT id, name, created_at FROM password_groups WHERE id = %s", (group_id,))
         updated_group = cursor.fetchone()
         updated_group = convert_datetime_to_string(updated_group)
         
-        logger.info("=" * 90 + "\n")
-        
+        logger.info("[GROUPS] ✅ SUCESSO!\n")
         return updated_group
         
     except HTTPException:
         raise
     except Exception as err:
-        logger.error(f"[GROUPS] ERRO: {str(err)}")
-        logger.error("=" * 90 + "\n")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao atualizar grupo: {str(err)}"
-        )
+        logger.error(f"[GROUPS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao atualizar grupo: {str(err)}")
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
-# [FIM] PUT /api/groups/{group_id}
 
-# [INICIO] DELETE /api/groups/{group_id}
-@groups_router.delete(
-    "/{group_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Deletar grupo",
-    description="Remove um grupo do sistema"
-)
+@groups_router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_group(group_id: int):
-    """Deleta um grupo do sistema"""
-    logger.info(f"\n[GROUPS] DELETANDO GRUPO #{group_id}...")
+    """Deleta um grupo"""
+    logger.info(f"\n[GROUPS] 🗑️ DELETANDO GRUPO #{group_id}...")
     
     conn = get_db_or_404()
     cursor = None
     
     try:
         cursor = conn.cursor(dictionary=True)
-        
         cursor.execute("SELECT name FROM password_groups WHERE id = %s", (group_id,))
         group = cursor.fetchone()
         
         if not group:
-            logger.warning(f"[GROUPS] Grupo #{group_id} nao encontrado")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Grupo com ID {group_id} nao encontrado"
-            )
-        
-        logger.info(f"[GROUPS] Deletando: {group['name']}")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grupo nao encontrado")
         
         cursor.execute("DELETE FROM password_groups WHERE id = %s", (group_id,))
         conn.commit()
         
-        logger.info(f"[GROUPS] DELETADO COM SUCESSO!\n")
+        logger.info(f"[GROUPS] ✅ DELETADO COM SUCESSO!\n")
         
     except HTTPException:
         raise
     except Exception as err:
-        logger.error(f"[GROUPS] ERRO: {str(err)}\n")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao deletar grupo: {str(err)}"
-        )
+        logger.error(f"[GROUPS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao deletar grupo: {str(err)}")
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
-# [FIM] DELETE /api/groups/{group_id}
 
 # =========================================
 # 12. ROUTER DE USUARIOS
@@ -837,140 +799,69 @@ async def delete_group(group_id: int):
 
 users_router = APIRouter(prefix="/api/users", tags=["users"])
 
-# [INICIO] GET /api/users
-@users_router.get(
-    "/",
-    response_model=list,
-    summary="Listar usuarios",
-    description="Obtem lista completa de todos os usuarios cadastrados"
-)
+@users_router.get("/")
 async def get_users():
     """Obtem todos os usuarios"""
-    logger.info("\n" + "=" * 90)
-    logger.info("[USERS] Listando todos os usuarios...")
-    logger.info("=" * 90)
+    logger.info("\n[USERS] 📋 Listando todos os usuarios...")
     
     conn = get_db_or_404()
     cursor = None
     
     try:
         cursor = conn.cursor(dictionary=True)
-        
-        query = """
-            SELECT 
-                id,
-                name,
-                email,
-                username,
-                role,
-                group_id,
-                is_active,
-                created_at
-            FROM users
-            ORDER BY created_at DESC
-        """
-        
-        cursor.execute(query)
+        cursor.execute("SELECT id, name, email, username, role, group_id, is_active, created_at FROM users ORDER BY created_at DESC")
         users = cursor.fetchall()
         users = convert_datetime_list(users)
         
-        logger.info(f"[USERS] {len(users)} usuario(s) encontrado(s)")
-        logger.info("=" * 90 + "\n")
-        
+        logger.info(f"[USERS] ✅ {len(users)} usuario(s) encontrado(s)\n")
         return users or []
         
     except Exception as err:
-        logger.error(f"[USERS] Erro: {str(err)}")
-        logger.error("=" * 90 + "\n")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao listar usuarios: {str(err)}"
-        )
+        logger.error(f"[USERS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao listar usuarios: {str(err)}")
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
-# [FIM] GET /api/users
 
-# [INICIO] GET /api/users/{user_id}
-@users_router.get(
-    "/{user_id}",
-    response_model=UserResponse,
-    summary="Obter usuario",
-    description="Obtem informacoes detalhadas de um usuario especifico"
-)
+@users_router.get("/{user_id}")
 async def get_user(user_id: int):
-    """Obtem um usuario especifico pelo ID"""
-    logger.info(f"\n[USERS] Obtendo usuario #{user_id}...")
+    """Obtem um usuario especifico"""
+    logger.info(f"\n[USERS] 🔍 Obtendo usuario #{user_id}...")
     
     conn = get_db_or_404()
     cursor = None
     
     try:
         cursor = conn.cursor(dictionary=True)
-        
-        query = """
-            SELECT 
-                id,
-                name,
-                email,
-                username,
-                role,
-                group_id,
-                is_active,
-                created_at
-            FROM users
-            WHERE id = %s
-        """
-        
-        cursor.execute(query, (user_id,))
+        cursor.execute("SELECT id, name, email, username, role, group_id, is_active, created_at FROM users WHERE id = %s", (user_id,))
         user = cursor.fetchone()
         
         if not user:
-            logger.warning(f"[USERS] Usuario #{user_id} nao encontrado")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Usuario com ID {user_id} nao encontrado"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
         
         user = convert_datetime_to_string(user)
-        logger.info(f"[USERS] Usuario encontrado: {user['name']}\n")
+        logger.info(f"[USERS] ✅ Usuario encontrado: {user['name']}\n")
         return user
         
     except HTTPException:
         raise
     except Exception as err:
-        logger.error(f"[USERS] Erro: {str(err)}\n")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao obter usuario: {str(err)}"
-        )
+        logger.error(f"[USERS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao obter usuario: {str(err)}")
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
-# [FIM] GET /api/users/{user_id}
 
-# [INICIO] POST /api/users
-@users_router.post(
-    "/",
-    status_code=status.HTTP_201_CREATED,
-    response_model=UserResponse,
-    summary="Criar usuario",
-    description="Cria um novo usuario com vinculacao a um grupo"
-)
+@users_router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_user(user: UserCreate):
     """Cria um novo usuario"""
-    logger.info("\n" + "=" * 90)
-    logger.info("[USERS] CRIANDO NOVO USUARIO")
-    logger.info("=" * 90)
+    logger.info("\n[USERS] ➕ CRIANDO NOVO USUARIO")
     logger.info(f"[USERS]   - Nome: {user.name}")
     logger.info(f"[USERS]   - Email: {user.email}")
-    logger.info(f"[USERS]   - Username: {user.username}")
-    logger.info(f"[USERS]   - Senha: {'*' * len(user.password)}")
-    logger.info(f"[USERS]   - Role: {user.role}")
     
     conn = get_db_or_404()
     cursor = None
@@ -979,112 +870,61 @@ async def create_user(user: UserCreate):
         cursor = conn.cursor(dictionary=True)
         
         if not validate_email_unique(cursor, user.email):
-            logger.warning(f"[USERS] Email ja registrado: {user.email}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Email '{user.email}' ja esta registrado"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Email ja registrado")
         
         if not validate_username_unique(cursor, user.username):
-            logger.warning(f"[USERS] Username ja registrado: {user.username}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Username '{user.username}' ja esta registrado"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Username ja registrado")
         
-        if user.group_id:
-            if not validate_group_exists(cursor, user.group_id):
-                logger.warning(f"[USERS] Grupo #{user.group_id} nao encontrado")
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Grupo com ID {user.group_id} nao encontrado"
-                )
+        if user.group_id and not validate_group_exists(cursor, user.group_id):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Grupo nao encontrado")
         
-        logger.info("[USERS] Gerando hash da senha com bcrypt...")
+        logger.info("[USERS] 🔐 Gerando hash da senha com bcrypt...")
         try:
             password_hash = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-            logger.info("[USERS]   - Hash gerado com sucesso")
+            logger.info("[USERS]   ✅ Hash gerado com sucesso")
         except Exception as hash_err:
-            logger.error(f"[USERS] Erro ao gerar hash: {str(hash_err)}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Erro ao processar senha: {str(hash_err)}"
-            )
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao processar senha")
         
-        insert_query = """
-            INSERT INTO users (name, email, username, password_hash, role, group_id, is_active)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """
-        
-        cursor.execute(insert_query, (
-            user.name,
-            user.email,
-            user.username,
-            password_hash,
-            user.role,
-            user.group_id,
-            user.is_active
-        ))
+        cursor.execute(
+            "INSERT INTO users (name, email, username, password_hash, role, group_id, is_active) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (user.name, user.email, user.username, password_hash, user.role, user.group_id, user.is_active)
+        )
         
         conn.commit()
         new_user_id = cursor.lastrowid
-        logger.info(f"[USERS] Usuario criado com ID: {new_user_id}")
+        logger.info(f"[USERS]   ✅ Usuario criado com ID: {new_user_id}")
         
-        cursor.execute(
-            """SELECT id, name, email, username, role, group_id, is_active, created_at 
-               FROM users WHERE id = %s""",
-            (new_user_id,)
-        )
+        cursor.execute("SELECT id, name, email, username, role, group_id, is_active, created_at FROM users WHERE id = %s", (new_user_id,))
         new_user = cursor.fetchone()
         new_user = convert_datetime_to_string(new_user)
         
-        logger.info("[USERS] SUCESSO!")
-        logger.info("=" * 90 + "\n")
-        
+        logger.info("[USERS] ✅ SUCESSO!\n")
         return new_user
         
     except HTTPException:
         raise
     except Exception as err:
-        logger.error(f"[USERS] ERRO: {str(err)}")
-        logger.error("=" * 90 + "\n")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao criar usuario: {str(err)}"
-        )
+        logger.error(f"[USERS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao criar usuario: {str(err)}")
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
-# [FIM] POST /api/users
 
-# [INICIO] PUT /api/users/{user_id}
-@users_router.put(
-    "/{user_id}",
-    response_model=UserResponse,
-    summary="Atualizar usuario",
-    description="Atualiza dados de um usuario"
-)
+@users_router.put("/{user_id}")
 async def update_user(user_id: int, user: UserUpdate):
     """Atualiza um usuario"""
-    logger.info("\n" + "=" * 90)
-    logger.info(f"[USERS] ATUALIZANDO USUARIO #{user_id}")
-    logger.info("=" * 90)
+    logger.info(f"\n[USERS] ✏️ ATUALIZANDO USUARIO #{user_id}")
     
     conn = get_db_or_404()
     cursor = None
     
     try:
         cursor = conn.cursor(dictionary=True)
-        
         cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
         if not cursor.fetchone():
-            logger.warning(f"[USERS] Usuario #{user_id} nao encontrado")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Usuario com ID {user_id} nao encontrado"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
         
         updates = []
         params = []
@@ -1092,104 +932,165 @@ async def update_user(user_id: int, user: UserUpdate):
         if user.name is not None:
             updates.append("name = %s")
             params.append(user.name)
-            logger.info(f"[USERS]   - Nome: {user.name}")
         
         if user.email is not None:
             if not validate_email_unique(cursor, user.email, exclude_user_id=user_id):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Email '{user.email}' ja esta registrado"
-                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email ja registrado")
             updates.append("email = %s")
             params.append(user.email)
-            logger.info(f"[USERS]   - Email: {user.email}")
         
         if user.username is not None:
             if not validate_username_unique(cursor, user.username, exclude_user_id=user_id):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Username '{user.username}' ja esta registrado"
-                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username ja registrado")
             updates.append("username = %s")
             params.append(user.username)
-            logger.info(f"[USERS]   - Username: {user.username}")
         
         if user.role is not None:
             updates.append("role = %s")
             params.append(user.role)
-            logger.info(f"[USERS]   - Role: {user.role}")
         
         if user.group_id is not None:
             if not validate_group_exists(cursor, user.group_id):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Grupo com ID {user.group_id} nao encontrado"
-                )
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grupo nao encontrado")
             updates.append("group_id = %s")
             params.append(user.group_id)
-            logger.info(f"[USERS]   - Grupo: {user.group_id}")
         
         if user.is_active is not None:
             updates.append("is_active = %s")
             params.append(user.is_active)
-            logger.info(f"[USERS]   - Status: {'Ativo' if user.is_active else 'Inativo'}")
         
         if not updates:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Nenhum campo fornecido para atualizar"
-            )
-        
-        update_query = f"""
-            UPDATE users
-            SET {', '.join(updates)}
-            WHERE id = %s
-        """
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
         
         params.append(user_id)
-        cursor.execute(update_query, params)
+        cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = %s", params)
         conn.commit()
         
-        logger.info(f"[USERS] SUCESSO!")
-        
-        cursor.execute(
-            """SELECT id, name, email, username, role, group_id, is_active, created_at 
-               FROM users WHERE id = %s""",
-            (user_id,)
-        )
+        cursor.execute("SELECT id, name, email, username, role, group_id, is_active, created_at FROM users WHERE id = %s", (user_id,))
         updated_user = cursor.fetchone()
         updated_user = convert_datetime_to_string(updated_user)
         
-        logger.info("=" * 90 + "\n")
-        
+        logger.info("[USERS] ✅ SUCESSO!\n")
         return updated_user
         
     except HTTPException:
         raise
     except Exception as err:
-        logger.error(f"[USERS] ERRO: {str(err)}")
-        logger.error("=" * 90 + "\n")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao atualizar usuario: {str(err)}"
-        )
+        logger.error(f"[USERS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao atualizar usuario: {str(err)}")
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
-# [FIM] PUT /api/users/{user_id}
 
-# [INICIO] DELETE /api/users/{user_id}
-@users_router.delete(
-    "/{user_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Deletar usuario",
-    description="Remove um usuario do sistema"
-)
+@users_router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(user_id: int):
-    """Deleta um usuario do sistema"""
-    logger.info(f"\n[USERS] DELETANDO USUARIO #{user_id}...")
+    """Deleta um usuario"""
+    logger.info(f"\n[USERS] 🗑️ DELETANDO USUARIO #{user_id}...")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT name FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
+        
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        conn.commit()
+        
+        logger.info(f"[USERS] ✅ DELETADO COM SUCESSO!\n")
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[USERS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao deletar usuario: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# =========================================
+# 13. ROUTER DE TICKETS
+# =========================================
+
+tickets_router = APIRouter(prefix="/api/tickets", tags=["tickets"])
+
+@tickets_router.get("/")
+async def get_tickets():
+    """Obtem todos os tickets"""
+    logger.info("\n[TICKETS] 📋 Listando todos os tickets...")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, numero, assunto, descricao_inicial, solicitante_id, responsavel_id, group_id, categoria_id, status_id, prioridade_id, origem, created_at, updated_at FROM tickets ORDER BY created_at DESC")
+        tickets = cursor.fetchall()
+        
+        tickets_mapeados = []
+        for ticket in tickets:
+            ticket_com_dados = mapa_dados_ticket(ticket, cursor)
+            ticket_com_dados = convert_datetime_to_string(ticket_com_dados)
+            tickets_mapeados.append(ticket_com_dados)
+        
+        logger.info(f"[TICKETS] ✅ {len(tickets_mapeados)} ticket(s) encontrado(s)\n")
+        return tickets_mapeados
+        
+    except Exception as err:
+        logger.error(f"[TICKETS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao listar tickets: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@tickets_router.get("/{ticket_id}")
+async def get_ticket(ticket_id: int):
+    """Obtem um ticket especifico"""
+    logger.info(f"\n[TICKET] 🔍 Obtendo ticket #{ticket_id}...")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, numero, assunto, descricao_inicial, solicitante_id, responsavel_id, group_id, categoria_id, status_id, prioridade_id, origem, created_at, updated_at FROM tickets WHERE id = %s", (ticket_id,))
+        ticket = cursor.fetchone()
+        
+        if not ticket:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao encontrado")
+        
+        ticket = mapa_dados_ticket(ticket, cursor)
+        ticket = convert_datetime_to_string(ticket)
+        
+        logger.info(f"[TICKET] ✅ Ticket encontrado: {ticket['numero']}\n")
+        return ticket
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[TICKET] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao obter ticket: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@tickets_router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_ticket(ticket_data: TicketCreate):
+    """Cria um novo ticket"""
+    logger.info("\n[TICKETS] ➕ CRIANDO NOVO TICKET")
+    logger.info(f"[TICKETS]   - Assunto: {ticket_data.assunto}")
     
     conn = get_db_or_404()
     cursor = None
@@ -1197,57 +1098,476 @@ async def delete_user(user_id: int):
     try:
         cursor = conn.cursor(dictionary=True)
         
-        cursor.execute("SELECT name, email FROM users WHERE id = %s", (user_id,))
-        user = cursor.fetchone()
+        cursor.execute("SELECT id FROM users WHERE id = %s", (ticket_data.solicitante_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solicitante nao existe")
         
-        if not user:
-            logger.warning(f"[USERS] Usuario #{user_id} nao encontrado")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Usuario com ID {user_id} nao encontrado"
-            )
+        if ticket_data.responsavel_id:
+            cursor.execute("SELECT id FROM users WHERE id = %s", (ticket_data.responsavel_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Responsavel nao existe")
         
-        logger.info(f"[USERS] Deletando: {user['name']}")
+        if ticket_data.group_id:
+            cursor.execute("SELECT id FROM password_groups WHERE id = %s", (ticket_data.group_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grupo nao existe")
         
-        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        numero_ticket = gerar_numero_ticket(cursor)
+        
+        cursor.execute(
+            "INSERT INTO tickets (numero, assunto, descricao_inicial, solicitante_id, responsavel_id, group_id, categoria_id, status_id, prioridade_id, origem, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())",
+            (numero_ticket, ticket_data.assunto, ticket_data.descricao_inicial, ticket_data.solicitante_id, ticket_data.responsavel_id or None, ticket_data.group_id or None, ticket_data.categoria_id or None, 1, ticket_data.prioridade_id, ticket_data.origem or "web")
+        )
+        
         conn.commit()
+        new_ticket_id = cursor.lastrowid
+        logger.info(f"[TICKETS]   ✅ Ticket criado com ID: {new_ticket_id}")
         
-        logger.info(f"[USERS] DELETADO COM SUCESSO!\n")
+        cursor.execute("SELECT id, numero, assunto, descricao_inicial, solicitante_id, responsavel_id, group_id, categoria_id, status_id, prioridade_id, origem, created_at, updated_at FROM tickets WHERE id = %s", (new_ticket_id,))
+        new_ticket = cursor.fetchone()
+        new_ticket = mapa_dados_ticket(new_ticket, cursor)
+        new_ticket = convert_datetime_to_string(new_ticket)
+        
+        logger.info("[TICKETS] ✅ SUCESSO!\n")
+        return new_ticket
         
     except HTTPException:
         raise
     except Exception as err:
-        logger.error(f"[USERS] ERRO: {str(err)}\n")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao deletar usuario: {str(err)}"
-        )
+        logger.error(f"[TICKETS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao criar ticket: {str(err)}")
     finally:
         if cursor:
             cursor.close()
         if conn:
             conn.close()
-# [FIM] DELETE /api/users/{user_id}
+
+@tickets_router.put("/{ticket_id}")
+async def update_ticket(ticket_id: int, ticket_data: TicketUpdate):
+    """Atualiza um ticket"""
+    logger.info(f"\n[TICKETS] ✏️ ATUALIZANDO TICKET #{ticket_id}")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao encontrado")
+        
+        updates = []
+        params = []
+        
+        if ticket_data.assunto is not None:
+            updates.append("assunto = %s")
+            params.append(ticket_data.assunto)
+        
+        if ticket_data.descricao_inicial is not None:
+            updates.append("descricao_inicial = %s")
+            params.append(ticket_data.descricao_inicial)
+        
+        if ticket_data.responsavel_id is not None:
+            if ticket_data.responsavel_id:
+                cursor.execute("SELECT id FROM users WHERE id = %s", (ticket_data.responsavel_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Responsavel nao existe")
+            updates.append("responsavel_id = %s")
+            params.append(ticket_data.responsavel_id or None)
+        
+        if ticket_data.group_id is not None:
+            if ticket_data.group_id:
+                cursor.execute("SELECT id FROM password_groups WHERE id = %s", (ticket_data.group_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grupo nao existe")
+            updates.append("group_id = %s")
+            params.append(ticket_data.group_id or None)
+        
+        if ticket_data.status_id is not None:
+            updates.append("status_id = %s")
+            params.append(ticket_data.status_id)
+        
+        if ticket_data.prioridade_id is not None:
+            updates.append("prioridade_id = %s")
+            params.append(ticket_data.prioridade_id)
+        
+        if ticket_data.categoria_id is not None:
+            updates.append("categoria_id = %s")
+            params.append(ticket_data.categoria_id)
+        
+        if not updates:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
+        
+        updates.append("updated_at = NOW()")
+        params.append(ticket_id)
+        
+        cursor.execute(f"UPDATE tickets SET {', '.join(updates)} WHERE id = %s", params)
+        conn.commit()
+        
+        cursor.execute("SELECT id, numero, assunto, descricao_inicial, solicitante_id, responsavel_id, group_id, categoria_id, status_id, prioridade_id, origem, created_at, updated_at FROM tickets WHERE id = %s", (ticket_id,))
+        updated_ticket = cursor.fetchone()
+        updated_ticket = mapa_dados_ticket(updated_ticket, cursor)
+        updated_ticket = convert_datetime_to_string(updated_ticket)
+        
+        logger.info("[TICKETS] ✅ SUCESSO!\n")
+        return updated_ticket
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[TICKETS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao atualizar ticket: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@tickets_router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_ticket(ticket_id: int):
+    """Deleta um ticket"""
+    logger.info(f"\n[TICKETS] 🗑️ DELETANDO TICKET #{ticket_id}...")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT numero FROM tickets WHERE id = %s", (ticket_id,))
+        ticket = cursor.fetchone()
+        
+        if not ticket:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao encontrado")
+        
+        cursor.execute("DELETE FROM ticket_interacoes WHERE ticket_id = %s", (ticket_id,))
+        cursor.execute("DELETE FROM notificacoes WHERE ticket_id = %s", (ticket_id,))
+        cursor.execute("DELETE FROM tickets WHERE id = %s", (ticket_id,))
+        conn.commit()
+        
+        logger.info(f"[TICKETS] ✅ TICKET {ticket['numero']} DELETADO COM SUCESSO!\n")
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[TICKETS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao deletar ticket: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 # =========================================
-# 13. HEALTH CHECK
+# 14. ROUTER DE INTERACOES
 # =========================================
 
-# [INICIO] GET /health
-@app.get(
-    "/health",
-    response_model=HealthCheckResponse,
-    summary="Health Check",
-    description="Verifica se a API esta funcionando"
-)
+interacoes_router = APIRouter(prefix="/api/ticket-interacoes", tags=["interacoes"])
+
+@interacoes_router.get("/{ticket_id}")
+async def get_ticket_interacoes(ticket_id: int):
+    """Obtem todas as interacoes de um ticket"""
+    logger.info(f"\n[INTERACOES] 💬 Listando comentarios do ticket #{ticket_id}...")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao encontrado")
+        
+        cursor.execute("SELECT id, ticket_id, usuario_id, mensagem, tipo, publico, created_at FROM ticket_interacoes WHERE ticket_id = %s ORDER BY created_at ASC", (ticket_id,))
+        interacoes = cursor.fetchall()
+        
+        interacoes_mapeadas = []
+        for interacao in interacoes:
+            cursor.execute("SELECT name FROM users WHERE id = %s", (interacao['usuario_id'],))
+            usuario = cursor.fetchone()
+            interacao['usuario_nome'] = usuario['name'] if usuario else "Desconhecido"
+            interacao = convert_datetime_to_string(interacao)
+            interacoes_mapeadas.append(interacao)
+        
+        logger.info(f"[INTERACOES] ✅ {len(interacoes_mapeadas)} comentario(s) encontrado(s)\n")
+        return interacoes_mapeadas
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[INTERACOES] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao listar interacoes: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@interacoes_router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_ticket_interacao(interacao_data: TicketInteracaoCreate):
+    """Cria uma nova interacao"""
+    logger.info("\n[INTERACOES] ➕ CRIANDO COMENTARIO")
+    logger.info(f"[INTERACOES]   - Ticket: #{interacao_data.ticket_id}")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("SELECT id FROM tickets WHERE id = %s", (interacao_data.ticket_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao existe")
+        
+        cursor.execute("SELECT id FROM users WHERE id = %s", (interacao_data.usuario_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao existe")
+        
+        cursor.execute("INSERT INTO ticket_interacoes (ticket_id, usuario_id, mensagem, tipo, publico, created_at) VALUES (%s, %s, %s, %s, %s, NOW())", 
+            (interacao_data.ticket_id, interacao_data.usuario_id, interacao_data.mensagem, interacao_data.tipo, interacao_data.publico))
+        
+        conn.commit()
+        new_interacao_id = cursor.lastrowid
+        logger.info(f"[INTERACOES]   ✅ Comentario criado com ID: {new_interacao_id}")
+        
+        cursor.execute("SELECT id, ticket_id, usuario_id, mensagem, tipo, publico, created_at FROM ticket_interacoes WHERE id = %s", (new_interacao_id,))
+        new_interacao = cursor.fetchone()
+        
+        cursor.execute("SELECT name FROM users WHERE id = %s", (new_interacao['usuario_id'],))
+        usuario = cursor.fetchone()
+        new_interacao['usuario_nome'] = usuario['name'] if usuario else "Desconhecido"
+        
+        new_interacao = convert_datetime_to_string(new_interacao)
+        
+        logger.info("[INTERACOES] ✅ SUCESSO!\n")
+        return new_interacao
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[INTERACOES] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao criar comentario: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# =========================================
+# 15. ROUTER DE NOTIFICACOES
+# =========================================
+
+notificacoes_router = APIRouter(prefix="/api/notificacoes", tags=["notificacoes"])
+
+@notificacoes_router.get("/")
+async def get_notificacoes(usuario_id: int = Query(...), lido: bool = None, limite: int = 50, offset: int = 0):
+    """Lista notificacoes do usuario"""
+    logger.info(f"\n[NOTIFICACOES] 📬 Listando notificacoes do usuario #{usuario_id}")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("SELECT id FROM users WHERE id = %s", (usuario_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
+        
+        query = "SELECT id, ticket_id, usuario_id, mensagem, tipo, lido, created_at, updated_at FROM notificacoes WHERE usuario_id = %s"
+        params = [usuario_id]
+        
+        if lido is not None:
+            query += " AND lido = %s"
+            params.append(lido)
+        
+        query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+        params.extend([limite, offset])
+        
+        cursor.execute(query, params)
+        notificacoes = cursor.fetchall()
+        notificacoes = convert_datetime_list(notificacoes)
+        
+        logger.info(f"[NOTIFICACOES] ✅ {len(notificacoes)} notificacao(oes) encontrada(s)\n")
+        return notificacoes or []
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[NOTIFICACOES] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao listar notificacoes: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@notificacoes_router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_notificacao(notificacao: NotificacaoCreate):
+    """Cria uma nova notificacao"""
+    logger.info("\n[NOTIFICACOES] 💌 CRIANDO NOTIFICACAO")
+    logger.info(f"[NOTIFICACOES]   - Ticket: #{notificacao.ticket_id}")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        
+        cursor.execute("SELECT id FROM tickets WHERE id = %s", (notificacao.ticket_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao encontrado")
+        
+        cursor.execute("SELECT id FROM users WHERE id = %s", (notificacao.usuario_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
+        
+        cursor.execute("INSERT INTO notificacoes (ticket_id, usuario_id, mensagem, tipo, lido, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, NOW(), NOW())",
+            (notificacao.ticket_id, notificacao.usuario_id, notificacao.mensagem, notificacao.tipo, notificacao.lido))
+        
+        conn.commit()
+        new_notif_id = cursor.lastrowid
+        logger.info(f"[NOTIFICACOES]   ✅ ID criado: {new_notif_id}")
+        
+        cursor.execute("SELECT id, ticket_id, usuario_id, mensagem, tipo, lido, created_at, updated_at FROM notificacoes WHERE id = %s", (new_notif_id,))
+        new_notif = cursor.fetchone()
+        new_notif = convert_datetime_to_string(new_notif)
+        
+        logger.info("[NOTIFICACOES] ✅ SUCESSO!\n")
+        return new_notif
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[NOTIFICACOES] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao criar notificacao: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@notificacoes_router.get("/nao-lidas/{usuario_id}")
+async def contar_nao_lidas(usuario_id: int):
+    """Conta notificacoes nao lidas"""
+    logger.info(f"\n[NOTIFICACOES] 📊 Contando nao lidas do usuario #{usuario_id}")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT COUNT(*) as total FROM notificacoes WHERE usuario_id = %s AND lido = FALSE", (usuario_id,))
+        result = cursor.fetchone()
+        count = result['total'] if result else 0
+        
+        logger.info(f"[NOTIFICACOES] ✅ {count} nao lida(s)\n")
+        return {"usuario_id": usuario_id, "nao_lidas": count}
+        
+    except Exception as err:
+        logger.error(f"[NOTIFICACOES] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao contar notificacoes: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@notificacoes_router.put("/{notificacao_id}")
+async def update_notificacao(notificacao_id: int, notificacao: NotificacaoUpdate):
+    """Atualiza uma notificacao"""
+    logger.info(f"\n[NOTIFICACOES] 📝 Atualizando notificacao #{notificacao_id}")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id FROM notificacoes WHERE id = %s", (notificacao_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notificacao nao encontrada")
+        
+        updates = []
+        params = []
+        
+        if notificacao.lido is not None:
+            updates.append("lido = %s")
+            params.append(notificacao.lido)
+        
+        if notificacao.mensagem is not None:
+            updates.append("mensagem = %s")
+            params.append(notificacao.mensagem)
+        
+        if not updates:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
+        
+        updates.append("updated_at = NOW()")
+        params.append(notificacao_id)
+        
+        cursor.execute(f"UPDATE notificacoes SET {', '.join(updates)} WHERE id = %s", params)
+        conn.commit()
+        
+        cursor.execute("SELECT id, ticket_id, usuario_id, mensagem, tipo, lido, created_at, updated_at FROM notificacoes WHERE id = %s", (notificacao_id,))
+        updated_notif = cursor.fetchone()
+        updated_notif = convert_datetime_to_string(updated_notif)
+        
+        logger.info("[NOTIFICACOES] ✅ SUCESSO!\n")
+        return updated_notif
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[NOTIFICACOES] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao atualizar notificacao: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+@notificacoes_router.delete("/{notificacao_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_notificacao(notificacao_id: int):
+    """Deleta uma notificacao"""
+    logger.info(f"\n[NOTIFICACOES] 🗑️ DELETANDO NOTIFICACAO #{notificacao_id}...")
+    
+    conn = get_db_or_404()
+    cursor = None
+    
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id FROM notificacoes WHERE id = %s", (notificacao_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notificacao nao encontrada")
+        
+        cursor.execute("DELETE FROM notificacoes WHERE id = %s", (notificacao_id,))
+        conn.commit()
+        
+        logger.info(f"[NOTIFICACOES] ✅ DELETADA COM SUCESSO!\n")
+        
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[NOTIFICACOES] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao deletar notificacao: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+# =========================================
+# 16. HEALTH CHECK
+# =========================================
+
+@app.get("/health", response_model=HealthCheckResponse)
 async def health():
     """Verifica a saude da API"""
-    db_status = "OK"
+    db_status = "✅ OK"
     try:
         conn = get_db_connection()
         conn.close()
     except:
-        db_status = "ERRO"
+        db_status = "❌ ERRO"
     
     return {
         "status": "ok",
@@ -1256,32 +1576,38 @@ async def health():
         "timestamp": datetime.now().isoformat(),
         "database": db_status
     }
-# [FIM] GET /health
 
 # =========================================
-# 14. REGISTRAR ROUTERS
+# 17. REGISTRAR ROUTERS
 # =========================================
 
 app.include_router(auth_router)
 app.include_router(groups_router)
 app.include_router(users_router)
+app.include_router(tickets_router)
+app.include_router(interacoes_router)
+app.include_router(notificacoes_router)
 
-logger.info("Routers registrados com sucesso!")
+logger.info("✅ TODOS OS ROUTERS REGISTRADOS COM SUCESSO!")
 logger.info("   - Router de Autenticacao: /api/auth")
 logger.info("   - Router de Grupos: /api/groups")
-logger.info("   - Router de Usuarios: /api/users\n")
+logger.info("   - Router de Usuarios: /api/users")
+logger.info("   - Router de Tickets: /api/tickets")
+logger.info("   - Router de Interacoes: /api/ticket-interacoes")
+logger.info("   - Router de Notificacoes: /api/notificacoes")
+logger.info("")
 
 # =========================================
-# 15. MAIN - INICIALIZAR SERVIDOR
+# 18. MAIN - INICIALIZAR SERVIDOR
 # =========================================
 
 if __name__ == "__main__":
     logger.info("\n" + "=" * 90)
-    logger.info("INICIANDO CPE CONTROL API v2.0.0")
+    logger.info("🚀 INICIANDO CPE CONTROL API v2.0.0")
     logger.info("=" * 90)
-    logger.info("Servidor: http://localhost:8000")
-    logger.info("IP Local: http://127.0.0.1:8000")
-    logger.info("Documentacao: http://localhost:8000/docs")
+    logger.info("🌐 Servidor: http://localhost:8000")
+    logger.info("🌐 IP Local: http://127.0.0.1:8000")
+    logger.info("📚 Documentacao: http://localhost:8000/docs")
     logger.info("=" * 90 + "\n")
     
     uvicorn.run(

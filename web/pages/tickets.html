@@ -16,11 +16,14 @@
 </head>
 
 <body>
+  <!-- NAVBAR -->
   <nav id="navbar-container"></nav>
 
   <div class="container-main">
+    <!-- SIDEBAR -->
     <div id="sidebar-container"></div>
 
+    <!-- MAIN CONTENT -->
     <div class="main-content">
       <div class="top-bar">
         <h1><i class="bi bi-ticket"></i> Tickets</h1>
@@ -28,7 +31,9 @@
       </div>
 
       <div class="content">
-        <!-- ALERTAS -->
+        <!-- ========================================
+             ALERTAS
+             ======================================== -->
         <div class="alert alert-danger d-none" id="alertBox" role="alert">
           <i class="bi bi-exclamation-circle"></i> <span id="alertMessage"></span>
         </div>
@@ -36,7 +41,9 @@
           <i class="bi bi-check-circle"></i> <span id="successMessage"></span>
         </div>
 
-        <!-- ACTION BAR -->
+        <!-- ========================================
+             ACTION BAR
+             ======================================== -->
         <div class="action-bar mb-3">
           <div class="btn-group">
             <button class="btn btn-primary btn-sm" onclick="openNewTicketModal()" title="Criar novo ticket">
@@ -51,9 +58,6 @@
             <button class="btn btn-info btn-sm" onclick="assignSelected()" title="Atribuir ticket(s) selecionado(s)">
               <i class="bi bi-person-check"></i> Atribuir
             </button>
-            <button class="btn btn-success btn-sm" id="respondBtn" onclick="respondSelected()" title="Responder ao ticket selecionado" style="display:none;">
-              <i class="bi bi-chat-dots"></i> Responder
-            </button>
           </div>
 
           <div class="search-filters">
@@ -61,17 +65,15 @@
               <span class="input-group-text"><i class="bi bi-search"></i></span>
               <input type="text" id="searchInput" class="form-control" placeholder="Buscar...">
             </div>
-            <div class="input-group input-group-sm">
-              <span class="input-group-text"><i class="bi bi-calendar"></i></span>
-              <input type="date" id="dateFilter" class="form-control">
-            </div>
             <button class="btn btn-outline-secondary btn-sm" onclick="toggleAdvancedFilters()">
               <i class="bi bi-funnel"></i> Filtros
             </button>
           </div>
         </div>
 
-        <!-- ADVANCED FILTERS -->
+        <!-- ========================================
+             ADVANCED FILTERS
+             ======================================== -->
         <div class="advanced-filters d-none mb-3" id="advancedFilters">
           <div class="row g-2">
             <div class="col-md-3">
@@ -93,16 +95,6 @@
               </select>
             </div>
             <div class="col-md-3">
-              <select id="groupFilter" class="form-select form-select-sm" onchange="applyFilters()">
-                <option value="">Grupo</option>
-                <option value="suporte">Suporte Técnico</option>
-                <option value="vendas">Vendas</option>
-                <option value="financeiro">Financeiro</option>
-                <option value="administrativo">Administrativo</option>
-                <option value="desenvolvimento">Desenvolvimento</option>
-              </select>
-            </div>
-            <div class="col-md-3">
               <button class="btn btn-outline-danger btn-sm w-100" onclick="clearFilters()">
                 <i class="bi bi-arrow-counterclockwise"></i> Limpar
               </button>
@@ -110,7 +102,9 @@
           </div>
         </div>
 
-        <!-- STATS -->
+        <!-- ========================================
+             STATS
+             ======================================== -->
         <div class="stats-bar mb-3">
           <div class="stat-item">
             <span class="stat-label">Total</span>
@@ -130,12 +124,16 @@
           </div>
         </div>
 
-        <!-- TABLE -->
+        <!-- ========================================
+             TABLE
+             ======================================== -->
         <div class="table-responsive">
           <table class="table table-sm table-hover align-middle">
             <thead>
               <tr>
-                <th style="width:40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)"></th>
+                <th style="width:40px;">
+                  <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                </th>
                 <th>Usuário</th>
                 <th>Título</th>
                 <th>Prioridade</th>
@@ -146,12 +144,18 @@
               </tr>
             </thead>
             <tbody id="ticketsBody">
-              <tr><td colspan="8" class="text-center text-muted py-4">Carregando...</td></tr>
+              <tr>
+                <td colspan="8" class="text-center text-muted py-4">
+                  <i class="bi bi-hourglass-split"></i> Carregando...
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
 
-        <!-- PAGINATION -->
+        <!-- ========================================
+             PAGINATION
+             ======================================== -->
         <div class="pagination-bar mt-3">
           <div>
             <span>Mostrando</span>
@@ -164,21 +168,30 @@
             <span>de <strong id="totalItems">0</strong></span>
           </div>
           <div class="page-controls">
-            <button class="btn btn-sm btn-outline-secondary" onclick="previousPage()"><i class="bi bi-chevron-left"></i></button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="previousPage()">
+              <i class="bi bi-chevron-left"></i>
+            </button>
             <input type="number" id="currentPage" class="form-control form-control-sm text-center" value="1" min="1" onchange="goToPage(this.value)" style="width:60px;">
             <span>/ <span id="totalPages">1</span></span>
-            <button class="btn btn-sm btn-outline-secondary" onclick="nextPage()"><i class="bi bi-chevron-right"></i></button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="nextPage()">
+              <i class="bi bi-chevron-right"></i>
+            </button>
           </div>
-          <div><span id="paginationText">1 a 25 de 0</span></div>
+          <div>
+            <span id="paginationText">1 a 25 de 0</span>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- MODAL - DETALHE DO TICKET -->
+  <!-- ========================================
+       MODAL - DETALHE DO TICKET
+       ======================================== -->
   <div class="modal fade" id="ticketDetailModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
       <div class="modal-content">
+        <!-- HEADER -->
         <div class="ticket-detail-header">
           <div class="d-flex justify-content-between align-items-start">
             <div>
@@ -189,8 +202,9 @@
           </div>
         </div>
 
+        <!-- BODY -->
         <div class="modal-body ticket-modal-body">
-          <!-- ABAS PRINCIPAIS -->
+          <!-- ====== ABAS PRINCIPAIS ====== -->
           <div class="ticket-detail-tabs">
             <button class="ticket-detail-tab active" onclick="switchTab(event, 'chat')">
               <i class="bi bi-chat-dots"></i> Chat & Resposta
@@ -203,7 +217,7 @@
             </button>
           </div>
 
-          <!-- TAB: CHAT & RESPOSTA (LAYOUT LADO A LADO) -->
+          <!-- ====== TAB 1: CHAT & RESPOSTA ====== -->
           <div class="ticket-detail-content active" id="tab-chat">
             <div class="chat-layout">
               <!-- COLUNA ESQUERDA - DESCRIÇÃO E COMENTÁRIOS -->
@@ -225,19 +239,19 @@
                 <div class="ticket-quick-info">
                   <div class="info-row">
                     <span class="label">Usuário:</span>
-                    <strong id="chatUserName"></strong>
+                    <strong id="detailUserName"></strong>
                   </div>
                   <div class="info-row">
                     <span class="label">Email:</span>
-                    <span id="chatEmail" class="text-break"></span>
+                    <span id="detailEmail" class="text-break"></span>
                   </div>
                   <div class="info-row">
                     <span class="label">Status:</span>
-                    <span id="chatStatus"></span>
+                    <span id="detailStatusQuick"></span>
                   </div>
                   <div class="info-row">
                     <span class="label">Atribuído:</span>
-                    <strong id="chatAssigned"></strong>
+                    <strong id="detailAssignedName"></strong>
                   </div>
                 </div>
 
@@ -254,7 +268,6 @@
                 <!-- MODO RESPONDER -->
                 <div class="reply-mode active" id="reply-respond">
                   <form id="detailReplyForm">
-                    <input type="hidden" id="replyModeType" value="public">
                     <div class="mb-3">
                       <label class="form-label"><i class="bi bi-chat"></i> Resposta para o Usuário</label>
                       <textarea class="form-control" id="detailReplyText" placeholder="Digite sua resposta que será enviada para o usuário..." required></textarea>
@@ -269,7 +282,6 @@
                 <!-- MODO COMENTÁRIO INTERNO -->
                 <div class="reply-mode" id="reply-internal">
                   <form id="detailInternalForm">
-                    <input type="hidden" id="internalModeType" value="internal">
                     <div class="mb-3">
                       <label class="form-label"><i class="bi bi-eye-slash"></i> Comentário Interno</label>
                       <textarea class="form-control" id="detailInternalText" placeholder="Apenas você verá este comentário..." required></textarea>
@@ -284,17 +296,17 @@
             </div>
           </div>
 
-          <!-- TAB: DETALHES -->
+          <!-- ====== TAB 2: DETALHES ====== -->
           <div class="ticket-detail-content" id="tab-details">
             <div class="details-grid">
               <div class="detail-row">
                 <div class="detail-col">
                   <span class="detail-label">Usuário</span>
-                  <span class="detail-value" id="detailUserName"></span>
+                  <span class="detail-value" id="detailUserNameDetail"></span>
                 </div>
                 <div class="detail-col">
                   <span class="detail-label">Email</span>
-                  <span class="detail-value" id="detailEmail"></span>
+                  <span class="detail-value" id="detailEmailDetail"></span>
                 </div>
               </div>
               <div class="detail-row">
@@ -330,14 +342,31 @@
             </div>
           </div>
 
-          <!-- TAB: AÇÕES -->
+          <!-- ====== TAB 3: AÇÕES ====== -->
           <div class="ticket-detail-content" id="tab-actions">
             <div class="actions-grid">
+              <!-- ✅ BOTÃO FINALIZAR ADICIONADO -->
               <div class="action-section">
-                <div class="action-section-title"><i class="bi bi-gear"></i> Alterar Status</div>
+                <div class="action-section-title">
+                  <i class="bi bi-check2-circle"></i> Ação Rápida
+                </div>
+                <div class="select-action">
+                  <p class="text-muted small mb-2">Muda o status do ticket para "Resolvido".</p>
+                  <button class="btn btn-success w-100" onclick="resolveTicket()">
+                    <i class="bi bi-check-lg"></i> Finalizar Chamado
+                  </button>
+                </div>
+              </div>
+
+              <!-- ALTERAR STATUS -->
+              <div class="action-section">
+                <div class="action-section-title">
+                  <i class="bi bi-gear"></i> Alterar Status
+                </div>
                 <div class="select-action">
                   <label>Novo Status</label>
                   <select id="detailStatusSelect" class="form-select form-select-sm" onchange="updateTicketStatus()">
+                    <option value="">Selecione um status...</option>
                     <option value="open">Aberto</option>
                     <option value="in-progress">Em Andamento</option>
                     <option value="resolved">Resolvido</option>
@@ -346,33 +375,16 @@
                 </div>
               </div>
 
+              <!-- ATRIBUIR USUÁRIO -->
               <div class="action-section">
-                <div class="action-section-title"><i class="bi bi-arrow-left-right"></i> Transferir para outro setor</div>
-                <div class="select-action">
-                  <label>Selecione o setor</label>
-                  <select id="detailGroupSelect" class="form-select form-select-sm" onchange="updateTicketGroup()">
-                    <option value="">Selecione...</option>
-                    <option value="suporte">Suporte Técnico</option>
-                    <option value="vendas">Vendas</option>
-                    <option value="financeiro">Financeiro</option>
-                    <option value="administrativo">Administrativo</option>
-                    <option value="desenvolvimento">Desenvolvimento</option>
-                  </select>
+                <div class="action-section-title">
+                  <i class="bi bi-person-check"></i> Atribuir a
                 </div>
-              </div>
-
-              <div class="action-section">
-                <div class="action-section-title"><i class="bi bi-person-check"></i> Atribuir a</div>
                 <div class="select-action">
                   <label>Responsável</label>
                   <select id="detailAssignSelect" class="form-select form-select-sm" onchange="updateTicketAssign()">
                     <option value="">Não atribuído</option>
-                    <option value="joao.silva">João Silva</option>
-                    <option value="maria.santos">Maria Santos</option>
-                    <option value="pedro.costa">Pedro Costa</option>
-                    <option value="ana.oliveira">Ana Oliveira</option>
-                    <option value="carlos.mendes">Carlos Mendes</option>
-                    <option value="me">Mim mesmo</option>
+                    <!-- Opções serão preenchidas dinamicamente pelo JavaScript -->
                   </select>
                 </div>
               </div>
@@ -380,6 +392,7 @@
           </div>
         </div>
 
+        <!-- FOOTER -->
         <div class="modal-footer">
           <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
           <button type="button" class="btn btn-sm btn-danger" onclick="deleteViewingTicket()">
@@ -390,110 +403,125 @@
     </div>
   </div>
 
-  <!-- MODAL - NOVO/EDITAR TICKET -->
+  <!-- ========================================
+       MODAL - NOVO/EDITAR TICKET
+       ======================================== -->
   <div class="modal fade" id="ticketModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content ticket-form-content">
+        <!-- HEADER -->
         <div class="modal-header ticket-form-header">
-          <h5 class="modal-title" id="ticketModalLabel"><i class="bi bi-plus-square"></i> Novo Ticket</h5>
+          <h5 class="modal-title" id="ticketModalLabel">
+            <i class="bi bi-plus-square"></i> Novo Ticket
+          </h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
+
+        <!-- BODY -->
         <div class="modal-body ticket-form-body">
           <form id="ticketForm">
-            <div class="form-row">
-              <div class="form-col">
-                <div class="mb-3">
-                  <label class="form-label">Título <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" id="ticketTitle" required>
-                </div>
-              </div>
+            <!-- ASSUNTO -->
+            <div class="mb-3">
+              <label class="form-label">
+                Assunto <span class="text-danger">*</span>
+              </label>
+              <input type="text" class="form-control" id="ticketTitle" placeholder="Título do ticket" required>
+              <small class="text-muted">Mínimo 3 caracteres</small>
             </div>
 
-            <div class="form-row">
-              <div class="form-col">
-                <div class="mb-3">
-                  <label class="form-label">Descrição</label>
-                  <textarea class="form-control" id="ticketDescription" rows="3"></textarea>
-                </div>
-              </div>
+            <!-- DESCRIÇÃO -->
+            <div class="mb-3">
+              <label class="form-label">
+                Descrição <span class="text-danger">*</span>
+              </label>
+              <textarea class="form-control" id="ticketDescription" rows="4" placeholder="Descreva o problema..." required></textarea>
+              <small class="text-muted">Mínimo 5 caracteres</small>
             </div>
 
-            <div class="form-row">
-              <div class="form-col">
-                <div class="mb-3">
-                  <label class="form-label">Usuário <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" id="ticketClient" required>
-                </div>
-              </div>
-              <div class="form-col">
-                <div class="mb-3">
-                  <label class="form-label">Email <span class="text-danger">*</span></label>
-                  <input type="email" class="form-control" id="ticketEmail" required>
-                </div>
-              </div>
+            <!-- SOLICITANTE (PREENCHIDO AUTOMATICAMENTE) -->
+            <div class="mb-3">
+              <label class="form-label">Solicitante</label>
+              <input type="text" class="form-control" id="ticketClient" placeholder="Seu nome" readonly>
+              <small class="text-muted">Preenchido automaticamente com seus dados</small>
             </div>
 
-            <div class="form-row">
-              <div class="form-col">
-                <div class="mb-3">
-                  <label class="form-label">Grupo <span class="text-danger">*</span></label>
-                  <select class="form-select" id="ticketGroup" required>
-                    <option value="">Selecione...</option>
-                    <option value="suporte">Suporte Técnico</option>
-                    <option value="vendas">Vendas</option>
-                    <option value="financeiro">Financeiro</option>
-                    <option value="administrativo">Administrativo</option>
-                    <option value="desenvolvimento">Desenvolvimento</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-col">
-                <div class="mb-3">
-                  <label class="form-label">Prioridade <span class="text-danger">*</span></label>
-                  <select class="form-select" id="ticketPriority" required>
-                    <option value="">Selecione...</option>
-                    <option value="low">Baixa</option>
-                    <option value="medium">Média</option>
-                    <option value="high">Alta</option>
-                    <option value="urgent">Urgente</option>
-                  </select>
-                </div>
-              </div>
+            <!-- EMAIL (PREENCHIDO AUTOMATICAMENTE) -->
+            <div class="mb-3">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-control" id="ticketEmail" placeholder="Seu email" readonly>
+              <small class="text-muted">Preenchido automaticamente com seus dados</small>
             </div>
+
+            <!-- GRUPO (PREENCHIDO AUTOMATICAMENTE) -->
+            <div class="mb-3">
+              <label class="form-label">Grupo/Setor</label>
+              <input type="text" class="form-control" id="ticketGroupName" placeholder="Seu grupo" readonly>
+              <small class="text-muted">Preenchido automaticamente com o seu setor</small>
+            </div>
+
+            <!-- PRIORIDADE -->
+            <div class="mb-3">
+              <label class="form-label">
+                Prioridade <span class="text-danger">*</span>
+              </label>
+              <select class="form-select" id="ticketPriority" required>
+                <option value="">Selecione...</option>
+                <option value="low">Baixa</option>
+                <option value="medium" selected>Média</option>
+                <option value="high">Alta</option>
+                <option value="urgent">Urgente</option>
+              </select>
+            </div>
+
+            <!-- CAMPOS OCULTOS -->
+            <input type="hidden" id="ticketGroup" value="">
           </form>
         </div>
+
+        <!-- FOOTER -->
         <div class="modal-footer ticket-form-footer">
           <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-sm btn-primary" id="submitBtn" onclick="document.getElementById('ticketForm').dispatchEvent(new Event('submit'))">Criar</button>
+          <button type="submit" class="btn btn-sm btn-primary" onclick="document.getElementById('ticketForm').dispatchEvent(new Event('submit'))">
+            <i class="bi bi-check-lg"></i> Criar Ticket
+          </button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- MODAL - ATRIBUIR -->
+  <!-- ========================================
+       MODAL - ATRIBUIR TICKET(S)
+       ======================================== -->
   <div class="modal fade" id="assignModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content ticket-form-content">
+        <!-- HEADER -->
         <div class="modal-header ticket-form-header">
-          <h5 class="modal-title"><i class="bi bi-person-check"></i> Atribuir Ticket</h5>
+          <h5 class="modal-title">
+            <i class="bi bi-person-check"></i> Atribuir Ticket(s)
+          </h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
+
+        <!-- BODY -->
         <div class="modal-body ticket-form-body">
+          <p class="text-muted mb-3">
+            <small>Selecione um responsável para os <strong id="assignCountText">1</strong> ticket(s) selecionado(s)</small>
+          </p>
           <form id="assignForm">
             <div class="mb-3">
-              <label class="form-label">Atribuir para <span class="text-danger">*</span></label>
+              <label class="form-label">
+                Responsável <span class="text-danger">*</span>
+              </label>
               <select class="form-select" id="assignUser" required>
                 <option value="">Selecione um usuário...</option>
-                <option value="joao.silva">João Silva</option>
-                <option value="maria.santos">Maria Santos</option>
-                <option value="pedro.costa">Pedro Costa</option>
-                <option value="ana.oliveira">Ana Oliveira</option>
-                <option value="carlos.mendes">Carlos Mendes</option>
-                <option value="me">Mim mesmo</option>
+                <!-- Opções serão preenchidas dinamicamente pelo JavaScript -->
               </select>
             </div>
           </form>
         </div>
+
+        <!-- FOOTER -->
         <div class="modal-footer ticket-form-footer">
           <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
           <button type="submit" class="btn btn-sm btn-primary" onclick="document.getElementById('assignForm').dispatchEvent(new Event('submit'))">
@@ -504,7 +532,9 @@
     </div>
   </div>
 
-  <!-- SCRIPTS -->
+  <!-- ========================================
+       SCRIPTS
+       ======================================== -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/route-protection.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js"></script>

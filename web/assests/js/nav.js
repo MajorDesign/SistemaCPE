@@ -88,15 +88,19 @@ function renderNavbar() {
         >
       </div>
 
-     
-
       <div class="navbar-right">
         <button class="navbar-icon-btn" title="Menu" onclick="toggleSidebarMobile()">
           <i class="bi bi-list"></i>
         </button>
-        <button class="navbar-icon-btn" title="Notificações">
+        
+        <!-- ✅ SINO DE NOTIFICAÇÕES -->
+        <button class="navbar-icon-btn notification-bell-btn" 
+                id="notificationBellBtn"
+                title="Notificações"
+                onclick="toggleNotificationPanel(event)">
           <i class="bi bi-bell"></i>
         </button>
+        
         <button class="navbar-icon-btn" title="Ajuda">
           <i class="bi bi-question-circle"></i>
         </button>
@@ -107,6 +111,31 @@ function renderNavbar() {
             <i class="bi bi-box-arrow-right"></i>
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- ✅ PAINEL DE NOTIFICAÇÕES (BALÃO) -->
+    <div class="notification-panel" id="notificationPanel">
+      <div class="notification-panel-header">
+        <h5>
+          <i class="bi bi-bell-fill"></i> Notificações
+        </h5>
+        <button class="close-btn" onclick="closeNotificationPanel(event)">
+          <i class="bi bi-x"></i>
+        </button>
+      </div>
+      
+      <div class="notification-list" id="notificationList">
+        <div class="notification-empty">
+          <i class="bi bi-inbox"></i>
+          <p>Nenhuma notificação</p>
+        </div>
+      </div>
+      
+      <div class="notification-panel-footer">
+        <a href="/SistemaCPE/web/pages/tickets.html" onclick="closeNotificationPanel(event)">
+          Ver todos os tickets →
+        </a>
       </div>
     </div>
   `;
@@ -303,6 +332,346 @@ function handleLogout(event) {
 }
 
 /* =========================================
+   ✅ SISTEMA DE NOTIFICAÇÕES
+   ========================================= */
+
+// --- Variáveis globais ---
+let notificationsData = [];
+let currentUserId = null;
+let notificationCheckInterval = null;
+const NOTIFICATIONS_API = "http://localhost:8000/api/notificacoes";
+
+// ✅ Inicializar notificações
+function initNotifications() {
+  try {
+    console.log("[NAV/NOTIFICATIONS] ⚙️ Inicializando notificações...");
+    
+    const userData = localStorage.getItem("user");
+    if (!userData) {
+      console.warn("[NAV/NOTIFICATIONS] ⚠️ Usuário não autenticado");
+      return;
+    }
+    
+    const user = JSON.parse(userData);
+    currentUserId = user.id;
+    
+    console.log("[NAV/NOTIFICATIONS] 👤 Usuário: #" + currentUserId);
+    
+    // Carregar notificações iniciais
+    loadNotifications();
+    
+    // Atualizar notificações a cada 15 segundos
+    if (notificationCheckInterval) {
+      clearInterval(notificationCheckInterval);
+    }
+    
+    notificationCheckInterval = setInterval(loadNotifications, 15000);
+    console.log("[NAV/NOTIFICATIONS] ✅ Sistema pronto (atualiza a cada 15s)");
+    
+    // Fechar painel ao clicar fora
+    document.addEventListener("click", (e) => {
+      const panel = document.getElementById("notificationPanel");
+      const btn = document.getElementById("notificationBellBtn");
+      
+      if (panel && btn && !panel.contains(e.target) && !btn.contains(e.target)) {
+        closeNotificationPanel(e);
+      }
+    });
+    
+  } catch (error) {
+    console.error("[NAV/NOTIFICATIONS] ❌ Erro na inicialização:", error);
+  }
+}
+
+// ✅ Carregar notificações da API
+async function loadNotifications() {
+  try {
+    if (!currentUserId) return;
+    
+    console.log("[NAV/NOTIFICATIONS] 📡 Carregando notificações...");
+    
+    const response = await fetch(`${NOTIFICATIONS_API}?usuario_id=${currentUserId}&limite=20`);
+    
+    if (response.status === 404) {
+      console.warn("[NAV/NOTIFICATIONS] ⚠️ Endpoint não encontrado, usando localStorage");
+      loadNotificationsFromStorage();
+      return;
+    }
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const notifications = await response.json();
+    console.log("[NAV/NOTIFICATIONS] ✅ " + notifications.length + " notificação(ões)");
+    
+    // Armazenar no localStorage
+    localStorage.setItem("notifications_" + currentUserId, JSON.stringify(notifications));
+    
+    notificationsData = notifications;
+    updateNotificationUI();
+    
+  } catch (error) {
+    console.error("[NAV/NOTIFICATIONS] ❌ Erro:", error);
+    loadNotificationsFromStorage();
+  }
+}
+
+// ✅ Carregar do localStorage (fallback)
+function loadNotificationsFromStorage() {
+  try {
+    const stored = localStorage.getItem("notifications_" + currentUserId);
+    
+    if (stored) {
+      notificationsData = JSON.parse(stored);
+      console.log("[NAV/NOTIFICATIONS] 💾 Usando dados do localStorage");
+      updateNotificationUI();
+    }
+  } catch (error) {
+    console.error("[NAV/NOTIFICATIONS] ❌ Erro ao carregar storage:", error);
+  }
+}
+
+// ✅ Atualizar UI
+function updateNotificationUI() {
+  console.log("[NAV/NOTIFICATIONS-UI] 🎨 Atualizando interface...");
+  
+  // Contar não lidas
+  const unreadCount = notificationsData.filter(n => !n.lido).length;
+  console.log("[NAV/NOTIFICATIONS-UI]   - Não lidas: " + unreadCount);
+  
+  // Atualizar badge
+  updateNotificationBadge(unreadCount);
+  
+  // Atualizar lista
+  renderNotificationList();
+}
+
+// ✅ Atualizar badge do sino
+function updateNotificationBadge(count) {
+  const bellBtn = document.getElementById("notificationBellBtn");
+  if (!bellBtn) return;
+  
+  // Remover badge antigo
+  const oldBadge = bellBtn.querySelector(".notification-badge");
+  if (oldBadge) oldBadge.remove();
+  
+  // Adicionar novo badge se houver notificações não lidas
+  if (count > 0) {
+    const badge = document.createElement("span");
+    badge.className = "notification-badge pulse";
+    badge.textContent = count > 9 ? "9+" : count;
+    bellBtn.appendChild(badge);
+    
+    console.log("[NAV/NOTIFICATIONS-UI] 📍 Badge: " + count);
+  }
+}
+
+// ✅ Renderizar lista de notificações
+function renderNotificationList() {
+  const listContainer = document.getElementById("notificationList");
+  if (!listContainer) return;
+  
+  // Ordenar por mais recentes primeiro
+  const sorted = [...notificationsData].sort((a, b) => {
+    return new Date(b.created_at) - new Date(a.created_at);
+  });
+  
+  // Limitar a 10 notificações
+  const displayed = sorted.slice(0, 10);
+  
+  if (displayed.length === 0) {
+    listContainer.innerHTML = `
+      <div class="notification-empty">
+        <i class="bi bi-inbox"></i>
+        <p>Nenhuma notificação</p>
+      </div>
+    `;
+    return;
+  }
+  
+  listContainer.innerHTML = displayed.map(notif => {
+    const icon = getNotificationIcon(notif.tipo);
+    const date = formatNotificationDate(notif.created_at);
+    const unreadClass = notif.lido ? "" : "unread";
+    
+    return `
+      <div class="notification-item ${unreadClass}" 
+           onclick="handleNotificationClick(${notif.id}, ${notif.ticket_id})"
+           data-notification-id="${notif.id}">
+        
+        <div class="notification-icon ${notif.tipo}">
+          ${icon}
+        </div>
+        
+        <div class="notification-content">
+          <p class="notification-title">
+            ${getTipoLabel(notif.tipo)}
+            <span class="notification-badge-type ${notif.tipo}">
+              ${getTipoBadgeText(notif.tipo)}
+            </span>
+          </p>
+          <p class="notification-message">
+            ${escapeHtml(notif.mensagem)}
+          </p>
+          <p class="notification-meta">
+            ${date}
+          </p>
+        </div>
+      </div>
+    `;
+  }).join("");
+  
+  console.log("[NAV/NOTIFICATIONS-UI] ✅ Lista com " + displayed.length + " itens");
+}
+
+// ✅ Toggle painel de notificações
+function toggleNotificationPanel(event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  
+  const panel = document.getElementById("notificationPanel");
+  if (!panel) return;
+  
+  panel.classList.toggle("show");
+  
+  if (panel.classList.contains("show")) {
+    console.log("[NAV/NOTIFICATIONS] 👁️ Painel aberto");
+    markAllAsRead();
+  } else {
+    console.log("[NAV/NOTIFICATIONS] 👁️ Painel fechado");
+  }
+}
+
+// ✅ Fechar painel de notificações
+function closeNotificationPanel(event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  
+  const panel = document.getElementById("notificationPanel");
+  if (panel) {
+    panel.classList.remove("show");
+  }
+}
+
+// ✅ Clique em notificação
+async function handleNotificationClick(notificationId, ticketId) {
+  console.log("[NAV/NOTIFICATIONS] 🔗 Clique #" + notificationId);
+  
+  try {
+    // Marcar como lida
+    await markNotificationAsRead(notificationId);
+    
+    // Fechar painel
+    closeNotificationPanel();
+    
+    // Navegar para o ticket
+    window.location.href = `/SistemaCPE/web/pages/tickets.html?ticket_id=${ticketId}`;
+    
+  } catch (error) {
+    console.error("[NAV/NOTIFICATIONS] ❌ Erro:", error);
+  }
+}
+
+// ✅ Marcar como lida
+async function markNotificationAsRead(notificationId) {
+  try {
+    const response = await fetch(`${NOTIFICATIONS_API}/${notificationId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ lido: true })
+    });
+    
+    if (response.ok) {
+      console.log("[NAV/NOTIFICATIONS] ✅ Notificação #" + notificationId + " lida");
+      await loadNotifications();
+    }
+  } catch (error) {
+    console.error("[NAV/NOTIFICATIONS] ❌ Erro ao marcar lida:", error);
+  }
+}
+
+// ✅ Marcar todas como lidas
+async function markAllAsRead() {
+  try {
+    const unreadNotifs = notificationsData.filter(n => !n.lido);
+    
+    if (unreadNotifs.length === 0) return;
+    
+    console.log("[NAV/NOTIFICATIONS] 📋 Marcando " + unreadNotifs.length + " como lida(s)...");
+    
+    for (const notif of unreadNotifs) {
+      await fetch(`${NOTIFICATIONS_API}/${notif.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ lido: true })
+      });
+    }
+    
+    await loadNotifications();
+  } catch (error) {
+    console.error("[NAV/NOTIFICATIONS] ❌ Erro:", error);
+  }
+}
+
+// ✅ Funções auxiliares de notificações
+function getNotificationIcon(tipo) {
+  const icons = {
+    "atribuido": "👤",
+    "respondido": "💬",
+    "transferido": "↔️",
+    "finalizado": "✅",
+    "alterado": "🔄"
+  };
+  return icons[tipo] || "📬";
+}
+
+function getTipoLabel(tipo) {
+  const labels = {
+    "atribuido": "Ticket Atribuído",
+    "respondido": "Nova Resposta",
+    "transferido": "Ticket Transferido",
+    "finalizado": "Ticket Finalizado",
+    "alterado": "Ticket Alterado"
+  };
+  return labels[tipo] || "Notificação";
+}
+
+function getTipoBadgeText(tipo) {
+  const texts = {
+    "atribuido": "Atribuído",
+    "respondido": "Resposta",
+    "transferido": "Transferência",
+    "finalizado": "Finalizado",
+    "alterado": "Alteração"
+  };
+  return texts[tipo] || tipo;
+}
+
+function formatNotificationDate(dateString) {
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now - date;
+    
+    if (diff < 60000) return "Agora";
+    if (diff < 3600000) return Math.floor(diff / 60000) + "m atrás";
+    if (diff < 86400000) return Math.floor(diff / 3600000) + "h atrás";
+    
+    const days = Math.floor(diff / 86400000);
+    return days === 1 ? "Ontem" : days + "d atrás";
+  } catch (error) {
+    return "Data inválida";
+  }
+}
+
+/* =========================================
    INICIALIZAR NAVEGAÇÃO
    ========================================= */
 
@@ -321,6 +690,11 @@ function initializeNavigation() {
       console.log("[NAV/INIT]   ✓ Navbar");
       console.log("[NAV/INIT]   ✓ Sidebar");
       console.log("[NAV/INIT]   ✓ Menu items carregados");
+      console.log("[NAV/INIT]   ✓ Sistema de notificações pronto");
+      
+      // ✅ Inicializar notificações
+      initNotifications();
+      
       console.log("=".repeat(80) + "\n");
       return true;
     } else {
