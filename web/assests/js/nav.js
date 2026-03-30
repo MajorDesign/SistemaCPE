@@ -60,12 +60,13 @@ function renderNavbar() {
     return false;
   }
 
-  const user = localStorage.getItem("user");
+  // ✅ CORRIGIDO: chave unificada para "cpe_user" (igual ao tickets.js)
+  const userStr = localStorage.getItem("cpe_user");
   let userData = { name: "Visitante" };
   
-  if (user) {
+  if (userStr) {
     try {
-      userData = JSON.parse(user);
+      userData = JSON.parse(userStr);
     } catch (err) {
       console.warn("[NAV/NAVBAR] ⚠️ Erro ao fazer parse do usuário:", err.message);
     }
@@ -93,7 +94,7 @@ function renderNavbar() {
           <i class="bi bi-list"></i>
         </button>
         
-        <!-- ✅ SINO DE NOTIFICAÇÕES -->
+        <!-- SINO DE NOTIFICAÇÕES -->
         <button class="navbar-icon-btn notification-bell-btn" 
                 id="notificationBellBtn"
                 title="Notificações"
@@ -114,7 +115,7 @@ function renderNavbar() {
       </div>
     </div>
 
-    <!-- ✅ PAINEL DE NOTIFICAÇÕES (BALÃO) -->
+    <!-- PAINEL DE NOTIFICAÇÕES (BALÃO) -->
     <div class="notification-panel" id="notificationPanel">
       <div class="notification-panel-header">
         <h5>
@@ -132,14 +133,23 @@ function renderNavbar() {
         </div>
       </div>
       
-      <div class="notification-panel-footer">
-        <a href="/SistemaCPE/web/pages/tickets.html" onclick="closeNotificationPanel(event)">
+     <div class="notification-panel-footer">
+        <button class="btn-limpar-notificacoes" 
+                onclick="limparNotificacoesLidas(event)"
+                title="Deletar todas as notificações já lidas">
+          <i class="bi bi-trash"></i>
+          Limpar lidas
+        </button>
+        
+        <a href="/SistemaCPE/web/pages/tickets.html" 
+           onclick="closeNotificationPanel(event)"
+           class="link-todos-tickets">
           Ver todos os tickets →
         </a>
       </div>
-    </div>
   `;
 
+  
   console.log("[NAV/NAVBAR] ✅ Navbar renderizada com sucesso");
   return true;
 }
@@ -315,6 +325,11 @@ function handleLogout(event) {
   console.log("[NAV/LOGOUT] 🚪 Processando logout...");
 
   try {
+    // ✅ CORRIGIDO: removendo as chaves corretas usadas pelo sistema
+    // tickets.js salva como "cpe_token" e "cpe_user"
+    localStorage.removeItem("cpe_token");
+    localStorage.removeItem("cpe_user");
+    // Mantendo remoção das chaves antigas por compatibilidade
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     localStorage.removeItem("logged_in");
@@ -332,7 +347,7 @@ function handleLogout(event) {
 }
 
 /* =========================================
-   ✅ SISTEMA DE NOTIFICAÇÕES
+   SISTEMA DE NOTIFICAÇÕES
    ========================================= */
 
 // --- Variáveis globais ---
@@ -341,19 +356,25 @@ let currentUserId = null;
 let notificationCheckInterval = null;
 const NOTIFICATIONS_API = "http://localhost:8000/api/notificacoes";
 
-// ✅ Inicializar notificações
+// Inicializar notificações
 function initNotifications() {
   try {
     console.log("[NAV/NOTIFICATIONS] ⚙️ Inicializando notificações...");
     
-    const userData = localStorage.getItem("user");
-    if (!userData) {
-      console.warn("[NAV/NOTIFICATIONS] ⚠️ Usuário não autenticado");
+    // ✅ CORRIGIDO: chave unificada para "cpe_user" (igual ao tickets.js e app.py)
+    const userStr = localStorage.getItem("cpe_user");
+    if (!userStr) {
+      console.warn("[NAV/NOTIFICATIONS] ⚠️ Usuário não autenticado (cpe_user não encontrado)");
       return;
     }
     
-    const user = JSON.parse(userData);
+    const user = JSON.parse(userStr);
     currentUserId = user.id;
+    
+    if (!currentUserId) {
+      console.warn("[NAV/NOTIFICATIONS] ⚠️ ID do usuário não encontrado no cpe_user");
+      return;
+    }
     
     console.log("[NAV/NOTIFICATIONS] 👤 Usuário: #" + currentUserId);
     
@@ -383,7 +404,7 @@ function initNotifications() {
   }
 }
 
-// ✅ Carregar notificações da API
+// Carregar notificações da API
 async function loadNotifications() {
   try {
     if (!currentUserId) return;
@@ -402,10 +423,14 @@ async function loadNotifications() {
       throw new Error(`HTTP ${response.status}`);
     }
     
-    const notifications = await response.json();
+    const data = await response.json();
+
+    // A API retorna { total, registros, limite, offset, notificacoes: [...] }
+    const notifications = Array.isArray(data) ? data : (data.notificacoes || []);
+    
     console.log("[NAV/NOTIFICATIONS] ✅ " + notifications.length + " notificação(ões)");
     
-    // Armazenar no localStorage
+    // Armazenar no localStorage como fallback
     localStorage.setItem("notifications_" + currentUserId, JSON.stringify(notifications));
     
     notificationsData = notifications;
@@ -417,7 +442,7 @@ async function loadNotifications() {
   }
 }
 
-// ✅ Carregar do localStorage (fallback)
+// Carregar do localStorage (fallback)
 function loadNotificationsFromStorage() {
   try {
     const stored = localStorage.getItem("notifications_" + currentUserId);
@@ -432,7 +457,7 @@ function loadNotificationsFromStorage() {
   }
 }
 
-// ✅ Atualizar UI
+// Atualizar UI
 function updateNotificationUI() {
   console.log("[NAV/NOTIFICATIONS-UI] 🎨 Atualizando interface...");
   
@@ -447,7 +472,7 @@ function updateNotificationUI() {
   renderNotificationList();
 }
 
-// ✅ Atualizar badge do sino
+// Atualizar badge do sino
 function updateNotificationBadge(count) {
   const bellBtn = document.getElementById("notificationBellBtn");
   if (!bellBtn) return;
@@ -467,7 +492,66 @@ function updateNotificationBadge(count) {
   }
 }
 
-// ✅ Renderizar lista de notificações
+// ========================================
+// 🗑️ LIMPAR NOTIFICAÇÕES LIDAS - NOVO
+// Data: 31/03/2026 15:10
+// ========================================
+// INÍCIO: Adicionar antes de closeNotificationPanel()
+
+async function limparNotificacoesLidas(event) {
+  if (event) {
+    event.stopPropagation();
+  }
+  
+  if (!currentUserId) {
+    console.warn("[NAV/NOTIFICATIONS] ⚠️ Usuário não autenticado");
+    return;
+  }
+
+  console.log("[NAV/NOTIFICATIONS] 🗑️ Iniciando limpeza de notificações lidas...");
+
+  try {
+    const response = await fetch(
+      `${NOTIFICATIONS_API}/limpador/lidas?usuario_id=${currentUserId}`,
+      {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const resultado = await response.json();
+    console.log("[NAV/NOTIFICATIONS] ✅ Limpeza concluída:", resultado);
+
+    // Recarregar notificações
+    await loadNotifications();
+
+    // Feedback visual ao usuário
+    if (resultado.total_deletadas > 0) {
+      const mensagem = `${resultado.total_deletadas} notificação(ões) removida(s)`;
+      console.log(`[NAV/NOTIFICATIONS] 📢 ${mensagem}`);
+      alert(`✅ ${mensagem}`);
+    } else {
+      console.log("[NAV/NOTIFICATIONS] ℹ️ Nenhuma notificação lida para remover");
+      alert("ℹ️ Nenhuma notificação lida para remover");
+    }
+
+  } catch (error) {
+    console.error("[NAV/NOTIFICATIONS] ❌ Erro ao limpar:", error.message);
+    alert("❌ Erro ao limpar notificações");
+  }
+}
+
+// ========================================
+// FIM DA FUNÇÃO - 31/03/2026 15:10
+// ========================================
+
+// Renderizar lista de notificações
 function renderNotificationList() {
   const listContainer = document.getElementById("notificationList");
   if (!listContainer) return;
@@ -525,7 +609,7 @@ function renderNotificationList() {
   console.log("[NAV/NOTIFICATIONS-UI] ✅ Lista com " + displayed.length + " itens");
 }
 
-// ✅ Toggle painel de notificações
+// Toggle painel de notificações
 function toggleNotificationPanel(event) {
   if (event) {
     event.stopPropagation();
@@ -544,7 +628,7 @@ function toggleNotificationPanel(event) {
   }
 }
 
-// ✅ Fechar painel de notificações
+// Fechar painel de notificações
 function closeNotificationPanel(event) {
   if (event) {
     event.stopPropagation();
@@ -556,9 +640,9 @@ function closeNotificationPanel(event) {
   }
 }
 
-// ✅ Clique em notificação
+// Clique em notificação: marca como lida e redireciona para o ticket
 async function handleNotificationClick(notificationId, ticketId) {
-  console.log("[NAV/NOTIFICATIONS] 🔗 Clique #" + notificationId);
+  console.log("[NAV/NOTIFICATIONS] 🔗 Clique #" + notificationId + " | Ticket #" + ticketId);
   
   try {
     // Marcar como lida
@@ -567,7 +651,7 @@ async function handleNotificationClick(notificationId, ticketId) {
     // Fechar painel
     closeNotificationPanel();
     
-    // Navegar para o ticket
+    // ✅ Navegar para o ticket — tickets.js lerá ?ticket_id= e abrirá o modal
     window.location.href = `/SistemaCPE/web/pages/tickets.html?ticket_id=${ticketId}`;
     
   } catch (error) {
@@ -575,29 +659,40 @@ async function handleNotificationClick(notificationId, ticketId) {
   }
 }
 
-// ✅ Marcar como lida
+// Marcar uma notificação como lida
 async function markNotificationAsRead(notificationId) {
   try {
-    const response = await fetch(`${NOTIFICATIONS_API}/${notificationId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ lido: true })
-    });
+    if (!currentUserId) return;
+
+    // ✅ CORRIGIDO: adicionado ?usuario_id= obrigatório exigido pelo notificacoes.py
+    // Sem esse parâmetro a API retornava erro 422 (Unprocessable Entity)
+    const response = await fetch(
+      `${NOTIFICATIONS_API}/${notificationId}?usuario_id=${currentUserId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ lido: true })
+      }
+    );
     
     if (response.ok) {
-      console.log("[NAV/NOTIFICATIONS] ✅ Notificação #" + notificationId + " lida");
+      console.log("[NAV/NOTIFICATIONS] ✅ Notificação #" + notificationId + " marcada como lida");
       await loadNotifications();
+    } else {
+      console.warn("[NAV/NOTIFICATIONS] ⚠️ Falha ao marcar lida: HTTP " + response.status);
     }
   } catch (error) {
     console.error("[NAV/NOTIFICATIONS] ❌ Erro ao marcar lida:", error);
   }
 }
 
-// ✅ Marcar todas como lidas
+// Marcar todas como lidas
 async function markAllAsRead() {
   try {
+    if (!currentUserId) return;
+
     const unreadNotifs = notificationsData.filter(n => !n.lido);
     
     if (unreadNotifs.length === 0) return;
@@ -605,13 +700,17 @@ async function markAllAsRead() {
     console.log("[NAV/NOTIFICATIONS] 📋 Marcando " + unreadNotifs.length + " como lida(s)...");
     
     for (const notif of unreadNotifs) {
-      await fetch(`${NOTIFICATIONS_API}/${notif.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ lido: true })
-      });
+      // ✅ CORRIGIDO: adicionado ?usuario_id= em todas as chamadas PUT
+      await fetch(
+        `${NOTIFICATIONS_API}/${notif.id}?usuario_id=${currentUserId}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ lido: true })
+        }
+      );
     }
     
     await loadNotifications();
@@ -620,36 +719,54 @@ async function markAllAsRead() {
   }
 }
 
-// ✅ Funções auxiliares de notificações
+/* =========================================
+   FUNÇÕES AUXILIARES DE NOTIFICAÇÕES
+   ========================================= */
+
+// ✅ CORRIGIDO: tipos alinhados com os valores reais gravados no banco
+// (notificacoes.py valida: "info","aviso","erro","sucesso","ticket_criado",
+//  "nova_resposta","status_alterado","atribuido","comentario_interno")
 function getNotificationIcon(tipo) {
   const icons = {
-    "atribuido": "👤",
-    "respondido": "💬",
-    "transferido": "↔️",
-    "finalizado": "✅",
-    "alterado": "🔄"
+    "ticket_criado":      "🎫",
+    "nova_resposta":      "💬",
+    "status_alterado":    "🔄",
+    "atribuido":          "👤",
+    "comentario_interno": "🔒",
+    "info":               "ℹ️",
+    "aviso":              "⚠️",
+    "erro":               "❌",
+    "sucesso":            "✅"
   };
   return icons[tipo] || "📬";
 }
 
 function getTipoLabel(tipo) {
   const labels = {
-    "atribuido": "Ticket Atribuído",
-    "respondido": "Nova Resposta",
-    "transferido": "Ticket Transferido",
-    "finalizado": "Ticket Finalizado",
-    "alterado": "Ticket Alterado"
+    "ticket_criado":      "Ticket Criado",
+    "nova_resposta":      "Nova Resposta",
+    "status_alterado":    "Status Alterado",
+    "atribuido":          "Ticket Atribuído",
+    "comentario_interno": "Comentário Interno",
+    "info":               "Informação",
+    "aviso":              "Aviso",
+    "erro":               "Erro",
+    "sucesso":            "Sucesso"
   };
   return labels[tipo] || "Notificação";
 }
 
 function getTipoBadgeText(tipo) {
   const texts = {
-    "atribuido": "Atribuído",
-    "respondido": "Resposta",
-    "transferido": "Transferência",
-    "finalizado": "Finalizado",
-    "alterado": "Alteração"
+    "ticket_criado":      "Criado",
+    "nova_resposta":      "Resposta",
+    "status_alterado":    "Status",
+    "atribuido":          "Atribuído",
+    "comentario_interno": "Interno",
+    "info":               "Info",
+    "aviso":              "Aviso",
+    "erro":               "Erro",
+    "sucesso":            "Sucesso"
   };
   return texts[tipo] || tipo;
 }
@@ -660,8 +777,8 @@ function formatNotificationDate(dateString) {
     const now = new Date();
     const diff = now - date;
     
-    if (diff < 60000) return "Agora";
-    if (diff < 3600000) return Math.floor(diff / 60000) + "m atrás";
+    if (diff < 60000)    return "Agora";
+    if (diff < 3600000)  return Math.floor(diff / 60000) + "m atrás";
     if (diff < 86400000) return Math.floor(diff / 3600000) + "h atrás";
     
     const days = Math.floor(diff / 86400000);
@@ -692,7 +809,7 @@ function initializeNavigation() {
       console.log("[NAV/INIT]   ✓ Menu items carregados");
       console.log("[NAV/INIT]   ✓ Sistema de notificações pronto");
       
-      // ✅ Inicializar notificações
+      // Inicializar notificações
       initNotifications();
       
       console.log("=".repeat(80) + "\n");

@@ -31,6 +31,7 @@
       </div>
 
       <div class="content">
+
         <!-- ========================================
              ALERTAS
              ======================================== -->
@@ -46,18 +47,35 @@
              ======================================== -->
         <div class="action-bar mb-3">
           <div class="btn-group">
+
+            <!-- Novo: visível para todos -->
             <button class="btn btn-primary btn-sm" onclick="openNewTicketModal()" title="Criar novo ticket">
               <i class="bi bi-plus-circle"></i> Novo
             </button>
-            <button class="btn btn-warning btn-sm" onclick="editSelected()" title="Editar ticket selecionado">
+
+            <!--
+              ✅ id="btnAlterar" adicionado.
+              tickets.js → applyRolePermissions() oculta este botão para USER.
+              Apenas ADMIN / TI / MANAGER enxergam.
+            -->
+            <button id="btnAlterar" class="btn btn-warning btn-sm" onclick="editSelected()" title="Editar ticket selecionado">
               <i class="bi bi-pencil-square"></i> Alterar
             </button>
+
+            <!-- Apagar: visível para todos; backend valida permissão (403 se não for dono) -->
             <button class="btn btn-danger btn-sm" onclick="deleteSelected()" title="Deletar ticket(s) selecionado(s)">
               <i class="bi bi-trash"></i> Apagar
             </button>
-            <button class="btn btn-info btn-sm" onclick="assignSelected()" title="Atribuir ticket(s) selecionado(s)">
+
+            <!--
+              ✅ id="btnAtribuir" adicionado.
+              tickets.js → applyRolePermissions() oculta este botão para USER.
+              Apenas ADMIN / TI / MANAGER enxergam.
+            -->
+            <button id="btnAtribuir" class="btn btn-info btn-sm" onclick="assignSelected()" title="Atribuir ticket(s) selecionado(s)">
               <i class="bi bi-person-check"></i> Atribuir
             </button>
+
           </div>
 
           <div class="search-filters">
@@ -171,7 +189,8 @@
             <button class="btn btn-sm btn-outline-secondary" onclick="previousPage()">
               <i class="bi bi-chevron-left"></i>
             </button>
-            <input type="number" id="currentPage" class="form-control form-control-sm text-center" value="1" min="1" onchange="goToPage(this.value)" style="width:60px;">
+            <input type="number" id="currentPage" class="form-control form-control-sm text-center"
+                   value="1" min="1" onchange="goToPage(this.value)" style="width:60px;">
             <span>/ <span id="totalPages">1</span></span>
             <button class="btn btn-sm btn-outline-secondary" onclick="nextPage()">
               <i class="bi bi-chevron-right"></i>
@@ -181,6 +200,7 @@
             <span id="paginationText">1 a 25 de 0</span>
           </div>
         </div>
+
       </div>
     </div>
   </div>
@@ -191,6 +211,7 @@
   <div class="modal fade" id="ticketDetailModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
       <div class="modal-content">
+
         <!-- HEADER -->
         <div class="ticket-detail-header">
           <div class="d-flex justify-content-between align-items-start">
@@ -204,23 +225,36 @@
 
         <!-- BODY -->
         <div class="modal-body ticket-modal-body">
+
           <!-- ====== ABAS PRINCIPAIS ====== -->
           <div class="ticket-detail-tabs">
+
+            <!-- Chat: visível para todos -->
             <button class="ticket-detail-tab active" onclick="switchTab(event, 'chat')">
               <i class="bi bi-chat-dots"></i> Chat & Resposta
             </button>
+
+            <!-- Detalhes: visível para todos -->
             <button class="ticket-detail-tab" onclick="switchTab(event, 'details')">
               <i class="bi bi-info-circle"></i> Detalhes
             </button>
+
+            <!--
+              Ações: visível apenas para ADMIN / TI / MANAGER.
+              tickets.js → applyDetailPermissions() usa querySelector neste onclick
+              para ocultar/exibir conforme o role do usuário logado.
+            -->
             <button class="ticket-detail-tab" onclick="switchTab(event, 'actions')">
               <i class="bi bi-sliders"></i> Ações
             </button>
+
           </div>
 
           <!-- ====== TAB 1: CHAT & RESPOSTA ====== -->
           <div class="ticket-detail-content active" id="tab-chat">
             <div class="chat-layout">
-              <!-- COLUNA ESQUERDA - DESCRIÇÃO E COMENTÁRIOS -->
+
+              <!-- COLUNA ESQUERDA: descrição e histórico -->
               <div class="chat-left">
                 <div class="description-section">
                   <h6 class="section-title"><i class="bi bi-file-text"></i> Descrição do Chamado</h6>
@@ -233,9 +267,10 @@
                 </div>
               </div>
 
-              <!-- COLUNA DIREITA - FORMULÁRIO DE RESPOSTA -->
+              <!-- COLUNA DIREITA: formulário de resposta -->
               <div class="chat-right">
-                <!-- INFO RÁPIDA DO TICKET -->
+
+                <!-- INFO RÁPIDA -->
                 <div class="ticket-quick-info">
                   <div class="info-row">
                     <span class="label">Usuário:</span>
@@ -255,23 +290,38 @@
                   </div>
                 </div>
 
-                <!-- MENU DE ABAS DO RESPONDER -->
+                <!-- ABAS DE MODO DE RESPOSTA -->
                 <div class="reply-menu-tabs">
+
+                  <!-- Responder: visível para todos -->
                   <button class="reply-menu-tab active" onclick="switchReplyMode(event, 'respond')">
                     <i class="bi bi-chat-left-quote"></i> Responder
                   </button>
+
+                  <!--
+                    Comentário Interno: visível apenas para ADMIN / TI / MANAGER.
+                    tickets.js → applyDetailPermissions() usa querySelector neste onclick
+                    para ocultar/exibir conforme o role.
+                  -->
                   <button class="reply-menu-tab" onclick="switchReplyMode(event, 'internal')">
                     <i class="bi bi-eye-slash"></i> Comentário Interno
                   </button>
+
                 </div>
 
-                <!-- MODO RESPONDER -->
+                <!-- MODO: RESPONDER (público) -->
                 <div class="reply-mode active" id="reply-respond">
                   <form id="detailReplyForm">
                     <div class="mb-3">
-                      <label class="form-label"><i class="bi bi-chat"></i> Resposta para o Usuário</label>
-                      <textarea class="form-control" id="detailReplyText" placeholder="Digite sua resposta que será enviada para o usuário..." required></textarea>
-                      <small class="text-muted d-block mt-2">O usuário receberá uma notificação desta resposta</small>
+                      <label class="form-label">
+                        <i class="bi bi-chat"></i> Resposta para o Usuário
+                      </label>
+                      <textarea class="form-control" id="detailReplyText"
+                                placeholder="Digite sua resposta que será enviada para o usuário..."
+                                required></textarea>
+                      <small class="text-muted d-block mt-2">
+                        O usuário receberá uma notificação desta resposta
+                      </small>
                     </div>
                     <button type="submit" class="btn btn-success btn-sm w-100">
                       <i class="bi bi-send"></i> Enviar Resposta
@@ -279,22 +329,29 @@
                   </form>
                 </div>
 
-                <!-- MODO COMENTÁRIO INTERNO -->
+                <!-- MODO: COMENTÁRIO INTERNO (apenas admin) -->
                 <div class="reply-mode" id="reply-internal">
                   <form id="detailInternalForm">
                     <div class="mb-3">
-                      <label class="form-label"><i class="bi bi-eye-slash"></i> Comentário Interno</label>
-                      <textarea class="form-control" id="detailInternalText" placeholder="Apenas você verá este comentário..." required></textarea>
-                      <small class="text-muted d-block mt-2">Não será visível para o usuário</small>
+                      <label class="form-label">
+                        <i class="bi bi-eye-slash"></i> Comentário Interno
+                      </label>
+                      <textarea class="form-control" id="detailInternalText"
+                                placeholder="Apenas a equipe verá este comentário..."
+                                required></textarea>
+                      <small class="text-muted d-block mt-2">
+                        Não será visível para o usuário solicitante
+                      </small>
                     </div>
                     <button type="submit" class="btn btn-warning btn-sm w-100">
                       <i class="bi bi-bookmark"></i> Salvar Comentário
                     </button>
                   </form>
                 </div>
-              </div>
-            </div>
-          </div>
+
+              </div><!-- /chat-right -->
+            </div><!-- /chat-layout -->
+          </div><!-- /tab-chat -->
 
           <!-- ====== TAB 2: DETALHES ====== -->
           <div class="ticket-detail-content" id="tab-details">
@@ -340,12 +397,13 @@
                 </div>
               </div>
             </div>
-          </div>
+          </div><!-- /tab-details -->
 
-          <!-- ====== TAB 3: AÇÕES ====== -->
+          <!-- ====== TAB 3: AÇÕES (apenas ADMIN / TI / MANAGER) ====== -->
           <div class="ticket-detail-content" id="tab-actions">
             <div class="actions-grid">
-              <!-- ✅ BOTÃO FINALIZAR ADICIONADO -->
+
+              <!-- Finalizar chamado -->
               <div class="action-section">
                 <div class="action-section-title">
                   <i class="bi bi-check2-circle"></i> Ação Rápida
@@ -358,7 +416,7 @@
                 </div>
               </div>
 
-              <!-- ALTERAR STATUS -->
+              <!-- Alterar status -->
               <div class="action-section">
                 <div class="action-section-title">
                   <i class="bi bi-gear"></i> Alterar Status
@@ -375,7 +433,11 @@
                 </div>
               </div>
 
-              <!-- ATRIBUIR USUÁRIO -->
+              <!--
+                Atribuir responsável.
+                Usuário não escolhe o responsável — apenas ADMIN / TI / MANAGER
+                têm acesso a esta aba, conforme applyDetailPermissions().
+              -->
               <div class="action-section">
                 <div class="action-section-title">
                   <i class="bi bi-person-check"></i> Atribuir a
@@ -384,31 +446,45 @@
                   <label>Responsável</label>
                   <select id="detailAssignSelect" class="form-select form-select-sm" onchange="updateTicketAssign()">
                     <option value="">Não atribuído</option>
-                    <!-- Opções serão preenchidas dinamicamente pelo JavaScript -->
+                    <!-- Preenchido dinamicamente por tickets.js → populateUserDropdowns() -->
                   </select>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
 
-        <!-- FOOTER -->
+            </div>
+          </div><!-- /tab-actions -->
+
+        </div><!-- /modal-body -->
+
+        <!-- FOOTER DO MODAL DE DETALHE -->
         <div class="modal-footer">
-          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Fechar</button>
-          <button type="button" class="btn btn-sm btn-danger" onclick="deleteViewingTicket()">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+            Fechar
+          </button>
+
+          <!--
+            ✅ id="btnDeletarTicket" adicionado.
+            tickets.js → applyDetailPermissions() oculta este botão para USER
+            que não é o solicitante do ticket.
+            Admin sempre vê. USER só vê no próprio ticket.
+          -->
+          <button id="btnDeletarTicket" type="button" class="btn btn-sm btn-danger"
+                  onclick="deleteViewingTicket()">
             <i class="bi bi-trash"></i> Deletar
           </button>
         </div>
-      </div>
-    </div>
-  </div>
+
+      </div><!-- /modal-content -->
+    </div><!-- /modal-dialog -->
+  </div><!-- /ticketDetailModal -->
 
   <!-- ========================================
-       MODAL - NOVO/EDITAR TICKET
+       MODAL - NOVO / EDITAR TICKET
        ======================================== -->
   <div class="modal fade" id="ticketModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content ticket-form-content">
+
         <!-- HEADER -->
         <div class="modal-header ticket-form-header">
           <h5 class="modal-title" id="ticketModalLabel">
@@ -420,12 +496,14 @@
         <!-- BODY -->
         <div class="modal-body ticket-form-body">
           <form id="ticketForm">
+
             <!-- ASSUNTO -->
             <div class="mb-3">
               <label class="form-label">
                 Assunto <span class="text-danger">*</span>
               </label>
-              <input type="text" class="form-control" id="ticketTitle" placeholder="Título do ticket" required>
+              <input type="text" class="form-control" id="ticketTitle"
+                     placeholder="Título do ticket" required>
               <small class="text-muted">Mínimo 3 caracteres</small>
             </div>
 
@@ -434,32 +512,47 @@
               <label class="form-label">
                 Descrição <span class="text-danger">*</span>
               </label>
-              <textarea class="form-control" id="ticketDescription" rows="4" placeholder="Descreva o problema..." required></textarea>
+              <textarea class="form-control" id="ticketDescription" rows="4"
+                        placeholder="Descreva o problema..." required></textarea>
               <small class="text-muted">Mínimo 5 caracteres</small>
             </div>
 
-            <!-- SOLICITANTE (PREENCHIDO AUTOMATICAMENTE) -->
+            <!--
+              SOLICITANTE: readonly, preenchido automaticamente pelo tickets.js
+              com o nome do usuário logado (localStorage cpe_user.name).
+            -->
             <div class="mb-3">
               <label class="form-label">Solicitante</label>
-              <input type="text" class="form-control" id="ticketClient" placeholder="Seu nome" readonly>
+              <input type="text" class="form-control" id="ticketClient"
+                     placeholder="Seu nome" readonly>
               <small class="text-muted">Preenchido automaticamente com seus dados</small>
             </div>
 
-            <!-- EMAIL (PREENCHIDO AUTOMATICAMENTE) -->
+            <!--
+              EMAIL: readonly, preenchido automaticamente pelo tickets.js
+              com o email do usuário logado (localStorage cpe_user.email).
+            -->
             <div class="mb-3">
               <label class="form-label">Email</label>
-              <input type="email" class="form-control" id="ticketEmail" placeholder="Seu email" readonly>
+              <input type="email" class="form-control" id="ticketEmail"
+                     placeholder="Seu email" readonly>
               <small class="text-muted">Preenchido automaticamente com seus dados</small>
             </div>
 
-            <!-- GRUPO (PREENCHIDO AUTOMATICAMENTE) -->
+            <!--
+              GRUPO/SETOR: readonly, preenchido automaticamente pelo tickets.js
+              com o group_name do usuário logado (localStorage cpe_user.group_name).
+              O usuário NÃO escolhe o setor de atendimento — apenas informa seu setor
+              de origem. Após criado, o setor não pode ser alterado pelo usuário.
+            -->
             <div class="mb-3">
               <label class="form-label">Grupo/Setor</label>
-              <input type="text" class="form-control" id="ticketGroupName" placeholder="Seu grupo" readonly>
+              <input type="text" class="form-control" id="ticketGroupName"
+                     placeholder="Seu grupo" readonly>
               <small class="text-muted">Preenchido automaticamente com o seu setor</small>
             </div>
 
-            <!-- PRIORIDADE -->
+            <!-- PRIORIDADE: único campo editável além de assunto e descrição -->
             <div class="mb-3">
               <label class="form-label">
                 Prioridade <span class="text-danger">*</span>
@@ -473,21 +566,31 @@
               </select>
             </div>
 
-            <!-- CAMPOS OCULTOS -->
+            <!-- Campo oculto: group_id real enviado ao backend -->
             <input type="hidden" id="ticketGroup" value="">
+
           </form>
         </div>
 
         <!-- FOOTER -->
         <div class="modal-footer ticket-form-footer">
-          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-sm btn-primary" onclick="document.getElementById('ticketForm').dispatchEvent(new Event('submit'))">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          <!--
+            ✅ Corrigido: requestSubmit() em vez de dispatchEvent(new Event('submit')).
+            requestSubmit() aciona a validação nativa do form antes de submeter,
+            comportamento correto e compatível com todos os browsers modernos.
+          -->
+          <button type="button" class="btn btn-sm btn-primary"
+                  onclick="document.getElementById('ticketForm').requestSubmit()">
             <i class="bi bi-check-lg"></i> Criar Ticket
           </button>
         </div>
+
       </div>
     </div>
-  </div>
+  </div><!-- /ticketModal -->
 
   <!-- ========================================
        MODAL - ATRIBUIR TICKET(S)
@@ -495,6 +598,7 @@
   <div class="modal fade" id="assignModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content ticket-form-content">
+
         <!-- HEADER -->
         <div class="modal-header ticket-form-header">
           <h5 class="modal-title">
@@ -506,7 +610,10 @@
         <!-- BODY -->
         <div class="modal-body ticket-form-body">
           <p class="text-muted mb-3">
-            <small>Selecione um responsável para os <strong id="assignCountText">1</strong> ticket(s) selecionado(s)</small>
+            <small>
+              Selecione um responsável para os
+              <strong id="assignCountText">1</strong> ticket(s) selecionado(s)
+            </small>
           </p>
           <form id="assignForm">
             <div class="mb-3">
@@ -515,7 +622,7 @@
               </label>
               <select class="form-select" id="assignUser" required>
                 <option value="">Selecione um usuário...</option>
-                <!-- Opções serão preenchidas dinamicamente pelo JavaScript -->
+                <!-- Preenchido dinamicamente por tickets.js → populateUserDropdowns() -->
               </select>
             </div>
           </form>
@@ -523,14 +630,18 @@
 
         <!-- FOOTER -->
         <div class="modal-footer ticket-form-footer">
-          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-sm btn-primary" onclick="document.getElementById('assignForm').dispatchEvent(new Event('submit'))">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          <button type="button" class="btn btn-sm btn-primary"
+                  onclick="document.getElementById('assignForm').requestSubmit()">
             <i class="bi bi-check-lg"></i> Atribuir
           </button>
         </div>
+
       </div>
     </div>
-  </div>
+  </div><!-- /assignModal -->
 
   <!-- ========================================
        SCRIPTS

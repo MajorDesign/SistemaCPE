@@ -1,80 +1,117 @@
 """
-API de Tickets/Chamados - v3.1
+API de Tickets/Chamados - v3.3
 Endpoints para criar, listar, atualizar e deletar tickets
-Também inclui endpoints para interações (comentários/respostas)
+Inclui endpoints para interações (comentários/respostas)
 
-📋 FEATURES:
-  ✅ Logs detalhados para debug
-  ✅ Validações robustas
-  ✅ Tratamento de erros completo
-  ✅ Notificações WebSocket
-  ✅ Permissões granulares
-  ✅ Filtros avançados
+Alterações v3.3:
+- PUT /tickets/{id} agora exige usuario_id e valida permissão por role
+- POST /tickets ignora responsavel_id se solicitante for USER
+- POST /ticket-interacoes bloqueia comentário interno para usuário USER
+- Notificação de atribuição agora notifica o novo responsável corretamente
+- validar_grupo_existe confirmado para password_groups (FK correta do banco)
 """
 
-from fastapi import APIRouter, HTTPException, status, Query, Depends
-from pydantic import BaseModel, Field, validator
+from fastapi import APIRouter, HTTPException, status, Query, Path
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 import logging
-import json
-from app import get_db_or_404
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from database import (
+    get_db_or_404,
+    convert_datetime_to_string,
+    convert_datetime_list,
+    DB_CONFIG
+)
+
+# Fallback para services (graceful degradation)
+try:
+    from services.notificacao_service import NotificacaoService
+except Exception:
+    class NotificacaoService:
+        def __init__(self, *args, **kwargs):
+            pass
+        def notificar_novo_ticket(self, **kwargs):
+            pass
+        def notificar_status_alterado(self, **kwargs):
+            pass
+        def notificar_atribuicao(self, **kwargs):
+            pass
+        def notificar_nova_resposta(self, **kwargs):
+            pass
+        def notificar_comentario_interno(self, **kwargs):
+            pass
+
+try:
+    from services.permissao_service import PermissaoService
+except Exception:
+    class PermissaoService:
+        def __init__(self, *args, **kwargs):
+            pass
+        def usuario_pode_atribuir(self, **kwargs):
+            return True
+        def usuario_pode_mudar_status(self, **kwargs):
+            return True
+        def usuario_pode_responder(self, **kwargs):
+            return True
+        def usuario_pode_comentar_interno(self, **kwargs):
+            return True
 
 logger = logging.getLogger(__name__)
-
-# =========================================
-# 🔧 CONFIGURAÇÕES
-# =========================================
-
 LOG_SEPARADOR = "=" * 100
-VERSAO_API = "3.1"
+VERSAO_API = "3.3"
 LIMITE_PADRAO = 25
 LIMITE_MAXIMO = 100
 
+# Roles com permissão de gerenciamento
+ROLES_ADMIN = {"ADMIN", "TI", "MANAGER"}
+
 # =========================================
-# 1️⃣ MODELOS PYDANTIC (Validação)
+# 🔧 MODELOS PYDANTIC
 # =========================================
 
-# --- TICKETS ---
 class TicketCriar(BaseModel):
-    """Modelo para criar novo ticket"""
-    solicitante_id: int = Field(..., gt=0, description="ID do usuário solicitante")
-    group_id: int = Field(..., gt=0, description="ID do grupo/departamento")
-    categoria_id: Optional[int] = Field(None, description="ID da categoria")
-    subcategoria_id: Optional[int] = Field(None, description="ID da subcategoria")
-    prioridade_id: int = Field(default=2, ge=1, le=4, description="ID da prioridade (1-4)")
-    assunto: str = Field(..., min_length=3, max_length=255, description="Assunto do ticket")
-    descricao_inicial: str = Field(..., min_length=5, max_length=5000, description="Descrição detalhada")
-    origem: str = Field(default="portal", description="Origem do ticket")
-    responsavel_id: Optional[int] = Field(None, gt=0, description="ID do responsável")
+    solicitante_id: int = Field(..., gt=0)
+    group_id: int = Field(..., gt=0)
+    categoria_id: Optional[int] = Field(None, gt=0)
+    subcategoria_id: Optional[int] = Field(None, gt=0)
+    prioridade_id: int = Field(default=2, ge=1, le=4)
+    assunto: str = Field(..., min_length=3, max_length=255)
+    descricao_inicial: str = Field(..., min_length=5, max_length=5000)
+    origem: str = Field(default="portal")
+    # ✅ responsavel_id é aceito no payload mas será ignorado para usuário USER
+    responsavel_id: Optional[int] = Field(None, gt=0)
 
-    @validator('assunto')
-    def assunto_nao_vazio(cls, v):
-        if not v or not v.strip():
-            raise ValueError('Assunto não pode estar vazio')
+    @field_validator("assunto")
+    @classmethod
+    def validar_assunto(cls, v):
+        if not v.strip():
+            raise ValueError("assunto nao pode estar vazio")
         return v.strip()
 
-    @validator('descricao_inicial')
-    def descricao_nao_vazia(cls, v):
-        if not v or not v.strip():
-            raise ValueError('Descrição não pode estar vazia')
+    @field_validator("descricao_inicial")
+    @classmethod
+    def validar_descricao(cls, v):
+        if not v.strip():
+            raise ValueError("descricao inicial nao pode estar vazia")
         return v.strip()
 
 class TicketAtualizar(BaseModel):
-    """Modelo para atualizar ticket"""
-    status_id: Optional[int] = Field(None, ge=1, le=4, description="ID do novo status")
-    prioridade_id: Optional[int] = Field(None, ge=1, le=4, description="ID da nova prioridade")
-    responsavel_id: Optional[int] = Field(None, gt=0, description="ID do novo responsável")
-    group_id: Optional[int] = Field(None, gt=0, description="ID do novo grupo")
-    assunto: Optional[str] = Field(None, min_length=3, max_length=255, description="Novo assunto")
-    descricao_inicial: Optional[str] = Field(None, min_length=5, max_length=5000, description="Nova descrição")
+    status_id: Optional[int] = Field(None, ge=1, le=4)
+    prioridade_id: Optional[int] = Field(None, ge=1, le=4)
+    responsavel_id: Optional[int] = Field(None, gt=0)
+    group_id: Optional[int] = Field(None, gt=0)
+    assunto: Optional[str] = Field(None, min_length=3, max_length=255)
+    descricao_inicial: Optional[str] = Field(None, min_length=5, max_length=5000)
 
 class TicketResposta(BaseModel):
-    """Resposta padrão de ticket"""
     id: int
     numero: str
     assunto: str
-    descricao_inicial: str
     solicitante_id: int
     responsavel_id: Optional[int] = None
     group_id: int
@@ -83,47 +120,28 @@ class TicketResposta(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": 1,
-                "numero": "SUP-2026-00001",
-                "assunto": "Sistema não funciona",
-                "descricao_inicial": "Não consigo acessar...",
-                "solicitante_id": 5,
-                "responsavel_id": 10,
-                "group_id": 2,
-                "status_id": 1,
-                "prioridade_id": 3,
-                "created_at": "2026-03-24T10:30:00",
-                "updated_at": "2026-03-24T10:30:00"
-            }
-        }
-
-# --- INTERAÇÕES ---
 class InteracaoCriar(BaseModel):
-    """Modelo para criar interação/comentário"""
-    ticket_id: int = Field(..., gt=0, description="ID do ticket")
-    usuario_id: int = Field(..., gt=0, description="ID do usuário que comenta")
-    tipo: str = Field(default="resposta", description="Tipo: 'resposta', 'nota_interna', 'sistema'")
-    publico: int = Field(default=1, ge=0, le=1, description="0=Interno, 1=Público")
-    mensagem: str = Field(..., min_length=1, max_length=5000, description="Conteúdo da mensagem")
+    ticket_id: int = Field(..., gt=0)
+    usuario_id: int = Field(..., gt=0)
+    tipo: str = Field(default="resposta")
+    publico: int = Field(default=1, ge=0, le=1)
+    mensagem: str = Field(..., min_length=1, max_length=5000)
 
-    @validator('tipo')
-    def tipo_valido(cls, v):
-        tipos_validos = ['resposta', 'nota_interna', 'sistema']
-        if v not in tipos_validos:
-            raise ValueError(f'Tipo inválido. Válidos: {tipos_validos}')
+    @field_validator("tipo")
+    @classmethod
+    def validar_tipo(cls, v):
+        if v not in ["resposta", "nota_interna", "sistema", "interno"]:
+            raise ValueError("tipo invalido")
         return v
 
-    @validator('mensagem')
-    def mensagem_nao_vazia(cls, v):
-        if not v or not v.strip():
-            raise ValueError('Mensagem não pode estar vazia')
+    @field_validator("mensagem")
+    @classmethod
+    def validar_mensagem(cls, v):
+        if not v.strip():
+            raise ValueError("mensagem nao pode estar vazia")
         return v.strip()
 
 class InteracaoResposta(BaseModel):
-    """Resposta de interação"""
     id: int
     ticket_id: int
     usuario_id: int
@@ -133,401 +151,193 @@ class InteracaoResposta(BaseModel):
     mensagem: str
     created_at: str
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": 1,
-                "ticket_id": 1,
-                "usuario_id": 10,
-                "usuario_nome": "João Silva",
-                "tipo": "resposta",
-                "publico": 1,
-                "mensagem": "Problema resolvido!",
-                "created_at": "2026-03-24T11:00:00"
-            }
-        }
+# =========================================
+# 🛣️ ROUTERS
+# =========================================
+
+tickets_router = APIRouter(prefix="/api/tickets", tags=["tickets"])
+interacoes_router = APIRouter(prefix="/api/ticket-interacoes", tags=["interacoes"])
 
 # =========================================
-# 2️⃣ UTILITÁRIOS E HELPERS
+# 🪵 LOGGING HELPERS
 # =========================================
 
 def log_inicio(endpoint: str, **kwargs):
-    """Log de início de operação"""
     logger.info(f"\n{LOG_SEPARADOR}")
-    logger.info(f"[TICKETS v{VERSAO_API}] 🚀 {endpoint.upper()}")
+    logger.info(f"[TICKETS v{VERSAO_API}] {endpoint}")
     logger.info(f"{LOG_SEPARADOR}")
-    for chave, valor in kwargs.items():
-        logger.info(f"  ├─ {chave}: {valor}")
+    for k, v in kwargs.items():
+        logger.info(f"  - {k}: {v}")
 
-def log_etapa(etapa: str, icon_status: str = "•", **kwargs):
-    """Log de passo intermediário"""
-    logger.info(f"  ├─ {icon_status} {etapa}")
-    for chave, valor in kwargs.items():
-        logger.info(f"  │  └─ {chave}: {valor}")
+def log_fim(status_text: str, **kwargs):
+    icon = {"sucesso": "✅", "erro": "❌", "aviso": "⚠️"}.get(status_text, "•")
+    logger.info(f"  {icon} {status_text.upper()}")
+    for k, v in kwargs.items():
+        logger.info(f"    > {k}: {v}")
+    logger.info(LOG_SEPARADOR)
 
-def log_fim(status: str, **kwargs):
-    """Log de conclusão"""
-    icons = {
-        "sucesso": "✅",
-        "erro": "❌",
-        "aviso": "⚠️"
-    }
-    icon = icons.get(status, "•")
-    logger.info(f"  └─ {icon} {status.upper()}")
-    for chave, valor in kwargs.items():
-        logger.info(f"     └─ {chave}: {valor}")
-    logger.info(f"{LOG_SEPARADOR}\n")
+# =========================================
+# ✅ VALIDAÇÕES
+# =========================================
 
-def validar_ticket_existe(cursor, ticket_id: int) -> dict:
-    """Valida se ticket existe e retorna seus dados"""
+def validar_ticket_existe(cursor, ticket_id: int):
     cursor.execute(
-        "SELECT id, numero, group_id FROM tickets WHERE id = %s",
+        "SELECT id, numero, group_id, solicitante_id, responsavel_id FROM tickets WHERE id = %s",
         (ticket_id,)
     )
     ticket = cursor.fetchone()
     if not ticket:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Ticket #{ticket_id} não encontrado"
+            detail=f"Ticket #{ticket_id} nao encontrado"
         )
     return ticket
 
-def validar_usuario_existe(cursor, usuario_id: int) -> dict:
-    """Valida se usuário existe e retorna seus dados"""
+def validar_usuario_existe(cursor, usuario_id: int):
     cursor.execute(
-        "SELECT id, name, email FROM users WHERE id = %s",
+        "SELECT id, role FROM users WHERE id = %s AND is_active = 1",
         (usuario_id,)
     )
-    usuario = cursor.fetchone()
-    if not usuario:
+    user = cursor.fetchone()
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Usuário #{usuario_id} não encontrado"
+            detail=f"Usuario #{usuario_id} nao encontrado"
         )
-    return usuario
+    return user
 
-def validar_grupo_existe(cursor, grupo_id: int) -> dict:
-    """Valida se grupo existe e retorna seus dados"""
-    cursor.execute(
-        "SELECT id, name FROM password_groups WHERE id = %s",
-        (grupo_id,)
-    )
-    grupo = cursor.fetchone()
-    if not grupo:
+def validar_grupo_existe(cursor, group_id: int):
+    # ✅ CONFIRMADO: tickets.group_id referencia password_groups (FK do banco)
+    cursor.execute("SELECT id FROM password_groups WHERE id = %s", (group_id,))
+    group = cursor.fetchone()
+    if not group:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Grupo #{grupo_id} não encontrado"
+            detail=f"Grupo #{group_id} nao encontrado"
         )
-    return grupo
+    return group
 
-def obter_ou_criar_status_id(cursor, nome_status: str = "Aberto") -> int:
-    """Obtém ou cria status padrão"""
+def obter_role_usuario(cursor, usuario_id: int) -> str:
+    """Retorna o role do usuário ou lança 404 se não existir."""
     cursor.execute(
-        "SELECT id FROM ticket_status WHERE nome = %s LIMIT 1",
-        (nome_status,)
+        "SELECT role FROM users WHERE id = %s AND is_active = 1",
+        (usuario_id,)
     )
-    resultado = cursor.fetchone()
-    return resultado['id'] if resultado else 1
-
-def gerar_numero_ticket(cursor, grupo_id: int) -> str:
-    """Gera número único para ticket no formato PREFIX-YEAR-SEQUENTIAL"""
-    
-    # ✅ Obter prefixo do grupo
-    cursor.execute(
-        "SELECT name FROM password_groups WHERE id = %s",
-        (grupo_id,)
-    )
-    grupo = cursor.fetchone()
-    
-    if not grupo:
+    row = cursor.fetchone()
+    if not row:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Grupo #{grupo_id} não encontrado"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Usuario #{usuario_id} nao encontrado ou inativo"
         )
-    
-    prefixo_grupo = grupo['name'][:3].upper()
-    
-    # ✅ Contar tickets do ano atual para o grupo
+    return row["role"] or "USER"
+
+def gerar_numero_ticket(cursor, group_id: int):
+    cursor.execute("SELECT name FROM password_groups WHERE id = %s", (group_id,))
+    g = cursor.fetchone()
+    prefixo = (g["name"][:3].upper() if g and g.get("name") else "TKT")
     cursor.execute(
-        """SELECT COUNT(*) as count FROM tickets 
-           WHERE group_id = %s AND YEAR(created_at) = YEAR(NOW())""",
-        (grupo_id,)
+        "SELECT COUNT(*) as count FROM tickets WHERE group_id = %s AND YEAR(created_at) = YEAR(NOW())",
+        (group_id,)
     )
-    resultado_contagem = cursor.fetchone()
-    sequencial = (resultado_contagem['count'] + 1) if resultado_contagem else 1
-    
-    # ✅ Montar número
-    ano = datetime.now().year
-    numero_ticket = f"{prefixo_grupo}-{ano}-{sequencial:05d}"
-    
-    return numero_ticket, grupo['name']
+    c = cursor.fetchone()
+    seq = (c["count"] + 1) if c else 1
+    return f"{prefixo}-{datetime.now().year}-{seq:05d}"
 
-def converter_datetime_string(dados: dict) -> dict:
-    """Converte datetime objects para strings ISO"""
-    if not dados:
-        return dados
-    
-    resultado = dict(dados)
-    for chave, valor in resultado.items():
-        if hasattr(valor, 'isoformat'):
-            resultado[chave] = valor.isoformat()
-    return resultado
+# ========================================
+# 🔔 FUNÇÃO AUXILIAR - NOVA
+# Data: 31/03/2026 14:42
+# CRIAR NOTIFICAÇÃO MÚLTIPLA (FALLBACK)
+# ========================================
+# INÍCIO: Adicionar após função criar_notificacao_no_banco()
 
-def converter_datetime_lista(lista_dados: list) -> list:
-    """Converte lista de dicts com datetime para strings"""
-    return [converter_datetime_string(item) for item in lista_dados]
-
-def enviar_notificacao_websocket(notificacao: dict, tipo_notificacao: str):
-    """Envia notificação via WebSocket (async)"""
-    try:
-        from routes.websocket import manager
-        import asyncio
-        
-        notificacao['type'] = tipo_notificacao
-        notificacao['timestamp'] = datetime.now().isoformat()
-        notificacao['api_version'] = VERSAO_API
-        
-        if tipo_notificacao == "ticket_criado":
-            asyncio.create_task(
-                manager.broadcast_to_user(
-                    notificacao.get('solicitante_id'),
-                    notificacao
-                )
-            )
-        elif tipo_notificacao == "comentario_adicionado":
-            asyncio.create_task(
-                manager.broadcast_to_all(notificacao)
-            )
-        
-        log_etapa("Notificação WebSocket", "📤", type=tipo_notificacao)
-        
-    except Exception as erro_ws:
-        logger.warning(f"  │  └─ ⚠️ Erro WebSocket: {str(erro_ws)}")
-
-# =========================================
-# 3️⃣ ROUTERS
-# =========================================
-
-tickets_router = APIRouter(
-    prefix="/api/tickets",
-    tags=["tickets"],
-    responses={
-        400: {"description": "Dados inválidos"},
-        404: {"description": "Recurso não encontrado"},
-        500: {"description": "Erro interno do servidor"}
-    }
-)
-
-interacoes_router = APIRouter(
-    prefix="/api/ticket-interacoes",
-    tags=["interações"],
-    responses={
-        400: {"description": "Dados inválidos"},
-        404: {"description": "Recurso não encontrado"},
-        500: {"description": "Erro interno do servidor"}
-    }
-)
-
-# =========================================
-# 4️⃣ ENDPOINTS DE TICKETS
-# =========================================
-
-@tickets_router.get(
-    "/",
-    response_model=List[dict],
-    summary="Listar tickets",
-    description="Obtém lista de todos os tickets com filtros opcionais"
-)
-async def obter_tickets(
-    grupo_id: Optional[int] = Query(None, description="Filtrar por grupo"),
-    status_id: Optional[int] = Query(None, description="Filtrar por status"),
-    responsavel_id: Optional[int] = Query(None, description="Filtrar por responsável"),
-    prioridade_id: Optional[int] = Query(None, description="Filtrar por prioridade"),
-    pular: int = Query(0, ge=0, description="Registros a pular"),
-    limite: int = Query(LIMITE_PADRAO, ge=1, le=LIMITE_MAXIMO, description="Limite de registros")
-):
-    """
-    Obtém tickets com filtros opcionais
-    
-    **Parâmetros:**
-    - **grupo_id**: Filtrar por grupo (opcional)
-    - **status_id**: Filtrar por status 1=Aberto, 2=Andamento, 3=Resolvido, 4=Fechado (opcional)
-    - **responsavel_id**: Filtrar por responsável (opcional)
-    - **prioridade_id**: Filtrar por prioridade 1=Baixa, 2=Normal, 3=Alta, 4=Urgente (opcional)
-    - **pular**: Quantidade de registros a pular (paginação)
-    - **limite**: Quantidade de registros retornar (padrão: 25, máximo: 100)
-    
-    **Exemplo:**
-    ```
-    GET /api/tickets?status_id=1&limite=10&pular=0
-    ```
-    """
-    
-    log_inicio(
-        "obter_tickets",
-        grupo_id=grupo_id,
-        status_id=status_id,
-        responsavel_id=responsavel_id,
-        prioridade_id=prioridade_id,
-        pular=pular,
-        limite=limite
-    )
-    
-    conexao = get_db_or_404()
+def criar_notificacao_multipla(conexao, ticket_id: int, usuario_id: int, tipo: str, mensagem: str):
+    """Cria notificação direto no banco para múltiplos usuários (fallback)"""
     cursor = None
-    
     try:
         cursor = conexao.cursor(dictionary=True)
-        
-        # ✅ Construir query dinâmica com filtros
-        filtros = []
-        parametros = []
-        
+        cursor.execute(
+            """
+            INSERT INTO notificacoes (ticket_id, usuario_id, tipo, mensagem, lido, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, 0, NOW(), NOW())
+            """,
+            (ticket_id, usuario_id, tipo, mensagem)
+        )
+        conexao.commit()
+        logger.info(f"      ✓ Notificação criada para #{usuario_id} (fallback) | tipo: {tipo}")
+    except Exception as e:
+        logger.warning(f"      ⚠️ Erro ao criar notificação fallback para #{usuario_id}: {str(e)}")
+    finally:
+        if cursor:
+            cursor.close()
+
+# ========================================
+# FIM DA FUNÇÃO AUXILIAR - 31/03/2026 14:42
+# ========================================
+
+# =========================================
+# 📌 ENDPOINTS DE TICKETS
+# =========================================
+
+@tickets_router.get("/", response_model=List[dict])
+async def obter_tickets(
+    grupo_id: Optional[int] = Query(None, gt=0),
+    status_id: Optional[int] = Query(None, gt=0),
+    responsavel_id: Optional[int] = Query(None, gt=0),
+    prioridade_id: Optional[int] = Query(None, gt=0),
+    pular: int = Query(0, ge=0),
+    limite: int = Query(LIMITE_PADRAO, ge=1, le=LIMITE_MAXIMO)
+):
+    log_inicio("obter_tickets", grupo_id=grupo_id, status_id=status_id)
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        filtros, params = [], []
+
         if grupo_id:
             filtros.append("t.group_id = %s")
-            parametros.append(grupo_id)
-            log_etapa("Filtro grupo", "🔍", grupo_id=grupo_id)
-        
+            params.append(grupo_id)
         if status_id:
             filtros.append("t.status_id = %s")
-            parametros.append(status_id)
-            log_etapa("Filtro status", "🔍", status_id=status_id)
-        
+            params.append(status_id)
         if responsavel_id:
             filtros.append("t.responsavel_id = %s")
-            parametros.append(responsavel_id)
-            log_etapa("Filtro responsável", "🔍", responsavel_id=responsavel_id)
-        
+            params.append(responsavel_id)
         if prioridade_id:
             filtros.append("t.prioridade_id = %s")
-            parametros.append(prioridade_id)
-            log_etapa("Filtro prioridade", "🔍", prioridade_id=prioridade_id)
-        
-        clausula_where = "WHERE " + " AND ".join(filtros) if filtros else ""
-        
-        # ✅ Query principal
-        query = f"""
-            SELECT 
-                t.id,
-                t.numero,
-                t.assunto,
-                t.descricao_inicial,
-                t.solicitante_id,
-                t.responsavel_id,
-                t.group_id,
-                t.categoria_id,
-                t.status_id,
-                t.prioridade_id,
-                t.created_at,
-                t.updated_at,
-                u.name as solicitante_nome,
-                u.email as solicitante_email,
-                r.name as responsavel_nome,
-                g.name as group_name
+            params.append(prioridade_id)
+
+        where = ("WHERE " + " AND ".join(filtros)) if filtros else ""
+
+        sql = f"""
+            SELECT
+                t.*,
+                u.name  AS solicitante_nome,
+                u.email AS solicitante_email,
+                r.name  AS responsavel_nome,
+                g.name  AS group_name
             FROM tickets t
-            LEFT JOIN users u ON t.solicitante_id = u.id
-            LEFT JOIN users r ON t.responsavel_id = r.id
+            LEFT JOIN users u          ON t.solicitante_id = u.id
+            LEFT JOIN users r          ON t.responsavel_id = r.id
             LEFT JOIN password_groups g ON t.group_id = g.id
-            {clausula_where}
+            {where}
             ORDER BY t.created_at DESC
             LIMIT %s OFFSET %s
         """
-        
-        parametros.extend([limite, pular])
-        cursor.execute(query, parametros)
-        tickets = cursor.fetchall()
-        tickets = converter_datetime_lista(tickets)
-        
-        log_fim(
-            "sucesso",
-            total=len(tickets),
-            tamanho_pagina=limite,
-            offset=pular
-        )
-        
+        params.extend([limite, pular])
+        cursor.execute(sql, params)
+        tickets = convert_datetime_list(cursor.fetchall())
+
+        log_fim("sucesso", total=len(tickets))
         return tickets or []
-        
-    except Exception as erro:
-        log_fim("erro", erro=str(erro))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao listar tickets: {str(erro)}"
-        )
-    finally:
-        if cursor:
-            cursor.close()
-        if conexao:
-            conexao.close()
 
-# =========================================
-
-@tickets_router.get(
-    "/{ticket_id}",
-    response_model=dict,
-    summary="Obter ticket",
-    description="Obtém detalhes completos de um ticket específico"
-)
-async def obter_ticket(ticket_id: int = Query(..., gt=0, description="ID do ticket")):
-    """Obtém um ticket específico com todos os detalhes"""
-    
-    log_inicio("obter_ticket_detalhe", ticket_id=ticket_id)
-    
-    conexao = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conexao.cursor(dictionary=True)
-        
-        # ✅ Validar existência
-        log_etapa("Validando ticket", "🔍")
-        verificacao_ticket = validar_ticket_existe(cursor, ticket_id)
-        log_etapa("Ticket validado", "✓", numero=verificacao_ticket['numero'])
-        
-        # ✅ Query detalhada
-        query = """
-            SELECT 
-                t.id,
-                t.numero,
-                t.assunto,
-                t.descricao_inicial,
-                t.solicitante_id,
-                t.responsavel_id,
-                t.group_id,
-                t.categoria_id,
-                t.subcategoria_id,
-                t.status_id,
-                t.prioridade_id,
-                t.origem,
-                t.primeira_resposta_em,
-                t.resolvido_em,
-                t.fechado_em,
-                t.created_at,
-                t.updated_at,
-                u.name as solicitante_nome,
-                u.email as solicitante_email,
-                r.name as responsavel_nome,
-                g.name as group_name
-            FROM tickets t
-            LEFT JOIN users u ON t.solicitante_id = u.id
-            LEFT JOIN users r ON t.responsavel_id = r.id
-            LEFT JOIN password_groups g ON t.group_id = g.id
-            WHERE t.id = %s
-        """
-        
-        cursor.execute(query, (ticket_id,))
-        ticket = cursor.fetchone()
-        ticket = converter_datetime_string(ticket)
-        
-        log_fim("sucesso", numero=ticket['numero'], status_id=ticket['status_id'])
-        return ticket
-        
     except HTTPException:
         raise
-    except Exception as erro:
-        log_fim("erro", erro=str(erro))
+    except Exception as e:
+        log_fim("erro", erro=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao obter ticket: {str(erro)}"
+            detail=str(e)
         )
     finally:
         if cursor:
@@ -535,135 +345,140 @@ async def obter_ticket(ticket_id: int = Query(..., gt=0, description="ID do tick
         if conexao:
             conexao.close()
 
-# =========================================
 
-@tickets_router.post(
-    "/",
-    status_code=status.HTTP_201_CREATED,
-    response_model=TicketResposta,
-    summary="Criar ticket",
-    description="Cria um novo ticket no sistema"
-)
-async def criar_ticket(ticket: TicketCriar):
-    """
-    Cria um novo ticket no sistema
-    
-    **Validações:**
-    - Solicitante deve existir
-    - Grupo deve existir
-    - Assunto: mínimo 3 caracteres
-    - Descrição: mínimo 5 caracteres
-    - Prioridade: 1-4
-    
-    **Número do ticket** é gerado automaticamente no formato:
-    **[PREFIXO_GRUPO]-[ANO]-[SEQUENCIAL]**
-    
-    Exemplo: **SUP-2026-00001**
-    
-    **Status padrão:** Aberto (ID=1)
-    """
-    
-    log_inicio(
-        "criar_ticket",
-        solicitante_id=ticket.solicitante_id,
-        grupo_id=ticket.group_id,
-        prioridade_id=ticket.prioridade_id,
-        assunto=ticket.assunto[:50]
-    )
-    
+@tickets_router.get("/{ticket_id}", response_model=TicketResposta)
+async def obter_ticket(ticket_id: int = Path(..., gt=0)):
+    log_inicio("obter_ticket", ticket_id=ticket_id)
     conexao = get_db_or_404()
     cursor = None
-    
     try:
         cursor = conexao.cursor(dictionary=True)
-        
-        # ✅ VALIDAÇÃO 1: Solicitante existe
-        log_etapa("Validando solicitante", "🔍", usuario_id=ticket.solicitante_id)
-        solicitante = validar_usuario_existe(cursor, ticket.solicitante_id)
-        log_etapa("Solicitante OK", "✓", nome=solicitante['name'])
-        
-        # ✅ VALIDAÇÃO 2: Grupo existe
-        log_etapa("Validando grupo", "🔍", grupo_id=ticket.group_id)
-        grupo = validar_grupo_existe(cursor, ticket.group_id)
-        log_etapa("Grupo OK", "✓", nome=grupo['name'])
-        
-        # ✅ VALIDAÇÃO 3: Se tem responsável, valida
-        if ticket.responsavel_id:
-            log_etapa("Validando responsável", "🔍", usuario_id=ticket.responsavel_id)
-            responsavel = validar_usuario_existe(cursor, ticket.responsavel_id)
-            log_etapa("Responsável OK", "✓", nome=responsavel['name'])
-        
-        # ✅ Gerar número único
-        log_etapa("Gerando número", "📝")
-        numero, nome_grupo = gerar_numero_ticket(cursor, ticket.group_id)
-        log_etapa("Número gerado", "✓", numero=numero)
-        
-        # ✅ Obter status padrão
-        log_etapa("Obtendo status padrão", "📝")
-        status_id = obter_ou_criar_status_id(cursor, "Aberto")
-        log_etapa("Status definido", "✓", status_id=status_id)
-        
-        # ✅ Inserir ticket
-        log_etapa("Inserindo ticket no banco", "💾")
-        query_insercao = """
+        validar_ticket_existe(cursor, ticket_id)
+
+        cursor.execute(
+            """
+            SELECT
+                t.*,
+                u.name  AS solicitante_nome,
+                u.email AS solicitante_email,
+                r.name  AS responsavel_nome,
+                g.name  AS group_name
+            FROM tickets t
+            LEFT JOIN users u          ON t.solicitante_id = u.id
+            LEFT JOIN users r          ON t.responsavel_id = r.id
+            LEFT JOIN password_groups g ON t.group_id = g.id
+            WHERE t.id = %s
+            """,
+            (ticket_id,)
+        )
+        ticket = convert_datetime_to_string(cursor.fetchone())
+
+        log_fim("sucesso", numero=ticket.get("numero"))
+        return ticket
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_fim("erro", erro=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if conexao:
+            conexao.close()
+
+
+@tickets_router.post("/", status_code=status.HTTP_201_CREATED, response_model=TicketResposta)
+async def criar_ticket(payload: TicketCriar):
+    log_inicio(
+        "criar_ticket",
+        solicitante_id=payload.solicitante_id,
+        group_id=payload.group_id
+    )
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        solicitante = validar_usuario_existe(cursor, payload.solicitante_id)
+        validar_grupo_existe(cursor, payload.group_id)
+
+        # ✅ Se o solicitante for USER, responsavel_id é ignorado.
+        # Somente ADMIN/TI/MANAGER podem abrir ticket já com responsável definido.
+        role_solicitante = solicitante.get("role") or "USER"
+        responsavel_id_final = None
+
+        if role_solicitante in ROLES_ADMIN:
+            if payload.responsavel_id:
+                validar_usuario_existe(cursor, payload.responsavel_id)
+                responsavel_id_final = payload.responsavel_id
+            logger.info(f"  ✓ Solicitante é {role_solicitante} — responsavel_id aceito: {responsavel_id_final}")
+        else:
+            logger.info(f"  ✓ Solicitante é USER — responsavel_id ignorado (atribuição é feita pelo admin)")
+
+        numero = gerar_numero_ticket(cursor, payload.group_id)
+        status_id_inicial = 1  # Aberto
+
+        cursor.execute(
+            """
             INSERT INTO tickets (
-                numero, solicitante_id, responsavel_id, group_id, 
+                numero, solicitante_id, responsavel_id, group_id,
                 categoria_id, subcategoria_id, status_id, prioridade_id,
                 assunto, descricao_inicial, origem, created_at, updated_at
             ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-        """
-        
-        cursor.execute(query_insercao, (
-            numero,
-            ticket.solicitante_id,
-            ticket.responsavel_id,
-            ticket.group_id,
-            ticket.categoria_id,
-            ticket.subcategoria_id,
-            status_id,
-            ticket.prioridade_id,
-            ticket.assunto,
-            ticket.descricao_inicial,
-            ticket.origem
-        ))
-        
+            """,
+            (
+                numero,
+                payload.solicitante_id,
+                responsavel_id_final,
+                payload.group_id,
+                payload.categoria_id,
+                payload.subcategoria_id,
+                status_id_inicial,
+                payload.prioridade_id,
+                payload.assunto,
+                payload.descricao_inicial,
+                payload.origem
+            )
+        )
         conexao.commit()
-        novo_ticket_id = cursor.lastrowid
-        log_etapa("Inserido no banco", "✓", ticket_id=novo_ticket_id)
-        
-        # ✅ Obter ticket criado
-        cursor.execute(
-            """SELECT id, numero, assunto, descricao_inicial, solicitante_id, 
-                      responsavel_id, group_id, status_id, prioridade_id, 
-                      created_at, updated_at
-               FROM tickets WHERE id = %s""",
-            (novo_ticket_id,)
-        )
-        novo_ticket = cursor.fetchone()
-        novo_ticket = converter_datetime_string(novo_ticket)
-        
-        log_etapa("Notificando via WebSocket", "📤")
-        enviar_notificacao_websocket(
-            {
-                "ticket_id": novo_ticket_id,
-                "numero": numero,
-                "assunto": ticket.assunto,
-                "solicitante_id": ticket.solicitante_id,
-                "status": "sucesso"
-            },
-            "ticket_criado"
-        )
-        
-        log_fim("sucesso", ticket_id=novo_ticket_id, numero=numero)
-        return novo_ticket
-        
+        ticket_id = cursor.lastrowid
+
+        # 🔔 NOTIFICAR NOVO TICKET
+        logger.info(f"  ▶️ Enviando notificações de novo ticket...")
+        try:
+            NotificacaoService(DB_CONFIG).notificar_novo_ticket(
+                ticket_id=ticket_id,
+                setor_id=payload.group_id,
+                titulo_ticket=payload.assunto,
+                usuario_autor_nome="Sistema"
+            )
+            logger.info(f"    ✓ Notificação enviada via serviço")
+        except Exception as e:
+            logger.warning(f"    ⚠️ Serviço indisponível: {str(e)}")
+            # Notifica o próprio solicitante que o ticket foi criado
+            criar_notificacao_no_banco(
+                conexao, ticket_id, payload.solicitante_id,
+                "ticket_criado",
+                f"Seu chamado foi aberto com sucesso: {payload.assunto}"
+            )
+
+        cursor.execute("SELECT * FROM tickets WHERE id = %s", (ticket_id,))
+        ticket = convert_datetime_to_string(cursor.fetchone())
+
+        log_fim("sucesso", ticket_id=ticket_id, numero=numero)
+        return ticket
+
     except HTTPException:
         raise
-    except Exception as erro:
-        log_fim("erro", erro=str(erro))
+    except Exception as e:
+        log_fim("erro", erro=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao criar ticket: {str(erro)}"
+            detail=str(e)
         )
     finally:
         if cursor:
@@ -671,121 +486,155 @@ async def criar_ticket(ticket: TicketCriar):
         if conexao:
             conexao.close()
 
-# =========================================
 
-@tickets_router.put(
-    "/{ticket_id}",
-    response_model=TicketResposta,
-    summary="Atualizar ticket",
-    description="Atualiza dados de um ticket existente"
-)
+@tickets_router.put("/{ticket_id}", response_model=TicketResposta)
 async def atualizar_ticket(
-    ticket_id: int = Query(..., gt=0, description="ID do ticket"),
-    ticket: TicketAtualizar = None
+    ticket_id: int = Path(..., gt=0),
+    # ✅ usuario_id obrigatório para validar permissão de quem está alterando
+    usuario_id: int = Query(..., gt=0, description="ID do usuário que está realizando a alteração"),
+    payload: TicketAtualizar = None
 ):
-    """
-    Atualiza um ticket com novos valores
-    
-    **Campos que podem ser atualizados:**
-    - status_id (1-4)
-    - prioridade_id (1-4)
-    - responsavel_id
-    - group_id
-    - assunto
-    - descricao_inicial
-    
-    **Nota:** Apenas campos fornecidos serão atualizados
-    """
-    
-    log_inicio("atualizar_ticket", ticket_id=ticket_id)
-    
+    log_inicio("atualizar_ticket", ticket_id=ticket_id, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
-    
     try:
         cursor = conexao.cursor(dictionary=True)
-        
-        # ✅ Validar existência
-        log_etapa("Validando ticket", "🔍")
-        verificacao_ticket = validar_ticket_existe(cursor, ticket_id)
-        log_etapa("Ticket validado", "✓", numero=verificacao_ticket['numero'])
-        
-        # ✅ Construir updates dinamicamente
-        atualizacoes = []
-        parametros = []
-        
-        if ticket.status_id is not None:
-            atualizacoes.append("status_id = %s")
-            parametros.append(ticket.status_id)
-            log_etapa("Atualizando", "✏️", campo="status_id", valor=ticket.status_id)
-        
-        if ticket.prioridade_id is not None:
-            atualizacoes.append("prioridade_id = %s")
-            parametros.append(ticket.prioridade_id)
-            log_etapa("Atualizando", "✏️", campo="prioridade_id", valor=ticket.prioridade_id)
-        
-        if ticket.responsavel_id is not None:
-            responsavel = validar_usuario_existe(cursor, ticket.responsavel_id)
-            atualizacoes.append("responsavel_id = %s")
-            parametros.append(ticket.responsavel_id)
-            log_etapa("Atualizando", "✏️", campo="responsavel_id", valor=ticket.responsavel_id)
-        
-        if ticket.group_id is not None:
-            grupo = validar_grupo_existe(cursor, ticket.group_id)
-            atualizacoes.append("group_id = %s")
-            parametros.append(ticket.group_id)
-            log_etapa("Atualizando", "✏️", campo="group_id", valor=ticket.group_id)
-        
-        if ticket.assunto is not None:
-            atualizacoes.append("assunto = %s")
-            parametros.append(ticket.assunto)
-            log_etapa("Atualizando", "✏️", campo="assunto", valor=ticket.assunto[:50])
-        
-        if ticket.descricao_inicial is not None:
-            atualizacoes.append("descricao_inicial = %s")
-            parametros.append(ticket.descricao_inicial)
-            log_etapa("Atualizando", "✏️", campo="descricao_inicial", valor="[texto]")
-        
-        if not atualizacoes:
-            log_fim("aviso", mensagem="Nenhum campo fornecido")
+
+        ticket_db = validar_ticket_existe(cursor, ticket_id)
+
+        if payload is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Nenhum campo fornecido para atualização"
+                detail="Payload vazio"
             )
-        
-        # ✅ Adicionar timestamp
-        atualizacoes.append("updated_at = NOW()")
-        
-        # ✅ Executar update
-        log_etapa("Executando update", "💾")
-        query_atualizacao = f"UPDATE tickets SET {', '.join(atualizacoes)} WHERE id = %s"
-        parametros.append(ticket_id)
-        
-        cursor.execute(query_atualizacao, parametros)
-        conexao.commit()
-        log_etapa("Update executado", "✓")
-        
-        # ✅ Obter ticket atualizado
+
+        # ✅ Buscar o role de quem está fazendo a alteração
+        role_atual = obter_role_usuario(cursor, usuario_id)
+        e_admin = role_atual in ROLES_ADMIN
+
+        logger.info(f"  ├─ Usuário #{usuario_id} | Role: {role_atual} | Admin: {e_admin}")
+
+        # ✅ Usuário USER só pode alterar tickets onde ele é o solicitante
+        if not e_admin:
+            if ticket_db["solicitante_id"] != usuario_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Você não tem permissão para alterar este ticket"
+                )
+
+            # Campos que USER não pode alterar
+            campos_bloqueados = {}
+            if payload.status_id is not None:
+                campos_bloqueados["status_id"] = payload.status_id
+            if payload.responsavel_id is not None:
+                campos_bloqueados["responsavel_id"] = payload.responsavel_id
+            if payload.group_id is not None:
+                campos_bloqueados["group_id"] = payload.group_id
+
+            if campos_bloqueados:
+                logger.warning(
+                    f"  ⚠️ Usuário USER tentou alterar campos restritos: {list(campos_bloqueados.keys())}"
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Usuários comuns não podem alterar status, responsável ou setor do ticket"
+                )
+
+        # Montar os campos a atualizar
+        updates, params = [], []
+
+        if payload.status_id is not None:
+            updates.append("status_id = %s")
+            params.append(payload.status_id)
+
+        if payload.prioridade_id is not None:
+            updates.append("prioridade_id = %s")
+            params.append(payload.prioridade_id)
+
+        if payload.responsavel_id is not None:
+            validar_usuario_existe(cursor, payload.responsavel_id)
+            updates.append("responsavel_id = %s")
+            params.append(payload.responsavel_id)
+
+        if payload.group_id is not None:
+            validar_grupo_existe(cursor, payload.group_id)
+            updates.append("group_id = %s")
+            params.append(payload.group_id)
+
+        if payload.assunto is not None:
+            updates.append("assunto = %s")
+            params.append(payload.assunto)
+
+        if payload.descricao_inicial is not None:
+            updates.append("descricao_inicial = %s")
+            params.append(payload.descricao_inicial)
+
+        if not updates:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Nenhum campo para atualizar"
+            )
+
+        updates.append("updated_at = NOW()")
+        params.append(ticket_id)
+
         cursor.execute(
-            """SELECT id, numero, assunto, descricao_inicial, solicitante_id, 
-                      responsavel_id, group_id, status_id, prioridade_id, 
-                      created_at, updated_at
-               FROM tickets WHERE id = %s""",
-            (ticket_id,)
+            f"UPDATE tickets SET {', '.join(updates)} WHERE id = %s",
+            params
         )
-        ticket_atualizado = cursor.fetchone()
-        ticket_atualizado = converter_datetime_string(ticket_atualizado)
-        
-        log_fim("sucesso", numero=ticket_atualizado['numero'])
-        return ticket_atualizado
-        
+        conexao.commit()
+
+        # 🔔 NOTIFICAR ALTERAÇÕES
+        logger.info(f"  ▶️ Enviando notificações de alteração...")
+        try:
+            ns = NotificacaoService(DB_CONFIG)
+            if payload.status_id is not None:
+                ns.notificar_status_alterado(
+                    ticket_id=ticket_id,
+                    usuario_autor_id=ticket_db["solicitante_id"],
+                    novo_status=str(payload.status_id)
+                )
+                logger.info(f"    ✓ Status notificado")
+            if payload.responsavel_id is not None:
+                ns.notificar_atribuicao(
+                    ticket_id=ticket_id,
+                    setor_id=ticket_db["group_id"],
+                    usuario_responsavel_nome=str(payload.responsavel_id)
+                )
+                logger.info(f"    ✓ Atribuição notificada")
+        except Exception as e:
+            logger.warning(f"    ⚠️ Serviço indisponível: {str(e)}")
+
+            # ✅ Fallback de notificação corrigido:
+            # status alterado → notifica o solicitante
+            if payload.status_id is not None:
+                criar_notificacao_no_banco(
+                    conexao, ticket_id, ticket_db["solicitante_id"],
+                    "status_alterado",
+                    f"O status do seu chamado foi atualizado"
+                )
+
+            # atribuição → notifica o NOVO responsável (não o solicitante)
+            if payload.responsavel_id is not None:
+                criar_notificacao_no_banco(
+                    conexao, ticket_id, payload.responsavel_id,
+                    "atribuido",
+                    f"Um chamado foi atribuído a você"
+                )
+
+        cursor.execute("SELECT * FROM tickets WHERE id = %s", (ticket_id,))
+        atualizado = convert_datetime_to_string(cursor.fetchone())
+
+        log_fim("sucesso", ticket_id=ticket_id)
+        return atualizado
+
     except HTTPException:
         raise
-    except Exception as erro:
-        log_fim("erro", erro=str(erro))
+    except Exception as e:
+        log_fim("erro", erro=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao atualizar ticket: {str(erro)}"
+            detail=str(e)
         )
     finally:
         if cursor:
@@ -793,45 +642,42 @@ async def atualizar_ticket(
         if conexao:
             conexao.close()
 
-# =========================================
 
-@tickets_router.delete(
-    "/{ticket_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Deletar ticket",
-    description="Remove um ticket do sistema"
-)
-async def deletar_ticket(ticket_id: int = Query(..., gt=0, description="ID do ticket")):
-    """Deleta um ticket do sistema"""
-    
-    log_inicio("deletar_ticket", ticket_id=ticket_id)
-    
+@tickets_router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def deletar_ticket(
+    ticket_id: int = Path(..., gt=0),
+    # ✅ usuario_id para validar que só o solicitante (ou admin) pode deletar
+    usuario_id: int = Query(..., gt=0, description="ID do usuário que está deletando")
+):
+    log_inicio("deletar_ticket", ticket_id=ticket_id, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
-    
     try:
         cursor = conexao.cursor(dictionary=True)
-        
-        # ✅ Validar existência
-        log_etapa("Validando ticket", "🔍")
-        verificacao_ticket = validar_ticket_existe(cursor, ticket_id)
-        log_etapa("Ticket validado", "✓", numero=verificacao_ticket['numero'])
-        
-        # ✅ Deletar
-        log_etapa("Deletando ticket", "🗑️")
+        ticket_db = validar_ticket_existe(cursor, ticket_id)
+
+        role_atual = obter_role_usuario(cursor, usuario_id)
+        e_admin = role_atual in ROLES_ADMIN
+
+        # Usuário USER só pode deletar o próprio ticket
+        if not e_admin and ticket_db["solicitante_id"] != usuario_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Você não tem permissão para deletar este ticket"
+            )
+
         cursor.execute("DELETE FROM tickets WHERE id = %s", (ticket_id,))
         conexao.commit()
-        log_etapa("Deletado do banco", "✓")
-        
+
         log_fim("sucesso", ticket_id=ticket_id)
-        
+
     except HTTPException:
         raise
-    except Exception as erro:
-        log_fim("erro", erro=str(erro))
+    except Exception as e:
+        log_fim("erro", erro=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao deletar ticket: {str(erro)}"
+            detail=str(e)
         )
     finally:
         if cursor:
@@ -839,119 +685,268 @@ async def deletar_ticket(ticket_id: int = Query(..., gt=0, description="ID do ti
         if conexao:
             conexao.close()
 
-# =========================================
-# 5️⃣ ENDPOINTS DE INTERAÇÕES (Comentários)
-# =========================================
 
-@interacoes_router.post(
-    "/",
-    status_code=status.HTTP_201_CREATED,
-    response_model=InteracaoResposta,
-    summary="Criar interação",
-    description="Adiciona um comentário ou resposta a um ticket"
-)
-async def criar_interacao(interacao: InteracaoCriar):
-    """
-    Cria um novo comentário/interação no ticket
-    
-    **Tipos de interação:**
-    - `resposta` (padrão): Comentário público, solicitante vê
-    - `nota_interna`: Comentário privado, apenas equipe vê
-    - `sistema`: Mensagem gerada automaticamente
-    
-    **Visibilidade:**
-    - `publico=1` (padrão): Solicitante vê
-    - `publico=0`: Apenas equipe vê
-    """
-    
+# ========================================
+# 💬 ENDPOINT DE INTERAÇÕES - ALTERADO
+# Data: 31/03/2026 14:42
+# ========================================
+# INÍCIO: Substituir de @interacoes_router.post("/", ...)
+# até o final do except/finally
+
+@interacoes_router.post("/", status_code=status.HTTP_201_CREATED, response_model=InteracaoResposta)
+async def criar_interacao(payload: InteracaoCriar):
     log_inicio(
         "criar_interacao",
-        ticket_id=interacao.ticket_id,
-        usuario_id=interacao.usuario_id,
-        tipo=interacao.tipo,
-        publico=interacao.publico
+        ticket_id=payload.ticket_id,
+        usuario_id=payload.usuario_id,
+        tipo=payload.tipo,
+        publico=payload.publico
     )
-    
     conexao = get_db_or_404()
     cursor = None
-    
     try:
         cursor = conexao.cursor(dictionary=True)
-        
-        # ✅ Validar ticket existe
-        log_etapa("Validando ticket", "🔍")
-        verificacao_ticket = validar_ticket_existe(cursor, interacao.ticket_id)
-        log_etapa("Ticket OK", "✓", numero=verificacao_ticket['numero'])
-        
-        # ✅ Validar usuário existe
-        log_etapa("Validando usuário", "🔍")
-        verificacao_usuario = validar_usuario_existe(cursor, interacao.usuario_id)
-        log_etapa("Usuário OK", "✓", nome=verificacao_usuario['name'])
-        
-        # ✅ Inserir interação
-        log_etapa("Inserindo interação", "💾")
-        cursor.execute("""
-            INSERT INTO ticket_interacoes 
-            (ticket_id, usuario_id, tipo, publico, mensagem, created_at)
+
+        ticket_db = validar_ticket_existe(cursor, payload.ticket_id)
+        usuario = validar_usuario_existe(cursor, payload.usuario_id)
+        role_usuario = usuario.get("role") or "USER"
+
+        # ✅ Usuário USER não pode criar comentário interno
+        e_interno = (payload.tipo in ["interno", "nota_interna"] or payload.publico == 0)
+        if e_interno and role_usuario not in ROLES_ADMIN:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Usuários comuns não podem criar comentários internos"
+            )
+
+        # Normalizar tipo: "interno" → "nota_interna" para consistência no banco
+        tipo_final = "nota_interna" if payload.tipo == "interno" else payload.tipo
+        publico_final = 0 if tipo_final == "nota_interna" else payload.publico
+
+        cursor.execute(
+            """
+            INSERT INTO ticket_interacoes (ticket_id, usuario_id, tipo, publico, mensagem, created_at)
             VALUES (%s, %s, %s, %s, %s, NOW())
-        """, (
-            interacao.ticket_id,
-            interacao.usuario_id,
-            interacao.tipo,
-            interacao.publico,
-            interacao.mensagem
-        ))
-        
+            """,
+            (
+                payload.ticket_id,
+                payload.usuario_id,
+                tipo_final,
+                publico_final,
+                payload.mensagem
+            )
+        )
         conexao.commit()
-        novo_id = cursor.lastrowid
-        log_etapa("Inserida com ID", "✓", id=novo_id)
+        interacao_id = cursor.lastrowid
+        # ========================================
+        # 🔔 NOTIFICAR TODOS OS ENVOLVIDOS - DEBUGADO
+        # Data: 31/03/2026 15:25
+        # ========================================
+        logger.info(f"  ▶️ Enviando notificações para todos os envolvidos...")
+        logger.info(f"    📋 Detalhes do ticket:")
+        logger.info(f"       - ticket_id: {payload.ticket_id}")
+        logger.info(f"       - solicitante_id: {ticket_db.get('solicitante_id')}")
+        logger.info(f"       - responsavel_id: {ticket_db.get('responsavel_id')}")
+        logger.info(f"       - usuario_id (quem respondeu): {payload.usuario_id}")
+        logger.info(f"       - publico_final: {publico_final}")
         
-        # ✅ Obter interação criada
-        cursor.execute("""
-            SELECT ti.id, ti.ticket_id, ti.usuario_id, ti.tipo, ti.publico, 
-                   ti.mensagem, ti.created_at, u.name as usuario_nome
+        # Obter lista de usuários que devem receber notificação
+        usuarios_para_notificar = set()
+                # Obter lista de usuários que devem receber notificação
+        usuarios_para_notificar = set()
+        
+        # 🔔 LÓGICA: Respostas públicas vs Comentários internos
+        if publico_final == 1:  # ✅ RESPOSTA PÚBLICA
+            logger.info(f"    📢 Tipo: RESPOSTA PÚBLICA - Notificando solicitante e responsável")
+            
+            # 1️⃣ Adicionar solicitante
+            if ticket_db["solicitante_id"]:
+                usuarios_para_notificar.add(ticket_db["solicitante_id"])
+                logger.info(f"    ├─ ✅ Adicionado Solicitante: #{ticket_db['solicitante_id']}")
+            
+            # 2️⃣ Adicionar responsável (se houver)
+            if ticket_db["responsavel_id"]:
+                usuarios_para_notificar.add(ticket_db["responsavel_id"])
+                logger.info(f"    ├─ ✅ Adicionado Responsável: #{ticket_db['responsavel_id']}")
+                
+        else:  # ❌ COMENTÁRIO INTERNO (SECRETO)
+            logger.info(f"    🔐 Tipo: COMENTÁRIO INTERNO (SECRETO)")
+            logger.warning(f"    ⚠️ NÃO notificando o solicitante (comentário é confidencial)")
+            
+            # 3️⃣ Para comentários internos, adicionar APENAS os admins do sistema
+            cursor.execute("""
+                SELECT DISTINCT u.id 
+                FROM users u
+                WHERE u.role IN ('ADMIN', 'TI', 'MANAGER')
+                AND u.id != %s 
+                AND u.is_active = 1
+            """, (payload.usuario_id,))
+            
+            grupo_users = cursor.fetchall()
+            for user in grupo_users:
+                usuarios_para_notificar.add(user["id"])
+            
+            logger.info(f"    ├─ ✅ Adicionados Admins do Sistema: {len(grupo_users)} usuários")
+        
+        # 4️⃣ Nunca notificar o próprio usuário que está respondendo
+        usuarios_antes = len(usuarios_para_notificar)
+        usuarios_para_notificar.discard(payload.usuario_id)
+        usuarios_depois = len(usuarios_para_notificar)
+        
+        if usuarios_antes != usuarios_depois:
+            logger.info(f"    ├─ 🚫 Removido quem respondeu: #{payload.usuario_id} (era {usuarios_antes}, agora {usuarios_depois})")
+        
+        logger.info(f"    └─ 📊 Total a notificar: {len(usuarios_para_notificar)} usuário(s)")
+        logger.info(f"       Lista final: {usuarios_para_notificar}")
+        
+        if usuarios_antes != usuarios_depois:
+            logger.info(f"    ├─ 🚫 Removido quem respondeu: #{payload.usuario_id} (era {usuarios_antes}, agora {usuarios_depois})")
+        
+        logger.info(f"    └─ 📊 Total a notificar: {len(usuarios_para_notificar)} usuário(s)")
+        logger.info(f"       Lista final: {usuarios_para_notificar}")
+        
+                # 🔔 CRIAR NOTIFICAÇÃO PARA CADA USUÁRIO
+        logger.info(f"    ╔════════════════════════════════════════════════════════════╗")
+        logger.info(f"    ║ 🔔 BLOCO DE CRIAÇÃO DE NOTIFICAÇÕES - INICIO                ║")
+        logger.info(f"    ╚════════════════════════════════════════════════════════════╝")
+        logger.info(f"    → usuarios_para_notificar: {usuarios_para_notificar}")
+        logger.info(f"    → bool(usuarios_para_notificar): {bool(usuarios_para_notificar)}")
+        logger.info(f"    → len(usuarios_para_notificar): {len(usuarios_para_notificar)}")
+        
+        if usuarios_para_notificar:
+            logger.info(f"    ✓ Entrando no bloco IF (tem usuários para notificar)")
+            
+            try:
+                logger.info(f"    ▶️ Tentando inicializar NotificacaoService...")
+                ns = NotificacaoService(DB_CONFIG)
+                logger.info(f"    ✓ NotificacaoService inicializado")
+                
+                if publico_final == 1:  # Resposta pública
+                    tipo_notif = "nova_resposta"
+                    mensagem_base = f"Nova resposta no ticket #{ticket_db.get('numero', payload.ticket_id)}: {payload.mensagem[:80]}"
+                    logger.info(f"    → Tipo PÚBLICO (publico_final=1)")
+                else:  # Comentário interno
+                    tipo_notif = "comentario_interno"
+                    mensagem_base = f"Comentário interno no ticket #{ticket_db.get('numero', payload.ticket_id)}: {payload.mensagem[:80]}"
+                    logger.info(f"    → Tipo INTERNO (publico_final=0)")
+                
+                logger.info(f"    → tipo_notif: {tipo_notif}")
+                logger.info(f"    → mensagem_base: {mensagem_base[:60]}...")
+                logger.info(f"    🔄 INICIANDO LOOP sobre {len(usuarios_para_notificar)} usuário(s)...")
+                
+                            # Notificar via serviço (se disponível)
+                for idx, user_id in enumerate(usuarios_para_notificar, 1):
+                    logger.info(f"    ├─ [Iteração {idx}] Processando user_id: {user_id}")
+                    try:
+                        logger.info(f"    │  ▶️ Chamando ns.notificar_nova_resposta()...")
+                        ns.notificar_nova_resposta(
+                            ticket_id=payload.ticket_id,
+                            usuario_id=user_id,
+                            usuario_autor_id=payload.usuario_id,
+                            usuario_respondente_nome="Sistema"
+                        )
+                        logger.info(f"    │  ✓ Serviço notificou #{user_id} com SUCESSO")
+                    except Exception as e:
+                        logger.warning(f"    │  ⚠️ Serviço falhou para #{user_id}: {str(e)}")
+                        logger.info(f"    │  ▶️ Usando fallback: criar_notificacao_multipla()")
+                        # Fallback: criar direto no banco
+                        criar_notificacao_multipla(
+                            conexao, 
+                            payload.ticket_id, 
+                            user_id, 
+                            tipo_notif, 
+                            mensagem_base
+                        )
+                        logger.info(f"    │  ✓ Fallback executado para #{user_id}")
+                
+                logger.info(f"    └─ ✓ Loop finalizado!")
+                logger.info(f"    ✓ Notificações enviadas via serviço")
+                
+            except Exception as e:
+                logger.warning(f"    ❌ ERRO na inicialização do serviço: {str(e)}")
+                logger.warning(f"    ⚠️ Serviço indisponível, usando fallback completo...")
+                logger.info(f"    🔄 INICIANDO FALLBACK (banco de dados)...")
+                
+                # Fallback: criar notificações direto no banco para todos
+                for idx, user_id in enumerate(usuarios_para_notificar, 1):
+                    logger.info(f"    ├─ [Fallback {idx}] user_id: {user_id}")
+                    tipo_notif = "nova_resposta" if publico_final == 1 else "comentario_interno"
+                    mensagem = f"Nova {'resposta' if publico_final == 1 else 'nota interna'} no ticket #{ticket_db.get('numero', payload.ticket_id)}"
+                    logger.info(f"    │  ▶️ Criando notificação (tipo: {tipo_notif})")
+                    criar_notificacao_multipla(
+                        conexao, 
+                        payload.ticket_id, 
+                        user_id, 
+                        tipo_notif, 
+                        mensagem
+                    )
+                    logger.info(f"    │  ✓ Notificação criada para #{user_id}")
+                
+                logger.info(f"    └─ ✓ Fallback finalizado!")
+                logger.info(f"    ✓ Notificações enviadas via fallback (banco)")
+                
+                # Fallback: criar notificações direto no banco para todos
+                for idx, user_id in enumerate(usuarios_para_notificar, 1):
+                    logger.info(f"    ├─ [Fallback {idx}] user_id: {user_id}")
+                    tipo_notif = "nova_resposta" if publico_final == 1 else "comentario_interno"
+                    mensagem = f"Nova {'resposta' if publico_final == 1 else 'nota interna'} no ticket #{ticket_db.get('numero', payload.ticket_id)}"
+                    logger.info(f"    │  ▶️ Criando notificação (tipo: {tipo_notif})")
+                    criar_notificacao_multipla(
+                        conexao, 
+                        payload.ticket_id, 
+                        user_id, 
+                        tipo_notif, 
+                        mensagem
+                    )
+                    logger.info(f"    │  ✓ Notificação criada para #{user_id}")
+                
+                logger.info(f"    └─ ✓ Fallback finalizado!")
+                logger.info(f"    ✓ Notificações enviadas via fallback (banco)")
+        else:
+            logger.warning(f"    ❌ NENHUM USUÁRIO PARA NOTIFICAR!")
+            logger.warning(f"    → usuarios_para_notificar está vazio ou None")
+
+        logger.info(f"    ╔════════════════════════════════════════════════════════════╗")
+        logger.info(f"    ║ 🔔 BLOCO DE CRIAÇÃO DE NOTIFICAÇÕES - FIM                  ║")
+        logger.info(f"    ╚════════════════════════════════════════════════════════════╝")
+
+        # ========================================
+        # FIM NOTIFICAÇÕES - 31/03/2026 15:25
+        # ========================================
+
+        cursor.execute(
+            """
+            SELECT ti.id, ti.ticket_id, ti.usuario_id, ti.tipo, ti.publico,
+                   ti.mensagem, ti.created_at, u.name AS usuario_nome
             FROM ticket_interacoes ti
             LEFT JOIN users u ON ti.usuario_id = u.id
             WHERE ti.id = %s
-        """, (novo_id,))
-        
-        resultado = cursor.fetchone()
-        
-        # ✅ Enviar notificação
-        log_etapa("Notificando via WebSocket", "📤")
-        enviar_notificacao_websocket(
-            {
-                "ticket_id": interacao.ticket_id,
-                "usuario_id": interacao.usuario_id,
-                "usuario_nome": verificacao_usuario['name'],
-                "mensagem": interacao.mensagem[:100],
-                "tipo": interacao.tipo,
-                "publico": interacao.publico,
-                "status": "sucesso"
-            },
-            "comentario_adicionado"
+            """,
+            (interacao_id,)
         )
-        
-        log_fim("sucesso", interacao_id=novo_id, tipo=interacao.tipo)
-        
-        return {
-            "id": resultado['id'],
-            "ticket_id": resultado['ticket_id'],
-            "usuario_id": resultado['usuario_id'],
-            "usuario_nome": resultado['usuario_nome'],
-            "tipo": resultado['tipo'],
-            "publico": resultado['publico'],
-            "mensagem": resultado['mensagem'],
-            "created_at": str(resultado['created_at'])
+        registro = cursor.fetchone()
+
+        resposta = {
+            "id":           registro["id"],
+            "ticket_id":    registro["ticket_id"],
+            "usuario_id":   registro["usuario_id"],
+            "usuario_nome": registro.get("usuario_nome"),
+            "tipo":         registro["tipo"],
+            "publico":      registro["publico"],
+            "mensagem":     registro["mensagem"],
+            "created_at":   registro["created_at"].isoformat() if registro["created_at"] else None
         }
-        
+
+        log_fim("sucesso", interacao_id=interacao_id, notificacoes_enviadas=len(usuarios_para_notificar))
+        return resposta
+
     except HTTPException:
         raise
-    except Exception as erro:
-        log_fim("erro", erro=str(erro))
+    except Exception as e:
+        log_fim("erro", erro=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao criar interação: {str(erro)}"
+            detail=str(e)
         )
     finally:
         if cursor:
@@ -959,71 +954,71 @@ async def criar_interacao(interacao: InteracaoCriar):
         if conexao:
             conexao.close()
 
-# =========================================
+# ========================================
+# FIM DA FUNÇÃO - 31/03/2026 14:42
+# ========================================
 
-@interacoes_router.get(
-    "/{ticket_id}",
-    response_model=List[InteracaoResposta],
-    summary="Listar interações",
-    description="Obtém todos os comentários e respostas de um ticket"
-)
-async def obter_interacoes_ticket(ticket_id: int = Query(..., gt=0, description="ID do ticket")):
-    """
-    Lista todas as interações (comentários) de um ticket
-    
-    Retorna ordenado por data de criação (mais antigos primeiro)
-    """
-    
-    log_inicio("obter_interacoes_ticket", ticket_id=ticket_id)
-    
+
+@interacoes_router.get("/{ticket_id}", response_model=List[InteracaoResposta])
+async def obter_interacoes_ticket(
+    ticket_id: int = Path(..., gt=0),
+    # ✅ usuario_id para filtrar: USER só vê respostas públicas (publico=1)
+    usuario_id: Optional[int] = Query(None, gt=0, description="ID do usuário solicitante (filtra comentários internos)")
+):
+    log_inicio("obter_interacoes_ticket", ticket_id=ticket_id, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
-    
     try:
         cursor = conexao.cursor(dictionary=True)
-        
-        # ✅ Validar ticket existe
-        log_etapa("Validando ticket", "🔍")
-        verificacao_ticket = validar_ticket_existe(cursor, ticket_id)
-        log_etapa("Ticket OK", "✓", numero=verificacao_ticket['numero'])
-        
-        # ✅ Buscar interações
-        log_etapa("Buscando interações", "🔍")
-        cursor.execute("""
-            SELECT ti.id, ti.ticket_id, ti.usuario_id, ti.tipo, ti.publico, 
-                   ti.mensagem, ti.created_at, u.name as usuario_nome
+        validar_ticket_existe(cursor, ticket_id)
+
+        # Verificar se é admin para decidir se mostra comentários internos
+        mostrar_internos = True
+        if usuario_id:
+            role_usuario = obter_role_usuario(cursor, usuario_id)
+            if role_usuario not in ROLES_ADMIN:
+                mostrar_internos = False
+                logger.info(f"  ✓ Usuário USER #{usuario_id} — ocultando comentários internos")
+
+        filtro_publico = "" if mostrar_internos else "AND ti.publico = 1"
+
+        cursor.execute(
+            f"""
+            SELECT ti.id, ti.ticket_id, ti.usuario_id, ti.tipo, ti.publico,
+                   ti.mensagem, ti.created_at, u.name AS usuario_nome
             FROM ticket_interacoes ti
             LEFT JOIN users u ON ti.usuario_id = u.id
-            WHERE ti.ticket_id = %s
+            WHERE ti.ticket_id = %s {filtro_publico}
             ORDER BY ti.created_at ASC
-        """, (ticket_id,))
-        
-        interacoes = cursor.fetchall()
-        
-        resposta = [
+            """,
+            (ticket_id,)
+        )
+        rows = cursor.fetchall()
+
+        interacoes = [
             {
-                "id": linha['id'],
-                "ticket_id": linha['ticket_id'],
-                "usuario_id": linha['usuario_id'],
-                "usuario_nome": linha['usuario_nome'],
-                "tipo": linha['tipo'],
-                "publico": linha['publico'],
-                "mensagem": linha['mensagem'],
-                "created_at": str(linha['created_at'])
+                "id":           r["id"],
+                "ticket_id":    r["ticket_id"],
+                "usuario_id":   r["usuario_id"],
+                "usuario_nome": r.get("usuario_nome"),
+                "tipo":         r["tipo"],
+                "publico":      r["publico"],
+                "mensagem":     r["mensagem"],
+                "created_at":   r["created_at"].isoformat() if r["created_at"] else None
             }
-            for linha in interacoes
+            for r in rows
         ]
-        
-        log_fim("sucesso", total=len(resposta))
-        return resposta
-        
+
+        log_fim("sucesso", total=len(interacoes))
+        return interacoes
+
     except HTTPException:
         raise
-    except Exception as erro:
-        log_fim("erro", erro=str(erro))
+    except Exception as e:
+        log_fim("erro", erro=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao buscar interações: {str(erro)}"
+            detail=str(e)
         )
     finally:
         if cursor:

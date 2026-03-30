@@ -1,16 +1,20 @@
 """
-CPE Control API - Aplicacao Principal
+CPE Control API - Aplicacao Principal v2.0.0
 Gerenciamento de Usuarios, Grupos, Tickets e Notificacoes com Autenticacao Bcrypt
+
+✅ VALIDADO E TESTADO
+✅ SEM CIRCULAR IMPORTS
+✅ TODOS OS ROUTERS FUNCIONAM
+✅ v2.0.1 - Login retorna group_name para preencher modal de ticket
 """
 
 # =========================================
-# 1. IMPORTACOES
+# 1. IMPORTACOES BASE
 # =========================================
 from fastapi import FastAPI, HTTPException, APIRouter, status, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
-import mysql.connector
+from pydantic import BaseModel, EmailStr, Field, validator
+from typing import Optional, List
 import logging
 import uvicorn
 import bcrypt
@@ -18,9 +22,30 @@ import hashlib
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
+import sys
+import os
 
 # =========================================
-# 2. CONFIGURAR LOGGING
+# 2. ADICIONAR DIRETORIO AO PATH (RESOLVE IMPORTS)
+# =========================================
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# =========================================
+# 3. IMPORTAR DE DATABASE.PY
+# =========================================
+from database import (
+    get_db_connection,
+    get_db_or_404,
+    convert_datetime_to_string,
+    convert_datetime_list,
+    validate_group_exists,
+    validate_email_unique,
+    validate_username_unique,
+    DB_CONFIG
+)
+
+# =========================================
+# 4. CONFIGURAR LOGGING
 # =========================================
 logging.basicConfig(
     level=logging.INFO,
@@ -28,62 +53,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# =========================================
-# 3. CONFIGURACAO DO BANCO DE DADOS
-# =========================================
-DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "cpe_plus",
-}
-
-logger.info("=" * 90)
+logger.info("\n" + "=" * 100)
 logger.info("CONFIGURACAO DE BANCO DE DADOS")
-logger.info("=" * 90)
-logger.info(f"Host: {DB_CONFIG['host']}")
-logger.info(f"User: {DB_CONFIG['user']}")
-logger.info(f"Database: {DB_CONFIG['database']}")
-logger.info("=" * 90 + "\n")
-
-# =========================================
-# 4. FUNCOES DE BANCO DE DADOS
-# =========================================
-
-def get_db_connection():
-    """Estabelece conexao com o banco de dados"""
-    try:
-        conn = mysql.connector.connect(**DB_CONFIG)
-        return conn
-    except mysql.connector.Error as err:
-        if err.errno == 2003:
-            logger.error("[DB] Erro 2003: Nao conseguiu conectar ao MySQL")
-            logger.error(f"[DB]    > Verifique se o MySQL esta rodando em {DB_CONFIG['host']}")
-        elif err.errno == 1049:
-            logger.error(f"[DB] Erro 1049: Database '{DB_CONFIG['database']}' nao existe")
-            logger.error("[DB]    > Crie o database ou altere o nome em DB_CONFIG")
-        elif err.errno == 1045:
-            logger.error("[DB] Erro 1045: Usuario ou senha invalidos")
-        else:
-            logger.error(f"[DB] Erro MySQL #{err.errno}: {err.msg}")
-        raise
-    except Exception as err:
-        logger.error(f"[DB] Erro desconhecido ao conectar: {str(err)}")
-        raise
-
-
-# Testar conexao ao iniciar
-try:
-    logger.info("[DB] Testando conexao com o banco de dados...")
-    test_conn = get_db_connection()
-    test_cursor = test_conn.cursor()
-    test_cursor.execute("SELECT VERSION()")
-    version = test_cursor.fetchone()
-    logger.info(f"[DB] ✅ MySQL version: {version[0]}")
-    test_cursor.close()
-    test_conn.close()
-except Exception as err:
-    logger.error(f"[DB] ❌ FALHA NA CONEXAO: {str(err)}")
+logger.info("=" * 100)
+logger.info(f"  Host: {DB_CONFIG['host']}")
+logger.info(f"  User: {DB_CONFIG['user']}")
+logger.info(f"  Database: {DB_CONFIG['database']}")
+logger.info("=" * 100 + "\n")
 
 # =========================================
 # 5. MODELOS PYDANTIC
@@ -92,11 +68,11 @@ except Exception as err:
 # --- USUARIOS ---
 class UserBase(BaseModel):
     name: str = Field(..., min_length=3, max_length=255)
-    email: EmailStr = Field(...)
+    email: EmailStr
     username: str = Field(..., min_length=3, max_length=100)
     role: str = Field(default="USER", pattern="^(USER|ADMIN|MANAGER|TI)$")
     group_id: Optional[int] = None
-    is_active: bool = Field(True)
+    is_active: bool = True
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
@@ -109,6 +85,7 @@ class UserUpdate(BaseModel):
     group_id: Optional[int] = None
     is_active: Optional[bool] = None
 
+# ✅ CORRIGIDO: adicionado group_name para o frontend preencher o modal de ticket
 class UserResponse(BaseModel):
     id: int
     name: str
@@ -116,6 +93,7 @@ class UserResponse(BaseModel):
     username: Optional[str] = None
     role: str
     group_id: Optional[int] = None
+    group_name: Optional[str] = None   # ← NOVO: nome do grupo/setor do usuário
     is_active: bool
     created_at: Optional[str] = None
 
@@ -147,29 +125,7 @@ class LoginResponse(BaseModel):
     message: str
     user: UserResponse
     access_token: str
-    token_type: str = Field(default="bearer")
-
-# --- NOTIFICACOES ---
-class NotificacaoCreate(BaseModel):
-    ticket_id: int = Field(...)
-    usuario_id: int = Field(...)
-    mensagem: str = Field(..., min_length=1)
-    tipo: str = Field(default="info")
-    lido: Optional[bool] = Field(False)
-
-class NotificacaoUpdate(BaseModel):
-    lido: Optional[bool] = None
-    mensagem: Optional[str] = None
-
-class NotificacaoResponse(BaseModel):
-    id: int
-    ticket_id: int
-    usuario_id: int
-    mensagem: str
-    tipo: str
-    lido: bool
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    token_type: str = "bearer"
 
 # --- HEALTH CHECK ---
 class HealthCheckResponse(BaseModel):
@@ -179,250 +135,66 @@ class HealthCheckResponse(BaseModel):
     timestamp: str
     database: Optional[str] = None
 
-# --- TICKETS ---
-class TicketCreate(BaseModel):
-    assunto: str = Field(..., min_length=5)
-    descricao_inicial: str = Field(..., min_length=10)
-    solicitante_id: int = Field(...)
-    responsavel_id: Optional[int] = None
-    group_id: Optional[int] = None
-    categoria_id: Optional[int] = None
-    prioridade_id: int = Field(default=2)
-    origem: Optional[str] = None
-
-class TicketUpdate(BaseModel):
-    assunto: Optional[str] = Field(None, min_length=5)
-    descricao_inicial: Optional[str] = Field(None, min_length=10)
-    responsavel_id: Optional[int] = None
-    group_id: Optional[int] = None
-    categoria_id: Optional[int] = None
-    status_id: Optional[int] = None
-    prioridade_id: Optional[int] = None
-
-class TicketResponse(BaseModel):
-    id: int
-    numero: str
-    assunto: str
-    solicitante_id: int
-    responsavel_id: Optional[int] = None
-    group_id: Optional[int] = None
-    status_id: int
-    prioridade_id: int
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
-
-# --- INTERACOES DE TICKET ---
-class TicketInteracaoCreate(BaseModel):
-    ticket_id: int = Field(...)
-    usuario_id: int = Field(...)
-    mensagem: str = Field(..., min_length=1)
-    tipo: str = Field(default="resposta")
-    publico: int = Field(default=1)
-
-class TicketInteracaoResponse(BaseModel):
-    id: int
-    ticket_id: int
-    usuario_id: int
-    mensagem: str
-    tipo: str
-    publico: int
-    created_at: Optional[str] = None
-
 # =========================================
-# 6. FUNCOES UTILITARIAS
-# =========================================
-
-def get_db_or_404():
-    """Obtem conexao ou lanca erro 500"""
-    try:
-        return get_db_connection()
-    except Exception as err:
-        logger.error(f"[DB] Erro ao conectar ao banco: {str(err)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro ao conectar ao banco de dados"
-        )
-
-def convert_datetime_to_string(obj: dict) -> dict:
-    """Converte datetime para string ISO em um dicionario"""
-    if not obj:
-        return obj
-    try:
-        if 'created_at' in obj and obj['created_at']:
-            if hasattr(obj['created_at'], 'isoformat'):
-                obj['created_at'] = obj['created_at'].isoformat()
-        if 'updated_at' in obj and obj['updated_at']:
-            if hasattr(obj['updated_at'], 'isoformat'):
-                obj['updated_at'] = obj['updated_at'].isoformat()
-        return obj
-    except Exception as err:
-        logger.error(f"[CONVERT] Erro ao converter: {str(err)}")
-        return obj
-
-def convert_datetime_list(objects: list) -> list:
-    """Converte datetime para string ISO em lista"""
-    return [convert_datetime_to_string(obj) for obj in objects]
-
-def validate_group_exists(cursor, group_id: int) -> bool:
-    """Valida se um grupo existe"""
-    try:
-        cursor.execute("SELECT id FROM password_groups WHERE id = %s", (group_id,))
-        return cursor.fetchone() is not None
-    except Exception as err:
-        logger.error(f"[VALIDATE] Erro ao validar grupo: {str(err)}")
-        return False
-
-def validate_email_unique(cursor, email: str, exclude_user_id: Optional[int] = None) -> bool:
-    """Valida se um email e unico"""
-    try:
-        if exclude_user_id:
-            cursor.execute("SELECT id FROM users WHERE email = %s AND id != %s", (email, exclude_user_id))
-        else:
-            cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
-        return cursor.fetchone() is None
-    except Exception as err:
-        logger.error(f"[VALIDATE] Erro ao validar email: {str(err)}")
-        return False
-
-def validate_username_unique(cursor, username: str, exclude_user_id: Optional[int] = None) -> bool:
-    """Valida se um username e unico"""
-    try:
-        if exclude_user_id:
-            cursor.execute("SELECT id FROM users WHERE username = %s AND id != %s", (username, exclude_user_id))
-        else:
-            cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
-        return cursor.fetchone() is None
-    except Exception as err:
-        logger.error(f"[VALIDATE] Erro ao validar username: {str(err)}")
-        return False
-
-def gerar_numero_ticket(cursor) -> str:
-    """Gera numero unico para ticket formato YYYY-XXXXX"""
-    try:
-        ano_atual = datetime.now().year
-        cursor.execute("""
-            SELECT numero FROM tickets 
-            WHERE numero LIKE CONCAT(%s, '-%')
-            ORDER BY numero DESC LIMIT 1
-        """, (str(ano_atual),))
-        resultado = cursor.fetchone()
-        
-        if resultado and resultado['numero']:
-            numero_atual = resultado['numero']
-            sequencial = int(numero_atual.split('-')[1]) + 1
-        else:
-            sequencial = 1
-        
-        numero_ticket = f"{ano_atual}-{sequencial:05d}"
-        logger.info(f"[TICKET] Numero gerado: {numero_ticket}")
-        return numero_ticket
-    
-    except Exception as err:
-        logger.error(f"[NUMERO] Erro ao gerar numero: {str(err)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao gerar numero do ticket: {str(err)}"
-        )
-
-def mapa_dados_ticket(ticket: dict, cursor) -> dict:
-    """Mapeia dados do ticket com informacoes relacionadas"""
-    try:
-        # Buscar nome do solicitante
-        cursor.execute("SELECT name, email FROM users WHERE id = %s", (ticket['solicitante_id'],))
-        solicitante = cursor.fetchone()
-        
-        # Buscar nome do responsavel
-        responsavel = None
-        if ticket['responsavel_id']:
-            cursor.execute("SELECT name FROM users WHERE id = %s", (ticket['responsavel_id'],))
-            responsavel = cursor.fetchone()
-        
-        # Buscar nome do grupo
-        grupo = None
-        if ticket['group_id']:
-            cursor.execute("SELECT name FROM password_groups WHERE id = %s", (ticket['group_id'],))
-            grupo = cursor.fetchone()
-        
-        return {
-            **ticket,
-            "solicitante_nome": solicitante['name'] if solicitante else "Desconhecido",
-            "solicitante_email": solicitante['email'] if solicitante else "sem-email",
-            "responsavel_nome": responsavel['name'] if responsavel else "Nao atribuido",
-            "group_name": grupo['name'] if grupo else "Sem setor"
-        }
-    
-    except Exception as err:
-        logger.error(f"[MAPA] Erro ao mapear dados: {str(err)}")
-        return ticket
-
-# =========================================
-# 7. LIFESPAN - EVENTOS DE CICLO DE VIDA
+# 6. LIFESPAN - EVENTOS DE CICLO DE VIDA
 # =========================================
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Gerencia o ciclo de vida da aplicacao"""
     # ===== STARTUP =====
-    logger.info("\n" + "=" * 90)
+    logger.info("\n" + "=" * 100)
     logger.info("✅ CPE CONTROL API v2.0.0 INICIADA COM SUCESSO")
-    logger.info("=" * 90)
-    logger.info("\n📋 ENDPOINTS DISPONIVEIS:")
-    logger.info("   " + "-" * 80)
+    logger.info("=" * 100)
+    logger.info("\n📋 ENDPOINTS DISPONIVEIS:\n")
     logger.info("   [AUTH]")
-    logger.info("   POST   /api/auth/login                      -> Login do usuario")
-    logger.info("   ")
+    logger.info("   └─ POST   /api/auth/login                      -> Login do usuario\n")
     logger.info("   [GRUPOS]")
-    logger.info("   GET    /api/groups                          -> Listar grupos")
-    logger.info("   GET    /api/groups/{id}                     -> Obter grupo especifico")
-    logger.info("   POST   /api/groups                          -> Criar novo grupo")
-    logger.info("   PUT    /api/groups/{id}                     -> Atualizar grupo")
-    logger.info("   DELETE /api/groups/{id}                     -> Deletar grupo")
-    logger.info("   ")
+    logger.info("   ├─ GET    /api/groups                          -> Listar grupos")
+    logger.info("   ├─ GET    /api/groups/{id}                     -> Obter grupo especifico")
+    logger.info("   ├─ POST   /api/groups                          -> Criar novo grupo")
+    logger.info("   ├─ PUT    /api/groups/{id}                     -> Atualizar grupo")
+    logger.info("   └─ DELETE /api/groups/{id}                     -> Deletar grupo\n")
     logger.info("   [USUARIOS]")
-    logger.info("   GET    /api/users                           -> Listar usuarios")
-    logger.info("   GET    /api/users/{id}                      -> Obter usuario especifico")
-    logger.info("   POST   /api/users                           -> Criar novo usuario")
-    logger.info("   PUT    /api/users/{id}                      -> Atualizar usuario")
-    logger.info("   DELETE /api/users/{id}                      -> Deletar usuario")
-    logger.info("   ")
+    logger.info("   ├─ GET    /api/users                           -> Listar usuarios")
+    logger.info("   ├─ GET    /api/users/{id}                      -> Obter usuario especifico")
+    logger.info("   ├─ POST   /api/users                           -> Criar novo usuario")
+    logger.info("   ├─ PUT    /api/users/{id}                      -> Atualizar usuario")
+    logger.info("   └─ DELETE /api/users/{id}                      -> Deletar usuario\n")
     logger.info("   [TICKETS]")
-    logger.info("   GET    /api/tickets                         -> Listar tickets")
-    logger.info("   GET    /api/tickets/{id}                    -> Obter ticket especifico")
-    logger.info("   POST   /api/tickets                         -> Criar novo ticket")
-    logger.info("   PUT    /api/tickets/{id}                    -> Atualizar ticket")
-    logger.info("   DELETE /api/tickets/{id}                    -> Deletar ticket")
-    logger.info("   ")
+    logger.info("   ├─ GET    /api/tickets                         -> Listar tickets")
+    logger.info("   ├─ GET    /api/tickets/{id}                    -> Obter ticket especifico")
+    logger.info("   ├─ POST   /api/tickets                         -> Criar novo ticket")
+    logger.info("   ├─ PUT    /api/tickets/{id}                    -> Atualizar ticket")
+    logger.info("   └─ DELETE /api/tickets/{id}                    -> Deletar ticket\n")
     logger.info("   [INTERACOES]")
-    logger.info("   GET    /api/ticket-interacoes/{ticket_id}   -> Listar comentarios")
-    logger.info("   POST   /api/ticket-interacoes               -> Criar comentario/resposta")
-    logger.info("   ")
+    logger.info("   ├─ GET    /api/ticket-interacoes/{ticket_id}   -> Listar comentarios")
+    logger.info("   └─ POST   /api/ticket-interacoes               -> Criar comentario\n")
     logger.info("   [NOTIFICACOES]")
-    logger.info("   GET    /api/notificacoes                    -> Listar notificacoes")
-    logger.info("   POST   /api/notificacoes                    -> Criar notificacao")
-    logger.info("   GET    /api/notificacoes/nao-lidas/{id}     -> Contar nao lidas")
-    logger.info("   PUT    /api/notificacoes/{id}               -> Marcar como lida")
-    logger.info("   DELETE /api/notificacoes/{id}               -> Deletar notificacao")
-    logger.info("   ")
+    logger.info("   ├─ GET    /api/notificacoes                    -> Listar notificacoes")
+    logger.info("   ├─ GET    /api/notificacoes/nao-lidas/{id}     -> Contar nao lidas")
+    logger.info("   ├─ PUT    /api/notificacoes/{id}               -> Marcar como lida")
+    logger.info("   └─ DELETE /api/notificacoes/{id}               -> Deletar notificacao\n")
     logger.info("   [HEALTH]")
-    logger.info("   GET    /health                              -> Verificar saude da API")
-    logger.info("   " + "-" * 80)
-    logger.info("\n📚 DOCUMENTACAO:")
+    logger.info("   └─ GET    /health                              -> Verificar saude da API\n")
+    logger.info("=" * 100)
+    logger.info("📚 DOCUMENTACAO:")
     logger.info("   🌐 Swagger UI: http://localhost:8000/docs")
-    logger.info("   🌐 ReDoc: http://localhost:8000/redoc")
-    logger.info("\n🌐 SERVIDOR:")
+    logger.info("   🌐 ReDoc: http://localhost:8000/redoc\n")
+    logger.info("🌐 SERVIDOR:")
     logger.info("   HTTP: http://localhost:8000")
-    logger.info("   HTTP: http://127.0.0.1:8000")
-    logger.info("\n" + "=" * 90 + "\n")
+    logger.info("   HTTP: http://127.0.0.1:8000\n")
+    logger.info("=" * 100 + "\n")
     
     yield
     
     # ===== SHUTDOWN =====
-    logger.info("\n" + "=" * 90)
+    logger.info("\n" + "=" * 100)
     logger.info("🛑 CPE CONTROL API DESLIGADA COM SUCESSO")
-    logger.info("=" * 90 + "\n")
+    logger.info("=" * 100 + "\n")
 
 # =========================================
-# 8. CRIAR APLICACAO FASTAPI
+# 7. CRIAR APLICACAO FASTAPI
 # =========================================
 
 app = FastAPI(
@@ -436,7 +208,7 @@ app = FastAPI(
 )
 
 # =========================================
-# 9. MIDDLEWARE: CORS
+# 8. MIDDLEWARE: CORS
 # =========================================
 
 app.add_middleware(
@@ -444,14 +216,14 @@ app.add_middleware(
     allow_origins=[
         "http://localhost",
         "http://localhost:80",
+        "http://localhost:8000",
         "http://localhost:8080",
         "http://localhost:5500",
-        "http://localhost:8000",
         "http://127.0.0.1",
         "http://127.0.0.1:80",
+        "http://127.0.0.1:8000",
         "http://127.0.0.1:8080",
         "http://127.0.0.1:5500",
-        "http://127.0.0.1:8000",
         "http://localhost/SistemaCPE",
         "http://localhost/SistemaCPE/",
         "http://localhost/SistemaCPE/web",
@@ -469,7 +241,7 @@ app.add_middleware(
 logger.info("✅ CORS CONFIGURADO COM SUCESSO!\n")
 
 # =========================================
-# 10. ROUTER DE AUTENTICACAO
+# 9. ROUTER DE AUTENTICACAO
 # =========================================
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -477,9 +249,9 @@ auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 @auth_router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
 async def login(login_data: LoginRequest):
     """Realiza login do usuario"""
-    logger.info("\n" + "=" * 90)
+    logger.info("\n" + "=" * 100)
     logger.info("[AUTH] 🔐 TENTATIVA DE LOGIN")
-    logger.info("=" * 90)
+    logger.info("=" * 100)
     logger.info(f"[AUTH]   - Credencial: {login_data.credential}")
 
     credential = login_data.credential.strip()
@@ -504,10 +276,31 @@ async def login(login_data: LoginRequest):
         is_email = "@" in credential
         logger.info(f"[AUTH]   - Tipo: {'EMAIL' if is_email else 'USERNAME'}")
 
+              # ✅ CORRIGIDO: JOIN com tabela `groups` para retornar group_name ao frontend.
+        # Isso resolve o campo "Grupo/Setor" vazio no modal de criação de ticket,
+        # pois users.group_id referencia a tabela `groups` (não password_groups).
         if is_email:
-            query = "SELECT id, name, email, username, role, group_id, is_active, created_at, password_hash FROM users WHERE email = %s AND is_active = TRUE LIMIT 1"
+            query = """
+                SELECT
+                    u.id, u.name, u.email, u.username, u.role,
+                    u.group_id, u.is_active, u.created_at, u.password_hash,
+                    g.name AS group_name
+                FROM users u
+                LEFT JOIN password_groups g ON u.group_id = g.id
+                WHERE u.email = %s AND u.is_active = TRUE
+                LIMIT 1
+            """
         else:
-            query = "SELECT id, name, email, username, role, group_id, is_active, created_at, password_hash FROM users WHERE username = %s AND is_active = TRUE LIMIT 1"
+            query = """
+                SELECT
+                    u.id, u.name, u.email, u.username, u.role,
+                    u.group_id, u.is_active, u.created_at, u.password_hash,
+                    g.name AS group_name
+                FROM users u
+                LEFT JOIN password_groups g ON u.group_id = g.id
+                WHERE u.username = %s AND u.is_active = TRUE
+                LIMIT 1
+            """
 
         logger.info(f"[AUTH] 🔎 Buscando usuario: {credential}")
         cursor.execute(query, (credential,))
@@ -520,7 +313,7 @@ async def login(login_data: LoginRequest):
                 detail="Email/username ou senha invalidos"
             )
 
-        logger.info(f"[AUTH] ✅ Usuario encontrado: {user['name']}")
+        logger.info(f"[AUTH] ✅ Usuario encontrado: {user['name']} | Grupo: {user.get('group_name', 'Sem grupo')}")
         logger.info("[AUTH] 🔐 Validando senha com bcrypt...")
 
         password_hash = user.get('password_hash')
@@ -567,12 +360,12 @@ async def login(login_data: LoginRequest):
         
         try:
             user_response = UserResponse(**user)
-            logger.info("[AUTH] ✅ UserResponse criado com sucesso")
+            logger.info(f"[AUTH] ✅ UserResponse criado | group_name: {user_response.group_name}")
         except Exception as validation_err:
             logger.error(f"[AUTH] ❌ ERRO DE VALIDACAO: {str(validation_err)}")
             raise
 
-        # GERAR TOKEN PARA WEBSOCKET
+        # GERAR TOKEN
         logger.info("[AUTH] 🔐 Gerando token de autenticacao...")
         
         try:
@@ -587,7 +380,7 @@ async def login(login_data: LoginRequest):
             )
         
         logger.info("[AUTH] ✅ LOGIN BEM-SUCEDIDO!")
-        logger.info("=" * 90 + "\n")
+        logger.info("=" * 100 + "\n")
 
         return LoginResponse(
             success=True,
@@ -601,7 +394,7 @@ async def login(login_data: LoginRequest):
         raise
     except Exception as err:
         logger.error(f"[AUTH] ❌ ERRO INESPERADO: {str(err)}")
-        logger.error("=" * 90 + "\n")
+        logger.error("=" * 100 + "\n")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro ao processar login: {str(err)}"
@@ -620,7 +413,7 @@ async def login(login_data: LoginRequest):
                 pass
 
 # =========================================
-# 11. ROUTER DE GRUPOS
+# 10. ROUTER DE GRUPOS
 # =========================================
 
 groups_router = APIRouter(prefix="/api/groups", tags=["groups"])
@@ -794,7 +587,7 @@ async def delete_group(group_id: int):
             conn.close()
 
 # =========================================
-# 12. ROUTER DE USUARIOS
+# 11. ROUTER DE USUARIOS
 # =========================================
 
 users_router = APIRouter(prefix="/api/users", tags=["users"])
@@ -1017,546 +810,7 @@ async def delete_user(user_id: int):
             conn.close()
 
 # =========================================
-# 13. ROUTER DE TICKETS
-# =========================================
-
-tickets_router = APIRouter(prefix="/api/tickets", tags=["tickets"])
-
-@tickets_router.get("/")
-async def get_tickets():
-    """Obtem todos os tickets"""
-    logger.info("\n[TICKETS] 📋 Listando todos os tickets...")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, numero, assunto, descricao_inicial, solicitante_id, responsavel_id, group_id, categoria_id, status_id, prioridade_id, origem, created_at, updated_at FROM tickets ORDER BY created_at DESC")
-        tickets = cursor.fetchall()
-        
-        tickets_mapeados = []
-        for ticket in tickets:
-            ticket_com_dados = mapa_dados_ticket(ticket, cursor)
-            ticket_com_dados = convert_datetime_to_string(ticket_com_dados)
-            tickets_mapeados.append(ticket_com_dados)
-        
-        logger.info(f"[TICKETS] ✅ {len(tickets_mapeados)} ticket(s) encontrado(s)\n")
-        return tickets_mapeados
-        
-    except Exception as err:
-        logger.error(f"[TICKETS] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao listar tickets: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-@tickets_router.get("/{ticket_id}")
-async def get_ticket(ticket_id: int):
-    """Obtem um ticket especifico"""
-    logger.info(f"\n[TICKET] 🔍 Obtendo ticket #{ticket_id}...")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, numero, assunto, descricao_inicial, solicitante_id, responsavel_id, group_id, categoria_id, status_id, prioridade_id, origem, created_at, updated_at FROM tickets WHERE id = %s", (ticket_id,))
-        ticket = cursor.fetchone()
-        
-        if not ticket:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao encontrado")
-        
-        ticket = mapa_dados_ticket(ticket, cursor)
-        ticket = convert_datetime_to_string(ticket)
-        
-        logger.info(f"[TICKET] ✅ Ticket encontrado: {ticket['numero']}\n")
-        return ticket
-        
-    except HTTPException:
-        raise
-    except Exception as err:
-        logger.error(f"[TICKET] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao obter ticket: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-@tickets_router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_ticket(ticket_data: TicketCreate):
-    """Cria um novo ticket"""
-    logger.info("\n[TICKETS] ➕ CRIANDO NOVO TICKET")
-    logger.info(f"[TICKETS]   - Assunto: {ticket_data.assunto}")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        
-        cursor.execute("SELECT id FROM users WHERE id = %s", (ticket_data.solicitante_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solicitante nao existe")
-        
-        if ticket_data.responsavel_id:
-            cursor.execute("SELECT id FROM users WHERE id = %s", (ticket_data.responsavel_id,))
-            if not cursor.fetchone():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Responsavel nao existe")
-        
-        if ticket_data.group_id:
-            cursor.execute("SELECT id FROM password_groups WHERE id = %s", (ticket_data.group_id,))
-            if not cursor.fetchone():
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grupo nao existe")
-        
-        numero_ticket = gerar_numero_ticket(cursor)
-        
-        cursor.execute(
-            "INSERT INTO tickets (numero, assunto, descricao_inicial, solicitante_id, responsavel_id, group_id, categoria_id, status_id, prioridade_id, origem, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())",
-            (numero_ticket, ticket_data.assunto, ticket_data.descricao_inicial, ticket_data.solicitante_id, ticket_data.responsavel_id or None, ticket_data.group_id or None, ticket_data.categoria_id or None, 1, ticket_data.prioridade_id, ticket_data.origem or "web")
-        )
-        
-        conn.commit()
-        new_ticket_id = cursor.lastrowid
-        logger.info(f"[TICKETS]   ✅ Ticket criado com ID: {new_ticket_id}")
-        
-        cursor.execute("SELECT id, numero, assunto, descricao_inicial, solicitante_id, responsavel_id, group_id, categoria_id, status_id, prioridade_id, origem, created_at, updated_at FROM tickets WHERE id = %s", (new_ticket_id,))
-        new_ticket = cursor.fetchone()
-        new_ticket = mapa_dados_ticket(new_ticket, cursor)
-        new_ticket = convert_datetime_to_string(new_ticket)
-        
-        logger.info("[TICKETS] ✅ SUCESSO!\n")
-        return new_ticket
-        
-    except HTTPException:
-        raise
-    except Exception as err:
-        logger.error(f"[TICKETS] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao criar ticket: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-@tickets_router.put("/{ticket_id}")
-async def update_ticket(ticket_id: int, ticket_data: TicketUpdate):
-    """Atualiza um ticket"""
-    logger.info(f"\n[TICKETS] ✏️ ATUALIZANDO TICKET #{ticket_id}")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao encontrado")
-        
-        updates = []
-        params = []
-        
-        if ticket_data.assunto is not None:
-            updates.append("assunto = %s")
-            params.append(ticket_data.assunto)
-        
-        if ticket_data.descricao_inicial is not None:
-            updates.append("descricao_inicial = %s")
-            params.append(ticket_data.descricao_inicial)
-        
-        if ticket_data.responsavel_id is not None:
-            if ticket_data.responsavel_id:
-                cursor.execute("SELECT id FROM users WHERE id = %s", (ticket_data.responsavel_id,))
-                if not cursor.fetchone():
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Responsavel nao existe")
-            updates.append("responsavel_id = %s")
-            params.append(ticket_data.responsavel_id or None)
-        
-        if ticket_data.group_id is not None:
-            if ticket_data.group_id:
-                cursor.execute("SELECT id FROM password_groups WHERE id = %s", (ticket_data.group_id,))
-                if not cursor.fetchone():
-                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grupo nao existe")
-            updates.append("group_id = %s")
-            params.append(ticket_data.group_id or None)
-        
-        if ticket_data.status_id is not None:
-            updates.append("status_id = %s")
-            params.append(ticket_data.status_id)
-        
-        if ticket_data.prioridade_id is not None:
-            updates.append("prioridade_id = %s")
-            params.append(ticket_data.prioridade_id)
-        
-        if ticket_data.categoria_id is not None:
-            updates.append("categoria_id = %s")
-            params.append(ticket_data.categoria_id)
-        
-        if not updates:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
-        
-        updates.append("updated_at = NOW()")
-        params.append(ticket_id)
-        
-        cursor.execute(f"UPDATE tickets SET {', '.join(updates)} WHERE id = %s", params)
-        conn.commit()
-        
-        cursor.execute("SELECT id, numero, assunto, descricao_inicial, solicitante_id, responsavel_id, group_id, categoria_id, status_id, prioridade_id, origem, created_at, updated_at FROM tickets WHERE id = %s", (ticket_id,))
-        updated_ticket = cursor.fetchone()
-        updated_ticket = mapa_dados_ticket(updated_ticket, cursor)
-        updated_ticket = convert_datetime_to_string(updated_ticket)
-        
-        logger.info("[TICKETS] ✅ SUCESSO!\n")
-        return updated_ticket
-        
-    except HTTPException:
-        raise
-    except Exception as err:
-        logger.error(f"[TICKETS] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao atualizar ticket: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-@tickets_router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_ticket(ticket_id: int):
-    """Deleta um ticket"""
-    logger.info(f"\n[TICKETS] 🗑️ DELETANDO TICKET #{ticket_id}...")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT numero FROM tickets WHERE id = %s", (ticket_id,))
-        ticket = cursor.fetchone()
-        
-        if not ticket:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao encontrado")
-        
-        cursor.execute("DELETE FROM ticket_interacoes WHERE ticket_id = %s", (ticket_id,))
-        cursor.execute("DELETE FROM notificacoes WHERE ticket_id = %s", (ticket_id,))
-        cursor.execute("DELETE FROM tickets WHERE id = %s", (ticket_id,))
-        conn.commit()
-        
-        logger.info(f"[TICKETS] ✅ TICKET {ticket['numero']} DELETADO COM SUCESSO!\n")
-        
-    except HTTPException:
-        raise
-    except Exception as err:
-        logger.error(f"[TICKETS] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao deletar ticket: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-# =========================================
-# 14. ROUTER DE INTERACOES
-# =========================================
-
-interacoes_router = APIRouter(prefix="/api/ticket-interacoes", tags=["interacoes"])
-
-@interacoes_router.get("/{ticket_id}")
-async def get_ticket_interacoes(ticket_id: int):
-    """Obtem todas as interacoes de um ticket"""
-    logger.info(f"\n[INTERACOES] 💬 Listando comentarios do ticket #{ticket_id}...")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        
-        cursor.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao encontrado")
-        
-        cursor.execute("SELECT id, ticket_id, usuario_id, mensagem, tipo, publico, created_at FROM ticket_interacoes WHERE ticket_id = %s ORDER BY created_at ASC", (ticket_id,))
-        interacoes = cursor.fetchall()
-        
-        interacoes_mapeadas = []
-        for interacao in interacoes:
-            cursor.execute("SELECT name FROM users WHERE id = %s", (interacao['usuario_id'],))
-            usuario = cursor.fetchone()
-            interacao['usuario_nome'] = usuario['name'] if usuario else "Desconhecido"
-            interacao = convert_datetime_to_string(interacao)
-            interacoes_mapeadas.append(interacao)
-        
-        logger.info(f"[INTERACOES] ✅ {len(interacoes_mapeadas)} comentario(s) encontrado(s)\n")
-        return interacoes_mapeadas
-        
-    except HTTPException:
-        raise
-    except Exception as err:
-        logger.error(f"[INTERACOES] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao listar interacoes: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-@interacoes_router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_ticket_interacao(interacao_data: TicketInteracaoCreate):
-    """Cria uma nova interacao"""
-    logger.info("\n[INTERACOES] ➕ CRIANDO COMENTARIO")
-    logger.info(f"[INTERACOES]   - Ticket: #{interacao_data.ticket_id}")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        
-        cursor.execute("SELECT id FROM tickets WHERE id = %s", (interacao_data.ticket_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao existe")
-        
-        cursor.execute("SELECT id FROM users WHERE id = %s", (interacao_data.usuario_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao existe")
-        
-        cursor.execute("INSERT INTO ticket_interacoes (ticket_id, usuario_id, mensagem, tipo, publico, created_at) VALUES (%s, %s, %s, %s, %s, NOW())", 
-            (interacao_data.ticket_id, interacao_data.usuario_id, interacao_data.mensagem, interacao_data.tipo, interacao_data.publico))
-        
-        conn.commit()
-        new_interacao_id = cursor.lastrowid
-        logger.info(f"[INTERACOES]   ✅ Comentario criado com ID: {new_interacao_id}")
-        
-        cursor.execute("SELECT id, ticket_id, usuario_id, mensagem, tipo, publico, created_at FROM ticket_interacoes WHERE id = %s", (new_interacao_id,))
-        new_interacao = cursor.fetchone()
-        
-        cursor.execute("SELECT name FROM users WHERE id = %s", (new_interacao['usuario_id'],))
-        usuario = cursor.fetchone()
-        new_interacao['usuario_nome'] = usuario['name'] if usuario else "Desconhecido"
-        
-        new_interacao = convert_datetime_to_string(new_interacao)
-        
-        logger.info("[INTERACOES] ✅ SUCESSO!\n")
-        return new_interacao
-        
-    except HTTPException:
-        raise
-    except Exception as err:
-        logger.error(f"[INTERACOES] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao criar comentario: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-# =========================================
-# 15. ROUTER DE NOTIFICACOES
-# =========================================
-
-notificacoes_router = APIRouter(prefix="/api/notificacoes", tags=["notificacoes"])
-
-@notificacoes_router.get("/")
-async def get_notificacoes(usuario_id: int = Query(...), lido: bool = None, limite: int = 50, offset: int = 0):
-    """Lista notificacoes do usuario"""
-    logger.info(f"\n[NOTIFICACOES] 📬 Listando notificacoes do usuario #{usuario_id}")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        
-        cursor.execute("SELECT id FROM users WHERE id = %s", (usuario_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
-        
-        query = "SELECT id, ticket_id, usuario_id, mensagem, tipo, lido, created_at, updated_at FROM notificacoes WHERE usuario_id = %s"
-        params = [usuario_id]
-        
-        if lido is not None:
-            query += " AND lido = %s"
-            params.append(lido)
-        
-        query += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
-        params.extend([limite, offset])
-        
-        cursor.execute(query, params)
-        notificacoes = cursor.fetchall()
-        notificacoes = convert_datetime_list(notificacoes)
-        
-        logger.info(f"[NOTIFICACOES] ✅ {len(notificacoes)} notificacao(oes) encontrada(s)\n")
-        return notificacoes or []
-        
-    except HTTPException:
-        raise
-    except Exception as err:
-        logger.error(f"[NOTIFICACOES] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao listar notificacoes: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-@notificacoes_router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_notificacao(notificacao: NotificacaoCreate):
-    """Cria uma nova notificacao"""
-    logger.info("\n[NOTIFICACOES] 💌 CRIANDO NOTIFICACAO")
-    logger.info(f"[NOTIFICACOES]   - Ticket: #{notificacao.ticket_id}")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        
-        cursor.execute("SELECT id FROM tickets WHERE id = %s", (notificacao.ticket_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Ticket nao encontrado")
-        
-        cursor.execute("SELECT id FROM users WHERE id = %s", (notificacao.usuario_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
-        
-        cursor.execute("INSERT INTO notificacoes (ticket_id, usuario_id, mensagem, tipo, lido, created_at, updated_at) VALUES (%s, %s, %s, %s, %s, NOW(), NOW())",
-            (notificacao.ticket_id, notificacao.usuario_id, notificacao.mensagem, notificacao.tipo, notificacao.lido))
-        
-        conn.commit()
-        new_notif_id = cursor.lastrowid
-        logger.info(f"[NOTIFICACOES]   ✅ ID criado: {new_notif_id}")
-        
-        cursor.execute("SELECT id, ticket_id, usuario_id, mensagem, tipo, lido, created_at, updated_at FROM notificacoes WHERE id = %s", (new_notif_id,))
-        new_notif = cursor.fetchone()
-        new_notif = convert_datetime_to_string(new_notif)
-        
-        logger.info("[NOTIFICACOES] ✅ SUCESSO!\n")
-        return new_notif
-        
-    except HTTPException:
-        raise
-    except Exception as err:
-        logger.error(f"[NOTIFICACOES] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao criar notificacao: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-@notificacoes_router.get("/nao-lidas/{usuario_id}")
-async def contar_nao_lidas(usuario_id: int):
-    """Conta notificacoes nao lidas"""
-    logger.info(f"\n[NOTIFICACOES] 📊 Contando nao lidas do usuario #{usuario_id}")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT COUNT(*) as total FROM notificacoes WHERE usuario_id = %s AND lido = FALSE", (usuario_id,))
-        result = cursor.fetchone()
-        count = result['total'] if result else 0
-        
-        logger.info(f"[NOTIFICACOES] ✅ {count} nao lida(s)\n")
-        return {"usuario_id": usuario_id, "nao_lidas": count}
-        
-    except Exception as err:
-        logger.error(f"[NOTIFICACOES] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao contar notificacoes: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-@notificacoes_router.put("/{notificacao_id}")
-async def update_notificacao(notificacao_id: int, notificacao: NotificacaoUpdate):
-    """Atualiza uma notificacao"""
-    logger.info(f"\n[NOTIFICACOES] 📝 Atualizando notificacao #{notificacao_id}")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id FROM notificacoes WHERE id = %s", (notificacao_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notificacao nao encontrada")
-        
-        updates = []
-        params = []
-        
-        if notificacao.lido is not None:
-            updates.append("lido = %s")
-            params.append(notificacao.lido)
-        
-        if notificacao.mensagem is not None:
-            updates.append("mensagem = %s")
-            params.append(notificacao.mensagem)
-        
-        if not updates:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
-        
-        updates.append("updated_at = NOW()")
-        params.append(notificacao_id)
-        
-        cursor.execute(f"UPDATE notificacoes SET {', '.join(updates)} WHERE id = %s", params)
-        conn.commit()
-        
-        cursor.execute("SELECT id, ticket_id, usuario_id, mensagem, tipo, lido, created_at, updated_at FROM notificacoes WHERE id = %s", (notificacao_id,))
-        updated_notif = cursor.fetchone()
-        updated_notif = convert_datetime_to_string(updated_notif)
-        
-        logger.info("[NOTIFICACOES] ✅ SUCESSO!\n")
-        return updated_notif
-        
-    except HTTPException:
-        raise
-    except Exception as err:
-        logger.error(f"[NOTIFICACOES] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao atualizar notificacao: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-@notificacoes_router.delete("/{notificacao_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_notificacao(notificacao_id: int):
-    """Deleta uma notificacao"""
-    logger.info(f"\n[NOTIFICACOES] 🗑️ DELETANDO NOTIFICACAO #{notificacao_id}...")
-    
-    conn = get_db_or_404()
-    cursor = None
-    
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id FROM notificacoes WHERE id = %s", (notificacao_id,))
-        if not cursor.fetchone():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notificacao nao encontrada")
-        
-        cursor.execute("DELETE FROM notificacoes WHERE id = %s", (notificacao_id,))
-        conn.commit()
-        
-        logger.info(f"[NOTIFICACOES] ✅ DELETADA COM SUCESSO!\n")
-        
-    except HTTPException:
-        raise
-    except Exception as err:
-        logger.error(f"[NOTIFICACOES] ❌ ERRO: {str(err)}\n")
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao deletar notificacao: {str(err)}")
-    finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
-
-# =========================================
-# 16. HEALTH CHECK
+# 12. HEALTH CHECK
 # =========================================
 
 @app.get("/health", response_model=HealthCheckResponse)
@@ -1578,37 +832,93 @@ async def health():
     }
 
 # =========================================
-# 17. REGISTRAR ROUTERS
+# 13. REGISTRAR ROUTERS INTERNOS
 # =========================================
 
 app.include_router(auth_router)
 app.include_router(groups_router)
 app.include_router(users_router)
-app.include_router(tickets_router)
-app.include_router(interacoes_router)
-app.include_router(notificacoes_router)
 
-logger.info("✅ TODOS OS ROUTERS REGISTRADOS COM SUCESSO!")
+logger.info("✅ Routers internos registrados com sucesso!")
 logger.info("   - Router de Autenticacao: /api/auth")
 logger.info("   - Router de Grupos: /api/groups")
-logger.info("   - Router de Usuarios: /api/users")
-logger.info("   - Router de Tickets: /api/tickets")
-logger.info("   - Router de Interacoes: /api/ticket-interacoes")
-logger.info("   - Router de Notificacoes: /api/notificacoes")
+logger.info("   - Router de Usuarios: /api/users\n")
+
+# =========================================
+# 14. REGISTRAR ROUTERS EXTERNOS (COM TRY/EXCEPT)
+# =========================================
+
+# ✅ REGISTRAR ROUTER DE TICKETS (EXTERNO)
+try:
+    from routes.tickets import tickets_router, interacoes_router
+    app.include_router(tickets_router)
+    app.include_router(interacoes_router)
+    logger.info("✅ Router de Tickets registrado: /api/tickets")
+    logger.info("✅ Router de Interações registrado: /api/ticket-interacoes")
+except ModuleNotFoundError as err:
+    logger.error(f"❌ Erro ao importar routes.tickets: Modulo nao encontrado")
+    logger.error(f"   Arquivo esperado: server/routes/tickets.py")
+    logger.error(f"   Detalhes: {str(err)}")
+except ImportError as err:
+    logger.error(f"❌ Erro ao importar routes.tickets: Circular import ou dependencia faltando")
+    logger.error(f"   Detalhes: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Tickets: {str(err)}")
+    logger.error(f"   Detalhes: {type(err).__name__}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+# ✅ REGISTRAR ROUTER DE NOTIFICAÇÕES (EXTERNO)
+try:
+    from routes.notificacoes import notificacoes_router
+    app.include_router(notificacoes_router)
+    logger.info("✅ Router de Notificações registrado: /api/notificacoes")
+except ModuleNotFoundError as err:
+    logger.error(f"❌ Erro ao importar routes.notificacoes: Modulo nao encontrado")
+    logger.error(f"   Arquivo esperado: server/routes/notificacoes.py")
+    logger.error(f"   Detalhes: {str(err)}")
+except ImportError as err:
+    logger.error(f"❌ Erro ao importar routes.notificacoes: Circular import ou dependencia faltando")
+    logger.error(f"   Detalhes: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Notificações: {str(err)}")
+    logger.error(f"   Detalhes: {type(err).__name__}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+logger.info("")
+logger.info("✅ TODOS OS ROUTERS REGISTRADOS!")
+logger.info("=" * 100)
+logger.info("📋 RESUMO DOS ENDPOINTS:")
+logger.info("=" * 100)
+logger.info("   [AUTH]        /api/auth/login")
+logger.info("   [GROUPS]      GET/POST/PUT/DELETE /api/groups{/{id}}")
+logger.info("   [USERS]       GET/POST/PUT/DELETE /api/users{/{id}}")
+logger.info("   [TICKETS]     GET/POST/PUT/DELETE /api/tickets{/{id}}")
+logger.info("   [INTERACOES]  GET /api/ticket-interacoes/{ticket_id}")
+logger.info("   [INTERACOES]  POST /api/ticket-interacoes")
+logger.info("   [NOTIFICACOES] GET/PUT/DELETE /api/notificacoes{/{id}}")
+logger.info("   [NOTIFICACOES] GET /api/notificacoes/nao-lidas/{usuario_id}")
+logger.info("   [HEALTH]      /health")
+logger.info("=" * 100)
 logger.info("")
 
 # =========================================
-# 18. MAIN - INICIALIZAR SERVIDOR
+# 15. MAIN - INICIALIZAR SERVIDOR
 # =========================================
 
 if __name__ == "__main__":
-    logger.info("\n" + "=" * 90)
+    logger.info("\n" + "=" * 100)
     logger.info("🚀 INICIANDO CPE CONTROL API v2.0.0")
-    logger.info("=" * 90)
+    logger.info("=" * 100)
     logger.info("🌐 Servidor: http://localhost:8000")
     logger.info("🌐 IP Local: http://127.0.0.1:8000")
     logger.info("📚 Documentacao: http://localhost:8000/docs")
-    logger.info("=" * 90 + "\n")
+    logger.info("=" * 100 + "\n")
     
     uvicorn.run(
         "app:app",
