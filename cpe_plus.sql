@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Tempo de geração: 25/03/2026 às 19:00
+-- Tempo de geração: 31/03/2026 às 14:25
 -- Versão do servidor: 9.1.0
 -- Versão do PHP: 8.3.14
 
@@ -136,14 +136,50 @@ CREATE TABLE IF NOT EXISTS `notificacoes` (
   KEY `idx_usuario_lido` (`usuario_id`,`lido`) COMMENT 'Busca rápida de notificações não lidas por usuário',
   KEY `idx_usuario_criado` (`usuario_id`,`created_at`) COMMENT 'Timeline de notificações por data',
   KEY `idx_ticket_id` (`ticket_id`) COMMENT 'Buscar notificações de um ticket específico'
-) ENGINE=MyISAM AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=60 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 --
 -- Despejando dados para a tabela `notificacoes`
 --
 
 INSERT INTO `notificacoes` (`id`, `ticket_id`, `usuario_id`, `mensagem`, `tipo`, `lido`, `created_at`, `updated_at`) VALUES
-(1, 4, 19, 'Administrador respondeu seu chamado: Preciso de um periferico', 'respondido', 1, '2026-03-23 20:27:40', '2026-03-25 16:11:29');
+(36, 8, 19, 'Comentário interno no ticket #SUP-2026-00005: isso aqui vou ter que ver mais tarde faça um comentario interno para me lembrar', 'comentario_interno', 1, '2026-03-30 19:07:39', '2026-03-30 19:07:51'),
+(12, 7, 17, 'Ticket atribuído a 15', 'atribuido', 0, '2026-03-30 18:11:35', '2026-03-30 18:11:35'),
+(34, 9, 19, 'Ticket atribuído a 15', 'atribuido', 1, '2026-03-30 18:53:49', '2026-03-30 18:54:01'),
+(18, 8, 17, 'Novo ticket: \"novo teste de notificação tarde\" de Sistema', 'ticket_criado', 0, '2026-03-30 18:31:28', '2026-03-30 18:31:28'),
+(9, 7, 17, 'Novo ticket: \"novo ticket de teste\" de Sistema', 'ticket_criado', 0, '2026-03-30 18:11:21', '2026-03-30 18:11:21'),
+(35, 9, 19, 'Nova resposta no ticket #SUP-2026-00006: já esta sendo atendido', 'nova_resposta', 1, '2026-03-30 18:54:14', '2026-03-30 18:54:30'),
+(33, 9, 17, 'Ticket atribuído a 15', 'atribuido', 0, '2026-03-30 18:53:49', '2026-03-30 18:53:49'),
+(32, 9, 15, 'Ticket atribuído a 15', 'atribuido', 1, '2026-03-30 18:53:49', '2026-03-30 19:00:34'),
+(31, 9, 19, 'Novo ticket: \"trocar mouse e teclado\" de Sistema', 'ticket_criado', 1, '2026-03-30 18:52:31', '2026-03-30 18:54:01'),
+(21, 8, 17, 'Ticket atribuído a 15', 'atribuido', 0, '2026-03-30 18:31:53', '2026-03-30 18:31:53'),
+(29, 9, 15, 'Novo ticket: \"trocar mouse e teclado\" de Sistema', 'ticket_criado', 1, '2026-03-30 18:52:31', '2026-03-30 18:53:17'),
+(30, 9, 17, 'Novo ticket: \"trocar mouse e teclado\" de Sistema', 'ticket_criado', 0, '2026-03-30 18:52:31', '2026-03-30 18:52:31'),
+(27, 8, 19, 'Comentário interno no ticket #SUP-2026-00005: interno', 'comentario_interno', 1, '2026-03-30 18:47:48', '2026-03-30 18:48:08'),
+(28, 8, 20, 'Comentário interno no ticket #SUP-2026-00005: interno', 'comentario_interno', 0, '2026-03-30 18:47:48', '2026-03-30 18:47:48'),
+(37, 8, 20, 'Comentário interno no ticket #SUP-2026-00005: isso aqui vou ter que ver mais tarde faça um comentario interno para me lembrar', 'comentario_interno', 0, '2026-03-30 19:07:39', '2026-03-30 19:07:39'),
+(38, 8, 19, 'Status alterado para 3', 'status_alterado', 1, '2026-03-30 19:08:34', '2026-03-30 19:08:48'),
+(39, 8, 20, 'Comentário interno no ticket #SUP-2026-00005: interno teste 2', 'comentario_interno', 0, '2026-03-30 19:38:52', '2026-03-30 19:38:52'),
+(40, 8, 19, 'Nova resposta no ticket #SUP-2026-00005: resposta publica teste', 'nova_resposta', 1, '2026-03-30 19:39:17', '2026-03-30 19:39:21'),
+(41, 8, 15, 'Nova resposta no ticket #SUP-2026-00005: teste recebido', 'nova_resposta', 1, '2026-03-30 19:39:40', '2026-03-30 19:39:49'),
+(42, 10, 15, 'Novo ticket: \"teste de ticket id\" de Sistema', 'ticket_criado', 1, '2026-03-30 22:08:22', '2026-03-30 22:15:27'),
+(43, 10, 17, 'Novo ticket: \"teste de ticket id\" de Sistema', 'ticket_criado', 0, '2026-03-30 22:08:22', '2026-03-30 22:08:22'),
+(44, 10, 19, 'Novo ticket: \"teste de ticket id\" de Sistema', 'ticket_criado', 1, '2026-03-30 22:08:22', '2026-03-30 22:15:47'),
+(45, 11, 15, 'Novo ticket: \"chamado\" de Sistema', 'ticket_criado', 1, '2026-03-30 22:14:09', '2026-03-30 22:15:30'),
+(46, 11, 17, 'Novo ticket: \"chamado\" de Sistema', 'ticket_criado', 0, '2026-03-30 22:14:09', '2026-03-30 22:14:09'),
+(47, 11, 19, 'Novo ticket: \"chamado\" de Sistema', 'ticket_criado', 1, '2026-03-30 22:14:09', '2026-03-30 22:15:47'),
+(48, 11, 15, 'Ticket atribuído a 15', 'atribuido', 0, '2026-03-30 22:15:39', '2026-03-30 22:15:39'),
+(49, 11, 17, 'Ticket atribuído a 15', 'atribuido', 0, '2026-03-30 22:15:39', '2026-03-30 22:15:39'),
+(50, 11, 19, 'Ticket atribuído a 15', 'atribuido', 0, '2026-03-30 22:15:39', '2026-03-30 22:15:39'),
+(51, 13, 15, 'Novo ticket: \"teste ticket alfa numerico\" de Sistema', 'ticket_criado', 0, '2026-03-30 22:46:33', '2026-03-30 22:46:33'),
+(52, 13, 17, 'Novo ticket: \"teste ticket alfa numerico\" de Sistema', 'ticket_criado', 0, '2026-03-30 22:46:33', '2026-03-30 22:46:33'),
+(53, 13, 19, 'Novo ticket: \"teste ticket alfa numerico\" de Sistema', 'ticket_criado', 0, '2026-03-30 22:46:33', '2026-03-30 22:46:33'),
+(54, 14, 15, 'Novo ticket: \"novo teste de geração de ticket alfa\" de Sistema', 'ticket_criado', 0, '2026-03-30 22:47:18', '2026-03-30 22:47:18'),
+(55, 14, 17, 'Novo ticket: \"novo teste de geração de ticket alfa\" de Sistema', 'ticket_criado', 0, '2026-03-30 22:47:18', '2026-03-30 22:47:18'),
+(56, 14, 19, 'Novo ticket: \"novo teste de geração de ticket alfa\" de Sistema', 'ticket_criado', 0, '2026-03-30 22:47:18', '2026-03-30 22:47:18'),
+(57, 15, 15, 'Novo ticket: \"segundo teste de ticket 2\" de Sistema', 'ticket_criado', 0, '2026-03-31 13:53:14', '2026-03-31 13:53:14'),
+(58, 15, 17, 'Novo ticket: \"segundo teste de ticket 2\" de Sistema', 'ticket_criado', 0, '2026-03-31 13:53:14', '2026-03-31 13:53:14'),
+(59, 15, 19, 'Novo ticket: \"segundo teste de ticket 2\" de Sistema', 'ticket_criado', 0, '2026-03-31 13:53:14', '2026-03-31 13:53:14');
 
 -- --------------------------------------------------------
 
@@ -199,7 +235,7 @@ CREATE TABLE IF NOT EXISTS `password_groups` (
   `user_group_id` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `idx_user_id` (`user_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Despejando dados para a tabela `password_groups`
@@ -208,7 +244,8 @@ CREATE TABLE IF NOT EXISTS `password_groups` (
 INSERT INTO `password_groups` (`id`, `user_id`, `name`, `created_at`, `updated_at`, `user_group_id`) VALUES
 (1, 0, 'Suporte', '2026-03-18 15:34:25', '2026-03-18 15:34:25', NULL),
 (2, 0, 'Financeiro', '2026-03-18 19:20:43', '2026-03-18 19:20:43', NULL),
-(3, 0, 'Assistencia', '2026-03-25 13:35:51', '2026-03-25 13:35:51', NULL);
+(3, 0, 'Assistencia', '2026-03-25 13:35:51', '2026-03-25 13:35:51', NULL),
+(4, 0, 'faturamento', '2026-03-30 16:15:10', '2026-03-30 16:15:10', NULL);
 
 -- --------------------------------------------------------
 
@@ -241,6 +278,7 @@ DROP TABLE IF EXISTS `tickets`;
 CREATE TABLE IF NOT EXISTS `tickets` (
   `id` bigint UNSIGNED NOT NULL AUTO_INCREMENT,
   `numero` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `id_alfanumerica` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `solicitante_id` bigint NOT NULL,
   `responsavel_id` bigint DEFAULT NULL,
   `group_id` int NOT NULL,
@@ -262,6 +300,7 @@ CREATE TABLE IF NOT EXISTS `tickets` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `numero` (`numero`),
   UNIQUE KEY `uk_numero` (`numero`),
+  UNIQUE KEY `id_alfanumerica` (`id_alfanumerica`),
   KEY `idx_solicitante_id` (`solicitante_id`),
   KEY `idx_responsavel_id` (`responsavel_id`),
   KEY `idx_group_id` (`group_id`),
@@ -274,17 +313,16 @@ CREATE TABLE IF NOT EXISTS `tickets` (
   KEY `idx_origem` (`origem`),
   KEY `idx_comp_group_status` (`group_id`,`status_id`,`created_at`),
   KEY `idx_comp_responsavel_status` (`responsavel_id`,`status_id`,`created_at`),
-  KEY `idx_comp_status_criacao` (`status_id`,`created_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `idx_comp_status_criacao` (`status_id`,`created_at`),
+  KEY `idx_id_alfanumerica` (`id_alfanumerica`)
+) ENGINE=InnoDB AUTO_INCREMENT=16 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Despejando dados para a tabela `tickets`
 --
 
-INSERT INTO `tickets` (`id`, `numero`, `solicitante_id`, `responsavel_id`, `group_id`, `categoria_id`, `subcategoria_id`, `status_id`, `prioridade_id`, `assunto`, `descricao_inicial`, `origem`, `sla_primeira_resposta_em`, `sla_resolucao_em`, `primeira_resposta_em`, `resolvido_em`, `fechado_em`, `ultimo_evento_em`, `created_at`, `updated_at`) VALUES
-(4, 'SUP-2026-00001', 19, 15, 1, NULL, NULL, 1, 1, 'Preciso de um periferico', 'desc ok', 'portal', NULL, NULL, NULL, NULL, NULL, '2026-03-20 14:40:58', '2026-03-20 17:38:58', '2026-03-24 20:07:54'),
-(5, '2026-00001', 15, 19, 1, NULL, NULL, 1, 2, 'segundo teste de ticket 2', 'segundo teste', '', NULL, NULL, NULL, NULL, NULL, '2026-03-24 12:55:26', '2026-03-24 15:55:26', '2026-03-24 19:08:58'),
-(6, '2026-00002', 19, 20, 1, NULL, NULL, 1, 2, 'meu chamado teste222', 'chamado jonathan de teste de notificação', '', NULL, NULL, NULL, NULL, NULL, '2026-03-24 17:15:13', '2026-03-24 20:15:13', '2026-03-25 16:26:07');
+INSERT INTO `tickets` (`id`, `numero`, `id_alfanumerica`, `solicitante_id`, `responsavel_id`, `group_id`, `categoria_id`, `subcategoria_id`, `status_id`, `prioridade_id`, `assunto`, `descricao_inicial`, `origem`, `sla_primeira_resposta_em`, `sla_resolucao_em`, `primeira_resposta_em`, `resolvido_em`, `fechado_em`, `ultimo_evento_em`, `created_at`, `updated_at`) VALUES
+(15, 'SUP-2026-00001', NULL, 15, NULL, 1, NULL, NULL, 1, 2, 'segundo teste de ticket 2', 'teste numercao', '', NULL, NULL, NULL, NULL, NULL, '2026-03-31 10:53:14', '2026-03-31 13:53:14', '2026-03-31 13:53:14');
 
 -- --------------------------------------------------------
 
@@ -334,20 +372,7 @@ CREATE TABLE IF NOT EXISTS `ticket_interacoes` (
   KEY `idx_created_at` (`created_at`),
   KEY `idx_comp_ticket_created` (`ticket_id`,`created_at`),
   KEY `idx_ticket_publico_criacao` (`ticket_id`,`publico`,`created_at`) COMMENT 'Carregar interações públicas/privadas de um ticket'
-) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Despejando dados para a tabela `ticket_interacoes`
---
-
-INSERT INTO `ticket_interacoes` (`id`, `ticket_id`, `usuario_id`, `tipo`, `publico`, `mensagem`, `created_at`) VALUES
-(17, 4, 15, '', 1, 'iopp', '2026-03-24 15:45:14'),
-(18, 5, 15, '', 1, 'primeira interação', '2026-03-24 15:55:54'),
-(19, 5, 15, '', 0, 'interação interna', '2026-03-24 15:56:05'),
-(20, 4, 15, '', 1, 'teste notification', '2026-03-24 20:08:06'),
-(21, 6, 15, '', 1, 'primeiro teste de notificação', '2026-03-24 20:15:46'),
-(22, 6, 15, '', 1, 'chamado jonathan de teste de notificação 2', '2026-03-24 20:43:00'),
-(23, 6, 15, '', 1, 'teste 1234', '2026-03-25 16:10:48');
+) ENGINE=InnoDB AUTO_INCREMENT=42 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 
@@ -453,7 +478,7 @@ INSERT INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `sector`, `
 (15, 'Administrador', 'admin@cpe.com.br', '$2b$12$cUzgsKcnlFpM4RLi4s6ice887vhB4RqDprqSCAeeTLpCiyhnjLkZ.', 'ADMIN', NULL, NULL, 1, '2026-03-18 21:01:36', 'admin', NULL, 1),
 (17, 'Manager System', 'manager@cpe.com.br', '$2b$12$e5owWqUGPxvGMQdM3dUVDe2O0k0vqCqRVJr.qiHqnINNk.G9K2i3O', '', NULL, NULL, 1, '2026-03-18 21:01:36', 'manager', NULL, 1),
 (19, 'jonathan', 'jonathan2@cpe.com.br', '$2b$12$gAsoH/SsdblwHN.kd9djQeFMXb3Kep0q8rUbfe0kNSYbPTlw.X2Xa', 'USER', NULL, NULL, 1, '2026-03-18 21:43:48', 'jonathan.lopes2', NULL, 1),
-(20, 'fernanda', 'fernandateste@cpe.com.br', '$2b$12$14PTC6nIsDE1TBi9/tOGZuDT2WmTMAB3R6mdqXCZ6mMGnahe8k4Xe', 'ADMIN', NULL, NULL, 1, '2026-03-18 22:19:27', 'fernanda.teste', NULL, 2);
+(20, 'fernanda', 'fernandateste@cpe.com.br', '$2b$12$14PTC6nIsDE1TBi9/tOGZuDT2WmTMAB3R6mdqXCZ6mMGnahe8k4Xe', 'ADMIN', NULL, NULL, 1, '2026-03-18 22:19:27', 'fernanda.teste', NULL, 3);
 
 -- --------------------------------------------------------
 
@@ -463,17 +488,17 @@ INSERT INTO `users` (`id`, `name`, `email`, `password_hash`, `role`, `sector`, `
 --
 DROP VIEW IF EXISTS `vw_historico_notificacoes`;
 CREATE TABLE IF NOT EXISTS `vw_historico_notificacoes` (
-`created_at` timestamp
-,`id` int
-,`lido` tinyint(1)
-,`mensagem` varchar(255)
-,`ticket_assunto` varchar(255)
+`id` int
 ,`ticket_id` int
 ,`ticket_numero` varchar(20)
-,`tipo` varchar(50)
-,`updated_at` timestamp
+,`ticket_assunto` varchar(255)
 ,`usuario_id` int
 ,`usuario_nome` varchar(120)
+,`mensagem` varchar(255)
+,`tipo` varchar(50)
+,`lido` tinyint(1)
+,`created_at` timestamp
+,`updated_at` timestamp
 );
 
 -- --------------------------------------------------------
@@ -484,14 +509,14 @@ CREATE TABLE IF NOT EXISTS `vw_historico_notificacoes` (
 --
 DROP VIEW IF EXISTS `vw_notificacoes_nao_lidas`;
 CREATE TABLE IF NOT EXISTS `vw_notificacoes_nao_lidas` (
-`atribuidos` bigint
-,`finalizados` bigint
-,`respondidos` bigint
-,`total_nao_lidas` bigint
-,`transferidos` bigint
-,`ultima_notificacao` timestamp
-,`usuario_id` bigint
+`usuario_id` bigint
 ,`usuario_nome` varchar(120)
+,`total_nao_lidas` bigint
+,`atribuidos` bigint
+,`respondidos` bigint
+,`transferidos` bigint
+,`finalizados` bigint
+,`ultima_notificacao` timestamp
 );
 
 -- --------------------------------------------------------

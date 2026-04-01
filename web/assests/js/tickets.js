@@ -1,3 +1,209 @@
+// =========================================
+// 0. GERAÇÃO DE ID ALFANUMÉRICA
+// =========================================
+
+/**
+ * Gera ID alfanumérica única no formato: AA9999B9C0
+ * 
+ * Formato:
+ * - AA (2 letras): código do setor (ex: TI, RH, FN, CM)
+ * - 9999 (4 números): número sequencial do ticket (incremental, 0001-9999)
+ * - B (1 letra): tipo/prioridade (U=urgente, N=normal, A=alta, B=baixa)
+ * - 9 (1 número): ano reduzido (ex: 6 para 2026)
+ * - C (1 letra): categoria ou código interno (T=técnico, A=administrativo, etc)
+ * - 0 (1 número): dígito verificador (checksum)
+ * 
+ * Total: exatamente 10 caracteres
+ * 
+ * @param {string} setor - Código do setor com 2 letras (ex: "TI", "RH", "FN")
+ * @param {string} prioridade - 1 letra indicando prioridade (ex: "U", "N", "A", "B")
+ * @param {string} categoria - 1 letra indicando categoria (ex: "T", "A", "V")
+ * @param {number} sequencial - Número sequencial do ticket (1-9999, será preenchido com zeros)
+ * @returns {string} ID formatada com exatamente 10 caracteres (ex: "TI0001U6T3")
+ * @throws {Error} Se os parâmetros forem inválidos
+ * 
+ * @example
+ * const id = gerarIdTicket("TI", "U", "T", 127);
+ * // Retorna: "TI0127U6T5" (onde 6 é o ano atual reduzido, 5 é o dígito verificador)
+ */
+function gerarIdTicket(setor, prioridade, categoria, sequencial) {
+  // ========================================
+  // 1️⃣ VALIDAÇÕES DE ENTRADA
+  // ========================================
+  
+  // Validar setor: deve ter exatamente 2 letras
+  if (!setor || typeof setor !== 'string' || setor.length !== 2) {
+    throw new Error('❌ Setor deve ter exatamente 2 letras (ex: "TI", "RH")');
+  }
+  
+  const setorUpper = setor.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(setorUpper)) {
+    throw new Error('❌ Setor deve conter apenas letras maiúsculas (ex: "TI", "RH")');
+  }
+  
+  // Validar prioridade: deve ter exatamente 1 letra
+  if (!prioridade || typeof prioridade !== 'string' || prioridade.length !== 1) {
+    throw new Error('❌ Prioridade deve ter exatamente 1 letra (ex: "U", "N", "A", "B")');
+  }
+  
+  const prioridadeUpper = prioridade.toUpperCase();
+  if (!/^[A-Z]$/.test(prioridadeUpper)) {
+    throw new Error('❌ Prioridade deve ser uma única letra maiúscula');
+  }
+  
+  // Validar categoria: deve ter exatamente 1 letra
+  if (!categoria || typeof categoria !== 'string' || categoria.length !== 1) {
+    throw new Error('❌ Categoria deve ter exatamente 1 letra (ex: "T", "A", "V")');
+  }
+  
+  const categoriaUpper = categoria.toUpperCase();
+  if (!/^[A-Z]$/.test(categoriaUpper)) {
+    throw new Error('❌ Categoria deve ser uma única letra maiúscula');
+  }
+  
+  // Validar sequencial: deve ser número entre 1 e 9999
+  const seqNum = parseInt(sequencial);
+  if (isNaN(seqNum) || seqNum < 1 || seqNum > 9999) {
+    throw new Error('❌ Sequencial deve ser um número entre 1 e 9999');
+  }
+  
+  // ========================================
+  // 2️⃣ GERAR COMPONENTES DA ID
+  // ========================================
+  
+  // Setor: AA (2 letras maiúsculas)
+  const parteSetor = setorUpper; // ex: "TI"
+  
+  // Sequencial: 9999 (4 dígitos, preenchido com zeros à esquerda)
+  const parteSequencial = String(seqNum).padStart(4, '0'); // ex: "0127"
+  
+  // Prioridade: B (1 letra maiúscula)
+  const partePrioridade = prioridadeUpper; // ex: "U"
+  
+  // Ano reduzido: 9 (último dígito do ano atual)
+  const anoAtual = new Date().getFullYear(); // ex: 2026
+  const parteAno = String(anoAtual).slice(-1); // ex: "6" (de 2026)
+  
+  // Categoria: C (1 letra maiúscula)
+  const parteCategoria = categoriaUpper; // ex: "T"
+  
+  // ========================================
+  // 3️⃣ CALCULAR DÍGITO VERIFICADOR (CHECKSUM)
+  // ========================================
+  
+  /**
+   * Calcula dígito verificador usando soma ponderada dos valores ASCII
+   * Método simples e eficaz para evitar duplicatas
+   */
+  const idSemVerificador = parteSetor + parteSequencial + partePrioridade + parteAno + parteCategoria;
+  
+  // Calcular soma ponderada dos valores ASCII
+  let somaChecksum = 0;
+  for (let i = 0; i < idSemVerificador.length; i++) {
+    const charCode = idSemVerificador.charCodeAt(i); // Código ASCII do caractere
+    const peso = (i + 1); // Peso: 1 para posição 0, 2 para posição 1, etc
+    somaChecksum += charCode * peso;
+  }
+  
+  // Dígito verificador: último dígito da soma (0-9)
+  const digitoVerificador = somaChecksum % 10;
+  
+  // ========================================
+  // 4️⃣ MONTAR ID FINAL
+  // ========================================
+  
+  const idFinal = idSemVerificador + digitoVerificador;
+  
+  // Garantir que tem exatamente 10 caracteres
+  if (idFinal.length !== 10) {
+    throw new Error(`❌ Erro ao gerar ID: tamanho incorreto (${idFinal.length} chars ao invés de 10)`);
+  }
+  
+  // ========================================
+  // 5️⃣ LOGGING E RETORNO
+  // ========================================
+  
+  console.log(`[ID_GERADOR] ✅ ID gerada com sucesso`);
+  console.log(`  - Setor:        ${parteSetor}`);
+  console.log(`  - Sequencial:   ${parteSequencial}`);
+  console.log(`  - Prioridade:   ${partePrioridade}`);
+  console.log(`  - Ano:          ${parteAno}`);
+  console.log(`  - Categoria:    ${parteCategoria}`);
+  console.log(`  - Verificador:  ${digitoVerificador}`);
+  console.log(`  - ID FINAL:     ${idFinal}`);
+  
+  return idFinal;
+}
+
+/**
+ * Valida uma ID já gerada verificando seu dígito verificador
+ * Útil para garantir integridade da ID
+ * 
+ * @param {string} id - ID a ser validada (10 caracteres)
+ * @returns {boolean} true se a ID é válida, false caso contrário
+ * 
+ * @example
+ * validarIdTicket("TI0127U6T5"); // true ou false
+ */
+function validarIdTicket(id) {
+  // Validar tamanho
+  if (!id || typeof id !== 'string' || id.length !== 10) {
+    console.warn(`[ID_VALIDADOR] ⚠️ ID inválida: tamanho incorreto`);
+    return false;
+  }
+  
+  // Extrair componentes
+  const idSemVerificador = id.substring(0, 9);
+  const verificadorOriginal = parseInt(id.charAt(9));
+  
+  // Recalcular dígito verificador
+  let somaChecksum = 0;
+  for (let i = 0; i < idSemVerificador.length; i++) {
+    const charCode = idSemVerificador.charCodeAt(i);
+    const peso = (i + 1);
+    somaChecksum += charCode * peso;
+  }
+  
+  const verificadorCalculado = somaChecksum % 10;
+  
+  // Comparar
+  const valido = verificadorOriginal === verificadorCalculado;
+  
+  if (valido) {
+    console.log(`[ID_VALIDADOR] ✅ ID válida: ${id}`);
+  } else {
+    console.warn(`[ID_VALIDADOR] ❌ ID inválida: checksum não corresponde`);
+  }
+  
+  return valido;
+}
+
+/**
+ * Extrai e exibe informações de uma ID gerada
+ * 
+ * @param {string} id - ID a ser decomposta (10 caracteres)
+ * @returns {object} Objeto com os componentes da ID
+ * 
+ * @example
+ * const info = decompurIdTicket("TI0127U6T5");
+ * // Retorna: { setor: "TI", sequencial: "0127", prioridade: "U", ano: "6", categoria: "T", verificador: "5" }
+ */
+function decompurIdTicket(id) {
+  if (!id || id.length !== 10) {
+    throw new Error('❌ ID deve ter exatamente 10 caracteres');
+  }
+  
+  return {
+    setor:        id.substring(0, 2),      // AA
+    sequencial:   id.substring(2, 6),      // 9999
+    prioridade:   id.substring(6, 7),      // B
+    ano:          id.substring(7, 8),      // 9
+    categoria:    id.substring(8, 9),      // C
+    verificador:  id.substring(9, 10),     // 0
+    completa:     id                       // AA9999B9C0
+  };
+}
+
 /**
  * CPE Control - Sistema de Gestão de Tickets
  * Cliente JavaScript para gerenciamento de tickets
@@ -365,6 +571,7 @@ async function loadTickets() {
       tickets = data.map(t => ({
         id:            t.id,
         numero:        t.numero || `#${t.id}`,
+        id_alfanumerica: t.id_alfanumerica || null,  // ✨ ADICIONAR ESTA LINHA
         title:         t.assunto || 'Sem título',
         userName:      t.solicitante_nome  || "Desconhecido",
         email:         t.solicitante_email || "sem-email",
@@ -373,7 +580,7 @@ async function loadTickets() {
         status:        mapStatusFromApi(t.status_id),
         assignedTo:    t.responsavel_id,
         assignedName:  t.responsavel_nome || "Não atribuído",
-        solicitante_id: t.solicitante_id, // ✅ guardado para checar permissão de deletar
+        solicitante_id: t.solicitante_id,
         createdAt:     formatDate(t.created_at),
         createdAtFull: t.created_at,
         updatedAt:     formatDate(t.updated_at),
@@ -406,6 +613,21 @@ function mapStatusToApi(s)      { return { 'open': 1, 'in-progress': 2, 'resolve
 function formatDate(d)          { return d ? new Date(d).toLocaleDateString('pt-BR') : 'N/A'; }
 function formatDateTime(d)      { return d ? new Date(d).toLocaleString('pt-BR')     : 'N/A'; }
 
+
+/**
+ * Mapeia prioridade de texto para código de 1 letra para ID alfanumérica
+ * @param {string} priority - Prioridade (low, medium, high, urgent)
+ * @returns {string} Código de 1 letra (B=baixa, N=normal, A=alta, U=urgente)
+ */
+function mapaPriorityToCode(priority) {
+  const map = {
+    'low':    'B',      // Baixa
+    'medium': 'N',      // Normal
+    'high':   'A',      // Alta
+    'urgent': 'U'       // Urgente
+  };
+  return map[priority] || 'N';
+}
 // =========================================
 // 11. FILTROS
 // =========================================
@@ -482,6 +704,9 @@ function renderTable() {
         <td onclick="event.stopPropagation()">
           <input type="checkbox" class="row-checkbox" value="${t.id}"
                  onchange="toggleRowSelect(${t.id}, this);" ${checked}>
+        </td>
+        <td onclick="openTicketDetail(${t.id})">
+          <strong class="text-primary">${t.id_alfanumerica || '#' + t.id}</strong>
         </td>
         <td onclick="openTicketDetail(${t.id})">
           <div class="d-flex align-items-center gap-2">
@@ -746,20 +971,22 @@ async function handleFormSubmit(e) {
   const user    = getCurrentUser();
   const userId  = getCurrentUserId();
 
+  // ✨ NÃO GERAR ID AQUI - DEIXAR PARA O BACKEND
+  // O backend vai gerar a ID alfanumérica baseada no ID real do banco
+
   const payload = {
     assunto:           title,
     descricao_inicial: description,
     prioridade_id:     mapPriorityToApi(document.getElementById("ticketPriority").value),
     group_id:          user.group_id   || user.grupo_id,
     solicitante_id:    user.id         || user.usuario_id,
+    // ❌ REMOVIDO: id_alfanumerica - será gerada no backend
     origem:            'web'
-    // responsavel_id não é enviado — o backend ignora para USER e só aceita para admin
   };
 
   let result;
   if (selectedTicketId) {
     console.log(`[TICKET] ✏️ Editando #${selectedTicketId}...`);
-    // ✅ usuario_id obrigatório no PUT
     result = await apiRequest(
       'PUT',
       `/tickets/${selectedTicketId}?usuario_id=${userId}`,
@@ -788,8 +1015,8 @@ async function loadTicketComments(ticketId) {
   console.log(`[COMENTARIOS] 📥 Carregando para ticket #${ticketId}...`);
 
   const userId = getCurrentUserId();
+  const admin = isAdmin();  // ✅ Verificar se é admin
 
-  // ✅ usuario_id enviado para o backend filtrar comentários internos para USER
   const data = await apiRequest(
     'GET',
     `/ticket-interacoes/${ticketId}?usuario_id=${userId}`
@@ -804,7 +1031,17 @@ async function loadTicketComments(ticketId) {
     return;
   }
 
-  container.innerHTML = data.map(c => `
+  // ✅ FILTRAR: USER só vê comentários públicos (publico=1)
+  // ✅ ADMIN vê tudo (público e interno)
+  const comentariosFiltrados = admin ? data : data.filter(c => c.publico === 1);
+
+  if (comentariosFiltrados.length === 0) {
+    container.innerHTML =
+      '<p class="text-muted text-center py-4">Nenhum comentário disponível</p>';
+    return;
+  }
+
+  container.innerHTML = comentariosFiltrados.map(c => `
     <div class="comment-item p-3 mb-2 rounded bg-light">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <span class="fw-bold">${c.usuario_nome || 'Desconhecido'}</span>

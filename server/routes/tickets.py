@@ -71,6 +71,93 @@ LIMITE_MAXIMO = 100
 ROLES_ADMIN = {"ADMIN", "TI", "MANAGER"}
 
 # =========================================
+# 🆔 GERAÇÃO DE ID ALFANUMÉRICA
+# =========================================
+
+def gerar_id_alfanumerica(ticket_id: int, group_id: int, cursor) -> str:
+    """
+    Gera ID alfanumérica no formato: AA9999B9C0
+    
+    Componentes:
+    - AA (2 letras): código do setor (primeiras 2 letras do nome do grupo)
+    - 9999 (4 números): ID do ticket (com zeros à esquerda)
+    - B (1 letra): prioridade (U=urgente, A=alta, N=normal, B=baixa)
+    - 9 (1 número): ano reduzido (último dígito do ano)
+    - C (1 letra): categoria (T=técnico por padrão)
+    - 0 (1 número): checksum (dígito verificador)
+    
+    Total: 10 caracteres
+    
+    Args:
+        ticket_id: ID numérico do ticket (do banco)
+        group_id: ID do grupo/setor
+        cursor: cursor do banco para consultar dados
+    
+    Returns:
+        str: ID alfanumérica formatada (ex: "TI0127U6T5")
+    """
+    
+    logger.info(f"    🆔 Gerando ID alfanumérica...")
+    logger.info(f"       - ticket_id: {ticket_id}")
+    logger.info(f"       - group_id: {group_id}")
+    
+    try:
+        # 1️⃣ OBTER CÓDIGO DO SETOR (2 letras)
+        cursor.execute("SELECT name FROM password_groups WHERE id = %s", (group_id,))
+        grupo = cursor.fetchone()
+        
+        if grupo and grupo.get("name"):
+            setor_code = grupo["name"][:2].upper()
+        else:
+            setor_code = "TI"  # Fallback
+        
+        logger.info(f"       - setor_code: {setor_code}")
+        
+        # 2️⃣ ID COM 4 DÍGITOS
+        sequencial = str(ticket_id).zfill(4)[-4:]  # Últimos 4 dígitos
+        logger.info(f"       - sequencial: {sequencial}")
+        
+        # 3️⃣ PRIORIDADE (padrão = N para Normal)
+        prioridade = "N"  # Normal
+        logger.info(f"       - prioridade: {prioridade}")
+        
+        # 4️⃣ ANO REDUZIDO (último dígito do ano)
+        ano_reduzido = str(datetime.now().year)[-1]
+        logger.info(f"       - ano_reduzido: {ano_reduzido}")
+        
+        # 5️⃣ CATEGORIA (padrão = T para Técnico)
+        categoria = "T"
+        logger.info(f"       - categoria: {categoria}")
+        
+        # 6️⃣ MONTAR ID SEM VERIFICADOR
+        id_sem_verificador = setor_code + sequencial + prioridade + ano_reduzido + categoria
+        logger.info(f"       - id_sem_verificador: {id_sem_verificador}")
+        
+        # 7️⃣ CALCULAR CHECKSUM (dígito verificador)
+        soma_checksum = 0
+        for i, char in enumerate(id_sem_verificador):
+            char_code = ord(char)
+            peso = i + 1
+            soma_checksum += char_code * peso
+        
+        dígito_verificador = soma_checksum % 10
+        logger.info(f"       - soma_checksum: {soma_checksum}")
+        logger.info(f"       - dígito_verificador: {dígito_verificador}")
+        
+        # 8️⃣ MONTAR ID FINAL
+        id_alfanumerica = id_sem_verificador + str(dígito_verificador)
+        logger.info(f"    ✅ ID alfanumérica gerada: {id_alfanumerica}")
+        
+        return id_alfanumerica
+    
+    except Exception as e:
+        logger.error(f"    ❌ Erro ao gerar ID alfanumérica: {str(e)}")
+        # Retornar uma ID genérica como fallback
+        return f"TKT{str(ticket_id).zfill(6)}"
+
+# =================Fim geração de ID ALFANUMERICA ========================#
+
+# =========================================
 # 🔧 MODELOS PYDANTIC
 # =========================================
 
@@ -390,7 +477,6 @@ async def obter_ticket(ticket_id: int = Path(..., gt=0)):
         if conexao:
             conexao.close()
 
-
 @tickets_router.post("/", status_code=status.HTTP_201_CREATED, response_model=TicketResposta)
 async def criar_ticket(payload: TicketCriar):
     log_inicio(
@@ -407,7 +493,6 @@ async def criar_ticket(payload: TicketCriar):
         validar_grupo_existe(cursor, payload.group_id)
 
         # ✅ Se o solicitante for USER, responsavel_id é ignorado.
-        # Somente ADMIN/TI/MANAGER podem abrir ticket já com responsável definido.
         role_solicitante = solicitante.get("role") or "USER"
         responsavel_id_final = None
 
@@ -422,6 +507,12 @@ async def criar_ticket(payload: TicketCriar):
         numero = gerar_numero_ticket(cursor, payload.group_id)
         status_id_inicial = 1  # Aberto
 
+        # ========================================
+        # 💬 INSERIR TICKET NO BANCO
+        # Data: 31/03/2026 16:00
+        # ========================================
+        
+        logger.info(f"  ▶️ Inserindo ticket no banco...")
         cursor.execute(
             """
             INSERT INTO tickets (
@@ -446,8 +537,35 @@ async def criar_ticket(payload: TicketCriar):
         )
         conexao.commit()
         ticket_id = cursor.lastrowid
+        logger.info(f"  ✓ Ticket inserido no banco com ID: {ticket_id}")
 
+        # ========================================
+        # 🆔 GERAR ID ALFANUMÉRICA
+        # Data: 31/03/2026 16:00
+        # ========================================
+
+        logger.info(f"  ▶️ Gerando ID alfanumérica...")
+        id_alfanumerica = gerar_id_alfanumerica(ticket_id, payload.group_id, cursor)
+        logger.info(f"  ✅ ID alfanumérica gerada: {id_alfanumerica}")
+
+        # ========================================
+        # 💾 SALVAR ID ALFANUMÉRICA NO BANCO
+        # Data: 31/03/2026 16:00
+        # ========================================
+
+        logger.info(f"  ▶️ Salvando ID alfanumérica no banco...")
+        cursor.execute(
+            "UPDATE tickets SET id_alfanumerica = %s WHERE id = %s",
+            (id_alfanumerica, ticket_id)
+        )
+        conexao.commit()
+        logger.info(f"  ✅ ID alfanumérica salva: {id_alfanumerica}")
+
+        # ========================================
         # 🔔 NOTIFICAR NOVO TICKET
+        # Data: 31/03/2026 16:00
+        # ========================================
+
         logger.info(f"  ▶️ Enviando notificações de novo ticket...")
         try:
             NotificacaoService(DB_CONFIG).notificar_novo_ticket(
@@ -460,7 +578,7 @@ async def criar_ticket(payload: TicketCriar):
         except Exception as e:
             logger.warning(f"    ⚠️ Serviço indisponível: {str(e)}")
             # Notifica o próprio solicitante que o ticket foi criado
-            criar_notificacao_no_banco(
+            criar_notificacao_multipla(
                 conexao, ticket_id, payload.solicitante_id,
                 "ticket_criado",
                 f"Seu chamado foi aberto com sucesso: {payload.assunto}"
@@ -469,7 +587,7 @@ async def criar_ticket(payload: TicketCriar):
         cursor.execute("SELECT * FROM tickets WHERE id = %s", (ticket_id,))
         ticket = convert_datetime_to_string(cursor.fetchone())
 
-        log_fim("sucesso", ticket_id=ticket_id, numero=numero)
+        log_fim("sucesso", ticket_id=ticket_id, numero=numero, id_alfanumerica=id_alfanumerica)
         return ticket
 
     except HTTPException:
@@ -684,7 +802,80 @@ async def deletar_ticket(
             cursor.close()
         if conexao:
             conexao.close()
+# ========================================
+# GET - OBTER INTERAÇÕES DE UM TICKET
+# Data: 31/03/2026 19:00
+# ========================================
 
+@interacoes_router.get("/{ticket_id}", response_model=List[InteracaoResposta])
+async def obter_interacoes(ticket_id: int = Path(..., gt=0)):
+    """
+    Obtém todas as INTERAÇÕES (comentários) de um TICKET
+    ✅ Retorna lista de interações
+    ✅ Ordena por data de criação
+    """
+    log_inicio("obter_interacoes", ticket_id=ticket_id)
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        logger.info(f"  ▶️ Buscando interações do ticket {ticket_id}...")
+        
+        # Validar se ticket existe
+        cursor.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
+        if not cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Ticket {ticket_id} não encontrado"
+            )
+
+        # Buscar interações
+        cursor.execute(
+            """
+            SELECT ti.id, ti.ticket_id, ti.usuario_id, ti.tipo, ti.publico,
+                   ti.mensagem, ti.created_at, u.name AS usuario_nome
+            FROM ticket_interacoes ti
+            LEFT JOIN users u ON ti.usuario_id = u.id
+            WHERE ti.ticket_id = %s
+            ORDER BY ti.created_at ASC
+            """,
+            (ticket_id,)
+        )
+        
+        registros = cursor.fetchall()
+        logger.info(f"  ✓ {len(registros)} interação(ões) encontrada(s)")
+
+        interacoes = [
+            {
+                "id": r["id"],
+                "ticket_id": r["ticket_id"],
+                "usuario_id": r["usuario_id"],
+                "usuario_nome": r.get("usuario_nome"),
+                "tipo": r["tipo"],
+                "publico": r["publico"],
+                "mensagem": r["mensagem"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None
+            }
+            for r in registros
+        ]
+
+        log_fim("sucesso", ticket_id=ticket_id, total_interacoes=len(interacoes))
+        return interacoes
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_fim("erro", erro=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        if conexao:
+            conexao.close()
 
 # ========================================
 # 💬 ENDPOINT DE INTERAÇÕES - ALTERADO
@@ -695,6 +886,12 @@ async def deletar_ticket(
 
 @interacoes_router.post("/", status_code=status.HTTP_201_CREATED, response_model=InteracaoResposta)
 async def criar_interacao(payload: InteracaoCriar):
+    """
+    Cria uma INTERAÇÃO (comentário/resposta) em um TICKET EXISTENTE
+    ✅ Valida permissões por role
+    ✅ Mantém notificações funcionando
+    ✅ Respeita comentários internos
+    """
     log_inicio(
         "criar_interacao",
         ticket_id=payload.ticket_id,
@@ -707,6 +904,7 @@ async def criar_interacao(payload: InteracaoCriar):
     try:
         cursor = conexao.cursor(dictionary=True)
 
+        # ✅ VALIDAÇÕES ESSENCIAIS
         ticket_db = validar_ticket_existe(cursor, payload.ticket_id)
         usuario = validar_usuario_existe(cursor, payload.usuario_id)
         role_usuario = usuario.get("role") or "USER"
@@ -723,10 +921,17 @@ async def criar_interacao(payload: InteracaoCriar):
         tipo_final = "nota_interna" if payload.tipo == "interno" else payload.tipo
         publico_final = 0 if tipo_final == "nota_interna" else payload.publico
 
+        # ========================================
+        # 💬 INSERIR INTERAÇÃO (CORRETO!)
+        # Data: 31/03/2026 15:30
+        # ========================================
+        
+        logger.info(f"  ▶️ Inserindo interação no banco...")
         cursor.execute(
             """
-            INSERT INTO ticket_interacoes (ticket_id, usuario_id, tipo, publico, mensagem, created_at)
-            VALUES (%s, %s, %s, %s, %s, NOW())
+            INSERT INTO ticket_interacoes (
+                ticket_id, usuario_id, tipo, publico, mensagem, created_at, updated_at
+            ) VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
             """,
             (
                 payload.ticket_id,
@@ -738,23 +943,22 @@ async def criar_interacao(payload: InteracaoCriar):
         )
         conexao.commit()
         interacao_id = cursor.lastrowid
+        logger.info(f"  ✓ Interação #{interacao_id} inserida com sucesso")
+
         # ========================================
-        # 🔔 NOTIFICAR TODOS OS ENVOLVIDOS - DEBUGADO
-        # Data: 31/03/2026 15:25
+        # 🔔 NOTIFICAÇÕES (MANTÉM FUNCIONANDO)
+        # Data: 31/03/2026 15:30
         # ========================================
-        logger.info(f"  ▶️ Enviando notificações para todos os envolvidos...")
+        
+        logger.info(f"  ▶️ Enviando notificações...")
         logger.info(f"    📋 Detalhes do ticket:")
         logger.info(f"       - ticket_id: {payload.ticket_id}")
         logger.info(f"       - solicitante_id: {ticket_db.get('solicitante_id')}")
         logger.info(f"       - responsavel_id: {ticket_db.get('responsavel_id')}")
         logger.info(f"       - usuario_id (quem respondeu): {payload.usuario_id}")
-        logger.info(f"       - publico_final: {publico_final}")
         
-        # Obter lista de usuários que devem receber notificação
         usuarios_para_notificar = set()
-                # Obter lista de usuários que devem receber notificação
-        usuarios_para_notificar = set()
-        
+
         # 🔔 LÓGICA: Respostas públicas vs Comentários internos
         if publico_final == 1:  # ✅ RESPOSTA PÚBLICA
             logger.info(f"    📢 Tipo: RESPOSTA PÚBLICA - Notificando solicitante e responsável")
@@ -768,8 +972,8 @@ async def criar_interacao(payload: InteracaoCriar):
             if ticket_db["responsavel_id"]:
                 usuarios_para_notificar.add(ticket_db["responsavel_id"])
                 logger.info(f"    ├─ ✅ Adicionado Responsável: #{ticket_db['responsavel_id']}")
-                
-        else:  # ❌ COMENTÁRIO INTERNO (SECRETO)
+
+        else:  # 🔐 COMENTÁRIO INTERNO
             logger.info(f"    🔐 Tipo: COMENTÁRIO INTERNO (SECRETO)")
             logger.warning(f"    ⚠️ NÃO notificando o solicitante (comentário é confidencial)")
             
@@ -786,31 +990,28 @@ async def criar_interacao(payload: InteracaoCriar):
             for user in grupo_users:
                 usuarios_para_notificar.add(user["id"])
             
-            logger.info(f"    ├─ ✅ Adicionados Admins do Sistema: {len(grupo_users)} usuários")
-        
-        # 4️⃣ Nunca notificar o próprio usuário que está respondendo
+            logger.info(f"    ├─ ✅ Adicionados Admins: {len(grupo_users)} usuários")
+
+        # 4️⃣ Nunca notificar o próprio usuário que criou a interação
         usuarios_antes = len(usuarios_para_notificar)
         usuarios_para_notificar.discard(payload.usuario_id)
         usuarios_depois = len(usuarios_para_notificar)
-        
+
         if usuarios_antes != usuarios_depois:
-            logger.info(f"    ├─ 🚫 Removido quem respondeu: #{payload.usuario_id} (era {usuarios_antes}, agora {usuarios_depois})")
-        
+            logger.info(f"    ├─ 🚫 Removido quem respondeu: #{payload.usuario_id}")
+
         logger.info(f"    └─ 📊 Total a notificar: {len(usuarios_para_notificar)} usuário(s)")
         logger.info(f"       Lista final: {usuarios_para_notificar}")
-        
-        if usuarios_antes != usuarios_depois:
-            logger.info(f"    ├─ 🚫 Removido quem respondeu: #{payload.usuario_id} (era {usuarios_antes}, agora {usuarios_depois})")
-        
-        logger.info(f"    └─ 📊 Total a notificar: {len(usuarios_para_notificar)} usuário(s)")
-        logger.info(f"       Lista final: {usuarios_para_notificar}")
-        
-                # 🔔 CRIAR NOTIFICAÇÃO PARA CADA USUÁRIO
+
+        # ========================================
+        # 🔔 ENVIAR NOTIFICAÇÕES COM FALLBACK
+        # Data: 31/03/2026 15:30
+        # ========================================
+
         logger.info(f"    ╔════════════════════════════════════════════════════════════╗")
         logger.info(f"    ║ 🔔 BLOCO DE CRIAÇÃO DE NOTIFICAÇÕES - INICIO                ║")
         logger.info(f"    ╚════════════════════════════════════════════════════════════╝")
         logger.info(f"    → usuarios_para_notificar: {usuarios_para_notificar}")
-        logger.info(f"    → bool(usuarios_para_notificar): {bool(usuarios_para_notificar)}")
         logger.info(f"    → len(usuarios_para_notificar): {len(usuarios_para_notificar)}")
         
         if usuarios_para_notificar:
@@ -834,7 +1035,7 @@ async def criar_interacao(payload: InteracaoCriar):
                 logger.info(f"    → mensagem_base: {mensagem_base[:60]}...")
                 logger.info(f"    🔄 INICIANDO LOOP sobre {len(usuarios_para_notificar)} usuário(s)...")
                 
-                            # Notificar via serviço (se disponível)
+                # Notificar via serviço (se disponível)
                 for idx, user_id in enumerate(usuarios_para_notificar, 1):
                     logger.info(f"    ├─ [Iteração {idx}] Processando user_id: {user_id}")
                     try:
@@ -884,24 +1085,6 @@ async def criar_interacao(payload: InteracaoCriar):
                 
                 logger.info(f"    └─ ✓ Fallback finalizado!")
                 logger.info(f"    ✓ Notificações enviadas via fallback (banco)")
-                
-                # Fallback: criar notificações direto no banco para todos
-                for idx, user_id in enumerate(usuarios_para_notificar, 1):
-                    logger.info(f"    ├─ [Fallback {idx}] user_id: {user_id}")
-                    tipo_notif = "nova_resposta" if publico_final == 1 else "comentario_interno"
-                    mensagem = f"Nova {'resposta' if publico_final == 1 else 'nota interna'} no ticket #{ticket_db.get('numero', payload.ticket_id)}"
-                    logger.info(f"    │  ▶️ Criando notificação (tipo: {tipo_notif})")
-                    criar_notificacao_multipla(
-                        conexao, 
-                        payload.ticket_id, 
-                        user_id, 
-                        tipo_notif, 
-                        mensagem
-                    )
-                    logger.info(f"    │  ✓ Notificação criada para #{user_id}")
-                
-                logger.info(f"    └─ ✓ Fallback finalizado!")
-                logger.info(f"    ✓ Notificações enviadas via fallback (banco)")
         else:
             logger.warning(f"    ❌ NENHUM USUÁRIO PARA NOTIFICAR!")
             logger.warning(f"    → usuarios_para_notificar está vazio ou None")
@@ -911,7 +1094,8 @@ async def criar_interacao(payload: InteracaoCriar):
         logger.info(f"    ╚════════════════════════════════════════════════════════════╝")
 
         # ========================================
-        # FIM NOTIFICAÇÕES - 31/03/2026 15:25
+        # ✅ RETORNAR INTERAÇÃO
+        # Data: 31/03/2026 15:30
         # ========================================
 
         cursor.execute(
@@ -955,73 +1139,5 @@ async def criar_interacao(payload: InteracaoCriar):
             conexao.close()
 
 # ========================================
-# FIM DA FUNÇÃO - 31/03/2026 14:42
+# FIM DA FUNÇÃO - 31/03/2026 15:30
 # ========================================
-
-
-@interacoes_router.get("/{ticket_id}", response_model=List[InteracaoResposta])
-async def obter_interacoes_ticket(
-    ticket_id: int = Path(..., gt=0),
-    # ✅ usuario_id para filtrar: USER só vê respostas públicas (publico=1)
-    usuario_id: Optional[int] = Query(None, gt=0, description="ID do usuário solicitante (filtra comentários internos)")
-):
-    log_inicio("obter_interacoes_ticket", ticket_id=ticket_id, usuario_id=usuario_id)
-    conexao = get_db_or_404()
-    cursor = None
-    try:
-        cursor = conexao.cursor(dictionary=True)
-        validar_ticket_existe(cursor, ticket_id)
-
-        # Verificar se é admin para decidir se mostra comentários internos
-        mostrar_internos = True
-        if usuario_id:
-            role_usuario = obter_role_usuario(cursor, usuario_id)
-            if role_usuario not in ROLES_ADMIN:
-                mostrar_internos = False
-                logger.info(f"  ✓ Usuário USER #{usuario_id} — ocultando comentários internos")
-
-        filtro_publico = "" if mostrar_internos else "AND ti.publico = 1"
-
-        cursor.execute(
-            f"""
-            SELECT ti.id, ti.ticket_id, ti.usuario_id, ti.tipo, ti.publico,
-                   ti.mensagem, ti.created_at, u.name AS usuario_nome
-            FROM ticket_interacoes ti
-            LEFT JOIN users u ON ti.usuario_id = u.id
-            WHERE ti.ticket_id = %s {filtro_publico}
-            ORDER BY ti.created_at ASC
-            """,
-            (ticket_id,)
-        )
-        rows = cursor.fetchall()
-
-        interacoes = [
-            {
-                "id":           r["id"],
-                "ticket_id":    r["ticket_id"],
-                "usuario_id":   r["usuario_id"],
-                "usuario_nome": r.get("usuario_nome"),
-                "tipo":         r["tipo"],
-                "publico":      r["publico"],
-                "mensagem":     r["mensagem"],
-                "created_at":   r["created_at"].isoformat() if r["created_at"] else None
-            }
-            for r in rows
-        ]
-
-        log_fim("sucesso", total=len(interacoes))
-        return interacoes
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_fim("erro", erro=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
-    finally:
-        if cursor:
-            cursor.close()
-        if conexao:
-            conexao.close()
