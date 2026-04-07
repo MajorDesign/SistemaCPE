@@ -27,7 +27,7 @@ async def list_groups(
             groups_result = conn.execute(
                 text("""
                     SELECT id, name, description, is_active, created_at
-                    FROM groups
+                    FROM `cpe_grupo`
                     ORDER BY name ASC
                 """)
             ).mappings().all()
@@ -66,9 +66,8 @@ async def get_group(
             group_result = conn.execute(
                 text("""
                     SELECT id, name, description, is_active, created_at, updated_at
-                    FROM groups
+                    FROM `cpe_grupo`
                     WHERE id = :id
-                    LIMIT 1
                 """),
                 {"id": group_id}
             ).mappings().first()
@@ -129,7 +128,7 @@ async def create_group(
         # Verifica se já existe
         with engine.connect() as conn:
             existing = conn.execute(
-                text("SELECT id FROM groups WHERE name = :name LIMIT 1"),
+                text("SELECT id FROM `cpe_grupo` WHERE name = :name LIMIT 1"),
                 {"name": name}
             ).mappings().first()
 
@@ -143,7 +142,7 @@ async def create_group(
         with engine.begin() as conn:
             conn.execute(
                 text("""
-                    INSERT INTO groups (name, description, is_active)
+                    INSERT INTO `cpe_grupo` (name, description, is_active)
                     VALUES (:name, :description, 1)
                 """),
                 {
@@ -218,7 +217,7 @@ async def update_group(
 
         with engine.begin() as conn:
             result = conn.execute(
-                text(f"UPDATE groups SET {set_clause}, updated_at = NOW() WHERE id = :id"),
+                text(f"UPDATE `cpe_grupo` SET {set_clause}, updated_at = NOW() WHERE id = :id"),
                 updates
             )
 
@@ -267,7 +266,7 @@ async def delete_group(
         with engine.begin() as conn:
             # Verifica se existe
             group = conn.execute(
-                text("SELECT id FROM groups WHERE id = :id LIMIT 1"),
+                text("SELECT id FROM `cpe_grupo` WHERE id = :id LIMIT 1"),
                 {"id": group_id}
             ).mappings().first()
 
@@ -285,10 +284,8 @@ async def delete_group(
 
             # Deleta o grupo
             conn.execute(
-                text("DELETE FROM groups WHERE id = :id"),
-                {"id": group_id}
+                text("DELETE FROM `cpe_grupo` WHERE id = :id"),
             )
-
         print(f"[GROUPS/DELETE] ✓ Grupo deletado: {group_id}")
         return {
             "success": True,

@@ -1,15 +1,21 @@
 """
-API de Tickets/Chamados - v3.3
+API de Tickets/Chamados - v3.4
 Endpoints para criar, listar, atualizar e deletar tickets
 Inclui endpoints para interações (comentários/respostas)
+
+Alterações v3.4:
+- Migração de password_groups para groups no banco de dados
+- validar_grupo_existe atualizado para groups (FK correta do banco)
+- gerar_numero_ticket atualizado para groups
+- gerar_id_alfanumerica atualizado para groups
+- Todas as queries de SELECT atualizadas para groups
 
 Alterações v3.3:
 - PUT /tickets/{id} agora exige usuario_id e valida permissão por role
 - POST /tickets ignora responsavel_id se solicitante for USER
 - POST /ticket-interacoes bloqueia comentário interno para usuário USER
 - Notificação de atribuição agora notifica o novo responsável corretamente
-- validar_grupo_existe confirmado para password_groups (FK correta do banco)
-"""
+ """
 
 from fastapi import APIRouter, HTTPException, status, Query, Path
 from pydantic import BaseModel, Field, field_validator
@@ -74,6 +80,11 @@ ROLES_ADMIN = {"ADMIN", "TI", "MANAGER"}
 # 🆔 GERAÇÃO DE ID ALFANUMÉRICA
 # =========================================
 
+# ================================================== 
+# 🆔 GERAÇÃO DE ID ALFANUMÉRICA
+# Data: 06/04/2026 19:45
+# ==================================================
+
 def gerar_id_alfanumerica(ticket_id: int, group_id: int, cursor) -> str:
     """
     Gera ID alfanumérica no formato: AA9999B9C0
@@ -103,7 +114,7 @@ def gerar_id_alfanumerica(ticket_id: int, group_id: int, cursor) -> str:
     
     try:
         # 1️⃣ OBTER CÓDIGO DO SETOR (2 letras)
-        cursor.execute("SELECT name FROM password_groups WHERE id = %s", (group_id,))
+        cursor.execute("SELECT name FROM `cpe_grupo` WHERE id = %s", (group_id,))
         grupo = cursor.fetchone()
         
         if grupo and grupo.get("name"):
@@ -155,7 +166,10 @@ def gerar_id_alfanumerica(ticket_id: int, group_id: int, cursor) -> str:
         # Retornar uma ID genérica como fallback
         return f"TKT{str(ticket_id).zfill(6)}"
 
-# =================Fim geração de ID ALFANUMERICA ========================#
+# ================================================== 
+# [FIM] 🆔 GERAÇÃO DE ID ALFANUMÉRICA
+# Data: 06/04/2026 19:45
+# ==================================================
 
 # =========================================
 # 🔧 MODELOS PYDANTIC
@@ -267,6 +281,10 @@ def log_fim(status_text: str, **kwargs):
 # ✅ VALIDAÇÕES
 # =========================================
 
+# =========================================
+# ✅ VALIDAÇÕES
+# =========================================
+
 def validar_ticket_existe(cursor, ticket_id: int):
     cursor.execute(
         "SELECT id, numero, group_id, solicitante_id, responsavel_id FROM tickets WHERE id = %s",
@@ -282,7 +300,7 @@ def validar_ticket_existe(cursor, ticket_id: int):
 
 def validar_usuario_existe(cursor, usuario_id: int):
     cursor.execute(
-        "SELECT id, role FROM users WHERE id = %s AND is_active = 1",
+        "SELECT id, role, group_id FROM users WHERE id = %s AND is_active = 1",
         (usuario_id,)
     )
     user = cursor.fetchone()
@@ -294,8 +312,9 @@ def validar_usuario_existe(cursor, usuario_id: int):
     return user
 
 def validar_grupo_existe(cursor, group_id: int):
-    # ✅ CONFIRMADO: tickets.group_id referencia password_groups (FK do banco)
-    cursor.execute("SELECT id FROM password_groups WHERE id = %s", (group_id,))
+    # ✅ CORRIGIDO: tickets.group_id agora referencia cpe_grupo (FK do banco)
+    # Data: 06/04/2026 19:45
+    cursor.execute("SELECT id FROM `cpe_grupo` WHERE id = %s", (group_id,))
     group = cursor.fetchone()
     if not group:
         raise HTTPException(
@@ -319,7 +338,9 @@ def obter_role_usuario(cursor, usuario_id: int) -> str:
     return row["role"] or "USER"
 
 def gerar_numero_ticket(cursor, group_id: int):
-    cursor.execute("SELECT name FROM password_groups WHERE id = %s", (group_id,))
+    # ✅ CORRIGIDO: Atualizado para usar cpe_grupo
+    # Data: 06/04/2026 19:45
+    cursor.execute("SELECT name FROM `cpe_grupo` WHERE id = %s", (group_id,))
     g = cursor.fetchone()
     prefixo = (g["name"][:3].upper() if g and g.get("name") else "TKT")
     cursor.execute(
@@ -330,18 +351,32 @@ def gerar_numero_ticket(cursor, group_id: int):
     seq = (c["count"] + 1) if c else 1
     return f"{prefixo}-{datetime.now().year}-{seq:05d}"
 
-# ========================================
-# 🔔 FUNÇÃO AUXILIAR - NOVA
-# Data: 31/03/2026 14:42
-# CRIAR NOTIFICAÇÃO MÚLTIPLA (FALLBACK)
-# ========================================
-# INÍCIO: Adicionar após função criar_notificacao_no_banco()
+# ================================================== 
+# [FIM] ✅ VALIDAÇÕES
+# Data: 06/04/2026 19:45
+# ==================================================
 
-def criar_notificacao_multipla(conexao, ticket_id: int, usuario_id: int, tipo: str, mensagem: str):
-    """Cria notificação direto no banco para múltiplos usuários (fallback)"""
+# ========================================
+# 🔔 FUNÇÃO AUXILIAR - criar_notificacao_no_banco()
+# Data: 31/03/2026 15:00
+# ========================================
+
+def criar_notificacao_no_banco(conexao, ticket_id: int, usuario_id: int, tipo: str, mensagem: str):
+    """
+    Cria notificação direto no banco de dados (fallback quando serviço está indisponível)
+    
+    Args:
+        conexao: conexão MySQL
+        ticket_id: ID do ticket
+        usuario_id: ID do usuário a ser notificado
+        tipo: tipo da notificação (status_alterado, atribuido, nova_resposta, etc)
+        mensagem: mensagem da notificação
+    """
     cursor = None
     try:
         cursor = conexao.cursor(dictionary=True)
+        logger.info(f"    ▶️ Criando notificação no banco para #{usuario_id}...")
+        
         cursor.execute(
             """
             INSERT INTO notificacoes (ticket_id, usuario_id, tipo, mensagem, lido, created_at, updated_at)
@@ -350,12 +385,17 @@ def criar_notificacao_multipla(conexao, ticket_id: int, usuario_id: int, tipo: s
             (ticket_id, usuario_id, tipo, mensagem)
         )
         conexao.commit()
-        logger.info(f"      ✓ Notificação criada para #{usuario_id} (fallback) | tipo: {tipo}")
+        logger.info(f"    ✓ Notificação criada para #{usuario_id} | tipo: {tipo}")
+        
     except Exception as e:
-        logger.warning(f"      ⚠️ Erro ao criar notificação fallback para #{usuario_id}: {str(e)}")
+        logger.warning(f"    ⚠️ Erro ao criar notificação no banco para #{usuario_id}: {str(e)}")
     finally:
         if cursor:
             cursor.close()
+
+# ========================================
+# FIM DA FUNÇÃO - 31/03/2026 15:00
+# ========================================
 
 # ========================================
 # FIM DA FUNÇÃO AUXILIAR - 31/03/2026 14:42
@@ -367,6 +407,7 @@ def criar_notificacao_multipla(conexao, ticket_id: int, usuario_id: int, tipo: s
 
 @tickets_router.get("/", response_model=List[dict])
 async def obter_tickets(
+    usuario_id: int = Query(..., gt=0, description="ID do usuário logado (necessário para filtrar por acesso)"),
     grupo_id: Optional[int] = Query(None, gt=0),
     status_id: Optional[int] = Query(None, gt=0),
     responsavel_id: Optional[int] = Query(None, gt=0),
@@ -374,13 +415,40 @@ async def obter_tickets(
     pular: int = Query(0, ge=0),
     limite: int = Query(LIMITE_PADRAO, ge=1, le=LIMITE_MAXIMO)
 ):
-    log_inicio("obter_tickets", grupo_id=grupo_id, status_id=status_id)
+    # ✅ CORRIGIDO: Adicionar filtro de acesso baseado em ROLE + GROUP_ID
+    # Data: 06/04/2026 19:45
+    log_inicio("obter_tickets", usuario_id=usuario_id, grupo_id=grupo_id, status_id=status_id)
     conexao = get_db_or_404()
     cursor = None
     try:
         cursor = conexao.cursor(dictionary=True)
+        
+        # ✅ STEP 1: Obter role e group_id do usuário logado
+        logger.info(f"  ▶️ Validando acesso do usuário #{usuario_id}...")
+        usuario = validar_usuario_existe(cursor, usuario_id)
+        role_usuario = usuario.get("role") or "USER"
+        group_id_usuario = usuario.get("group_id")
+        
+        logger.info(f"  ✓ Usuário encontrado: role={role_usuario}, group_id={group_id_usuario}")
+        
         filtros, params = [], []
 
+        # ✅ STEP 2: Filtro de ACESSO baseado em ROLE
+        if role_usuario in ROLES_ADMIN:  # ADMIN, TI, MANAGER
+            logger.info(f"  ✓ Usuário é {role_usuario} — pode ver TODOS os tickets")
+            # Admin vê tudo
+        elif role_usuario == "RESPONSAVEL_GRUPO":
+            logger.info(f"  ✓ Usuário é RESPONSAVEL_GRUPO — pode ver TODOS do seu group_id={group_id_usuario}")
+            # Responsável vê apenas tickets do seu grupo
+            filtros.append("t.group_id = %s")
+            params.append(group_id_usuario)
+        else:  # USER
+            logger.info(f"  ✓ Usuário é USER — pode ver todos os tickets do seu grupo (group_id={group_id_usuario})")
+            # User vê todos os tickets do seu grupo (somente leitura se não for o responsável)
+            filtros.append("t.group_id = %s")
+            params.append(group_id_usuario)
+
+        # ✅ STEP 3: Aplicar filtros adicionais do frontend
         if grupo_id:
             filtros.append("t.group_id = %s")
             params.append(grupo_id)
@@ -395,6 +463,10 @@ async def obter_tickets(
             params.append(prioridade_id)
 
         where = ("WHERE " + " AND ".join(filtros)) if filtros else ""
+        
+        logger.info(f"  ✓ Filtros montados: {len(filtros)} condição(ões)")
+        if filtros:
+            logger.info(f"    > {' AND '.join(filtros)}")
 
         sql = f"""
             SELECT
@@ -406,16 +478,18 @@ async def obter_tickets(
             FROM tickets t
             LEFT JOIN users u          ON t.solicitante_id = u.id
             LEFT JOIN users r          ON t.responsavel_id = r.id
-            LEFT JOIN password_groups g ON t.group_id = g.id
+            LEFT JOIN `cpe_grupo` g ON t.group_id = g.id
             {where}
             ORDER BY t.created_at DESC
             LIMIT %s OFFSET %s
         """
         params.extend([limite, pular])
+        
+        logger.info(f"  ▶️ Executando query com {len(params)} parâmetros...")
         cursor.execute(sql, params)
         tickets = convert_datetime_list(cursor.fetchall())
 
-        log_fim("sucesso", total=len(tickets))
+        log_fim("sucesso", total=len(tickets), filtro_acesso=role_usuario)
         return tickets or []
 
     except HTTPException:
@@ -432,6 +506,11 @@ async def obter_tickets(
         if conexao:
             conexao.close()
 
+# ================================================== 
+# [FIM] GET - OBTER TICKETS
+# Data: 06/04/2026 19:45
+# ==================================================
+            
 
 @tickets_router.get("/{ticket_id}", response_model=TicketResposta)
 async def obter_ticket(ticket_id: int = Path(..., gt=0)):
@@ -453,7 +532,7 @@ async def obter_ticket(ticket_id: int = Path(..., gt=0)):
             FROM tickets t
             LEFT JOIN users u          ON t.solicitante_id = u.id
             LEFT JOIN users r          ON t.responsavel_id = r.id
-            LEFT JOIN password_groups g ON t.group_id = g.id
+            LEFT JOIN `cpe_grupo` g ON t.group_id = g.id
             WHERE t.id = %s
             """,
             (ticket_id,)
@@ -476,6 +555,273 @@ async def obter_ticket(ticket_id: int = Path(..., gt=0)):
             cursor.close()
         if conexao:
             conexao.close()
+
+
+# =========================================
+# 🙋 ASSUMIR / DEVOLVER TICKET
+# Qualquer usuário do grupo pode se auto-atribuir (assumir).
+# O usuário atribuído pode devolver para a fila (devolver).
+# Ambas as ações ficam registradas no histórico.
+# =========================================
+
+class AssumiPayload(BaseModel):
+    usuario_id: int = Field(..., gt=0)
+
+@tickets_router.post("/{ticket_id}/assumir")
+async def assumir_ticket(ticket_id: int, payload: AssumiPayload):
+    """Qualquer usuário do mesmo grupo pode se auto-atribuir ao ticket."""
+    log_inicio("assumir_ticket", ticket_id=ticket_id, usuario_id=payload.usuario_id)
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        ticket_db = validar_ticket_existe(cursor, ticket_id)
+        usuario   = validar_usuario_existe(cursor, payload.usuario_id)
+        role      = usuario.get("role") or "USER"
+        e_admin   = role in ROLES_ADMIN
+
+        # Ticket já está atribuído?
+        if ticket_db.get("responsavel_id"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Este ticket já possui um responsável atribuído"
+            )
+
+        # Usuário deve pertencer ao mesmo grupo do ticket (exceto admins)
+        if not e_admin and usuario.get("group_id") != ticket_db.get("group_id"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Você não pertence ao grupo deste ticket"
+            )
+
+        nome_usuario = usuario.get("name") or f"Usuário #{payload.usuario_id}"
+
+        # Atribuir ticket ao usuário + mudar status para Em Atendimento (2)
+        cursor.execute(
+            "UPDATE tickets SET responsavel_id = %s, status_id = 2, updated_at = NOW() WHERE id = %s",
+            (payload.usuario_id, ticket_id)
+        )
+
+        # Registrar interação
+        cursor.execute(
+            """
+            INSERT INTO ticket_interacoes
+                (ticket_id, usuario_id, tipo, mensagem, publico, created_at)
+            VALUES (%s, %s, 'atribuicao', %s, 1, NOW())
+            """,
+            (ticket_id, payload.usuario_id,
+             f"🙋 {nome_usuario} assumiu o atendimento deste chamado.")
+        )
+
+        conexao.commit()
+
+        # Notificar solicitante
+        criar_notificacao_no_banco(
+            conexao, ticket_id, ticket_db["solicitante_id"],
+            "ticket_atribuido",
+            f"Seu chamado foi assumido por {nome_usuario}"
+        )
+
+        logger.info(f"  ✅ Ticket #{ticket_id} assumido por {nome_usuario}")
+        return {"success": True, "message": f"Chamado assumido por {nome_usuario}"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conexao: conexao.rollback()
+        logger.error(f"  ❌ Erro ao assumir ticket: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:  cursor.close()
+        if conexao: conexao.close()
+
+
+class DevolverPayload(BaseModel):
+    usuario_id: int = Field(..., gt=0)
+    motivo: Optional[str] = Field(None, max_length=500)
+
+@tickets_router.post("/{ticket_id}/devolver")
+async def devolver_ticket(ticket_id: int, payload: DevolverPayload):
+    """O usuário atribuído devolve o ticket para a fila do grupo."""
+    log_inicio("devolver_ticket", ticket_id=ticket_id, usuario_id=payload.usuario_id)
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        ticket_db = validar_ticket_existe(cursor, ticket_id)
+        usuario   = validar_usuario_existe(cursor, payload.usuario_id)
+        role      = usuario.get("role") or "USER"
+        e_admin   = role in ROLES_ADMIN
+
+        # Apenas o responsável atual ou admin pode devolver
+        responsavel_atual = ticket_db.get("responsavel_id")
+        if not e_admin and responsavel_atual != payload.usuario_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas o responsável atual pode devolver o chamado"
+            )
+
+        if not responsavel_atual:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Este chamado não possui responsável atribuído"
+            )
+
+        nome_usuario = usuario.get("name") or f"Usuário #{payload.usuario_id}"
+        motivo_txt   = f" — Motivo: {payload.motivo}" if payload.motivo else ""
+
+        # Remover responsável + voltar status para Aberto (1)
+        cursor.execute(
+            "UPDATE tickets SET responsavel_id = NULL, status_id = 1, updated_at = NOW() WHERE id = %s",
+            (ticket_id,)
+        )
+
+        # Registrar interação
+        cursor.execute(
+            """
+            INSERT INTO ticket_interacoes
+                (ticket_id, usuario_id, tipo, mensagem, publico, created_at)
+            VALUES (%s, %s, 'devolucao', %s, 1, NOW())
+            """,
+            (ticket_id, payload.usuario_id,
+             f"↩️ {nome_usuario} devolveu o chamado para a fila{motivo_txt}.")
+        )
+
+        conexao.commit()
+
+        # Notificar RESPONSAVEL_GRUPO do grupo
+        cursor.execute(
+            "SELECT id FROM users WHERE group_id = %s AND role = 'RESPONSAVEL_GRUPO' AND is_active = 1",
+            (ticket_db["group_id"],)
+        )
+        for resp in cursor.fetchall():
+            criar_notificacao_no_banco(
+                conexao, ticket_id, resp["id"],
+                "ticket_devolvido",
+                f"{nome_usuario} devolveu o chamado para a fila{motivo_txt}"
+            )
+
+        logger.info(f"  ✅ Ticket #{ticket_id} devolvido por {nome_usuario}")
+        return {"success": True, "message": "Chamado devolvido para a fila"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conexao: conexao.rollback()
+        logger.error(f"  ❌ Erro ao devolver ticket: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:  cursor.close()
+        if conexao: conexao.close()
+
+
+# =========================================
+# 🔀 ENCAMINHAR TICKET PARA OUTRO GRUPO
+# Permitido para TODOS os usuários com acesso ao ticket.
+# Apenas ADMIN/GESTOR pode atribuir responsável ao encaminhar.
+# =========================================
+
+class EncaminharPayload(BaseModel):
+    usuario_id: int = Field(..., gt=0)
+    group_id:   int = Field(..., gt=0)
+    motivo:     Optional[str] = Field(None, max_length=500)
+    responsavel_id: Optional[int] = Field(None, gt=0)  # só admin pode usar
+
+@tickets_router.post("/{ticket_id}/encaminhar")
+async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
+    log_inicio("encaminhar_ticket", ticket_id=ticket_id, usuario_id=payload.usuario_id, novo_grupo=payload.group_id)
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        # Validações básicas
+        ticket_db  = validar_ticket_existe(cursor, ticket_id)
+        usuario    = validar_usuario_existe(cursor, payload.usuario_id)
+        role_atual = usuario.get("role") or "USER"
+        e_admin    = role_atual in ROLES_ADMIN
+
+        validar_grupo_existe(cursor, payload.group_id)
+
+        if payload.group_id == ticket_db["group_id"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="O ticket já pertence a este grupo"
+            )
+
+        # Buscar nome do grupo destino para logs/notificação
+        cursor.execute("SELECT name FROM `cpe_grupo` WHERE id = %s", (payload.group_id,))
+        grupo_destino = cursor.fetchone()
+        nome_grupo_destino = grupo_destino["name"] if grupo_destino else f"Grupo #{payload.group_id}"
+
+        # Buscar nome do usuário que encaminhou
+        cursor.execute("SELECT name FROM users WHERE id = %s", (payload.usuario_id,))
+        row_user = cursor.fetchone()
+        nome_usuario = row_user["name"] if row_user else f"Usuário #{payload.usuario_id}"
+
+        # Responsável: só admin pode definir ao encaminhar
+        novo_responsavel_id = None
+        if e_admin and payload.responsavel_id:
+            validar_usuario_existe(cursor, payload.responsavel_id)
+            novo_responsavel_id = payload.responsavel_id
+
+        # Atualizar ticket: novo grupo, limpar responsável (a menos que admin atribua)
+        cursor.execute(
+            "UPDATE tickets SET group_id = %s, responsavel_id = %s, updated_at = NOW() WHERE id = %s",
+            (payload.group_id, novo_responsavel_id, ticket_id)
+        )
+
+        # Registrar interação de encaminhamento
+        motivo_txt = f" — Motivo: {payload.motivo}" if payload.motivo else ""
+        mensagem_interacao = (
+            f"🔀 Ticket encaminhado para o grupo '{nome_grupo_destino}' "
+            f"por {nome_usuario}{motivo_txt}"
+        )
+        cursor.execute(
+            """
+            INSERT INTO ticket_interacoes
+                (ticket_id, usuario_id, tipo, mensagem, publico, created_at)
+            VALUES (%s, %s, 'encaminhamento', %s, 1, NOW())
+            """,
+            (ticket_id, payload.usuario_id, mensagem_interacao)
+        )
+
+        conexao.commit()
+
+        # Notificar RESPONSAVEL_GRUPO do novo grupo
+        cursor.execute(
+            "SELECT id FROM users WHERE group_id = %s AND role = 'RESPONSAVEL_GRUPO' AND is_active = 1",
+            (payload.group_id,)
+        )
+        responsaveis_novo_grupo = cursor.fetchall()
+        for resp in responsaveis_novo_grupo:
+            criar_notificacao_no_banco(
+                conexao, ticket_id, resp["id"],
+                "ticket_encaminhado",
+                f"Ticket encaminhado para '{nome_grupo_destino}' por {nome_usuario}: {ticket_db.get('assunto', '')}"
+            )
+
+        logger.info(f"  ✅ Ticket #{ticket_id} encaminhado para '{nome_grupo_destino}' por {nome_usuario}")
+        return {
+            "success": True,
+            "message": f"Ticket encaminhado para '{nome_grupo_destino}' com sucesso"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"  ❌ Erro ao encaminhar ticket: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:  cursor.close()
+        if conexao: conexao.close()
+
+# ================================================== 
+# [FIM] GET - OBTER TICKET ÚNICO
+# Data: 06/04/2026 19:45
+# ==================================================
 
 @tickets_router.post("/", status_code=status.HTTP_201_CREATED, response_model=TicketResposta)
 async def criar_ticket(payload: TicketCriar):
@@ -565,24 +911,35 @@ async def criar_ticket(payload: TicketCriar):
         # 🔔 NOTIFICAR NOVO TICKET
         # Data: 31/03/2026 16:00
         # ========================================
-
+        
         logger.info(f"  ▶️ Enviando notificações de novo ticket...")
+        # Buscar nome real do solicitante para a notificação
+        cursor.execute("SELECT name FROM users WHERE id = %s", (payload.solicitante_id,))
+        row_solicitante = cursor.fetchone()
+        nome_solicitante = row_solicitante["name"] if row_solicitante else "Usuário"
+
         try:
             NotificacaoService(DB_CONFIG).notificar_novo_ticket(
                 ticket_id=ticket_id,
                 setor_id=payload.group_id,
                 titulo_ticket=payload.assunto,
-                usuario_autor_nome="Sistema"
+                usuario_autor_nome=nome_solicitante
             )
             logger.info(f"    ✓ Notificação enviada via serviço")
         except Exception as e:
             logger.warning(f"    ⚠️ Serviço indisponível: {str(e)}")
-            # Notifica o próprio solicitante que o ticket foi criado
-            criar_notificacao_multipla(
-                conexao, ticket_id, payload.solicitante_id,
-                "ticket_criado",
-                f"Seu chamado foi aberto com sucesso: {payload.assunto}"
+            # Fallback: notificar responsáveis do grupo diretamente no banco
+            cursor.execute(
+                "SELECT id FROM users WHERE group_id = %s AND role = 'RESPONSAVEL_GRUPO' AND is_active = 1",
+                (payload.group_id,)
             )
+            responsaveis = cursor.fetchall()
+            for resp in responsaveis:
+                criar_notificacao_no_banco(
+                    conexao, ticket_id, resp["id"],
+                    "ticket_criado",
+                    f"Novo chamado de {nome_solicitante}: {payload.assunto}"
+                )
 
         cursor.execute("SELECT * FROM tickets WHERE id = %s", (ticket_id,))
         ticket = convert_datetime_to_string(cursor.fetchone())
@@ -603,8 +960,7 @@ async def criar_ticket(payload: TicketCriar):
             cursor.close()
         if conexao:
             conexao.close()
-
-
+            
 @tickets_router.put("/{ticket_id}", response_model=TicketResposta)
 async def atualizar_ticket(
     ticket_id: int = Path(..., gt=0),
@@ -1047,11 +1403,12 @@ async def criar_interacao(payload: InteracaoCriar):
                             usuario_respondente_nome="Sistema"
                         )
                         logger.info(f"    │  ✓ Serviço notificou #{user_id} com SUCESSO")
+                        
                     except Exception as e:
                         logger.warning(f"    │  ⚠️ Serviço falhou para #{user_id}: {str(e)}")
-                        logger.info(f"    │  ▶️ Usando fallback: criar_notificacao_multipla()")
+                        logger.info(f"    │  ▶️ Usando fallback: criar_notificacao_no_banco()")
                         # Fallback: criar direto no banco
-                        criar_notificacao_multipla(
+                        criar_notificacao_no_banco(
                             conexao, 
                             payload.ticket_id, 
                             user_id, 

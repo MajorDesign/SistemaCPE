@@ -17,25 +17,33 @@ from utils import (
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
-# =========================================
+# ================================================== 
 # ➕ CREATE USER
-# =========================================
+# Data: 02/04/2026 18:00
+# ==================================================
 
 @router.post("/")
 async def create_user(
     data: dict,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Cria um novo usuário (apenas ADMIN)"""
-    print(f"[USERS/CREATE] Criando novo usuário (solicitado por: {current_user['id']})")
+    """Cria um novo usuário (apenas ADMIN, TI e MANAGER)"""
+    print(f"[USERS/CREATE] Criando novo usuário (solicitado por: {current_user['id']} - {current_user['role']})")
     
     try:
-        # ✅ Verifica permissão
-        if current_user["role"] != "ADMIN":
+        # ================================================== 
+        # VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:00
+        # ==================================================
+        if current_user["role"] not in ["ADMIN", "TI", "MANAGER"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas ADMINs podem criar usuários"
+                detail="Apenas ADMIN, TI e MANAGER podem criar usuários"
             )
+        # ================================================== 
+        # [FIM] VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:00
+        # ==================================================
 
         # ✅ VALIDAÇÕES
         required_fields = ["name", "email", "username", "password", "role"]
@@ -71,10 +79,10 @@ async def create_user(
             )
 
         # Validar role
-        if data["role"] not in ["USER", "ADMIN", "TI"]:
+        if data["role"] not in ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Role inválido. Use: USER, ADMIN ou TI"
+                detail="Role inválido. Use: USER, RESPONSAVEL_GRUPO, ADMIN, TI ou MANAGER"
             )
 
         # Validar senha
@@ -113,12 +121,28 @@ async def create_user(
                     detail="Username já cadastrado no sistema"
                 )
 
-            # ✅ USAR NOW() PARA MYSQL (não datetime('now') do SQLite)
+            # ✅ Validar group_id se fornecido
+            group_id = None
+            if "group_id" in data and data["group_id"]:
+                group_id = int(data["group_id"])
+                # Verificar se grupo existe
+                group_exists = conn.execute(
+                    text("SELECT id FROM `cpe_grupo` WHERE id = :id"),
+                    {"id": group_id}
+                ).first()
+
+                if not group_exists:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Grupo/Setor não encontrado"
+                    )
+
+            # ✅ USAR NOW() PARA MYSQL
             conn.execute(
                 text("""
                     INSERT INTO users 
-                    (name, email, username, password_hash, role, is_active, created_at)
-                    VALUES (:name, :email, :username, :password_hash, :role, :is_active, NOW())
+                    (name, email, username, password_hash, role, group_id, is_active, created_at)
+                    VALUES (:name, :email, :username, :password_hash, :role, :group_id, :is_active, NOW())
                 """),
                 {
                     "name": name,
@@ -126,11 +150,12 @@ async def create_user(
                     "username": username,
                     "password_hash": password_hash,
                     "role": data["role"],
+                    "group_id": group_id,
                     "is_active": 1
                 }
             )
 
-        print(f"[USERS/CREATE] ✓ Novo usuário criado: {email}")
+        print(f"[USERS/CREATE] ✓ Novo usuário criado: {email} (por: {current_user['id']} - {current_user['role']})")
         return {
             "success": True,
             "message": f"Usuário '{name}' criado com sucesso"
@@ -145,26 +170,40 @@ async def create_user(
             detail=f"Erro ao criar usuário: {str(e)}"
         )
 
+# ================================================== 
+# [FIM] CREATE USER
+# Data: 02/04/2026 18:00
+# ==================================================
+        
 
-# =========================================
+
+# ================================================== 
 # 🗑️ DELETE USER
-# =========================================
+# Data: 02/04/2026 18:05
+# ==================================================
 
 @router.delete("/{user_id}")
 async def delete_user(
     user_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Deleta um usuário (apenas ADMIN)"""
-    print(f"[USERS/DELETE] Deletando usuário: {user_id} (solicitado por: {current_user['id']})")
+    """Deleta um usuário (apenas ADMIN, TI e MANAGER)"""
+    print(f"[USERS/DELETE] Deletando usuário: {user_id} (solicitado por: {current_user['id']} - {current_user['role']})")
     
     try:
-        # ✅ Verifica permissão
-        if current_user["role"] != "ADMIN":
+        # ================================================== 
+        # VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:05
+        # ==================================================
+        if current_user["role"] not in ["ADMIN", "TI", "MANAGER"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas ADMINs podem deletar usuários"
+                detail="Apenas ADMIN, TI e MANAGER podem deletar usuários"
             )
+        # ================================================== 
+        # [FIM] VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:05
+        # ==================================================
 
         # ✅ Não permitir deletar a si mesmo
         if current_user["id"] == user_id:
@@ -194,7 +233,7 @@ async def delete_user(
                 {"id": user_id}
             )
 
-        print(f"[USERS/DELETE] ✓ Usuário deletado: {user_name}")
+        print(f"[USERS/DELETE] ✓ Usuário deletado: {user_name} (por: {current_user['id']} - {current_user['role']})")
         return {
             "success": True,
             "message": f"Usuário '{user_name}' deletado com sucesso"
@@ -209,39 +248,69 @@ async def delete_user(
             detail=f"Erro ao deletar usuário: {str(e)}"
         )
 
+# ================================================== 
+# [FIM] DELETE USER
+# Data: 02/04/2026 18:05
+# ==================================================
 
-# =========================================
+
+# ================================================== 
 # 👥 LIST USERS
-# =========================================
+# Data: 02/04/2026 18:10
+# ==================================================
 
 @router.get("/")
 async def list_users(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Lista todos os usuários (apenas para ADMIN)"""
-    print(f"[USERS/LIST] Listando usuários (solicitado por: {current_user['id']})")
+    """Lista usuários conforme permissão do role"""
+    print(f"[USERS/LIST] Listando usuários (solicitado por: {current_user['id']} - {current_user['role']})")
     
     try:
-        # ✅ Verifica permissão
-        if current_user["role"] != "ADMIN":
+        # ================================================== 
+        # VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:10
+        # ==================================================
+        if current_user["role"] not in ["ADMIN", "TI", "MANAGER", "RESPONSAVEL_GRUPO"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas ADMINs podem listar usuários"
+                detail="Você não tem permissão para listar usuários"
             )
+        # ================================================== 
+        # [FIM] VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:10
+        # ==================================================
 
         with engine.connect() as conn:
-            users_result = conn.execute(
-                text("""
-                    SELECT id, name, email, username, role, sector, unit, is_active,
-                           department_id, group_id, created_at
-                    FROM users
-                    ORDER BY id ASC
-                """)
-            ).mappings().all()
+            # ✅ Se RESPONSAVEL_GRUPO, filtra apenas usuários do seu grupo
+            if current_user["role"] == "RESPONSAVEL_GRUPO":
+                users_result = conn.execute(
+                    text("""
+                        SELECT id, name, email, username, role, sector, unit, is_active,
+                               department_id, group_id, created_at
+                        FROM users
+                        WHERE group_id = :group_id
+                        ORDER BY name ASC
+                    """),
+                    {"group_id": current_user.get("group_id")}
+                ).mappings().all()
+                
+                print(f"[USERS/LIST] Filtrando por grupo: {current_user.get('group_id')}")
+            
+            # ✅ Se ADMIN, TI ou MANAGER, lista TODOS os usuários
+            else:
+                users_result = conn.execute(
+                    text("""
+                        SELECT id, name, email, username, role, sector, unit, is_active,
+                               department_id, group_id, created_at
+                        FROM users
+                        ORDER BY name ASC
+                    """)
+                ).mappings().all()
 
         users = [dict(u) for u in users_result]
 
-        print(f"[USERS/LIST] ✓ {len(users)} usuários listados")
+        print(f"[USERS/LIST] ✓ {len(users)} usuários listados (por: {current_user['id']} - {current_user['role']})")
         return {
             "success": True,
             "total": len(users),
@@ -257,26 +326,67 @@ async def list_users(
             detail=f"Erro ao listar usuários: {str(e)}"
         )
 
+# ================================================== 
+# [FIM] LIST USERS
+# Data: 02/04/2026 18:10
+# ==================================================
 
-# =========================================
+
+# ================================================== 
 # 👤 GET USER BY ID
-# =========================================
+# Data: 02/04/2026 18:15
+# ==================================================
 
 @router.get("/{user_id}")
 async def get_user(
     user_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Obtém dados de um usuário"""
-    print(f"[USERS/GET] Obtendo usuário: {user_id}")
+    """Obtém dados de um usuário conforme permissão do role"""
+    print(f"[USERS/GET] Obtendo usuário: {user_id} (solicitado por: {current_user['id']} - {current_user['role']})")
     
     try:
-        # ✅ Verifica se é ADMIN ou está acessando a si mesmo
-        if current_user["role"] != "ADMIN" and current_user["id"] != user_id:
+        # ================================================== 
+        # VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:15
+        # ==================================================
+        
+        # ✅ ADMIN, TI e MANAGER = vêem qualquer usuário
+        if current_user["role"] in ["ADMIN", "TI", "MANAGER"]:
+            pass  # Permitir acesso total
+        
+        # ✅ RESPONSAVEL_GRUPO = vê apenas usuários do seu grupo
+        elif current_user["role"] == "RESPONSAVEL_GRUPO":
+            with engine.connect() as conn:
+                user_to_check = conn.execute(
+                    text("SELECT group_id FROM users WHERE id = :id"),
+                    {"id": user_id}
+                ).first()
+                
+                if not user_to_check or user_to_check[0] != current_user.get("group_id"):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Você só pode ver usuários do seu grupo"
+                    )
+        
+        # ✅ USER = vê apenas a si mesmo
+        elif current_user["id"] != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Você só pode ver seus próprios dados"
+            )
+        
+        # ❌ Outros roles são bloqueados
+        else:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acesso negado"
             )
+        
+        # ================================================== 
+        # [FIM] VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:15
+        # ==================================================
 
         with engine.connect() as conn:
             user_result = conn.execute(
@@ -298,7 +408,7 @@ async def get_user(
 
         user = dict(user_result)
 
-        print(f"[USERS/GET] ✓ Usuário obtido: {user['name']}")
+        print(f"[USERS/GET] ✓ Usuário obtido: {user['name']} (por: {current_user['id']} - {current_user['role']})")
         return {
             "success": True,
             "user": user
@@ -313,10 +423,15 @@ async def get_user(
             detail=f"Erro ao obter usuário: {str(e)}"
         )
 
+# ================================================== 
+# [FIM] GET USER BY ID
+# Data: 02/04/2026 18:15
+# ==================================================
 
-# =========================================
+# ================================================== 
 # ✏️ UPDATE USER
-# =========================================
+# Data: 02/04/2026 18:20
+# ==================================================
 
 @router.put("/{user_id}")
 async def update_user(
@@ -324,16 +439,55 @@ async def update_user(
     data: dict,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Atualiza dados de um usuário"""
-    print(f"[USERS/UPDATE] Atualizando usuário: {user_id}")
+    """Atualiza dados de um usuário conforme permissão do role"""
+    print(f"[USERS/UPDATE] Atualizando usuário: {user_id} (solicitado por: {current_user['id']} - {current_user['role']})")
     
     try:
-        # ✅ Verifica permissão
-        if current_user["role"] != "ADMIN" and current_user["id"] != user_id:
+        # ================================================== 
+        # VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:20
+        # ==================================================
+        
+        # ✅ ADMIN, TI e MANAGER = editam QUALQUER usuário
+        if current_user["role"] in ["ADMIN", "TI", "MANAGER"]:
+            can_edit_all_fields = True
+        
+        # ✅ RESPONSAVEL_GRUPO = edita APENAS usuários do seu grupo
+        elif current_user["role"] == "RESPONSAVEL_GRUPO":
+            with engine.connect() as conn:
+                user_to_check = conn.execute(
+                    text("SELECT group_id FROM users WHERE id = :id"),
+                    {"id": user_id}
+                ).first()
+                
+                if not user_to_check or user_to_check[0] != current_user.get("group_id"):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Você só pode editar usuários do seu grupo"
+                    )
+            
+            can_edit_all_fields = False  # RESPONSAVEL_GRUPO só edita campos básicos
+        
+        # ✅ USER = edita apenas a si mesmo
+        elif current_user["id"] != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Você só pode editar seus próprios dados"
+            )
+        else:
+            can_edit_all_fields = False  # USER só edita campos básicos
+        
+        # ❌ Outros roles são bloqueados
+        if current_user["role"] not in ["ADMIN", "TI", "MANAGER", "RESPONSAVEL_GRUPO", "USER"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acesso negado"
             )
+        
+        # ================================================== 
+        # [FIM] VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:20
+        # ==================================================
 
         # ✅ Valida campos
         updates = {}
@@ -399,18 +553,64 @@ async def update_user(
         if "unit" in data and data["unit"]:
             updates["unit"] = normalize_string(data["unit"])
 
-        # ✅ Apenas ADMIN pode alterar role e is_active
-        if current_user["role"] == "ADMIN":
+        # ================================================== 
+        # CAMPOS RESTRITOS - APENAS ADMIN E TI
+        # Data: 02/04/2026 18:20
+        # ==================================================
+        
+        # ✅ Apenas ADMIN, TI e MANAGER podem alterar role e group_id
+        if can_edit_all_fields:
             if "role" in data and data["role"]:
-                if data["role"] not in ["USER", "ADMIN", "TI"]:
+                if data["role"] not in ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"]:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Role inválido"
+                        detail="Role inválido. Use: USER, RESPONSAVEL_GRUPO, ADMIN, TI ou MANAGER"
                     )
                 updates["role"] = data["role"]
 
+            if "group_id" in data and data["group_id"]:
+                group_id = int(data["group_id"])
+                # Verificar se grupo existe
+                with engine.connect() as conn_check:
+                    group_exists = conn_check.execute(
+                        text("SELECT id FROM `cpe_grupo` WHERE id = :id"),
+                        {"id": group_id}
+                    ).first()
+
+                    if not group_exists:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Grupo/Setor não encontrado"
+                        )
+                updates["group_id"] = group_id
+
             if "is_active" in data:
                 updates["is_active"] = 1 if data["is_active"] else 0
+        
+        else:
+            # ❌ RESPONSAVEL_GRUPO e USER NÃO podem alterar role, group_id ou is_active
+            if "role" in data:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Você não tem permissão para alterar role"
+                )
+            
+            if "group_id" in data:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Você não tem permissão para alterar grupo"
+                )
+            
+            if "is_active" in data:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Você não tem permissão para alterar status"
+                )
+        
+        # ================================================== 
+        # [FIM] CAMPOS RESTRITOS
+        # Data: 02/04/2026 18:20
+        # ==================================================
 
         if not updates:
             raise HTTPException(
@@ -434,7 +634,7 @@ async def update_user(
                     detail="Usuário não encontrado"
                 )
 
-        print(f"[USERS/UPDATE] ✓ Usuário atualizado: {user_id}")
+        print(f"[USERS/UPDATE] ✓ Usuário atualizado: {user_id} (por: {current_user['id']} - {current_user['role']})")
         return {
             "success": True,
             "message": "Usuário atualizado com sucesso"
@@ -449,10 +649,16 @@ async def update_user(
             detail=f"Erro ao atualizar usuário: {str(e)}"
         )
 
+# ================================================== 
+# [FIM] UPDATE USER
+# Data: 02/04/2026 18:20
+# ==================================================
 
-# =========================================
+
+# ================================================== 
 # 🔑 CHANGE PASSWORD
-# =========================================
+# Data: 02/04/2026 18:25
+# ==================================================
 
 @router.put("/{user_id}/password")
 async def change_password(
@@ -460,35 +666,90 @@ async def change_password(
     data: dict,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Muda a senha de um usuário"""
-    print(f"[USERS/CHANGE-PASSWORD] Alterando senha do usuário: {user_id}")
+    """Altera a senha de um usuário conforme permissão do role"""
+    print(f"[USERS/CHANGE-PASSWORD] Alterando senha do usuário: {user_id} (solicitado por: {current_user['id']} - {current_user['role']})")
     
     try:
-        # ✅ Verifica permissão
-        if current_user["role"] != "ADMIN" and current_user["id"] != user_id:
+        # ================================================== 
+        # VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:25
+        # ==================================================
+        
+        # ✅ ADMIN, TI e MANAGER = alteram senha de QUALQUER usuário
+        if current_user["role"] in ["ADMIN", "TI", "MANAGER"]:
+            can_change_all = True
+        
+        # ✅ RESPONSAVEL_GRUPO = altera senha APENAS de usuários do seu grupo
+        elif current_user["role"] == "RESPONSAVEL_GRUPO":
+            with engine.connect() as conn:
+                user_to_check = conn.execute(
+                    text("SELECT group_id FROM users WHERE id = :id"),
+                    {"id": user_id}
+                ).first()
+                
+                if not user_to_check or user_to_check[0] != current_user.get("group_id"):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Você só pode alterar senha de usuários do seu grupo"
+                    )
+            
+            can_change_all = False
+        
+        # ✅ USER = altera apenas sua própria senha
+        elif current_user["id"] != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Você só pode alterar sua própria senha"
+            )
+        else:
+            can_change_all = False
+        
+        # ❌ Outros roles são bloqueados
+        if current_user["role"] not in ["ADMIN", "TI", "MANAGER", "RESPONSAVEL_GRUPO", "USER"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Acesso negado"
             )
+        
+        # ================================================== 
+        # [FIM] VALIDAÇÃO DE PERMISSÃO
+        # Data: 02/04/2026 18:25
+        # ==================================================
 
+        # ✅ Valida nova senha
         new_password = data.get("password", "").strip()
 
         if not new_password:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Nova senha obrigatória"
+                detail="Nova senha é obrigatória"
             )
 
         if not validate_password_strength(new_password):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Senha deve ter pelo menos 8 caracteres"
+                detail="Senha deve ter no mínimo 8 caracteres"
             )
 
         # ✅ Hash da nova senha
         password_hash = hash_password(new_password)
 
         with engine.begin() as conn:
+            # ✅ Verificar se usuário existe
+            user_exists = conn.execute(
+                text("SELECT id, name FROM users WHERE id = :id"),
+                {"id": user_id}
+            ).first()
+
+            if not user_exists:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Usuário não encontrado"
+                )
+
+            user_name = user_exists[1]
+
+            # ✅ Atualizar senha
             result = conn.execute(
                 text("UPDATE users SET password_hash = :hash WHERE id = :id"),
                 {"hash": password_hash, "id": user_id}
@@ -497,10 +758,10 @@ async def change_password(
             if result.rowcount == 0:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Usuário não encontrado"
+                    detail="Erro ao atualizar senha"
                 )
 
-        print(f"[USERS/CHANGE-PASSWORD] ✓ Senha alterada para usuário: {user_id}")
+        print(f"[USERS/CHANGE-PASSWORD] ✓ Senha alterada para usuário: {user_name} (por: {current_user['id']} - {current_user['role']})")
         return {
             "success": True,
             "message": "Senha alterada com sucesso"
@@ -514,3 +775,8 @@ async def change_password(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Erro ao alterar senha: {str(e)}"
         )
+
+# ================================================== 
+# [FIM] CHANGE PASSWORD
+# Data: 02/04/2026 18:25
+# ==================================================

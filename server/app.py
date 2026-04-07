@@ -38,7 +38,6 @@ from database import (
     get_db_or_404,
     convert_datetime_to_string,
     convert_datetime_list,
-    validate_group_exists,
     validate_email_unique,
     validate_username_unique,
     DB_CONFIG
@@ -70,7 +69,7 @@ class UserBase(BaseModel):
     name: str = Field(..., min_length=3, max_length=255)
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=100)
-    role: str = Field(default="USER", pattern="^(USER|ADMIN|MANAGER|TI)$")
+    role: str = Field(default="USER", pattern="^(USER|ADMIN|TI|RESPONSAVEL_GRUPO)$")
     group_id: Optional[int] = None
     is_active: bool = True
 
@@ -81,7 +80,7 @@ class UserUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=3, max_length=255)
     email: Optional[EmailStr] = None
     username: Optional[str] = Field(None, min_length=3, max_length=100)
-    role: Optional[str] = Field(None, pattern="^(USER|ADMIN|MANAGER|TI)$")
+    role: Optional[str] = Field(None, pattern="^(USER|ADMIN|TI|RESPONSAVEL_GRUPO)$")
     group_id: Optional[int] = None
     is_active: Optional[bool] = None
 
@@ -103,7 +102,7 @@ class GroupBase(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
 
 class GroupCreate(GroupBase):
-    pass
+    department_id: Optional[int] = None
 
 class GroupUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=3, max_length=255)
@@ -246,6 +245,11 @@ logger.info("✅ CORS CONFIGURADO COM SUCESSO!\n")
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
+# ================================================== 
+# LOGIN - FUNÇÃO COMPLETA CORRIGIDA
+# Data: 06/04/2026 19:45
+# ==================================================
+
 @auth_router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
 async def login(login_data: LoginRequest):
     """Realiza login do usuario"""
@@ -276,32 +280,32 @@ async def login(login_data: LoginRequest):
         is_email = "@" in credential
         logger.info(f"[AUTH]   - Tipo: {'EMAIL' if is_email else 'USERNAME'}")
 
-              # ✅ CORRIGIDO: JOIN com tabela `groups` para retornar group_name ao frontend.
+        # ✅ CORRIGIDO: JOIN com tabela `cpe_grupo` para retornar group_name ao frontend.
         # Isso resolve o campo "Grupo/Setor" vazio no modal de criação de ticket,
-        # pois users.group_id referencia a tabela `groups` (não password_groups).
+        # pois users.group_id referencia a tabela `cpe_grupo` (não groups).
+        # IMPORTANTE: `cpe_grupo` é a tabela renomeada (groups é palavra-chave reservada do MySQL).
+        
         if is_email:
             query = """
-                SELECT
+                 SELECT
                     u.id, u.name, u.email, u.username, u.role,
                     u.group_id, u.is_active, u.created_at, u.password_hash,
-                    g.name AS group_name
+                    `cpe_grupo`.`name` AS group_name
                 FROM users u
-                LEFT JOIN password_groups g ON u.group_id = g.id
-                WHERE u.email = %s AND u.is_active = TRUE
-                LIMIT 1
+                LEFT JOIN `cpe_grupo` ON u.group_id = `cpe_grupo`.`id`
+                WHERE u.email = %s
             """
         else:
             query = """
                 SELECT
                     u.id, u.name, u.email, u.username, u.role,
                     u.group_id, u.is_active, u.created_at, u.password_hash,
-                    g.name AS group_name
+                    `cpe_grupo`.`name` AS group_name
                 FROM users u
-                LEFT JOIN password_groups g ON u.group_id = g.id
-                WHERE u.username = %s AND u.is_active = TRUE
-                LIMIT 1
+                LEFT JOIN `cpe_grupo` ON u.group_id = `cpe_grupo`.`id`
+                WHERE u.username = %s
             """
-
+        
         logger.info(f"[AUTH] 🔎 Buscando usuario: {credential}")
         cursor.execute(query, (credential,))
         user = cursor.fetchone()
@@ -412,6 +416,11 @@ async def login(login_data: LoginRequest):
             except:
                 pass
 
+# ================================================== 
+# [FIM] LOGIN - FUNÇÃO COMPLETA CORRIGIDA
+# Data: 06/04/2026 19:45
+# ==================================================
+
 # =========================================
 # 10. ROUTER DE GRUPOS
 # =========================================
@@ -428,7 +437,7 @@ async def get_groups():
     
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, created_at FROM password_groups ORDER BY created_at DESC")
+        cursor.execute("SELECT id, department_id, name, description, created_at FROM `cpe_grupo` ORDER BY created_at DESC")
         groups = cursor.fetchall()
         groups = convert_datetime_list(groups)
         
@@ -454,7 +463,7 @@ async def get_group(group_id: int):
     
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, created_at FROM password_groups WHERE id = %s", (group_id,))
+        cursor.execute("SELECT id, department_id, name, description, created_at FROM `cpe_grupo` WHERE id = %s", (group_id,))
         group = cursor.fetchone()
         
         if not group:
@@ -487,12 +496,13 @@ async def create_group(group: GroupCreate):
     
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("INSERT INTO password_groups (name) VALUES (%s)", (group.name,))
+        cursor.execute("INSERT INTO `cpe_grupo` (department_id, name, description) VALUES (%s, %s, %s)",
+        (group.department_id, group.name, group.description))
         conn.commit()
         new_group_id = cursor.lastrowid
         logger.info(f"[GROUPS]   ✅ Grupo criado com ID: {new_group_id}")
         
-        cursor.execute("SELECT id, name, created_at FROM password_groups WHERE id = %s", (new_group_id,))
+        cursor.execute("SELECT id, department_id, name, description, created_at FROM `cpe_grupo` WHERE id = %s", (new_group_id,))
         new_group = cursor.fetchone()
         new_group = convert_datetime_to_string(new_group)
         
@@ -518,7 +528,7 @@ async def update_group(group_id: int, group: GroupUpdate):
     
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id FROM password_groups WHERE id = %s", (group_id,))
+        cursor.execute("SELECT id FROM `cpe_grupo` WHERE id = %s", (group_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grupo nao encontrado")
         
@@ -529,14 +539,18 @@ async def update_group(group_id: int, group: GroupUpdate):
             updates.append("name = %s")
             params.append(group.name)
         
+        if group.description is not None:
+            updates.append("description = %s")
+            params.append(group.description)
+        
         if not updates:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
         
         params.append(group_id)
-        cursor.execute(f"UPDATE password_groups SET {', '.join(updates)} WHERE id = %s", params)
+        cursor.execute(f"UPDATE `cpe_grupo` SET {', '.join(updates)} WHERE id = %s", params)
         conn.commit()
         
-        cursor.execute("SELECT id, name, created_at FROM password_groups WHERE id = %s", (group_id,))
+        cursor.execute("SELECT id, department_id, name, description, created_at FROM `cpe_grupo` WHERE id = %s", (group_id,))
         updated_group = cursor.fetchone()
         updated_group = convert_datetime_to_string(updated_group)
         
@@ -564,13 +578,13 @@ async def delete_group(group_id: int):
     
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT name FROM password_groups WHERE id = %s", (group_id,))
+        cursor.execute("SELECT name FROM `cpe_grupo` WHERE id = %s", (group_id,))
         group = cursor.fetchone()
         
         if not group:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grupo nao encontrado")
         
-        cursor.execute("DELETE FROM password_groups WHERE id = %s", (group_id,))
+        cursor.execute("DELETE FROM `cpe_grupo` WHERE id = %s", (group_id,))
         conn.commit()
         
         logger.info(f"[GROUPS] ✅ DELETADO COM SUCESSO!\n")
@@ -668,8 +682,10 @@ async def create_user(user: UserCreate):
         if not validate_username_unique(cursor, user.username):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Username ja registrado")
         
-        if user.group_id and not validate_group_exists(cursor, user.group_id):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Grupo nao encontrado")
+        if user.group_id:
+            cursor.execute("SELECT id FROM `cpe_grupo` WHERE id = %s", (user.group_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grupo nao encontrado")
         
         logger.info("[USERS] 🔐 Gerando hash da senha com bcrypt...")
         try:
@@ -743,7 +759,8 @@ async def update_user(user_id: int, user: UserUpdate):
             params.append(user.role)
         
         if user.group_id is not None:
-            if not validate_group_exists(cursor, user.group_id):
+            cursor.execute("SELECT id FROM `cpe_grupo` WHERE id = %s", (user.group_id,))
+            if not cursor.fetchone():
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grupo nao encontrado")
             updates.append("group_id = %s")
             params.append(user.group_id)
@@ -869,6 +886,14 @@ except Exception as err:
     logger.error(f"   Detalhes: {type(err).__name__}")
     import traceback
     logger.error(traceback.format_exc())
+
+# ✅ REGISTRAR ROUTER DE PERMISSÕES (EXTERNO)
+try:
+    from routes.permissions import router as permissions_router
+    app.include_router(permissions_router)
+    logger.info("✅ Router de Permissões registrado: /api/permissions")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Permissões: {str(err)}")
 
 # ✅ REGISTRAR ROUTER DE NOTIFICAÇÕES (EXTERNO)
 try:

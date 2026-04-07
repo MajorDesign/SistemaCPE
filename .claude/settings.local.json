@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed -n '20,23p' c:/wamp64/www/SistemaCPE/web/pages/groups.html)",
+      "Bash(sed -n '13,16p' c:/wamp64/www/SistemaCPE/web/pages/tickets.html)",
+      "Bash(sed -n '219,222p' c:/wamp64/www/SistemaCPE/web/pages/billing.html)",
+      "Bash(sed -n '295,298p' c:/wamp64/www/SistemaCPE/web/pages/chat.html)",
+      "Bash(sed -n '272,275p' c:/wamp64/www/SistemaCPE/web/pages/download-agents.html)",
+      "Bash(sed -n '291,294p' c:/wamp64/www/SistemaCPE/web/pages/inventory.html)",
+      "Bash(sed -n '292,295p' c:/wamp64/www/SistemaCPE/web/pages/knowledge-base.html)",
+      "Bash(sed -n '491,494p' c:/wamp64/www/SistemaCPE/web/pages/password-vault.html)",
+      "Bash(sed -n '358,361p' c:/wamp64/www/SistemaCPE/web/pages/projects.html)",
+      "Bash(sed -n '331,334p' c:/wamp64/www/SistemaCPE/web/pages/registrations.html)"
+    ]
+  }
+}

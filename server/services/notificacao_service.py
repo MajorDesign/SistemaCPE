@@ -94,26 +94,26 @@ class NotificacaoService:
             conn = self.get_connection()
             cursor = conn.cursor(dictionary=True)
 
-            # ✅ PASSO 1: Buscar todos os usuários do setor
-            logger.info(f"  ├─ 🔍 Buscando membros do setor...")
+            # Buscar apenas RESPONSAVEL_GRUPO do setor
+            logger.info(f"  |-  Buscando responsaveis do setor...")
             cursor.execute(
                 """
-                SELECT id, name 
-                FROM users 
-                WHERE group_id = %s AND is_active = 1
+                SELECT id, name
+                FROM users
+                WHERE group_id = %s AND is_active = 1 AND role = 'RESPONSAVEL_GRUPO'
                 """,
                 (setor_id,),
             )
 
             usuarios_setor = cursor.fetchall()
-            logger.info(f"  ├─ ✅ {len(usuarios_setor)} membro(s) encontrado(s)")
+            usuarios_setor = cursor.fetchall()
+            logger.info(f"  |-  {len(usuarios_setor)} responsavel(eis) encontrado(s)")
 
             if not usuarios_setor:
-                logger.warning(f"  └─ ⚠️ Setor sem membros ativos!")
+                logger.warning(f"  |-  Nenhum RESPONSAVEL_GRUPO ativo no setor!")
                 return False
 
-            # ✅ PASSO 2: Criar notificação para cada membro
-            mensagem = f"Novo ticket: \"{titulo_ticket}\" de {usuario_autor_nome}"
+            # Criar notificacao para cada responsavel
             notificacoes_criadas = 0
 
             for usuario in usuarios_setor:

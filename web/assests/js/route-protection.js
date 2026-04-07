@@ -578,18 +578,191 @@ class RouteProtection {
   }
 }
 
-// ====================================
+// ================================================== 
+// FUNÇÃO AUXILIAR: checkPageAccess()
+// Data: 02/04/2026 19:45
+// ==================================================
+
+/**
+ * FUNCAO: checkPageAccess()
+ * 
+ * Valida se o usuário autenticado tem permissão para acessar a página
+ * 
+ * @param {string} pageName - Nome da página (ex: "USERS", "GROUPS")
+ * @param {array} allowedRoles - Roles permitidos (ex: ["ADMIN", "TI", "MANAGER"])
+ * @returns {object|null} - Dados do usuário se permitido, null caso contrário
+ */
+function checkPageAccess(pageName, allowedRoles) {
+  console.log(`[PAGE-ACCESS/${pageName}] 🔐 Validando acesso para página: ${pageName}`);
+  console.log(`[PAGE-ACCESS/${pageName}] ✅ Roles permitidos: ${allowedRoles.join(", ")}`);
+  
+  // ================================================== 
+  // STEP 1: Verificar se authProtection foi carregado
+  // Data: 02/04/2026 19:45
+  // ==================================================
+  
+  if (typeof authProtection === 'undefined') {
+    console.error(`[PAGE-ACCESS/${pageName}] ❌ ERRO: authProtection não foi carregado!`);
+    alert("❌ Erro ao carregar sistema de proteção. Por favor, recarregue a página.");
+    window.location.href = "/SistemaCPE/web/login.html";
+    return null;
+  }
+  
+  // ================================================== 
+  // STEP 2: Verificar se usuário está autenticado
+  // Data: 02/04/2026 19:45
+  // ==================================================
+  
+  if (!authProtection.isAuthenticated()) {
+    console.error(`[PAGE-ACCESS/${pageName}] ❌ ACESSO NEGADO: Nenhum usuário logado`);
+    
+    alert("❌ Você deve fazer login para acessar esta página!");
+    
+    setTimeout(() => {
+      window.location.href = "/SistemaCPE/web/login.html";
+    }, 1500);
+    
+    return null;
+  }
+  
+  // ================================================== 
+  // STEP 3: Obter dados do usuário
+  // Data: 02/04/2026 19:45
+  // ==================================================
+  
+  const userData = authProtection.getUser();
+  const userRole = userData.role || "USER";
+  
+  console.log(`[PAGE-ACCESS/${pageName}] 👤 Usuário autenticado:`);
+  console.log(`   └─ ID: ${userData.id}`);
+  console.log(`   └─ Nome: ${userData.name}`);
+  console.log(`   └─ Email: ${userData.email}`);
+  console.log(`   └─ Role: ${userRole}`);
+  
+  // ==================================================
+  // STEP 4A: Verificar exceções individuais do usuário
+  // ==================================================
+
+  const exceptions = JSON.parse(localStorage.getItem('ACCESS_EXCEPTIONS') || '{}');
+  const userKey = `userId_${userData.id}`;
+  const userExceptions = exceptions[userKey];
+
+  if (userExceptions) {
+    // Página explicitamente BLOQUEADA para este usuário
+    if (userExceptions.blockPages && userExceptions.blockPages.includes(pageName)) {
+      console.error(`[PAGE-ACCESS/${pageName}] ❌ ACESSO BLOQUEADO por exceção individual!`);
+      console.error(`   └─ Usuário ID: ${userData.id} está na lista de bloqueio para ${pageName}`);
+
+      alert(
+        `❌ ACESSO BLOQUEADO!\n\n` +
+        `Seu acesso a esta página foi bloqueado pelo administrador.\n\n` +
+        `Você será redirecionado em 3 segundos...`
+      );
+
+      setTimeout(() => {
+        window.location.href = "/SistemaCPE/index.html";
+      }, 3000);
+
+      return null;
+    }
+
+    // Página explicitamente PERMITIDA para este usuário (override de role)
+    if (userExceptions.allowPages && userExceptions.allowPages.includes(pageName)) {
+      console.log(`[PAGE-ACCESS/${pageName}] ✅ ACESSO PERMITIDO por exceção individual!`);
+      console.log(`   └─ Usuário ID: ${userData.id} está na lista de permissão para ${pageName}`);
+      return userData;
+    }
+  }
+
+  // ==================================================
+  // STEP 4B: Carregar permissões salvas pelo admin (PAGE_PERMISSIONS)
+  // ==================================================
+
+  const savedPermissions = JSON.parse(localStorage.getItem('PAGE_PERMISSIONS') || '{}');
+  if (savedPermissions[pageName]) {
+    allowedRoles = savedPermissions[pageName];
+    console.log(`[PAGE-ACCESS/${pageName}] 📋 Permissões carregadas do admin: ${allowedRoles.join(", ")}`);
+  }
+
+  // ==================================================
+  // STEP 4: Validar permissão de role
+  // Data: 02/04/2026 19:45
+  // ==================================================
+
+  if (!allowedRoles.includes(userRole)) {
+    console.error(`[PAGE-ACCESS/${pageName}] ❌ ACESSO NEGADO!`);
+    console.error(`   └─ Role atual: '${userRole}'`);
+    console.error(`   └─ Roles permitidos: ${allowedRoles.join(", ")}`);
+
+    const roleLabel = getRoleLabel(userRole);
+    const permittedLabel = allowedRoles.map(r => getRoleLabel(r)).join(", ");
+
+    alert(
+      `❌ ACESSO NEGADO!\n\n` +
+      `Sua função (${roleLabel}) não tem permissão para acessar esta página.\n\n` +
+      `Apenas ${permittedLabel} podem acessar.\n\n` +
+      `Você será redirecionado em 3 segundos...`
+    );
+
+    setTimeout(() => {
+      window.location.href = "/SistemaCPE/index.html";
+    }, 3000);
+
+    return null;
+  }
+
+  // ==================================================
+  // STEP 5: Acesso PERMITIDO!
+  // Data: 02/04/2026 19:45
+  // ==================================================
+  
+  console.log(`[PAGE-ACCESS/${pageName}] ✅ ACESSO PERMITIDO!`);
+  console.log(`   └─ Usuário: ${userData.name} (${userRole})`);
+  console.log(`   └─ Página: ${pageName}`);
+  
+  return userData;
+}
+
+// ================================================== 
+// FUNÇÃO AUXILIAR: getRoleLabel()
+// Data: 02/04/2026 19:45
+// ==================================================
+
+/**
+ * Retorna label legível do role
+ * 
+ * @param {string} role - Role do usuário
+ * @returns {string} - Label formatado
+ */
+function getRoleLabel(role) {
+  const roleLabels = {
+    'USER': '👤 Usuário Comum',
+    'RESPONSAVEL_GRUPO': '👨‍💼 Responsável do Grupo',
+    'ADMIN': '🔐 Administrador Sistema',
+    'TI': '🔧 TI',
+    'MANAGER': '📊 Gerente'
+  };
+  
+  return roleLabels[role] || role;
+}
+
+// ================================================== 
+// [FIM] FUNÇÕES AUXILIARES
+// Data: 02/04/2026 19:45
+// ==================================================
+
+// ================================================== 
 // INSTÂNCIA GLOBAL
-// ====================================
+// Data: 02/04/2026 19:50
+// ==================================================
 
-const authProtection = new RouteProtection();
+const authProtection = new RouteProtection();  // ✅ CRIAR PRIMEIRO
 
-// Disponibilizar globalmente
 window.RouteProtection = RouteProtection;
 window.authProtection = authProtection;
-
 // ====================================
 // LOG FINAL
+// Data: 02/04/2026 19:45
 // ====================================
 
 console.log("\n[ROUTE-PROTECTION] 🎉 Sistema carregado com sucesso!");
@@ -606,4 +779,6 @@ console.log("[ROUTE-PROTECTION]   ✓ authProtection.logout()");
 console.log("[ROUTE-PROTECTION]   ✓ authProtection.getRedirectAfterLogin()");
 console.log("[ROUTE-PROTECTION]   ✓ authProtection.getConfig()");
 console.log("[ROUTE-PROTECTION]   ✓ authProtection.updateConfig(obj)");
+console.log("[ROUTE-PROTECTION]   ✓ checkPageAccess(pageName, allowedRoles)");
+console.log("[ROUTE-PROTECTION]   ✓ getRoleLabel(role)");
 console.log("[ROUTE-PROTECTION]\n" + "=".repeat(80) + "\n");

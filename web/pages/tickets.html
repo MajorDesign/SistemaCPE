@@ -13,6 +13,9 @@
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css">
   <title>Tickets - CPE Control</title>
+  <script src="/SistemaCPE/web/assests/js/per_usuario/access-config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/per_usuario/page-access-control.js"></script>
+  <script>checkPageAccess('TICKETS');</script>
 </head>
 
 <body>
@@ -469,6 +472,18 @@
             que não é o solicitante do ticket.
             Admin sempre vê. USER só vê no próprio ticket.
           -->
+          <button id="btnAssumirTicket" type="button" class="btn btn-sm btn-success d-none"
+                  onclick="assumirTicket()">
+            <i class="bi bi-hand-index-thumb"></i> Assumir Atendimento
+          </button>
+          <button id="btnDevolverTicket" type="button" class="btn btn-sm btn-outline-secondary d-none"
+                  onclick="devolverTicket()">
+            <i class="bi bi-arrow-return-left"></i> Desistir
+          </button>
+          <button id="btnEncaminharTicket" type="button" class="btn btn-sm btn-warning"
+                  onclick="openForwardModal()">
+            <i class="bi bi-arrow-right-circle"></i> Encaminhar
+          </button>
           <button id="btnDeletarTicket" type="button" class="btn btn-sm btn-danger"
                   onclick="deleteViewingTicket()">
             <i class="bi bi-trash"></i> Deletar
@@ -541,17 +556,19 @@
             </div>
 
             <!--
-              GRUPO/SETOR: readonly, preenchido automaticamente pelo tickets.js
-              com o group_name do usuário logado (localStorage cpe_user.group_name).
-              O usuário NÃO escolhe o setor de atendimento — apenas informa seu setor
-              de origem. Após criado, o setor não pode ser alterado pelo usuário.
+              GRUPO DE DESTINO: o usuario pode escolher qualquer grupo para abrir o chamado.
+              Populado via tickets.js. O grupo do usuario e selecionado por padrao.
             -->
             <div class="mb-3">
-              <label class="form-label">Grupo/Setor</label>
-              <input type="text" class="form-control" id="ticketGroupName"
-                     placeholder="Seu grupo" readonly>
-              <small class="text-muted">Preenchido automaticamente com o seu setor</small>
+              <label class="form-label">
+                Grupo/Setor de Destino <span class="text-danger">*</span>
+              </label>
+              <select class="form-select" id="ticketGroupName" required>
+                <option value="">Carregando grupos...</option>
+              </select>
+              <small class="text-muted">Selecione o grupo que ira atender seu chamado</small>
             </div>
+
 
             <!-- PRIORIDADE: único campo editável além de assunto e descrição -->
             <div class="mb-3">
@@ -568,7 +585,6 @@
             </div>
 
             <!-- Campo oculto: group_id real enviado ao backend -->
-            <input type="hidden" id="ticketGroup" value="">
 
           </form>
         </div>
@@ -643,6 +659,97 @@
       </div>
     </div>
   </div><!-- /assignModal -->
+
+  <!-- ========================================
+       MODAL - ENCAMINHAR TICKET
+       ======================================== -->
+  <div class="modal fade" id="forwardModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+      <div class="modal-content">
+
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-arrow-right-circle"></i> Encaminhar Chamado
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <div id="forwardError" class="alert alert-danger d-none"></div>
+
+          <p class="text-muted small mb-3">
+            O chamado será encaminhado para o grupo selecionado. O responsável atual será removido e o responsável do grupo de destino será notificado.
+          </p>
+
+          <!-- Grupo de destino -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-diagram-3"></i> Grupo de Destino <span class="text-danger">*</span>
+            </label>
+            <select class="form-select" id="forwardGroupSelect">
+              <option value="">Selecione o grupo...</option>
+            </select>
+          </div>
+
+          <!-- Responsável (apenas admin) -->
+          <div class="mb-3 d-none" id="forwardResponsavelDiv">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-person-check"></i> Atribuir a (opcional)
+            </label>
+            <select class="form-select" id="forwardResponsavelSelect">
+              <option value="">Sem atribuição</option>
+            </select>
+            <small class="text-muted">Deixe em branco para que o responsável do grupo atribua.</small>
+          </div>
+
+          <!-- Motivo -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-chat-left-text"></i> Motivo do Encaminhamento
+            </label>
+            <textarea class="form-control" id="forwardMotivo" rows="3"
+                      placeholder="Descreva o motivo do encaminhamento..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-warning" onclick="submitForward()">
+            <i class="bi bi-arrow-right-circle"></i> Encaminhar
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- /forwardModal -->
+
+  <!-- Modal: Desistir / Devolver para fila -->
+  <div class="modal fade" id="devolverModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-arrow-return-left"></i> Desistir do Atendimento
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small">O chamado voltará para a fila do setor sem responsável. Isso ficará registrado no histórico.</p>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Motivo (opcional)</label>
+            <textarea class="form-control" id="devolverMotivo" rows="2"
+                      placeholder="Por que está devolvendo?"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-outline-danger" onclick="submitDevolver()">
+            <i class="bi bi-arrow-return-left"></i> Confirmar Desistência
+          </button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /devolverModal -->
 
   <!-- ========================================
        SCRIPTS

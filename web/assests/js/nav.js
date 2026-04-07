@@ -22,29 +22,61 @@ function escapeHtml(text) {
    CONFIGURAÇÃO DE MENU GLOBAL
    ========================================= */
 
+// ================================================== 
+// CONFIGURAÇÃO DE MENU GLOBAL COM FILTRO POR ROLE
+// Data: 01/04/2026
+// ==================================================
+
 const globalMenu = [
-  { path: "/SistemaCPE/index.html", label: "Dashboard", icon: "bi-speedometer2" },
-  { path: "/SistemaCPE/web/pages/tickets.html", label: "Tickets", icon: "bi-ticket" },
-  { path: "/SistemaCPE/web/pages/users.html", label: "Usuários", icon: "bi-people" },
-  { path: "/SistemaCPE/web/pages/groups.html", label: "Gerenciar Grupos", icon: "bi-diagram-3" },
-  { path: "/SistemaCPE/web/pages/chat.html", label: "Chat", icon: "bi-chat-dots" },
-  { path: "/SistemaCPE/web/pages/tasks.html", label: "Tarefas", icon: "bi-check-lg" },
-  { path: "/SistemaCPE/web/pages/projects.html", label: "Projetos", icon: "bi-folder" },
+  { path: "/SistemaCPE/index.html", label: "Dashboard", icon: "bi-speedometer2", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/tickets.html", label: "Tickets", icon: "bi-ticket", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/users.html", label: "Usuários", icon: "bi-people", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/groups.html", label: "Gerenciar Grupos", icon: "bi-diagram-3", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/chat.html", label: "Chat", icon: "bi-chat-dots", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/tasks.html", label: "Tarefas", icon: "bi-check-lg", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/projects.html", label: "Projetos", icon: "bi-folder", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
   {
     label: "Inventário",
     icon: "bi-box",
+    requiredRoles: ["ADMIN", "TI", "MANAGER"],
     submenu: [
-      { path: "/SistemaCPE/web/pages/inventory.html", label: "Equipamentos", icon: "bi-pc-display" },
-      { path: "/SistemaCPE/web/pages/password-vault.html", label: "Cofre de Senhas", icon: "bi-shield-lock" },
+      { path: "/SistemaCPE/web/pages/inventory.html", label: "Equipamentos", icon: "bi-pc-display", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+      { path: "/SistemaCPE/web/pages/password-vault.html", label: "Cofre de Senhas", icon: "bi-shield-lock", requiredRoles: ["ADMIN", "TI", "MANAGER"] }
     ]
   },
-  { path: "/SistemaCPE/web/pages/reports.html", label: "Relatórios", icon: "bi-graph-up" },
-  { path: "/SistemaCPE/web/pages/billing.html", label: "Faturamento", icon: "bi-credit-card" },
-  { path: "/SistemaCPE/web/pages/knowledge-base.html", label: "Base de conhecimento", icon: "bi-book" },
-  { path: "/SistemaCPE/web/pages/registrations.html", label: "Cadastros", icon: "bi-person-plus" },
-  { path: "/SistemaCPE/web/pages/settings.html", label: "Configurações", icon: "bi-gear" },
-  { path: "/SistemaCPE/web/pages/download-agents.html", label: "Download de Agentes", icon: "bi-download" },
+  { path: "/SistemaCPE/web/pages/reports.html", label: "Relatórios", icon: "bi-graph-up", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/billing.html", label: "Faturamento", icon: "bi-credit-card", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/knowledge-base.html", label: "Base de conhecimento", icon: "bi-book", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/registrations.html", label: "Cadastros", icon: "bi-person-plus", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/settings.html", label: "Configurações", icon: "bi-gear", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/download-agents.html", label: "Download de Agentes", icon: "bi-download", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
+  // ================================================== 
+  // ✨ MENU: Permissões do Sistema
+  // Data: 06/04/2026 21:30
+  // ==================================================
+  { path: "/SistemaCPE/web/pages/permissions.html", label: "Permissões", icon: "bi-shield-lock", requiredRoles: ["ADMIN"] }
 ];
+// ================================================== 
+// FUNÇÃO: getFilteredMenu() - Filtrar menu por ROLE
+// Data: 01/04/2026
+// ==================================================
+function getFilteredMenu(userRole) {
+  console.log("[NAV/MENU] 🔍 Filtrando menu para role: " + userRole);
+  
+  // ✅ Filtrar itens que o usuário tem permissão
+  return globalMenu.filter(item => {
+    const hasPermission = !item.requiredRoles || item.requiredRoles.includes(userRole);
+    
+    if (hasPermission && item.submenu) {
+      // ✅ Filtrar também os subitens
+      item.submenu = item.submenu.filter(subitem => 
+        !subitem.requiredRoles || subitem.requiredRoles.includes(userRole)
+      );
+    }
+    
+    return hasPermission;
+  });
+}
 
 /* =========================================
    RENDERIZAR NAVBAR
@@ -158,24 +190,49 @@ function renderNavbar() {
    RENDERIZAR SIDEBAR
    ========================================= */
 
-function renderSidebar() {
-  console.log("[NAV/SIDEBAR] 🎯 Renderizando sidebar...");
-
-  const sidebarContainer = document.getElementById("sidebar-container");
+   function renderSidebar() {
+    console.log("[NAV/SIDEBAR] 🎯 Renderizando sidebar...");
   
-  if (!sidebarContainer) {
-    console.error("[NAV/SIDEBAR] ❌ #sidebar-container não encontrado!");
-    return false;
-  }
+    const sidebarContainer = document.getElementById("sidebar-container");
+    
+    if (!sidebarContainer) {
+      console.error("[NAV/SIDEBAR] ❌ #sidebar-container não encontrado!");
+      return false;
+    }
+  
+    // ✅ CORRIGIDO: Obter role do usuário
+    const userStr = localStorage.getItem("cpe_user");
+    let userRole = "USER";
+    
+    if (userStr) {
+      try {
+        const userData = JSON.parse(userStr);
+        userRole = userData.role || "USER";
+        console.log("[NAV/SIDEBAR] 👤 Role do usuário: " + userRole);
+      } catch (err) {
+        console.warn("[NAV/SIDEBAR] ⚠️ Erro ao obter role:", err.message);
+      }
+    }
+  
+    // ================================================== 
+// RENDERIZAR SIDEBAR COM FILTRO POR ROLE
+// Data: 01/04/2026 16:45
+// ==================================================
 
-  let menuHTML = `
-    <div class="sidebar-wrapper">
-      <div class="sidebar-logo-container"></div>
-      <nav class="sidebar-nav">
-        <ul class="sidebar-menu">
-  `;
+    // ✅ CORRIGIDO: Filtrar menu por role
+    const menuFiltered = getFilteredMenu(userRole);
+    console.log("[NAV/SIDEBAR] ✅ Menu filtrado: " + menuFiltered.length + " itens visíveis");
+  
+    let menuHTML = `
+      <div class="sidebar-wrapper">
+        <div class="sidebar-logo-container"></div>
+        <nav class="sidebar-nav">
+          <ul class="sidebar-menu">
+    `;
 
-  globalMenu.forEach((item, index) => {
+  // ✅ CORRIGIDO: Usar menuFiltered (não globalMenu) para respeitar permissões por role
+  // Data: 01/04/2026 16:45
+  menuFiltered.forEach((item, index) => {
     if (item.submenu && Array.isArray(item.submenu)) {
       menuHTML += `
         <li class="menu-item has-submenu" title="${item.label}">
@@ -214,6 +271,10 @@ function renderSidebar() {
       `;
     }
   });
+  // ================================================== 
+  // [FIM] RENDERIZAR SIDEBAR COM FILTRO POR ROLE
+  // Data: 01/04/2026 16:45
+  // ==================================================
 
   menuHTML += `
         <li class="menu-item logout-item" title="Sair">

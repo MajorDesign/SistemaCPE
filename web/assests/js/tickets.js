@@ -225,6 +225,7 @@ let tickets         = [];
 let filteredTickets = [];
 let selectedTickets = new Set();
 let users           = [];
+let groups          = [];
 let currentPage     = 1;
 let itemsPerPage    = 25;
 let selectedTicketId = null;
@@ -255,6 +256,16 @@ function getCurrentUser() {
 function isAdmin() {
   const user = getCurrentUser();
   return ROLES_ADMIN.has(user.role);
+}
+
+/** Retorna true se o usuário é Responsável de Grupo. */
+function isResponsavelGrupo() {
+  return getCurrentUser().role === 'RESPONSAVEL_GRUPO';
+}
+
+/** Retorna true se o usuário pode gerenciar tickets (admin ou responsável do grupo). */
+function isGestor() {
+  return isAdmin() || isResponsavelGrupo();
 }
 
 /** Retorna o ID do usuário logado (número). */
@@ -292,6 +303,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     setupEventListeners();
     await loadUsers();
+    await loadGroups();
     await loadTickets();
 
     // ✅ Abre ticket automaticamente se vier de notificação (?ticket_id=X)
@@ -314,18 +326,19 @@ document.addEventListener("DOMContentLoaded", async () => {
  * Chamado uma vez na inicialização.
  */
 function applyRolePermissions() {
-  const admin = isAdmin();
-  console.log(`[PERMISSAO] 🔐 Admin: ${admin}`);
+  const gestor = isGestor(); // ADMIN, TI, MANAGER ou RESPONSAVEL_GRUPO
+  const role   = getCurrentUser().role || 'USER';
+  console.log(`[PERMISSAO] 🔐 Role: ${role} | Gestor: ${gestor}`);
 
-  // Botão "Alterar" na action-bar — apenas admin
+  // Botão "Alterar" — gestores (admin + responsável do grupo)
   const btnAlterar = document.getElementById('btnAlterar');
-  if (btnAlterar) btnAlterar.style.display = admin ? '' : 'none';
+  if (btnAlterar) btnAlterar.style.display = gestor ? '' : 'none';
 
-  // Botão "Atribuir" na action-bar — apenas admin
+  // Botão "Atribuir" — gestores (admin + responsável do grupo)
   const btnAtribuir = document.getElementById('btnAtribuir');
-  if (btnAtribuir) btnAtribuir.style.display = admin ? '' : 'none';
+  if (btnAtribuir) btnAtribuir.style.display = gestor ? '' : 'none';
 
-  console.log(`[PERMISSAO] ✅ Elementos ajustados para role: ${getCurrentUser().role || 'USER'}`);
+  console.log(`[PERMISSAO] ✅ Elementos ajustados para role: ${role}`);
 }
 
 /**
@@ -333,25 +346,70 @@ function applyRolePermissions() {
  * Chamado toda vez que o modal é aberto, pois depende do ticket visualizado.
  */
 function applyDetailPermissions(ticket) {
-  const admin        = isAdmin();
-  const userId       = getCurrentUserId();
-  const isSolicitante = ticket.solicitante_id === userId || ticket.userName === getCurrentUser().name;
+  const admin           = isAdmin();
+  const responsavel     = isResponsavelGrupo();
+  const gestor          = isGestor();
+  const userId          = getCurrentUserId();
+  const isSolicitante   = ticket.solicitante_id === userId;
+  const isResponsavelDoTicket = ticket.assignedTo === userId;
+  // USER pode interagir (responder) apenas se for o responsável atribuído ao ticket
+  const podeInteragir   = gestor || isSolicitante || isResponsavelDoTicket;
 
-  // Aba "Ações" (alterar status, atribuir, finalizar) — apenas admin
+  // Aba "Ações" — apenas gestores
   const tabActions = document.querySelector('[onclick="switchTab(event, \'actions\')"]');
-  if (tabActions) tabActions.style.display = admin ? '' : 'none';
+  if (tabActions) tabActions.style.display = gestor ? '' : 'none';
 
-  // Aba "Comentário Interno" — apenas admin
+  // Aba "Comentário Interno" — apenas admin completo
   const tabInternal = document.querySelector('[onclick="switchReplyMode(event, \'internal\')"]');
   if (tabInternal) tabInternal.style.display = admin ? '' : 'none';
 
-  // Botão "Deletar" no footer — admin vê sempre; USER só vê se for o solicitante
-  const btnDeletar = document.getElementById('btnDeletarTicket');
-  if (btnDeletar) {
-    btnDeletar.style.display = (admin || isSolicitante) ? '' : 'none';
+  // Formulário de resposta pública — visível só para quem pode interagir
+  const replyForm = document.getElementById('detailReplyForm');
+  if (replyForm) {
+    replyForm.style.display = podeInteragir ? '' : 'none';
+    if (!podeInteragir) {
+      // Exibe aviso de somente leitura
+      const existing = document.getElementById('readonlyNotice');
+      if (!existing) {
+        const notice = document.createElement('p');
+        notice.id = 'readonlyNotice';
+        notice.className = 'text-muted text-center py-2';
+        notice.innerHTML = '<i class="bi bi-eye"></i> Você pode visualizar este chamado mas não pode interagir. Aguarde ser atribuído.';
+        replyForm.parentNode.insertBefore(notice, replyForm);
+      }
+    } else {
+      document.getElementById('readonlyNotice')?.remove();
+    }
   }
 
-  console.log(`[PERMISSAO] ✅ Modal ajustado | admin: ${admin} | solicitante: ${isSolicitante}`);
+  // Botão "Deletar":
+  // - Gestores: sempre
+  // - USER: apenas o próprio ticket (solicitante)
+  const btnDeletar = document.getElementById('btnDeletarTicket');
+  if (btnDeletar) {
+    btnDeletar.style.display = (gestor || isSolicitante) ? '' : 'none';
+  }
+
+  // Botão "Assumir": visível quando o ticket NÃO tem responsável e o usuário é do mesmo grupo
+  const btnAssumir = document.getElementById('btnAssumirTicket');
+  if (btnAssumir) {
+    const user = getCurrentUser();
+    const semResponsavel = !ticket.assignedTo || ticket.assignedTo === null;
+    const mesmoGrupo = admin || (user.group_id && user.group_id === ticket.group_id);
+    const ticketAberto = ticket.status !== 'Fechado' && ticket.status !== 'Cancelado';
+    const podeAssumir = semResponsavel && mesmoGrupo && ticketAberto;
+    btnAssumir.classList.toggle('d-none', !podeAssumir);
+  }
+
+  // Botão "Desistir": visível apenas para quem é o responsável atual
+  const btnDevolver = document.getElementById('btnDevolverTicket');
+  if (btnDevolver) {
+    const ticketAberto = ticket.status !== 'Fechado' && ticket.status !== 'Cancelado';
+    const podeDevolver = isResponsavelDoTicket && ticketAberto;
+    btnDevolver.classList.toggle('d-none', !podeDevolver);
+  }
+
+  console.log(`[PERMISSAO] ✅ Modal | gestor:${gestor} | solicitante:${isSolicitante} | responsavelTicket:${isResponsavelDoTicket} | podeInteragir:${podeInteragir}`);
 }
 
 // =========================================
@@ -553,6 +611,42 @@ function populateUserDropdowns() {
 }
 
 // =========================================
+// 8B. CARREGAR GRUPOS
+// =========================================
+
+async function loadGroups() {
+  console.log("[GRUPOS] 📥 Carregando grupos da API...");
+  try {
+    const data = await apiRequest('GET', '/groups');
+    if (!data || !Array.isArray(data)) {
+      console.warn('[GRUPOS] ⚠️ Resposta inválida');
+      groups = [];
+    } else {
+      groups = data.map(g => ({ id: g.id, name: g.name }));
+      console.log(`[GRUPOS] ✅ ${groups.length} grupo(s) carregado(s)`);
+    }
+  } catch (error) {
+    console.error('[GRUPOS] ❌ Erro ao carregar:', error);
+    groups = [];
+  }
+}
+
+function populateGroupDropdown() {
+  const select = document.getElementById('ticketGroupName');
+  if (!select) return;
+
+  const user = getCurrentUser();
+  const userGroupId = user.group_id || user.grupo_id || null;
+
+  select.innerHTML = '<option value="">Selecione o grupo...</option>' +
+    groups.map(g =>
+      `<option value="${g.id}" ${g.id == userGroupId ? 'selected' : ''}>${g.name}</option>`
+    ).join('');
+
+  console.log(`[GRUPOS] ✅ Select populado com ${groups.length} grupos (padrão: ${userGroupId})`);
+}
+
+// =========================================
 // 9. CARREGAR TICKETS
 // =========================================
 
@@ -562,31 +656,46 @@ async function loadTickets() {
   console.log("[TICKETS] 📥 Carregando tickets...");
 
   try {
-    const data = await apiRequest('GET', '/tickets');
+    // ✅ CORRIGIDO: Adicionar usuario_id obrigatório na requisição
+    const userId = getCurrentUserId();
+    if (!userId) {
+      console.error('[TICKETS] ❌ usuario_id não encontrado!');
+      showError('❌ Erro: usuário não identificado. Faça login novamente.');
+      return;
+    }
+
+    console.log(`[TICKETS] 📤 Enviando usuario_id=${userId} para backend...`);
+    const data = await apiRequest('GET', `/tickets?usuario_id=${userId}`);
 
     if (!data || !Array.isArray(data)) {
       console.warn('[TICKETS] ⚠️ Resposta inválida');
       tickets = [];
     } else {
       tickets = data.map(t => ({
-        id:            t.id,
-        numero:        t.numero || `#${t.id}`,
-        id_alfanumerica: t.id_alfanumerica || null,  // ✨ ADICIONAR ESTA LINHA
-        title:         t.assunto || 'Sem título',
-        userName:      t.solicitante_nome  || "Desconhecido",
-        email:         t.solicitante_email || "sem-email",
-        groupName:     t.group_name        || "Sem setor",
-        priority:      mapPriorityFromApi(t.prioridade_id),
-        status:        mapStatusFromApi(t.status_id),
-        assignedTo:    t.responsavel_id,
-        assignedName:  t.responsavel_nome || "Não atribuído",
-        solicitante_id: t.solicitante_id,
-        createdAt:     formatDate(t.created_at),
-        createdAtFull: t.created_at,
-        updatedAt:     formatDate(t.updated_at),
-        updatedAtFull: t.updated_at,
-        description:   t.descricao_inicial || 'Sem descrição'
+        id:              t.id,
+        numero:          t.numero || `#${t.id}`,
+        id_alfanumerica: t.id_alfanumerica || null,
+        title:           t.assunto || 'Sem título',
+        userName:        t.solicitante_nome  || "Desconhecido",
+        email:           t.solicitante_email || "sem-email",
+        groupName:       t.group_name        || "Sem setor",
+        group_id:        t.group_id          || null,
+        priority:        mapPriorityFromApi(t.prioridade_id),
+        status:          mapStatusFromApi(t.status_id),
+        assignedTo:      t.responsavel_id,
+        assignedName:    t.responsavel_nome || "Não atribuído",
+        solicitante_id:  t.solicitante_id,
+        createdAt:       formatDate(t.created_at),
+        createdAtFull:   t.created_at,
+        updatedAt:       formatDate(t.updated_at),
+        updatedAtFull:   t.updated_at,
+        description:     t.descricao_inicial || 'Sem descrição'
       }));
+
+      // O backend já filtra corretamente por role:
+      // - ADMIN/TI/MANAGER → todos os tickets
+      // - RESPONSAVEL_GRUPO → tickets do seu grupo
+      // - USER → tickets que criou ou foram atribuídos a ele
       console.log(`[TICKETS] ✅ ${tickets.length} ticket(s) carregado(s)`);
     }
 
@@ -605,6 +714,16 @@ async function loadTickets() {
 // =========================================
 // 10. MAPEAR DADOS DA API
 // =========================================
+
+/**
+ * Retorna true se o ticket foi criado há menos de 2h e ainda está aberto (sem responsável atribuído).
+ */
+function isNewTicket(ticket) {
+  if (ticket.status !== 'open') return false;
+  if (ticket.assignedTo) return false;
+  const created = new Date(ticket.createdAtFull);
+  return (Date.now() - created.getTime()) < 2 * 60 * 60 * 1000; // 2 horas
+}
 
 function mapPriorityFromApi(id) { return { 1: 'low', 2: 'medium', 3: 'high', 4: 'urgent' }[id] || 'medium'; }
 function mapPriorityToApi(p)    { return { 'low': 1, 'medium': 2, 'high': 3, 'urgent': 4 }[p] || 2; }
@@ -688,13 +807,14 @@ function renderTable() {
 
   const userId = getCurrentUserId();
   const admin  = isAdmin();
+  const gestor = isGestor();
 
   body.innerHTML = pageTickets.map(t => {
     const initial = t.userName.charAt(0).toUpperCase() || "?";
     const checked = selectedTickets.has(t.id) ? 'checked' : '';
 
-    // ✅ Botão deletar na linha: admin vê sempre; USER só vê o próprio ticket
-    const podeDeletar = admin || t.solicitante_id === userId;
+    // ✅ Botão deletar na linha: gestor (admin/responsável) vê sempre; USER só vê o próprio ticket
+    const podeDeletar = gestor || t.solicitante_id === userId;
     const btnDeletar  = podeDeletar
       ? `<button class="btn btn-sm btn-danger" onclick="deleteTicketRow(${t.id})" title="Deletar"><i class="bi bi-trash"></i></button>`
       : '';
@@ -707,6 +827,7 @@ function renderTable() {
         </td>
         <td onclick="openTicketDetail(${t.id})">
           <strong class="text-primary">${t.id_alfanumerica || '#' + t.id}</strong>
+          ${isNewTicket(t) ? '<span class="badge bg-danger ms-1" style="font-size:0.65rem;vertical-align:middle;">NOVO</span>' : ''}
         </td>
         <td onclick="openTicketDetail(${t.id})">
           <div class="d-flex align-items-center gap-2">
@@ -947,12 +1068,12 @@ function openNewTicketModal() {
     `<i class="bi bi-plus-square"></i> Novo Ticket`;
 
   // ✅ Preenche automaticamente com dados do usuário logado
-  // group_name agora vem preenchido pelo login corrigido no app.py
   const user = getCurrentUser();
-  document.getElementById("ticketClient").value    = user.name       || user.usuario_nome || '';
-  document.getElementById("ticketEmail").value     = user.email      || user.usuario_email || '';
-  document.getElementById("ticketGroupName").value = user.group_name || user.grupo_nome   || '';
-  document.getElementById("ticketGroup").value     = user.group_id   || user.grupo_id     || '';
+  document.getElementById("ticketClient").value = user.name  || user.usuario_nome  || '';
+  document.getElementById("ticketEmail").value  = user.email || user.usuario_email || '';
+
+  // ✅ Popula o select de grupos e pré-seleciona o grupo do usuário
+  populateGroupDropdown();
 
   new bootstrap.Modal(document.getElementById("ticketModal")).show();
 }
@@ -974,13 +1095,19 @@ async function handleFormSubmit(e) {
   // ✨ NÃO GERAR ID AQUI - DEIXAR PARA O BACKEND
   // O backend vai gerar a ID alfanumérica baseada no ID real do banco
 
+  // ✅ Grupo escolhido pelo usuário no select (pode ser qualquer grupo)
+  const selectedGroupId = parseInt(document.getElementById("ticketGroupName").value);
+  if (!selectedGroupId) {
+    showError("❌ Selecione o grupo de destino do chamado!");
+    return;
+  }
+
   const payload = {
     assunto:           title,
     descricao_inicial: description,
     prioridade_id:     mapPriorityToApi(document.getElementById("ticketPriority").value),
-    group_id:          user.group_id   || user.grupo_id,
-    solicitante_id:    user.id         || user.usuario_id,
-    // ❌ REMOVIDO: id_alfanumerica - será gerada no backend
+    group_id:          selectedGroupId,
+    solicitante_id:    user.id || user.usuario_id,
     origem:            'web'
   };
 
@@ -1243,7 +1370,216 @@ async function updateTicketAssign() {
 }
 
 // =========================================
-// 22. ALERTAS
+// 22. ASSUMIR / DEVOLVER TICKET
+// =========================================
+
+async function assumirTicket() {
+  if (!viewingTicketId) return;
+  const userId = getCurrentUserId();
+
+  try {
+    const token = localStorage.getItem('cpe_token') || '';
+    const res = await fetch(`${API_BASE}/tickets/${viewingTicketId}/assumir`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ usuario_id: userId })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showError(err.detail || 'Erro ao assumir o chamado.');
+      return;
+    }
+
+    showSuccess('Chamado assumido! Você agora é o responsável.');
+    bootstrap.Modal.getInstance(document.getElementById('ticketDetailModal'))?.hide();
+    await loadTickets();
+
+  } catch (e) {
+    console.error('[ASSUMIR] Erro:', e);
+    showError('Erro de conexão ao assumir o chamado.');
+  }
+}
+
+function devolverTicket() {
+  if (!viewingTicketId) return;
+  document.getElementById('devolverMotivo').value = '';
+  new bootstrap.Modal(document.getElementById('devolverModal')).show();
+}
+
+async function submitDevolver() {
+  if (!viewingTicketId) return;
+  const userId = getCurrentUserId();
+  const motivo = document.getElementById('devolverMotivo').value.trim();
+
+  try {
+    const token = localStorage.getItem('cpe_token') || '';
+    const res = await fetch(`${API_BASE}/tickets/${viewingTicketId}/devolver`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ usuario_id: userId, motivo: motivo || null })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showError(err.detail || 'Erro ao devolver o chamado.');
+      return;
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById('devolverModal'))?.hide();
+    bootstrap.Modal.getInstance(document.getElementById('ticketDetailModal'))?.hide();
+    showSuccess('Chamado devolvido para a fila do setor.');
+    await loadTickets();
+
+  } catch (e) {
+    console.error('[DEVOLVER] Erro:', e);
+    showError('Erro de conexão ao devolver o chamado.');
+  }
+}
+
+// =========================================
+// 24. ENCAMINHAR TICKET
+// =========================================
+
+/**
+ * Abre o modal de encaminhamento, populando o select de grupos
+ * (excluindo o grupo atual do ticket) e, se admin, o select de responsáveis.
+ */
+async function openForwardModal() {
+  if (!viewingTicketId) return;
+
+  const ticket = tickets.find(t => t.id === viewingTicketId);
+  if (!ticket) return;
+
+  // Limpar estado anterior
+  const groupSelect  = document.getElementById('forwardGroupSelect');
+  const respSelect   = document.getElementById('forwardResponsavelSelect');
+  const respDiv      = document.getElementById('forwardResponsavelDiv');
+  const motivoEl     = document.getElementById('forwardMotivo');
+  const errorEl      = document.getElementById('forwardError');
+
+  groupSelect.innerHTML  = '<option value="">Selecione o grupo...</option>';
+  respSelect.innerHTML   = '<option value="">Sem atribuição</option>';
+  motivoEl.value         = '';
+  errorEl.classList.add('d-none');
+
+  // Carregar grupos se ainda não carregados
+  if (!groups || groups.length === 0) {
+    await loadGroups();
+  }
+
+  // Popular grupos — excluir o grupo atual do ticket
+  const currentGroupId = ticket.group_id;
+  groups.forEach(g => {
+    if (g.id === currentGroupId) return; // pula grupo atual
+    const opt = document.createElement('option');
+    opt.value       = g.id;
+    opt.textContent = g.name;
+    groupSelect.appendChild(opt);
+  });
+
+  // Mostrar responsável apenas para admins
+  if (isAdmin()) {
+    respDiv.classList.remove('d-none');
+
+    // Quando o grupo de destino mudar, carregar usuários daquele grupo
+    groupSelect.onchange = async () => {
+      respSelect.innerHTML = '<option value="">Sem atribuição</option>';
+      const gid = parseInt(groupSelect.value);
+      if (!gid) return;
+
+      try {
+        const userId = getCurrentUserId();
+        const token  = localStorage.getItem('cpe_token') || '';
+        const res    = await fetch(`${API_BASE}/users?usuario_id=${userId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const list = Array.isArray(data) ? data : (data.users || []);
+
+        list
+          .filter(u => u.group_id === gid)
+          .forEach(u => {
+            const opt = document.createElement('option');
+            opt.value       = u.id;
+            opt.textContent = u.name;
+            respSelect.appendChild(opt);
+          });
+      } catch (e) {
+        console.error('[ENCAMINHAR] Erro ao carregar usuários do grupo:', e);
+      }
+    };
+  } else {
+    respDiv.classList.add('d-none');
+    groupSelect.onchange = null;
+  }
+
+  // Abrir modal
+  const modal = new bootstrap.Modal(document.getElementById('forwardModal'));
+  modal.show();
+}
+
+/**
+ * Envia o pedido de encaminhamento para o backend.
+ */
+async function submitForward() {
+  const groupSelect = document.getElementById('forwardGroupSelect');
+  const respSelect  = document.getElementById('forwardResponsavelSelect');
+  const motivoEl    = document.getElementById('forwardMotivo');
+  const errorEl     = document.getElementById('forwardError');
+
+  const groupId = parseInt(groupSelect.value);
+  if (!groupId) {
+    errorEl.textContent = 'Selecione o grupo de destino.';
+    errorEl.classList.remove('d-none');
+    return;
+  }
+
+  const userId       = getCurrentUserId();
+  const motivo       = motivoEl.value.trim();
+  const responsavelId = isAdmin() && respSelect.value ? parseInt(respSelect.value) : null;
+
+  const payload = {
+    usuario_id:     userId,
+    group_id:       groupId,
+    motivo:         motivo || null,
+    responsavel_id: responsavelId
+  };
+
+  try {
+    const token = localStorage.getItem('cpe_token') || '';
+    const res   = await fetch(`${API_BASE}/tickets/${viewingTicketId}/encaminhar`, {
+      method:  'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      errorEl.textContent = err.detail || 'Erro ao encaminhar o chamado.';
+      errorEl.classList.remove('d-none');
+      return;
+    }
+
+    // Fechar modal e recarregar
+    bootstrap.Modal.getInstance(document.getElementById('forwardModal'))?.hide();
+    bootstrap.Modal.getInstance(document.getElementById('ticketDetailModal'))?.hide();
+    showSuccess('Chamado encaminhado com sucesso!');
+    await loadTickets();
+
+  } catch (e) {
+    console.error('[ENCAMINHAR] Erro:', e);
+    errorEl.textContent = 'Erro de conexão. Tente novamente.';
+    errorEl.classList.remove('d-none');
+  }
+}
+
+// =========================================
+// 25. ALERTAS
 // =========================================
 
 function showAlert(id, msg) {

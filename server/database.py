@@ -7,7 +7,11 @@ Utiliza mysql.connector (sem SQLAlchemy)
 from fastapi import HTTPException, status
 import mysql.connector
 import logging
+import os
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 # =========================================
 # CONFIGURACAO DE LOGGING
@@ -18,10 +22,10 @@ logger = logging.getLogger(__name__)
 # CONFIGURACAO DO BANCO DE DADOS
 # =========================================
 DB_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "",
-    "database": "cpe_plus",
+    "host":     os.getenv("MYSQL_HOST",     "localhost"),
+    "user":     os.getenv("MYSQL_USER",     "root"),
+    "password": os.getenv("MYSQL_PASSWORD", ""),
+    "database": os.getenv("MYSQL_DB",       "cpe_plus"),
 }
 
 logger.info("=" * 90)
