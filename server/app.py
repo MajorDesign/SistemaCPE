@@ -895,6 +895,16 @@ try:
 except Exception as err:
     logger.error(f"❌ Erro ao registrar router de Permissões: {str(err)}")
 
+# ✅ REGISTRAR ROUTER DE CATEGORIAS/SUBCATEGORIAS (EXTERNO)
+try:
+    from routes.categorias import categorias_router, subcategorias_router
+    app.include_router(categorias_router)
+    app.include_router(subcategorias_router)
+    logger.info("✅ Router de Categorias registrado: /api/categorias")
+    logger.info("✅ Router de Subcategorias registrado: /api/subcategorias")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Categorias: {str(err)}")
+
 # ✅ REGISTRAR ROUTER DE NOTIFICAÇÕES (EXTERNO)
 try:
     from routes.notificacoes import notificacoes_router

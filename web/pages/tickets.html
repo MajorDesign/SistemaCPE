@@ -161,6 +161,7 @@
                 <th>Prioridade</th>
                 <th>Status</th>
                 <th>Atribuído a</th>
+                <th><i class="bi bi-stopwatch"></i> SLA</th>
                 <th>Data</th>
                 <th style="width:120px;">Ações</th>
               </tr>
@@ -400,6 +401,27 @@
                   <span class="detail-value" id="detailUpdatedAt"></span>
                 </div>
               </div>
+
+              <!-- SLA -->
+              <div class="detail-row" id="detailSLARow" style="display:none;">
+                <div class="detail-col" style="flex:1;">
+                  <span class="detail-label"><i class="bi bi-stopwatch"></i> SLA</span>
+                  <div id="detailSLABadge"></div>
+                  <div id="detailSLABar" class="mt-1" style="height:6px;border-radius:3px;background:#e9ecef;overflow:hidden;">
+                    <div id="detailSLABarFill" style="height:100%;width:0%;transition:width .4s;"></div>
+                  </div>
+                  <small id="detailSLALabel" class="text-muted"></small>
+                </div>
+                <div class="detail-col d-flex align-items-end gap-2" id="detailSLAControls" style="display:none!important;">
+                  <button class="btn btn-sm btn-outline-warning" onclick="pausarSLAManual()" id="btnSLAPausar">
+                    <i class="bi bi-pause-circle"></i> Pausar SLA
+                  </button>
+                  <button class="btn btn-sm btn-outline-success d-none" onclick="retomarSLAManual()" id="btnSLARetomar">
+                    <i class="bi bi-play-circle"></i> Retomar SLA
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div><!-- /tab-details -->
 
@@ -569,6 +591,28 @@
               <small class="text-muted">Selecione o grupo que ira atender seu chamado</small>
             </div>
 
+
+            <!-- CATEGORIA: opcional, aparece após selecionar o grupo -->
+            <div class="mb-3 d-none" id="ticketCategoriaDiv">
+              <label class="form-label">
+                <i class="bi bi-folder"></i> Categoria
+                <small class="text-muted">(opcional)</small>
+              </label>
+              <select class="form-select" id="ticketCategoria">
+                <option value="">Selecione uma categoria...</option>
+              </select>
+            </div>
+
+            <!-- SUBCATEGORIA: opcional, aparece após selecionar categoria com subcategorias -->
+            <div class="mb-3 d-none" id="ticketSubcategoriaDiv">
+              <label class="form-label">
+                <i class="bi bi-diagram-2"></i> Subcategoria
+                <small class="text-muted">(opcional)</small>
+              </label>
+              <select class="form-select" id="ticketSubcategoria">
+                <option value="">Selecione uma subcategoria...</option>
+              </select>
+            </div>
 
             <!-- PRIORIDADE: único campo editável além de assunto e descrição -->
             <div class="mb-3">

@@ -373,7 +373,39 @@ const PAGE_ACCESS_CONFIG = {
     return config.allowedRoles.includes(userRole);
   }
   
-  // ================================================== 
+  // ==================================================
+  // SECTION 5: PERMISSÕES DE FUNCIONALIDADES ESPECIAIS
+  // Funcionalidades que podem ser liberadas individualmente pelo admin
+  // via permissions.html (user_access_exceptions com page_name = feature key)
+  // ==================================================
+
+  /**
+   * Lista de funcionalidades especiais que podem ser concedidas individualmente.
+   * A chave é o valor salvo em user_access_exceptions.page_name.
+   */
+  const FEATURE_PERMISSIONS = {
+    'MANAGE_CATEGORIES': {
+      label:       'Gerenciar Categorias e Subcategorias',
+      description: 'Permite criar, editar e excluir categorias e subcategorias de grupos',
+      icon:        'bi-tags',
+      defaultRoles: ['ADMIN', 'TI']
+    }
+  };
+
+  /**
+   * Verifica se o usuário logado pode gerenciar categorias.
+   * Retorna Promise<boolean>.
+   * Critério: role ADMIN/TI  OU  exceção 'allow' para 'MANAGE_CATEGORIES'.
+   */
+  async function podeGerenciarCategorias(userId, userRole) {
+    if (!userId) return false;
+    if (['ADMIN', 'TI'].includes(userRole)) return true;
+
+    const exc = await fetchUserExceptions(userId);
+    return exc.allowPages.includes('MANAGE_CATEGORIES');
+  }
+
+  // ==================================================
   // [FIM] access-config.js
   // Data: 06/04/2026 20:15
   // ==================================================

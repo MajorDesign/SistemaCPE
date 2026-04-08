@@ -412,31 +412,32 @@
               <i class="bi bi-lightning"></i> Tipo de Exceção
             </label>
             <select id="exceptionType" class="form-select" onchange="updateExceptionItemOptions()">
-              <option value="block_page">Bloquear acesso a página</option>
-              <option value="allow_page">Permitir acesso a página</option>
+              <option value="block_page">Bloquear acesso</option>
+              <option value="allow_page">Conceder acesso / permissão</option>
             </select>
+            <small class="form-text text-muted">Use <strong>Conceder</strong> para liberar funcionalidades especiais (ex: Gerenciar Categorias)</small>
           </div>
 
-          <!-- Campo: Página (Multi-Select) -->
+          <!-- Campo: Página / Funcionalidade (Multi-Select) -->
           <div class="mb-3">
             <label class="form-label">
-              <i class="bi bi-list"></i> Selecionar Páginas
+              <i class="bi bi-list"></i> Selecionar Páginas ou Funcionalidades
             </label>
-            <select id="exceptionItem" class="form-select" multiple style="height: 200px;">
+            <select id="exceptionItem" class="form-select" multiple style="height: 220px;">
               <option value="">-- Selecione --</option>
             </select>
             <small class="form-text text-muted" style="display: block; margin-top: 0.5rem;">
-              💡 Use <strong>Ctrl+Click</strong> (ou <strong>Cmd+Click</strong> no Mac) para selecionar múltiplas páginas
+              💡 Use <strong>Ctrl+Click</strong> para selecionar múltiplos itens. Itens com <strong>⚙️</strong> são funcionalidades especiais.
             </small>
           </div>
 
           <!-- Resumo dos Itens Selecionados -->
           <div style="padding: 1rem; background: #f0f9ff; border: 1px solid #bfdbfe; border-radius: 8px; margin-bottom: 1rem;">
             <small style="color: #1e40af; font-weight: 600;">
-              <i class="bi bi-info-circle"></i> Páginas Selecionadas:
+              <i class="bi bi-info-circle"></i> Itens Selecionados:
             </small>
             <div id="selectedItemsPreview" style="margin-top: 0.5rem; color: #1e40af;">
-              <small>Nenhuma página selecionada</small>
+              <small>Nenhum item selecionado</small>
             </div>
           </div>
 
@@ -875,16 +876,40 @@
       modal.show();
     }
 
+    // Funcionalidades especiais que podem ser concedidas/bloqueadas individualmente
+    // A chave é salva como page_name em user_access_exceptions
+    const SPECIAL_FEATURES = {
+      'MANAGE_CATEGORIES': {
+        label:       'Gerenciar Categorias e Subcategorias',
+        description: 'Permite criar, editar e excluir categorias e subcategorias de grupos'
+      }
+    };
+
     function updateExceptionItemOptions() {
       const select = document.getElementById('exceptionItem');
       select.innerHTML = '';
 
+      // Grupo 1: Páginas do sistema
+      const groupPages = document.createElement('optgroup');
+      groupPages.label = '📄 Páginas do Sistema';
       Object.keys(PAGES_CONFIG).forEach(pageName => {
         const option = document.createElement('option');
         option.value = `page_${pageName}`;
         option.textContent = pageName;
-        select.appendChild(option);
+        groupPages.appendChild(option);
       });
+      select.appendChild(groupPages);
+
+      // Grupo 2: Funcionalidades especiais
+      const groupFeatures = document.createElement('optgroup');
+      groupFeatures.label = '⚙️ Funcionalidades Especiais';
+      Object.entries(SPECIAL_FEATURES).forEach(([key, feat]) => {
+        const option = document.createElement('option');
+        option.value = `page_${key}`;  // mesmo prefixo → backend salva sem prefixo
+        option.textContent = `${key} — ${feat.label}`;
+        groupFeatures.appendChild(option);
+      });
+      select.appendChild(groupFeatures);
 
       document.getElementById('selectedItemsPreview').innerHTML = '<small>Nenhuma página selecionada</small>';
     }
@@ -892,13 +917,17 @@
     // Atualizar preview quando selecionar itens
     document.addEventListener('change', function(e) {
       if (e.target.id === 'exceptionItem') {
-        const selectedOptions = Array.from(e.target.selectedOptions).map(opt => opt.textContent);
-        
+        const selectedOptions = Array.from(e.target.selectedOptions);
+
         if (selectedOptions.length === 0) {
-          document.getElementById('selectedItemsPreview').innerHTML = '<small>Nenhuma página selecionada</small>';
+          document.getElementById('selectedItemsPreview').innerHTML = '<small>Nenhum item selecionado</small>';
         } else {
-          const badgesHtml = selectedOptions.map(item => {
-            return `<span class="badge" style="background: #667eea; margin-right: 0.5rem; margin-bottom: 0.5rem;">${item}</span>`;
+          const badgesHtml = selectedOptions.map(opt => {
+            const key = opt.value.replace(/^page_/, '');
+            const isFeature = key in SPECIAL_FEATURES;
+            const label = isFeature ? `⚙️ ${key}` : key;
+            const color  = isFeature ? '#6f42c1' : '#667eea';
+            return `<span class="badge" style="background:${color}; margin-right:.4rem; margin-bottom:.4rem;" title="${isFeature ? SPECIAL_FEATURES[key].description : ''}">${label}</span>`;
           }).join('');
           document.getElementById('selectedItemsPreview').innerHTML = badgesHtml;
         }
@@ -992,10 +1021,10 @@
                   ${blockCount > 0 ? `
                     <div style="margin: 0.5rem 0; padding: 0.75rem; background: #fee2e2; border-left: 4px solid #ef4444; border-radius: 4px;">
                       <small style="color: #7f1d1d; font-weight: 600;">
-                        <i class="bi bi-x-circle-fill"></i> Páginas Bloqueadas (${blockCount}):
+                        <i class="bi bi-x-circle-fill"></i> Bloqueios (${blockCount}):
                       </small>
                       <div style="margin-top: 0.3rem;">
-                        ${exception.blockPages.map(p => `<span class="badge bg-danger" style="margin-right: 0.3rem; margin-bottom: 0.3rem;">${p}</span>`).join('')}
+                        ${exception.blockPages.map(p => `<span class="badge bg-danger" style="margin-right: 0.3rem; margin-bottom: 0.3rem;" title="${SPECIAL_FEATURES[p]?.description || ''}">${SPECIAL_FEATURES[p] ? '⚙️ ' + p : p}</span>`).join('')}
                       </div>
                     </div>
                   ` : ''}
@@ -1003,10 +1032,10 @@
                   ${allowCount > 0 ? `
                     <div style="margin: 0.5rem 0; padding: 0.75rem; background: #d1fae5; border-left: 4px solid #10b981; border-radius: 4px;">
                       <small style="color: #065f46; font-weight: 600;">
-                        <i class="bi bi-check-circle-fill"></i> Páginas Permitidas (${allowCount}):
+                        <i class="bi bi-check-circle-fill"></i> Permissões Concedidas (${allowCount}):
                       </small>
                       <div style="margin-top: 0.3rem;">
-                        ${exception.allowPages.map(p => `<span class="badge bg-success" style="margin-right: 0.3rem; margin-bottom: 0.3rem;">${p}</span>`).join('')}
+                        ${exception.allowPages.map(p => `<span class="badge bg-success" style="margin-right: 0.3rem; margin-bottom: 0.3rem;" title="${SPECIAL_FEATURES[p]?.description || ''}">${SPECIAL_FEATURES[p] ? '⚙️ ' + p : p}</span>`).join('')}
                       </div>
                     </div>
                   ` : ''}

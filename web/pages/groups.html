@@ -170,7 +170,33 @@
   <script>
     let groups = [];
     let selectedGroupId = null;
-    const API_URL = 'http://localhost:8000/api/groups/';
+    const API_URL      = 'http://localhost:8000/api/groups/';
+    const API_BASE     = 'http://localhost:8000/api';
+
+    // Usuário logado (para verificação de role e permissões)
+    function getCurrentUser() {
+      try { return JSON.parse(localStorage.getItem('cpe_user') || '{}'); } catch { return {}; }
+    }
+    function getCurrentUserId() {
+      const u = getCurrentUser();
+      return u.id || u.usuario_id || null;
+    }
+
+    // Resolvida na inicialização — indica se o usuário pode gerenciar categorias
+    // (ADMIN/TI por role, ou via exceção MANAGE_CATEGORIES no banco)
+    let _podeGerenciarCat = false;
+
+    async function resolverPermissaoCategorias() {
+      const userId = getCurrentUserId();
+      if (!userId) { _podeGerenciarCat = false; return; }
+      try {
+        const res  = await fetch(`${API_BASE}/categorias/check-permissao?usuario_id=${userId}`);
+        const data = await res.json();
+        _podeGerenciarCat = data.pode === true;
+      } catch (e) {
+        _podeGerenciarCat = false;
+      }
+    }
 
     console.log("[GROUPS/CONFIG] 🔌 Variáveis globais inicializadas");
     console.log("[GROUPS/CONFIG] 📍 API Groups URL:", API_URL);
@@ -213,7 +239,8 @@
         
         console.log("[GROUPS/INIT] ✅ Página inicializada com sucesso");
 
-        // ===== Carregar Grupos =====
+        // ===== Resolver permissão de categorias e carregar grupos =====
+        await resolverPermissaoCategorias();
         await loadGroups();
 
         console.log("=".repeat(80) + "\n");
@@ -304,6 +331,15 @@
         return;
       }
 
+      // helper: formata minutos em "Xd Xh Xm"
+      function formatarSLA(mins) {
+        if (!mins) return null;
+        const d = Math.floor(mins / 1440);
+        const h = Math.floor((mins % 1440) / 60);
+        const m = mins % 60;
+        return [d && `${d}d`, h && `${h}h`, m && `${m}m`].filter(Boolean).join(' ');
+      }
+
       groupsList.innerHTML = groups.map(group => {
         const createdDate = formatDate(group.created_at);
         const description = group.description || "Sem descrição";
@@ -335,6 +371,10 @@
               <button class="btn-group-action" onclick="editGroup(${group.id}, event)">
                 <i class="bi bi-pencil"></i> Editar
               </button>
+              ${_podeGerenciarCat ? `
+              <button class="btn-group-action" style="background:#6f42c1;color:#fff;" onclick="abrirGerenciarCategorias(${group.id}, '${group.name.replace(/'/g, "\\'")}', event)">
+                <i class="bi bi-tags"></i> Categorias
+              </button>` : ''}
               <button class="btn-group-action danger" onclick="deleteGroup(${group.id}, '${group.name.replace(/'/g, "\\'")}', event)">
                 <i class="bi bi-trash"></i> Deletar
               </button>
@@ -767,6 +807,498 @@
     console.log("[GROUPS]   ✓ deleteGroup()");
     console.log("[GROUPS] 🎯 Pronto para usar!");
     console.log("[GROUPS]\n" + "=".repeat(80) + "\n");
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Gerenciar Categorias e Subcategorias                  -->
+  <!-- data-bs-backdrop="static" → não fecha ao clicar fora         -->
+  <!-- ============================================================ -->
+  <div class="modal fade" id="categoriasModal" tabindex="-1" aria-hidden="true"
+       data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+
+        <div class="modal-header" style="background:#6f42c1; color:#fff;">
+          <h5 class="modal-title">
+            <i class="bi bi-tags-fill"></i>
+            Categorias — <span id="catModalGroupName"></span>
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body p-0">
+
+          <!-- ALERTA INTERNO -->
+          <div id="catModalAlert" class="alert alert-danger d-none m-3 mb-0"></div>
+          <div id="catModalSuccess" class="alert alert-success d-none m-3 mb-0"></div>
+
+          <div class="row g-0" style="min-height:500px;">
+
+            <!-- ===== COLUNA ESQUERDA: Lista de categorias ===== -->
+            <div class="col-md-4 border-end" style="background:#f8f9fa;">
+              <div class="p-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <strong><i class="bi bi-list-ul"></i> Categorias</strong>
+                  <button class="btn btn-sm btn-outline-purple"
+                          style="border-color:#6f42c1;color:#6f42c1;"
+                          onclick="abrirFormCategoria()">
+                    <i class="bi bi-plus-lg"></i> Nova
+                  </button>
+                </div>
+                <div id="catLista" class="list-group list-group-flush">
+                  <div class="text-muted text-center py-4">
+                    <i class="bi bi-hourglass-split"></i> Carregando...
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ===== COLUNA DIREITA: Formulário ===== -->
+            <div class="col-md-8">
+              <div class="p-3">
+
+                <!-- Form: Nova/Editar Categoria -->
+                <div id="formCategoriaDiv" class="d-none">
+                  <h6 class="fw-bold mb-3" id="formCatTitulo">
+                    <i class="bi bi-folder-plus"></i> Nova Categoria
+                  </h6>
+                  <input type="hidden" id="editandoCategoriaId">
+                  <div class="mb-3">
+                    <label class="form-label">Nome <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="catNome"
+                           placeholder="Ex: Hardware, Software, Rede..." maxlength="255">
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Descrição <small class="text-muted">(opcional)</small></label>
+                    <textarea class="form-control" id="catDescricao" rows="2"
+                              placeholder="Descrição da categoria..." maxlength="500"></textarea>
+                  </div>
+
+                  <!-- SLA -->
+                  <div class="mb-3 p-3 rounded" style="background:#f0f4ff; border:1px solid #c7d2fe;">
+                    <label class="form-label fw-semibold">
+                      <i class="bi bi-stopwatch"></i> SLA
+                      <small class="text-muted fw-normal">(opcional — deixe em branco para sem SLA)</small>
+                    </label>
+                    <div class="row g-2 align-items-end">
+                      <div class="col-4">
+                        <label class="form-label small">Dias</label>
+                        <input type="number" class="form-control" id="catSlaDias"
+                               min="0" max="365" placeholder="0" oninput="atualizarPreviewSLA()">
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small">Horas</label>
+                        <input type="number" class="form-control" id="catSlaHoras"
+                               min="0" max="23" placeholder="0" oninput="atualizarPreviewSLA()">
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small">Minutos</label>
+                        <input type="number" class="form-control" id="catSlaMinutos"
+                               min="0" max="59" placeholder="0" oninput="atualizarPreviewSLA()">
+                      </div>
+                    </div>
+                    <div id="catSlaPreview" class="mt-2 small text-muted"></div>
+                    <input type="hidden" id="catSlaTotalMinutos">
+                  </div>
+
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-primary" onclick="salvarCategoria()">
+                      <i class="bi bi-check-lg"></i> Salvar Categoria
+                    </button>
+                    <button class="btn btn-secondary" onclick="fecharFormularios()">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Form: Nova/Editar Subcategoria -->
+                <div id="formSubcategoriaDiv" class="d-none">
+                  <h6 class="fw-bold mb-1" id="formSubTitulo">
+                    <i class="bi bi-diagram-2"></i> Nova Subcategoria
+                  </h6>
+                  <p class="text-muted small mb-3">
+                    Categoria pai: <strong id="formSubCatNome"></strong>
+                  </p>
+                  <input type="hidden" id="editandoSubcategoriaId">
+                  <input type="hidden" id="subCategoriaPaiId">
+                  <div class="mb-3">
+                    <label class="form-label">Nome <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="subNome"
+                           placeholder="Ex: Teclado, Mouse, Monitor..." maxlength="255">
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Descrição <small class="text-muted">(opcional)</small></label>
+                    <textarea class="form-control" id="subDescricao" rows="2"
+                              placeholder="Descrição da subcategoria..." maxlength="500"></textarea>
+                  </div>
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-primary" onclick="salvarSubcategoria()">
+                      <i class="bi bi-check-lg"></i> Salvar Subcategoria
+                    </button>
+                    <button class="btn btn-secondary" onclick="fecharFormularios()">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Estado vazio -->
+                <div id="formVazioDiv" class="text-center text-muted py-5">
+                  <i class="bi bi-tags" style="font-size:2.5rem;opacity:.3;"></i>
+                  <p class="mt-2">Selecione uma categoria ou clique em<br><strong>+ Nova</strong> para começar.</p>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <small class="text-muted me-auto">
+            <i class="bi bi-info-circle"></i> Alterações são salvas imediatamente
+          </small>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- /categoriasModal -->
+
+  <!-- ============================================================ -->
+  <!-- JS: Gerenciamento de Categorias                              -->
+  <!-- ============================================================ -->
+  <script>
+    let catModalGroupId   = null;
+    let categoriasCache   = [];   // lista carregada do backend
+
+    // ── Abre o modal e carrega categorias do grupo ──────────────
+    async function abrirGerenciarCategorias(groupId, groupName, event) {
+      if (event) event.preventDefault();
+      catModalGroupId = groupId;
+      document.getElementById('catModalGroupName').textContent = groupName;
+      fecharFormularios();
+      catModalAlert('', false);
+
+      const modal = new bootstrap.Modal(document.getElementById('categoriasModal'));
+      modal.show();
+      await carregarCategorias();
+    }
+
+    // ── Carrega categorias do backend ───────────────────────────
+    async function carregarCategorias() {
+      document.getElementById('catLista').innerHTML =
+        '<div class="text-muted text-center py-3"><i class="bi bi-hourglass-split"></i> Carregando...</div>';
+
+      try {
+        const res  = await fetch(`${API_BASE}/categorias?group_id=${catModalGroupId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        categoriasCache = await res.json();
+        renderCatLista();
+      } catch (e) {
+        document.getElementById('catLista').innerHTML =
+          `<div class="text-danger text-center py-3"><i class="bi bi-exclamation-circle"></i> Erro ao carregar: ${e.message}</div>`;
+      }
+    }
+
+    // ── Renderiza lista de categorias (com subcategorias) ───────
+    function renderCatLista() {
+      const el = document.getElementById('catLista');
+      if (!categoriasCache.length) {
+        el.innerHTML = '<div class="text-muted text-center py-4 small">Nenhuma categoria ainda.<br>Clique em <strong>+ Nova</strong> para criar.</div>';
+        return;
+      }
+
+      el.innerHTML = categoriasCache.map(cat => {
+        const slaBadge = cat.sla_minutos
+          ? `<span class="badge rounded-pill me-1" style="background:#6f42c1;font-size:.7rem;" title="SLA: ${cat.sla_minutos} min"><i class="bi bi-stopwatch"></i> ${formatarSLAMin(cat.sla_minutos)}</span>`
+          : '';
+        return `
+        <div class="border rounded mb-2 overflow-hidden">
+          <!-- Linha da categoria -->
+          <div class="d-flex align-items-center px-2 py-2 bg-white">
+            <span class="flex-grow-1 fw-semibold" style="font-size:.9rem;">
+              <i class="bi bi-folder-fill text-warning me-1"></i>${escapeHtml(cat.nome)}
+              ${slaBadge}
+            </span>
+            <button class="btn btn-sm btn-link p-0 me-1 text-primary" title="Adicionar subcategoria"
+                    onclick="abrirFormSubcategoria(${cat.id}, '${cat.nome.replace(/'/g,"\\'")}')">
+              <i class="bi bi-plus-circle"></i>
+            </button>
+            <button class="btn btn-sm btn-link p-0 me-1 text-secondary" title="Editar"
+                    onclick="abrirEditarCategoria(${cat.id})">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn btn-sm btn-link p-0 text-danger" title="Excluir"
+                    onclick="deletarCategoria(${cat.id}, '${cat.nome.replace(/'/g,"\\'")}')">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+          <!-- Subcategorias -->
+          ${cat.subcategorias && cat.subcategorias.length ? `
+          <div style="background:#f8f9fa;">
+            ${cat.subcategorias.map(sub => `
+            <div class="d-flex align-items-center px-3 py-1 border-top">
+              <span class="flex-grow-1 text-muted" style="font-size:.82rem;">
+                <i class="bi bi-arrow-return-right me-1"></i>${escapeHtml(sub.nome)}
+              </span>
+              <button class="btn btn-sm btn-link p-0 me-1 text-secondary" title="Editar subcategoria"
+                      onclick="abrirEditarSubcategoria(${sub.id}, ${cat.id}, '${cat.nome.replace(/'/g,"\\'")}')">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button class="btn btn-sm btn-link p-0 text-danger" title="Excluir"
+                      onclick="deletarSubcategoria(${sub.id}, '${sub.nome.replace(/'/g,"\\'")}')">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>`).join('')}
+          </div>` : ''}
+        </div>
+      `;
+      }).join('');
+    }
+
+    // ── Converte minutos em texto legível ─────────────────────────
+    function formatarSLAMin(mins) {
+      if (!mins) return '—';
+      const d = Math.floor(mins / 1440);
+      const h = Math.floor((mins % 1440) / 60);
+      const m = mins % 60;
+      return [d && `${d}d`, h && `${h}h`, m && `${m}m`].filter(Boolean).join(' ') || '0m';
+    }
+
+    // ── Calcula total de minutos dos inputs de SLA ────────────────
+    function calcularSLAMinutos() {
+      const dias  = parseInt(document.getElementById('catSlaDias').value)    || 0;
+      const horas = parseInt(document.getElementById('catSlaHoras').value)   || 0;
+      const mins  = parseInt(document.getElementById('catSlaMinutos').value) || 0;
+      return dias * 1440 + horas * 60 + mins;
+    }
+
+    // ── Preview ao digitar SLA ────────────────────────────────────
+    function atualizarPreviewSLA() {
+      const total   = calcularSLAMinutos();
+      const preview = document.getElementById('catSlaPreview');
+      if (!preview) return;
+      preview.textContent = total > 0 ? `Total: ${formatarSLAMin(total)} (${total} minutos)` : '';
+    }
+
+    // ── Preenche inputs de SLA a partir de minutos totais ─────────
+    function preencherInputsSLA(totalMinutos) {
+      const dias  = Math.floor((totalMinutos || 0) / 1440);
+      const horas = Math.floor(((totalMinutos || 0) % 1440) / 60);
+      const mins  = (totalMinutos || 0) % 60;
+      document.getElementById('catSlaDias').value    = dias  || '';
+      document.getElementById('catSlaHoras').value   = horas || '';
+      document.getElementById('catSlaMinutos').value = mins  || '';
+      atualizarPreviewSLA();
+    }
+
+    // ── Formulário: nova categoria ───────────────────────────────
+    function abrirFormCategoria() {
+      fecharFormularios();
+      document.getElementById('formCatTitulo').innerHTML = '<i class="bi bi-folder-plus"></i> Nova Categoria';
+      document.getElementById('editandoCategoriaId').value = '';
+      document.getElementById('catNome').value      = '';
+      document.getElementById('catDescricao').value = '';
+      preencherInputsSLA(0);
+      document.getElementById('formCategoriaDiv').classList.remove('d-none');
+      document.getElementById('formVazioDiv').classList.add('d-none');
+      document.getElementById('catNome').focus();
+    }
+
+    // ── Formulário: editar categoria existente ──────────────────
+    function abrirEditarCategoria(catId) {
+      const cat = categoriasCache.find(c => c.id === catId);
+      if (!cat) return;
+      fecharFormularios();
+      document.getElementById('formCatTitulo').innerHTML = '<i class="bi bi-pencil"></i> Editar Categoria';
+      document.getElementById('editandoCategoriaId').value = catId;
+      document.getElementById('catNome').value      = cat.nome;
+      document.getElementById('catDescricao').value = cat.descricao || '';
+      preencherInputsSLA(cat.sla_minutos || 0);
+      document.getElementById('formCategoriaDiv').classList.remove('d-none');
+      document.getElementById('formVazioDiv').classList.add('d-none');
+      document.getElementById('catNome').focus();
+    }
+
+    // ── Salva categoria (cria ou atualiza) ──────────────────────
+    async function salvarCategoria() {
+      const nome        = document.getElementById('catNome').value.trim();
+      const descricao   = document.getElementById('catDescricao').value.trim();
+      const editId      = document.getElementById('editandoCategoriaId').value;
+      const userId      = getCurrentUserId();
+      const slaMinutos  = calcularSLAMinutos() || null;
+
+      if (!nome) { catModalAlert('Informe o nome da categoria.'); return; }
+
+      try {
+        let res;
+        if (editId) {
+          res = await fetch(`${API_BASE}/categorias/${editId}`, {
+            method:  'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+              nome, descricao: descricao || null,
+              sla_minutos: slaMinutos !== null ? slaMinutos : 0,
+              usuario_id: userId
+            })
+          });
+        } else {
+          res = await fetch(`${API_BASE}/categorias/`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+              group_id: catModalGroupId, nome,
+              descricao: descricao || null,
+              sla_minutos: slaMinutos,
+              usuario_id: userId
+            })
+          });
+        }
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          catModalAlert(err.detail || 'Erro ao salvar categoria.');
+          return;
+        }
+
+        catModalSuccess(editId ? 'Categoria atualizada!' : 'Categoria criada!');
+        fecharFormularios();
+        await carregarCategorias();
+
+      } catch (e) {
+        catModalAlert('Erro de conexão: ' + e.message);
+      }
+    }
+
+    // ── Deletar categoria ────────────────────────────────────────
+    async function deletarCategoria(catId, nome) {
+      if (!confirm(`Excluir a categoria "${nome}" e todas as suas subcategorias?`)) return;
+      const userId = getCurrentUserId();
+      try {
+        const res = await fetch(`${API_BASE}/categorias/${catId}?usuario_id=${userId}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) {
+          const err = await res.json().catch(() => ({}));
+          catModalAlert(err.detail || 'Erro ao excluir categoria.');
+          return;
+        }
+        catModalSuccess('Categoria excluída!');
+        fecharFormularios();
+        await carregarCategorias();
+      } catch (e) {
+        catModalAlert('Erro de conexão: ' + e.message);
+      }
+    }
+
+    // ── Formulário: nova subcategoria ────────────────────────────
+    function abrirFormSubcategoria(catId, catNome) {
+      fecharFormularios();
+      document.getElementById('formSubTitulo').innerHTML  = '<i class="bi bi-diagram-2"></i> Nova Subcategoria';
+      document.getElementById('editandoSubcategoriaId').value = '';
+      document.getElementById('subCategoriaPaiId').value  = catId;
+      document.getElementById('formSubCatNome').textContent = catNome;
+      document.getElementById('subNome').value      = '';
+      document.getElementById('subDescricao').value = '';
+      document.getElementById('formSubcategoriaDiv').classList.remove('d-none');
+      document.getElementById('formVazioDiv').classList.add('d-none');
+      document.getElementById('subNome').focus();
+    }
+
+    // ── Formulário: editar subcategoria ─────────────────────────
+    function abrirEditarSubcategoria(subId, catId, catNome) {
+      const cat = categoriasCache.find(c => c.id === catId);
+      const sub = cat?.subcategorias?.find(s => s.id === subId);
+      if (!sub) return;
+      fecharFormularios();
+      document.getElementById('formSubTitulo').innerHTML  = '<i class="bi bi-pencil"></i> Editar Subcategoria';
+      document.getElementById('editandoSubcategoriaId').value = subId;
+      document.getElementById('subCategoriaPaiId').value  = catId;
+      document.getElementById('formSubCatNome').textContent = catNome;
+      document.getElementById('subNome').value      = sub.nome;
+      document.getElementById('subDescricao').value = sub.descricao || '';
+      document.getElementById('formSubcategoriaDiv').classList.remove('d-none');
+      document.getElementById('formVazioDiv').classList.add('d-none');
+      document.getElementById('subNome').focus();
+    }
+
+    // ── Salva subcategoria (cria ou atualiza) ───────────────────
+    async function salvarSubcategoria() {
+      const nome       = document.getElementById('subNome').value.trim();
+      const descricao  = document.getElementById('subDescricao').value.trim();
+      const catId      = parseInt(document.getElementById('subCategoriaPaiId').value);
+      const editId     = document.getElementById('editandoSubcategoriaId').value;
+      const userId     = getCurrentUserId();
+
+      if (!nome) { catModalAlert('Informe o nome da subcategoria.'); return; }
+
+      try {
+        let res;
+        if (editId) {
+          res = await fetch(`${API_BASE}/subcategorias/${editId}`, {
+            method:  'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ nome, descricao: descricao || null, usuario_id: userId })
+          });
+        } else {
+          res = await fetch(`${API_BASE}/subcategorias/`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ categoria_id: catId, nome, descricao: descricao || null, usuario_id: userId })
+          });
+        }
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          catModalAlert(err.detail || 'Erro ao salvar subcategoria.');
+          return;
+        }
+
+        catModalSuccess(editId ? 'Subcategoria atualizada!' : 'Subcategoria criada!');
+        fecharFormularios();
+        await carregarCategorias();
+
+      } catch (e) {
+        catModalAlert('Erro de conexão: ' + e.message);
+      }
+    }
+
+    // ── Deletar subcategoria ─────────────────────────────────────
+    async function deletarSubcategoria(subId, nome) {
+      if (!confirm(`Excluir a subcategoria "${nome}"?`)) return;
+      const userId = getCurrentUserId();
+      try {
+        const res = await fetch(`${API_BASE}/subcategorias/${subId}?usuario_id=${userId}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) {
+          const err = await res.json().catch(() => ({}));
+          catModalAlert(err.detail || 'Erro ao excluir subcategoria.');
+          return;
+        }
+        catModalSuccess('Subcategoria excluída!');
+        await carregarCategorias();
+      } catch (e) {
+        catModalAlert('Erro de conexão: ' + e.message);
+      }
+    }
+
+    // ── Helpers de UI ────────────────────────────────────────────
+    function fecharFormularios() {
+      document.getElementById('formCategoriaDiv').classList.add('d-none');
+      document.getElementById('formSubcategoriaDiv').classList.add('d-none');
+      document.getElementById('formVazioDiv').classList.remove('d-none');
+    }
+
+    function catModalAlert(msg, show = true) {
+      const el = document.getElementById('catModalAlert');
+      if (show && msg) { el.textContent = msg; el.classList.remove('d-none'); }
+      else             { el.classList.add('d-none'); }
+      document.getElementById('catModalSuccess').classList.add('d-none');
+    }
+
+    function catModalSuccess(msg) {
+      const el = document.getElementById('catModalSuccess');
+      el.textContent = msg;
+      el.classList.remove('d-none');
+      document.getElementById('catModalAlert').classList.add('d-none');
+      setTimeout(() => el.classList.add('d-none'), 3000);
+    }
   </script>
 
 </body>

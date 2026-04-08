@@ -474,21 +474,50 @@ async def obter_tickets(
                 u.name  AS solicitante_nome,
                 u.email AS solicitante_email,
                 r.name  AS responsavel_nome,
-                g.name  AS group_name
+                g.name  AS group_name,
+                ts.status        AS sla_status,
+                ts.sla_minutos   AS sla_minutos,
+                ts.iniciado_em   AS sla_iniciado_em,
+                ts.pausado_em    AS sla_pausado_em,
+                ts.minutos_pausados AS sla_minutos_pausados,
+                ts.estourou_em   AS sla_estourou_em,
+                ts.concluido_em  AS sla_concluido_em
             FROM tickets t
-            LEFT JOIN users u          ON t.solicitante_id = u.id
-            LEFT JOIN users r          ON t.responsavel_id = r.id
-            LEFT JOIN `cpe_grupo` g ON t.group_id = g.id
+            LEFT JOIN users u            ON t.solicitante_id = u.id
+            LEFT JOIN users r            ON t.responsavel_id = r.id
+            LEFT JOIN `cpe_grupo` g      ON t.group_id = g.id
+            LEFT JOIN ticket_sla ts      ON ts.ticket_id = t.id
             {where}
             ORDER BY t.created_at DESC
             LIMIT %s OFFSET %s
         """
         params.extend([limite, pular])
-        
+
         logger.info(f"  ▶️ Executando query com {len(params)} parâmetros...")
         cursor.execute(sql, params)
-        tickets = convert_datetime_list(cursor.fetchall())
+        rows = cursor.fetchall()
 
+        # Calcular status do SLA para cada ticket e embutir no retorno
+        tickets = []
+        for row in rows:
+            row = dict(row)
+            sla_dict = None
+            if row.get("sla_status"):
+                sla_raw = {
+                    "status":           row.get("sla_status"),
+                    "sla_minutos":      row.get("sla_minutos"),
+                    "iniciado_em":      row.get("sla_iniciado_em"),
+                    "pausado_em":       row.get("sla_pausado_em"),
+                    "minutos_pausados": row.get("sla_minutos_pausados") or 0,
+                    "estourou_em":      row.get("sla_estourou_em"),
+                    "concluido_em":     row.get("sla_concluido_em"),
+                }
+                sla_dict = {"calculo": SLAService.calcular_status_sla(sla_raw)}
+                sla_dict.update({k: str(v) if hasattr(v, "isoformat") else v for k, v in sla_raw.items()})
+            row["sla"] = sla_dict
+            tickets.append(row)
+
+        tickets = convert_datetime_list(tickets)
         log_fim("sucesso", total=len(tickets), filtro_acesso=role_usuario)
         return tickets or []
 
@@ -558,6 +587,24 @@ async def obter_ticket(ticket_id: int = Path(..., gt=0)):
 
 
 # =========================================
+# 🕐 SLA — importar serviço
+# =========================================
+try:
+    from services.sla_service import SLAService
+except Exception:
+    class SLAService:
+        @staticmethod
+        def iniciar_sla(*_): return False
+        @staticmethod
+        def pausar_sla(*_): return False
+        @staticmethod
+        def acumular_pausa(*_): pass
+        @staticmethod
+        def concluir_sla(*_): pass
+        @staticmethod
+        def calcular_status_sla(_): return None
+
+# =========================================
 # 🙋 ASSUMIR / DEVOLVER TICKET
 # Qualquer usuário do grupo pode se auto-atribuir (assumir).
 # O usuário atribuído pode devolver para a fila (devolver).
@@ -615,6 +662,18 @@ async def assumir_ticket(ticket_id: int, payload: AssumiPayload):
         )
 
         conexao.commit()
+
+        # ── SLA: acumular pausa anterior (se estava pausado) e iniciar contagem ──
+        SLAService.acumular_pausa(conexao, ticket_id)
+        if SLAService.iniciar_sla(conexao, ticket_id):
+            conexao.commit()
+            cursor.execute(
+                """INSERT INTO ticket_interacoes
+                       (ticket_id, usuario_id, tipo, mensagem, publico, created_at)
+                   VALUES (%s, %s, 'sla_iniciado', '⏱️ Contagem de SLA iniciada.', 1, NOW())""",
+                (ticket_id, payload.usuario_id)
+            )
+            conexao.commit()
 
         # Notificar solicitante
         criar_notificacao_no_banco(
@@ -691,6 +750,18 @@ async def devolver_ticket(ticket_id: int, payload: DevolverPayload):
 
         conexao.commit()
 
+        # ── SLA: pausar contagem ao devolver ──
+        if SLAService.pausar_sla(conexao, ticket_id):
+            conexao.commit()
+            cursor.execute(
+                """INSERT INTO ticket_interacoes
+                       (ticket_id, usuario_id, tipo, mensagem, publico, created_at)
+                   VALUES (%s, %s, 'sla_pausado', %s, 1, NOW())""",
+                (ticket_id, payload.usuario_id,
+                 f"⏸️ SLA pausado{motivo_txt}.")
+            )
+            conexao.commit()
+
         # Notificar RESPONSAVEL_GRUPO do grupo
         cursor.execute(
             "SELECT id FROM users WHERE group_id = %s AND role = 'RESPONSAVEL_GRUPO' AND is_active = 1",
@@ -711,6 +782,135 @@ async def devolver_ticket(ticket_id: int, payload: DevolverPayload):
     except Exception as e:
         if conexao: conexao.rollback()
         logger.error(f"  ❌ Erro ao devolver ticket: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:  cursor.close()
+        if conexao: conexao.close()
+
+
+# =========================================
+# 🕐 SLA — STATUS E PAUSA MANUAL
+# =========================================
+
+@tickets_router.get("/{ticket_id}/sla")
+async def status_sla(ticket_id: int):
+    """Retorna o status atual do SLA de um ticket."""
+    conexao = get_db_or_404()
+    cursor  = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(
+            """SELECT ts.*, c.nome AS categoria_nome
+               FROM ticket_sla ts
+               LEFT JOIN categorias c ON c.id = ts.categoria_id
+               WHERE ts.ticket_id = %s""",
+            (ticket_id,)
+        )
+        sla = cursor.fetchone()
+        if not sla:
+            return {"sla": None}
+
+        # Converter datetimes para string
+        for campo in ("iniciado_em", "pausado_em", "estourou_em", "concluido_em", "created_at", "updated_at"):
+            if sla.get(campo) and hasattr(sla[campo], "isoformat"):
+                sla[campo] = sla[campo].isoformat()
+
+        sla["calculo"] = SLAService.calcular_status_sla(sla)
+        return {"sla": sla}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:  cursor.close()
+        if conexao: conexao.close()
+
+
+class SLAPausarPayload(BaseModel):
+    usuario_id: int           = Field(..., gt=0)
+    motivo:     Optional[str] = Field(None, max_length=500)
+
+@tickets_router.post("/{ticket_id}/sla/pausar")
+async def pausar_sla_manual(ticket_id: int, payload: SLAPausarPayload):
+    """Responsável do grupo ou admin pausa o SLA manualmente."""
+    conexao = get_db_or_404()
+    cursor  = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        usuario = validar_usuario_existe(cursor, payload.usuario_id)
+        role    = usuario.get("role") or "USER"
+
+        if role not in ROLES_ADMIN and role != "RESPONSAVEL_GRUPO":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas Responsável do Grupo ou Admin podem pausar o SLA"
+            )
+
+        validar_ticket_existe(cursor, ticket_id)
+        pausou = SLAService.pausar_sla(conexao, ticket_id)
+        if not pausou:
+            raise HTTPException(status_code=400, detail="SLA não está em andamento ou não existe")
+
+        conexao.commit()
+        motivo_txt = f" — Motivo: {payload.motivo}" if payload.motivo else ""
+        nome = usuario.get("name") or f"Usuário #{payload.usuario_id}"
+        cursor.execute(
+            """INSERT INTO ticket_interacoes
+                   (ticket_id, usuario_id, tipo, mensagem, publico, created_at)
+               VALUES (%s, %s, 'sla_pausado', %s, 1, NOW())""",
+            (ticket_id, payload.usuario_id, f"⏸️ SLA pausado manualmente por {nome}{motivo_txt}.")
+        )
+        conexao.commit()
+        return {"success": True, "message": "SLA pausado"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conexao: conexao.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:  cursor.close()
+        if conexao: conexao.close()
+
+
+@tickets_router.post("/{ticket_id}/sla/retomar")
+async def retomar_sla_manual(ticket_id: int, payload: SLAPausarPayload):
+    """Responsável do grupo ou admin retoma o SLA pausado manualmente."""
+    conexao = get_db_or_404()
+    cursor  = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        usuario = validar_usuario_existe(cursor, payload.usuario_id)
+        role    = usuario.get("role") or "USER"
+
+        if role not in ROLES_ADMIN and role != "RESPONSAVEL_GRUPO":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas Responsável do Grupo ou Admin podem retomar o SLA"
+            )
+
+        validar_ticket_existe(cursor, ticket_id)
+        SLAService.acumular_pausa(conexao, ticket_id)
+        retomou = SLAService.iniciar_sla(conexao, ticket_id)
+        if not retomou:
+            raise HTTPException(status_code=400, detail="SLA não está pausado ou não existe")
+
+        conexao.commit()
+        nome = usuario.get("name") or f"Usuário #{payload.usuario_id}"
+        cursor.execute(
+            """INSERT INTO ticket_interacoes
+                   (ticket_id, usuario_id, tipo, mensagem, publico, created_at)
+               VALUES (%s, %s, 'sla_retomado', %s, 1, NOW())""",
+            (ticket_id, payload.usuario_id, f"▶️ SLA retomado por {nome}.")
+        )
+        conexao.commit()
+        return {"success": True, "message": "SLA retomado"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conexao: conexao.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         if cursor:  cursor.close()
@@ -884,6 +1084,18 @@ async def criar_ticket(payload: TicketCriar):
         conexao.commit()
         ticket_id = cursor.lastrowid
         logger.info(f"  ✓ Ticket inserido no banco com ID: {ticket_id}")
+
+        # ── SLA: criar registro se categoria tem SLA definido ──
+        if payload.categoria_id:
+            cursor.execute(
+                "SELECT sla_minutos FROM categorias WHERE id = %s AND ativo = 1",
+                (payload.categoria_id,)
+            )
+            cat = cursor.fetchone()
+            if cat and cat.get("sla_minutos"):
+                SLAService.criar_sla(conexao, ticket_id, payload.categoria_id, cat["sla_minutos"])
+                conexao.commit()
+                logger.info(f"  ✓ SLA criado: {cat['sla_minutos']} min para ticket #{ticket_id}")
 
         # ========================================
         # 🆔 GERAR ID ALFANUMÉRICA

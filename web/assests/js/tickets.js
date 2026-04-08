@@ -644,6 +644,86 @@ function populateGroupDropdown() {
     ).join('');
 
   console.log(`[GRUPOS] ✅ Select populado com ${groups.length} grupos (padrão: ${userGroupId})`);
+
+  // Ao mudar o grupo, carregar categorias desse grupo
+  select.addEventListener('change', async () => {
+    const gid = parseInt(select.value);
+    resetCategoriaSubcategoria();
+    if (!gid) return;
+    await carregarCategoriasTicket(gid);
+  });
+
+  // Se já tem grupo pré-selecionado, carregar categorias imediatamente
+  if (userGroupId) {
+    carregarCategoriasTicket(userGroupId);
+  }
+}
+
+/** Carrega categorias do grupo selecionado e popula o select de categoria */
+async function carregarCategoriasTicket(groupId) {
+  const catDiv    = document.getElementById('ticketCategoriaDiv');
+  const catSelect = document.getElementById('ticketCategoria');
+  if (!catDiv || !catSelect) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/categorias?group_id=${groupId}`);
+    if (!res.ok) return;
+    const cats = await res.json();
+
+    if (!cats.length) {
+      catDiv.classList.add('d-none');
+      return;
+    }
+
+    catSelect.innerHTML = '<option value="">Selecione uma categoria...</option>' +
+      cats.map(c => `<option value="${c.id}" data-subs='${JSON.stringify(c.subcategorias || [])}'>${c.nome}</option>`).join('');
+
+    catDiv.classList.remove('d-none');
+
+    // Ao mudar categoria, popular subcategorias
+    catSelect.onchange = () => {
+      const opt  = catSelect.options[catSelect.selectedIndex];
+      const subs = opt ? JSON.parse(opt.dataset.subs || '[]') : [];
+      preencherSubcategorias(subs);
+    };
+
+  } catch (e) {
+    console.warn('[TICKET] Erro ao carregar categorias:', e);
+  }
+}
+
+/** Preenche o select de subcategorias com base na categoria escolhida */
+function preencherSubcategorias(subs) {
+  const subDiv    = document.getElementById('ticketSubcategoriaDiv');
+  const subSelect = document.getElementById('ticketSubcategoria');
+  if (!subDiv || !subSelect) return;
+
+  subSelect.innerHTML = '<option value="">Selecione uma subcategoria...</option>';
+
+  if (!subs.length) {
+    subDiv.classList.add('d-none');
+    return;
+  }
+
+  subs.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value       = s.id;
+    opt.textContent = s.nome;
+    subSelect.appendChild(opt);
+  });
+  subDiv.classList.remove('d-none');
+}
+
+/** Limpa categoria e subcategoria ao mudar de grupo */
+function resetCategoriaSubcategoria() {
+  const catDiv  = document.getElementById('ticketCategoriaDiv');
+  const subDiv  = document.getElementById('ticketSubcategoriaDiv');
+  const catSel  = document.getElementById('ticketCategoria');
+  const subSel  = document.getElementById('ticketSubcategoria');
+  if (catDiv)  catDiv.classList.add('d-none');
+  if (subDiv)  subDiv.classList.add('d-none');
+  if (catSel)  catSel.innerHTML = '<option value="">Selecione uma categoria...</option>';
+  if (subSel)  subSel.innerHTML = '<option value="">Selecione uma subcategoria...</option>';
 }
 
 // =========================================
@@ -689,7 +769,8 @@ async function loadTickets() {
         createdAtFull:   t.created_at,
         updatedAt:       formatDate(t.updated_at),
         updatedAtFull:   t.updated_at,
-        description:     t.descricao_inicial || 'Sem descrição'
+        description:     t.descricao_inicial || 'Sem descrição',
+        sla:             t.sla || null
       }));
 
       // O backend já filtra corretamente por role:
@@ -839,6 +920,7 @@ function renderTable() {
         <td>${getPriorityBadge(t.priority)}</td>
         <td>${getStatusBadge(t.status)}</td>
         <td><small>${t.assignedName !== "Não atribuído" ? t.assignedName : '-'}</small></td>
+        <td>${getSLABadge(t.sla)}</td>
         <td><small>${t.createdAt}</small></td>
         <td>
           <button class="btn btn-sm btn-info" onclick="openTicketDetail(${t.id})" title="Visualizar">
@@ -1007,6 +1089,9 @@ async function openTicketDetail(id) {
   // ✅ Aplica permissões de acordo com o role e se é o solicitante
   applyDetailPermissions(t);
 
+  // ✅ Renderiza painel de SLA
+  renderSLANoModal(t);
+
   // ✅ Passa usuario_id para filtrar comentários internos no backend
   await loadTicketComments(id);
 
@@ -1072,6 +1157,9 @@ function openNewTicketModal() {
   document.getElementById("ticketClient").value = user.name  || user.usuario_nome  || '';
   document.getElementById("ticketEmail").value  = user.email || user.usuario_email || '';
 
+  // ✅ Limpa categoria e subcategoria do form anterior
+  resetCategoriaSubcategoria();
+
   // ✅ Popula o select de grupos e pré-seleciona o grupo do usuário
   populateGroupDropdown();
 
@@ -1102,13 +1190,18 @@ async function handleFormSubmit(e) {
     return;
   }
 
+  const categoriaId    = parseInt(document.getElementById("ticketCategoria")?.value)    || null;
+  const subcategoriaId = parseInt(document.getElementById("ticketSubcategoria")?.value) || null;
+
   const payload = {
     assunto:           title,
     descricao_inicial: description,
     prioridade_id:     mapPriorityToApi(document.getElementById("ticketPriority").value),
     group_id:          selectedGroupId,
     solicitante_id:    user.id || user.usuario_id,
-    origem:            'web'
+    origem:            'web',
+    categoria_id:      categoriaId,
+    subcategoria_id:   subcategoriaId
   };
 
   let result;
@@ -1257,6 +1350,22 @@ function getStatusBadge(s) {
   const map     = { 'open': "Aberto", 'in-progress': "Andamento", 'resolved': "Resolvido", 'closed': "Fechado" };
   const classes = { 'open': "bg-warning text-dark", 'in-progress': "bg-primary", 'resolved': "bg-success", 'closed': "bg-secondary" };
   return `<span class="badge ${classes[s] || 'bg-secondary'}">${map[s] || s}</span>`;
+}
+
+function getSLABadge(sla) {
+  if (!sla || !sla.calculo) return '<span class="text-muted small">—</span>';
+  const c = sla.calculo;
+  const colorMap = { verde: '#198754', amarelo: '#ffc107', vermelho: '#dc3545', cinza: '#6c757d' };
+  const textMap  = { verde: '#fff',    amarelo: '#000',    vermelho: '#fff',    cinza: '#fff'    };
+  const bg   = colorMap[c.cor] || '#6c757d';
+  const text = textMap[c.cor]  || '#fff';
+  const icon = c.cor === 'vermelho' ? 'bi-alarm-fill'
+             : c.cor === 'amarelo'  ? 'bi-clock-history'
+             : c.cor === 'cinza'    ? 'bi-pause-circle'
+             : 'bi-check-circle';
+  return `<span class="badge" style="background:${bg};color:${text};white-space:nowrap;" title="${c.label}">
+    <i class="bi ${icon}"></i> ${c.label}
+  </span>`;
 }
 
 // =========================================
@@ -1579,7 +1688,88 @@ async function submitForward() {
 }
 
 // =========================================
-// 25. ALERTAS
+// 25. SLA — MODAL DE DETALHE
+// =========================================
+
+/** Atualiza o painel de SLA no modal de detalhe */
+function renderSLANoModal(ticket) {
+  const sla   = ticket.sla;
+  const row   = document.getElementById('detailSLARow');
+  const badge = document.getElementById('detailSLABadge');
+  const bar   = document.getElementById('detailSLABarFill');
+  const label = document.getElementById('detailSLALabel');
+  const ctrl  = document.getElementById('detailSLAControls');
+  const btnP  = document.getElementById('btnSLAPausar');
+  const btnR  = document.getElementById('btnSLARetomar');
+
+  if (!sla || !sla.calculo) {
+    if (row) row.style.display = 'none';
+    return;
+  }
+
+  row.style.display = '';
+  const c = sla.calculo;
+  const colorMap = { verde: '#198754', amarelo: '#ffc107', vermelho: '#dc3545', cinza: '#6c757d' };
+
+  badge.innerHTML = getSLABadge(sla);
+  bar.style.background  = colorMap[c.cor] || '#6c757d';
+  bar.style.width       = Math.min(c.percentual, 100) + '%';
+  label.textContent     = c.label;
+
+  // Controles de pausa — apenas para gestores (RESPONSAVEL_GRUPO ou admin)
+  if (isGestor() && c.status !== 'concluido' && c.status !== 'estourado' && c.status !== 'aguardando') {
+    ctrl.style.removeProperty('display');
+    if (c.status === 'pausado') {
+      btnP.classList.add('d-none');
+      btnR.classList.remove('d-none');
+    } else {
+      btnP.classList.remove('d-none');
+      btnR.classList.add('d-none');
+    }
+  } else {
+    ctrl.style.setProperty('display', 'none', 'important');
+  }
+}
+
+async function pausarSLAManual() {
+  if (!viewingTicketId) return;
+  const userId = getCurrentUserId();
+  const motivo = prompt('Motivo da pausa (opcional):') || null;
+  try {
+    const token = localStorage.getItem('cpe_token') || '';
+    const res   = await fetch(`${API_BASE}/tickets/${viewingTicketId}/sla/pausar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:   JSON.stringify({ usuario_id: userId, motivo })
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); showError(e.detail || 'Erro ao pausar SLA.'); return; }
+    showSuccess('SLA pausado.');
+    await loadTickets();
+    const t = tickets.find(x => x.id === viewingTicketId);
+    if (t) renderSLANoModal(t);
+  } catch (e) { showError('Erro de conexão.'); }
+}
+
+async function retomarSLAManual() {
+  if (!viewingTicketId) return;
+  const userId = getCurrentUserId();
+  try {
+    const token = localStorage.getItem('cpe_token') || '';
+    const res   = await fetch(`${API_BASE}/tickets/${viewingTicketId}/sla/retomar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:   JSON.stringify({ usuario_id: userId })
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); showError(e.detail || 'Erro ao retomar SLA.'); return; }
+    showSuccess('SLA retomado.');
+    await loadTickets();
+    const t = tickets.find(x => x.id === viewingTicketId);
+    if (t) renderSLANoModal(t);
+  } catch (e) { showError('Erro de conexão.'); }
+}
+
+// =========================================
+// 26. ALERTAS
 // =========================================
 
 function showAlert(id, msg) {
