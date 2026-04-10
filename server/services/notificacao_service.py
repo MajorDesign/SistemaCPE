@@ -94,23 +94,22 @@ class NotificacaoService:
             conn = self.get_connection()
             cursor = conn.cursor(dictionary=True)
 
-            # Buscar apenas RESPONSAVEL_GRUPO do setor
-            logger.info(f"  |-  Buscando responsaveis do setor...")
+            # Notificar TODOS os usuários ativos do setor (não apenas responsáveis)
+            logger.info(f"  |-  Buscando todos os usuarios do setor...")
             cursor.execute(
                 """
                 SELECT id, name
                 FROM users
-                WHERE group_id = %s AND is_active = 1 AND role = 'RESPONSAVEL_GRUPO'
+                WHERE group_id = %s AND is_active = 1
                 """,
                 (setor_id,),
             )
 
             usuarios_setor = cursor.fetchall()
-            usuarios_setor = cursor.fetchall()
-            logger.info(f"  |-  {len(usuarios_setor)} responsavel(eis) encontrado(s)")
+            logger.info(f"  |-  {len(usuarios_setor)} usuario(s) encontrado(s) no setor")
 
             if not usuarios_setor:
-                logger.warning(f"  |-  Nenhum RESPONSAVEL_GRUPO ativo no setor!")
+                logger.warning(f"  |-  Nenhum usuário ativo no setor!")
                 return False
 
             # Criar notificacao para cada responsavel

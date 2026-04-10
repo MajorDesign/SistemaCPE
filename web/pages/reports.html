@@ -1,1203 +1,1328 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Relatórios - CPE Control</title>
+  <title>Relatórios de Tickets — CPE Control</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
-    rel="stylesheet">
-
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/style.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
 
   <style>
-    .page-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 2rem;
-      padding-bottom: 1.5rem;
-      border-bottom: 2px solid #e5e7eb;
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
-
-    .page-title {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #1f2937;
-      margin: 0;
-    }
-
-    .tabs-navigation {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 2rem;
-      border-bottom: 2px solid #e5e7eb;
-      flex-wrap: wrap;
-    }
-
-    .tab-button {
-      padding: 12px 20px;
-      border: none;
-      background: none;
-      color: #6b7280;
-      font-weight: 600;
-      cursor: pointer;
-      position: relative;
-      transition: all 0.2s ease;
-      font-size: 14px;
-    }
-
-    .tab-button:hover {
-      color: #667eea;
-    }
-
-    .tab-button.active {
-      color: #667eea;
-    }
-
-    .tab-button.active::after {
-      content: '';
-      position: absolute;
-      bottom: -2rem;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 2px;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
-      margin-bottom: 2rem;
-    }
-
-    .stat-card {
-      background: white;
+    /* ── KPI Cards ── */
+    .rpt-kpi {
+      background: #fff;
       border: 1px solid #e5e7eb;
       border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-      transition: all 0.3s ease;
+      padding: 18px 20px;
+      transition: box-shadow .2s, transform .2s;
+    }
+    .rpt-kpi:hover { box-shadow: 0 6px 18px rgba(0,0,0,.08); transform: translateY(-2px); }
+    .rpt-kpi-icon { width: 40px; height: 40px; border-radius: 10px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; margin-bottom:10px; }
+    .rpt-kpi-value { font-size: 1.9rem; font-weight: 700; color: #1f2937; line-height: 1; }
+    .rpt-kpi-label { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing:.04em; color: #6b7280; margin-top: 4px; }
+    .rpt-kpi-sub   { font-size: .75rem; color: #9ca3af; margin-top: 2px; }
+
+    /* ── Filter bar ── */
+    .rpt-filter-bar { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; }
+    .rpt-filter-bar .form-control, .rpt-filter-bar .form-select {
+      font-size: .85rem; border-color: #e5e7eb; border-radius: 8px;
+    }
+    .rpt-filter-bar .form-control:focus, .rpt-filter-bar .form-select:focus {
+      border-color: #6f42c1; box-shadow: 0 0 0 3px rgba(111,66,193,.12);
     }
 
-    .stat-card:hover {
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
-      transform: translateY(-2px);
-    }
+    /* ── Table ── */
+    .rpt-table-wrap { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+    .rpt-table-header { padding: 14px 20px; border-bottom: 1px solid #f3f4f6; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+    .rpt-table-header h6 { margin: 0; font-weight: 700; color: #1f2937; }
+    .rpt-table { font-size: .83rem; }
+    .rpt-table thead th { background: #f9fafb; font-size: .72rem; text-transform: uppercase; letter-spacing:.04em; color: #6b7280; font-weight: 600; border-bottom: 2px solid #e5e7eb; padding: 10px 12px; white-space: nowrap; }
+    .rpt-table tbody td { padding: 10px 12px; vertical-align: middle; border-color: #f3f4f6; }
+    .rpt-table tbody tr:hover { background: #f9fafb; }
 
-    .stat-label {
-      font-size: 13px;
-      color: #6b7280;
-      font-weight: 600;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
+    /* ── Status badges ── */
+    .badge-status { font-size: .71rem; padding: 3px 8px; border-radius: 20px; font-weight: 600; }
+    .s-open     { background:#dbeafe; color:#1d4ed8; }
+    .s-progress { background:#fef3c7; color:#b45309; }
+    .s-waiting  { background:#e0e7ff; color:#4338ca; }
+    .s-resolved { background:#d1fae5; color:#065f46; }
+    .s-closed   { background:#f3f4f6; color:#374151; }
 
-    .stat-value {
-      font-size: 32px;
-      font-weight: 700;
-      color: #1f2937;
-      margin-bottom: 8px;
-    }
+    /* ── SLA mini-badge ── */
+    .sla-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; }
+    .sla-ok    { background:#10b981; }
+    .sla-warn  { background:#f59e0b; }
+    .sla-bad   { background:#ef4444; }
+    .sla-none  { background:#d1d5db; }
 
-    .stat-change {
-      font-size: 13px;
-      color: #6b7280;
-    }
+    /* ── Pagination ── */
+    .rpt-pagination { padding: 12px 20px; border-top: 1px solid #f3f4f6; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:.82rem; color:#6b7280; }
 
-    .search-filter {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
-    }
+    /* ── Termômetro / gauge ── */
+    #rptAvalGaugeArc { transition: stroke-dashoffset .8s ease, stroke .8s ease; }
+    #rptAvalGaugeNeedle { transition: transform .8s ease; }
 
-    .search-filter input,
-    .search-filter select {
-      padding: 0.75rem 1rem;
-      border: 2px solid #e5e7eb;
-      border-radius: 8px;
-      font-size: 14px;
-      flex: 1;
-      min-width: 250px;
-    }
+    /* ── Tabela individual avaliações ── */
+    .aval-membro-bar { height:8px; border-radius:4px; background:#e5e7eb; overflow:hidden; }
+    .aval-membro-fill { height:100%; border-radius:4px; transition:width .5s ease; }
+    .classif-badge { font-size:.72rem; font-weight:700; padding:3px 9px; border-radius:20px; }
+    .classif-exc  { background:#d1fae5; color:#065f46; }
+    .classif-bom  { background:#dbeafe; color:#1e40af; }
+    .classif-med  { background:#fef3c7; color:#92400e; }
+    .classif-crit { background:#fee2e2; color:#991b1b; }
 
-    .search-filter input:focus,
-    .search-filter select:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-      outline: none;
-    }
-
-    .reports-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 24px;
-    }
-
-    .report-card {
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      overflow: hidden;
-      transition: all 0.3s ease;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-      display: flex;
-      flex-direction: column;
-    }
-
-    .report-card:hover {
-      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
-      transform: translateY(-4px);
-      border-color: #667eea;
-    }
-
-    .report-header {
-      padding: 24px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-
-    .report-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 24px;
-      margin-bottom: 12px;
-    }
-
-    .report-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: #1f2937;
-      margin-bottom: 6px;
-    }
-
-    .report-description {
-      font-size: 13px;
-      color: #6b7280;
-      line-height: 1.5;
-    }
-
-    .report-body {
-      padding: 20px 24px;
-      flex: 1;
-    }
-
-    .report-info {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      margin-bottom: 16px;
-      font-size: 13px;
-      color: #6b7280;
-    }
-
-    .report-info-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .report-meta {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-    }
-
-    .meta-badge {
-      display: inline-block;
-      padding: 4px 10px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-
-    .meta-active {
-      background-color: rgba(16, 185, 129, 0.1);
-      color: #065f46;
-    }
-
-    .meta-monthly {
-      background-color: rgba(102, 126, 234, 0.1);
-      color: #1e40af;
-    }
-
-    .meta-weekly {
-      background-color: rgba(245, 158, 11, 0.1);
-      color: #92400e;
-    }
-
-    .report-footer {
-      padding: 16px 24px;
-      border-top: 1px solid #e5e7eb;
-      display: flex;
-      gap: 8px;
-    }
-
-    .btn-report-action {
-      flex: 1;
-      padding: 0.6rem;
-      border-radius: 6px;
-      border: 1px solid #e5e7eb;
-      background: white;
-      color: #1f2937;
-      font-weight: 600;
-      font-size: 13px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .btn-report-action:hover {
-      background-color: #f3f4f6;
-      border-color: #667eea;
-      color: #667eea;
-    }
-
-    .btn-report-action.danger:hover {
-      background-color: rgba(239, 68, 68, 0.1);
-      border-color: #ef4444;
-      color: #ef4444;
-    }
-
-    .btn-generate-report {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
-      font-weight: 600;
-      white-space: nowrap;
-      transition: all 0.3s ease;
-      cursor: pointer;
-    }
-
-    .btn-generate-report:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
-      color: white;
-      text-decoration: none;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 3rem 2rem;
-      color: #6b7280;
-    }
-
-    .empty-state-icon {
-      font-size: 3rem;
-      color: #d1d5db;
-      margin-bottom: 1rem;
-    }
-
-    .alert {
-      border: none;
-      border-radius: 8px;
-      margin-bottom: 1.5rem;
-    }
-
-    .alert-danger {
-      background-color: rgba(220, 38, 38, 0.1);
-      color: #991b1b;
-    }
-
-    .alert-success {
-      background-color: rgba(16, 185, 129, 0.1);
-      color: #065f46;
-    }
-
-    .modal-header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-    }
-
-    .modal-header .btn-close {
-      filter: brightness(0) invert(1);
-    }
-
-    .form-control:focus,
-    .form-select:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .d-none {
-      display: none;
-    }
-
+    /* ── Responsive ── */
     @media (max-width: 768px) {
-      .reports-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .search-filter {
-        flex-direction: column;
-      }
-
-      .search-filter input,
-      .search-filter select {
-        width: 100%;
-      }
-
-      .page-header {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .report-footer {
-        flex-direction: column;
-      }
-
-      .btn-report-action {
-        width: 100%;
-      }
+      .rpt-kpi-value { font-size: 1.5rem; }
+      .rpt-table-wrap { overflow-x: auto; }
     }
   </style>
+
   <script src="/SistemaCPE/web/assests/js/per_usuario/access-config.js"></script>
   <script src="/SistemaCPE/web/assests/js/per_usuario/page-access-control.js"></script>
   <script>checkPageAccess('REPORTS');</script>
 </head>
 
 <body>
-  <!-- ============================================================ -->
-  <!-- 🔒 LOADING PAGE -->
-  <!-- ============================================================ -->
-  <div id="loadingPage"
-    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
-    <div style="text-align: center; color: white;">
-      <div class="spinner-border" role="status"
-        style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
-        <span class="visually-hidden">Carregando...</span>
-      </div>
-      <p style="margin-top: 1rem;">Inicializando página...</p>
-    </div>
-  </div>
-  <!-- ============================================================ -->
+  <!-- NAVBAR (injetado pelo nav.js) -->
+  <nav id="navbar-container"></nav>
 
-  <div class="container-main" style="display: none;">
-    <!-- SIDEBAR -->
-    <div class="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">CPE</div>
-        <div class="sidebar-title">CONTROL</div>
-      </div>
-
-      <div class="search-box">
-        <input type="text" placeholder="Buscar">
-      </div>
-
-      <ul class="sidebar-menu"></ul>
-    </div>
+  <div class="container-main">
+    <!-- SIDEBAR (injetado pelo nav.js) -->
+    <div id="sidebar-container"></div>
 
     <!-- MAIN CONTENT -->
     <div class="main-content">
       <div class="top-bar">
-        <button class="menu-toggle">☰</button>
-        <h1><i class="bi bi-bar-chart"></i> Relatórios</h1>
+        <h1><i class="bi bi-bar-chart-line"></i> Relatórios de Tickets</h1>
+        <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
       </div>
 
       <div class="content">
-        <!-- ALERTS -->
-        <div class="alert alert-danger d-none" id="alertBox" role="alert">
-          <i class="bi bi-exclamation-circle"></i>
-          <span id="alertMessage"></span>
-        </div>
 
-        <div class="alert alert-success d-none" id="successBox" role="alert">
-          <i class="bi bi-check-circle"></i>
-          <span id="successMessage">Operação realizada com sucesso!</span>
-        </div>
-
-        <!-- PAGE HEADER -->
-        <div class="page-header">
-          <h2 class="page-title">
-            <i class="bi bi-graph-up"></i> Meus Relatórios
-          </h2>
-          <button class="btn-generate-report" id="btnNewReport" data-bs-toggle="modal" data-bs-target="#reportModal">
-            <i class="bi bi-plus-lg"></i> Gerar Relatório
-          </button>
-        </div>
-
-        <!-- TABS NAVIGATION -->
-        <div class="tabs-navigation">
-          <button class="tab-button active" onclick="switchTab('all')">
-            <i class="bi bi-file-earmark-pdf"></i> Todos
-          </button>
-          <button class="tab-button" onclick="switchTab('tickets')">
-            <i class="bi bi-ticket-detailed"></i> Tickets
-          </button>
-          <button class="tab-button" onclick="switchTab('projects')">
-            <i class="bi bi-folder-check"></i> Projetos
-          </button>
-          <button class="tab-button" onclick="switchTab('tasks')">
-            <i class="bi bi-check-square"></i> Tarefas
-          </button>
-          <button class="tab-button" onclick="switchTab('inventory')">
-            <i class="bi bi-box-seam"></i> Inventário
-          </button>
-        </div>
-
-        <!-- STATISTICS -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-label">Total de Relatórios</div>
-            <div class="stat-value" id="totalReports">0</div>
-            <div class="stat-change">Relatórios gerados</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-label">Este Mês</div>
-            <div class="stat-value" id="monthlyReports">0</div>
-            <div class="stat-change">Gerados em março</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-label">Agendados</div>
-            <div class="stat-value" id="scheduledReports">0</div>
-            <div class="stat-change">Relatórios automáticos</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-label">Compartilhados</div>
-            <div class="stat-value" id="sharedReports">0</div>
-            <div class="stat-change">Com outros usuários</div>
+        <!-- ACESSO NEGADO -->
+        <div id="accessDenied" class="d-none">
+          <div class="text-center py-5">
+            <i class="bi bi-shield-lock" style="font-size:3rem;color:#d1d5db;"></i>
+            <h5 class="mt-3 text-muted">Acesso Restrito</h5>
+            <p class="text-muted">Esta página é exclusiva para Responsáveis de Grupo e Administradores.</p>
+            <a href="/SistemaCPE/web/pages/tickets.html" class="btn btn-primary mt-2">Ir para Tickets</a>
           </div>
         </div>
 
-        <!-- SEARCH AND FILTER -->
-        <div class="search-filter">
-          <input type="text" id="searchInput" placeholder="Buscar relatório...">
-          <select id="typeFilter" style="width: 200px;">
-            <option value="">Todos os Tipos</option>
-            <option value="tickets">Tickets</option>
-            <option value="projects">Projetos</option>
-            <option value="tasks">Tarefas</option>
-            <option value="inventory">Inventário</option>
-          </select>
-        </div>
+        <!-- CONTEÚDO PRINCIPAL -->
+        <div id="rptContent" class="d-none">
 
-        <!-- REPORTS GRID -->
-        <div class="reports-grid" id="reportsGrid">
-          <div style="grid-column: 1 / -1;">
-            <div class="empty-state">
-              <div class="empty-state-icon">
-                <i class="bi bi-inbox"></i>
-              </div>
-              <p>Carregando relatórios...</p>
+          <!-- ABAS SUPERIORES -->
+          <ul class="nav nav-tabs mb-4" id="rptTabs" style="border-bottom:2px solid #e5e7eb;">
+            <li class="nav-item">
+              <button class="nav-link active fw-semibold px-4" id="tabTicketsBtn"
+                onclick="rptMostrarAba('tickets')" style="font-size:.85rem;">
+                <i class="bi bi-ticket-perforated me-2"></i>Chamados
+              </button>
+            </li>
+            <li class="nav-item">
+              <button class="nav-link fw-semibold px-4" id="tabAvaliacoesBtn"
+                onclick="rptMostrarAba('avaliacoes')" style="font-size:.85rem;">
+                <i class="bi bi-star-fill me-2 text-warning"></i>Avaliações
+              </button>
+            </li>
+          </ul>
+
+          <!-- ─── ABA: CHAMADOS ─────────────────────────────── -->
+          <div id="tabTickets">
+
+          <!-- HEADER -->
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+            <div>
+              <h4 class="mb-0 fw-bold" style="color:#1f2937;"><i class="bi bi-bar-chart-line me-2" style="color:#6f42c1;"></i>Relatórios de Tickets</h4>
+              <small class="text-muted" id="rptSubtitulo">Carregando...</small>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+              <button class="btn btn-outline-secondary btn-sm" onclick="rptCarregar()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Atualizar
+              </button>
+              <button class="btn btn-outline-success btn-sm" onclick="rptExportCSV()">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Exportar CSV
+              </button>
             </div>
           </div>
+
+          <!-- FILTROS -->
+          <div class="rpt-filter-bar mb-4">
+            <div class="row g-2 align-items-end">
+              <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Data Início</label>
+                <input type="date" class="form-control form-control-sm" id="rptDataInicio">
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Data Fim</label>
+                <input type="date" class="form-control form-control-sm" id="rptDataFim">
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Status</label>
+                <select class="form-select form-select-sm" id="rptStatus">
+                  <option value="">Todos</option>
+                  <option value="1">Aberto</option>
+                  <option value="2">Em Andamento</option>
+                  <option value="3">Aguardando</option>
+                  <option value="4">Resolvido</option>
+                  <option value="5">Fechado</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Responsável</label>
+                <select class="form-select form-select-sm" id="rptResponsavel">
+                  <option value="">Todos</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">SLA</label>
+                <select class="form-select form-select-sm" id="rptSlaFiltro">
+                  <option value="">Todos</option>
+                  <option value="ok">Dentro do Prazo</option>
+                  <option value="estourado">Estourado</option>
+                  <option value="proximo">Próx. de Vencer</option>
+                  <option value="sem_sla">Sem SLA</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-2 d-flex gap-2">
+                <button class="btn btn-primary btn-sm flex-grow-1" onclick="rptCarregar()">
+                  <i class="bi bi-search me-1"></i>Filtrar
+                </button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="rptLimparFiltros()" title="Limpar filtros">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI CARDS -->
+          <div class="row g-3 mb-4" id="rptKpiRow">
+            <!-- preenchido pelo JS -->
+          </div>
+
+          <!-- SEPARADOR SLA -->
+          <div class="row g-3 mb-4" id="rptKpiSlaRow" style="display:none!important">
+            <!-- preenchido pelo JS se houver dados SLA -->
+          </div>
+
+          <!-- TABELA -->
+          <div class="rpt-table-wrap">
+            <div class="rpt-table-header">
+              <h6><i class="bi bi-table me-2 text-purple"></i>Lista de Tickets</h6>
+              <div class="d-flex align-items-center gap-3">
+                <span class="text-muted small" id="rptContagem">—</span>
+                <div class="input-group input-group-sm" style="width:200px;">
+                  <span class="input-group-text"><i class="bi bi-search"></i></span>
+                  <input type="text" class="form-control" id="rptBusca" placeholder="Buscar na tabela..." oninput="rptFiltrarTabela()">
+                </div>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table rpt-table mb-0">
+                <thead>
+                  <tr>
+                    <th onclick="rptOrdenar('numero')" style="cursor:pointer"># <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th>Assunto</th>
+                    <th onclick="rptOrdenar('solicitante_nome')" style="cursor:pointer">Solicitante <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th onclick="rptOrdenar('responsavel_nome')" style="cursor:pointer">Responsável <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th onclick="rptOrdenar('status_id')" style="cursor:pointer">Status <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th>SLA Total</th>
+                    <th>1ª Resposta</th>
+                    <th onclick="rptOrdenar('created_at')" style="cursor:pointer">Criado em <i class="bi bi-arrow-down-up text-muted"></i></th>
+                  </tr>
+                </thead>
+                <tbody id="rptTbody">
+                  <tr><td colspan="8" class="text-center py-4 text-muted">
+                    <div class="spinner-border spinner-border-sm me-2"></div>Carregando...
+                  </td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="rpt-pagination" id="rptPagination">
+              <span id="rptPaginaInfo">—</span>
+              <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-secondary" id="rptBtnAnterior" onclick="rptPagina(-1)">
+                  <i class="bi bi-chevron-left"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-secondary" id="rptBtnProximo" onclick="rptPagina(1)">
+                  <i class="bi bi-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          </div><!-- /tabTickets -->
+
+          <!-- ─── ABA: AVALIAÇÕES ───────────────────────────── -->
+          <div id="tabAvaliacoes" style="display:none;">
+
+            <!-- Header -->
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-4">
+              <div>
+                <h4 class="mb-0 fw-bold" style="color:#1f2937;"><i class="bi bi-star-fill me-2 text-warning"></i>Avaliações de Atendimento</h4>
+                <small class="text-muted" id="rptAvalSubtitulo">Carregando...</small>
+              </div>
+              <button class="btn btn-outline-secondary btn-sm" onclick="rptAvalCarregar()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Atualizar
+              </button>
+            </div>
+
+            <!-- KPI Avaliações -->
+            <div class="row g-3 mb-4" id="rptAvalKpis">
+              <div class="col-12 text-center py-3 text-muted">
+                <div class="spinner-border spinner-border-sm me-2"></div>Carregando...
+              </div>
+            </div>
+
+            <!-- ── TERMÔMETRO DO GRUPO ───────────────────────── -->
+            <div class="bg-white border rounded-3 p-4 mb-4" id="rptAvalTermometro" style="display:none;">
+              <div class="d-flex align-items-center mb-3">
+                <i class="bi bi-thermometer-half me-2 text-warning"></i>
+                <span class="fw-semibold" style="font-size:.88rem;">Excelência do Grupo</span>
+              </div>
+              <div class="row g-4 align-items-center">
+                <!-- Gauge -->
+                <div class="col-12 col-md-4 text-center">
+                  <div style="position:relative;display:inline-block;">
+                    <svg viewBox="0 0 200 120" width="220" height="132" id="rptAvalGaugeSvg">
+                      <!-- trilha cinza -->
+                      <path d="M20,110 A90,90 0 0,1 180,110" fill="none" stroke="#e5e7eb" stroke-width="18" stroke-linecap="round"/>
+                      <!-- arco colorido -->
+                      <path id="rptAvalGaugeArc" d="M20,110 A90,90 0 0,1 180,110" fill="none" stroke="#d1d5db" stroke-width="18" stroke-linecap="round"
+                            stroke-dasharray="283" stroke-dashoffset="283"/>
+                      <!-- agulha -->
+                      <line id="rptAvalGaugeNeedle" x1="100" y1="110" x2="100" y2="30"
+                            stroke="#374151" stroke-width="3" stroke-linecap="round"
+                            transform="rotate(0,100,110)"/>
+                      <circle cx="100" cy="110" r="6" fill="#374151"/>
+                    </svg>
+                    <div style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);text-align:center;">
+                      <div id="rptAvalGaugeVal" style="font-size:1.8rem;font-weight:800;line-height:1;color:#1f2937;">—</div>
+                      <div id="rptAvalGaugeLabel" style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;">Carregando</div>
+                    </div>
+                  </div>
+                  <div class="d-flex justify-content-between px-2 mt-1" style="font-size:.68rem;color:#9ca3af;width:220px;margin:0 auto;">
+                    <span>Crítico</span><span>Médio</span><span>Excelente</span>
+                  </div>
+                </div>
+                <!-- Legenda de faixas -->
+                <div class="col-12 col-md-4">
+                  <div class="d-flex flex-column gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                      <div style="width:12px;height:12px;border-radius:3px;background:#059669;flex-shrink:0;"></div>
+                      <span style="font-size:.8rem;"><strong>Excelente</strong> — 8,0 a 10 ★</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                      <div style="width:12px;height:12px;border-radius:3px;background:#3b82f6;flex-shrink:0;"></div>
+                      <span style="font-size:.8rem;"><strong>Bom</strong> — 6,0 a 7,9 ★</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                      <div style="width:12px;height:12px;border-radius:3px;background:#f59e0b;flex-shrink:0;"></div>
+                      <span style="font-size:.8rem;"><strong>Mediano</strong> — 4,0 a 5,9 ★</span>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                      <div style="width:12px;height:12px;border-radius:3px;background:#ef4444;flex-shrink:0;"></div>
+                      <span style="font-size:.8rem;"><strong>Crítico</strong> — abaixo de 4,0 ★</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- Mini-KPIs -->
+                <div class="col-12 col-md-4">
+                  <div class="row g-2" id="rptAvalMiniKpis"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Distribuição -->
+            <div class="bg-white border rounded-3 p-3 mb-4" id="rptAvalDist" style="display:none;">
+              <div class="d-flex align-items-center mb-3">
+                <i class="bi bi-bar-chart-fill text-warning me-2"></i>
+                <span class="fw-semibold" style="font-size:.85rem;">Distribuição por Estrelas</span>
+              </div>
+              <div id="rptAvalDistBars"></div>
+            </div>
+
+            <!-- ── DESEMPENHO INDIVIDUAL ──────────────────────── -->
+            <div class="bg-white border rounded-3 overflow-hidden mb-4" id="rptAvalMembroSection" style="display:none;">
+              <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom" style="background:#fffbeb;">
+                <span class="fw-semibold" style="font-size:.85rem;">
+                  <i class="bi bi-people-fill me-2 text-warning"></i>Desempenho Individual — Avaliações
+                </span>
+              </div>
+              <div class="table-responsive">
+                <table class="table rpt-table mb-0" id="rptAvalMembroTable">
+                  <thead>
+                    <tr>
+                      <th>Membro</th>
+                      <th class="text-center">Avaliações</th>
+                      <th class="text-center">Média</th>
+                      <th class="text-center" style="min-width:130px;">Nota Visual</th>
+                      <th class="text-center">Positivas</th>
+                      <th class="text-center">Neutras</th>
+                      <th class="text-center">Negativas</th>
+                      <th class="text-center">Menor</th>
+                      <th class="text-center">Maior</th>
+                      <th class="text-center" style="min-width:110px;">Classificação</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rptAvalMembroTbody">
+                    <tr><td colspan="10" class="text-center py-3 text-muted">Carregando...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Filtros avaliações -->
+            <div class="rpt-filter-bar mb-3">
+              <div class="row g-2 align-items-end">
+                <div class="col-6 col-md-2">
+                  <label class="form-label small fw-semibold mb-1">Data Início</label>
+                  <input type="date" class="form-control form-control-sm" id="rptAvalDi">
+                </div>
+                <div class="col-6 col-md-2">
+                  <label class="form-label small fw-semibold mb-1">Data Fim</label>
+                  <input type="date" class="form-control form-control-sm" id="rptAvalDf">
+                </div>
+                <div class="col-6 col-md-2">
+                  <label class="form-label small fw-semibold mb-1">Nota Mín.</label>
+                  <select class="form-select form-select-sm" id="rptAvalEMin">
+                    <option value="">Todas</option>
+                    <option value="1">1★</option><option value="2">2★</option>
+                    <option value="3">3★</option><option value="4">4★</option>
+                    <option value="5">5★</option><option value="6">6★</option>
+                    <option value="7">7★</option><option value="8">8★</option>
+                    <option value="9">9★</option><option value="10">10★</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-2">
+                  <label class="form-label small fw-semibold mb-1">Nota Máx.</label>
+                  <select class="form-select form-select-sm" id="rptAvalEMax">
+                    <option value="">Todas</option>
+                    <option value="1">1★</option><option value="2">2★</option>
+                    <option value="3">3★</option><option value="4">4★</option>
+                    <option value="5">5★</option><option value="6">6★</option>
+                    <option value="7">7★</option><option value="8">8★</option>
+                    <option value="9">9★</option><option value="10">10★</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-2">
+                  <label class="form-label small fw-semibold mb-1">Situação</label>
+                  <select class="form-select form-select-sm" id="rptAvalSit">
+                    <option value="">Todas</option>
+                    <option value="1">Apenas avaliados</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-2 d-flex gap-2">
+                  <button class="btn btn-warning btn-sm flex-grow-1 text-white" onclick="rptAvalCarregar()">
+                    <i class="bi bi-search me-1"></i>Filtrar
+                  </button>
+                  <button class="btn btn-outline-secondary btn-sm" onclick="rptAvalLimpar()" title="Limpar"><i class="bi bi-x-lg"></i></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tabela avaliações -->
+            <div class="rpt-table-wrap">
+              <div class="rpt-table-header">
+                <h6><i class="bi bi-table me-2 text-warning"></i>Lista de Avaliações</h6>
+                <span class="text-muted small" id="rptAvalContagem">—</span>
+              </div>
+              <div class="table-responsive">
+                <table class="table rpt-table mb-0">
+                  <thead>
+                    <tr>
+                      <th>Chamado</th>
+                      <th>Assunto</th>
+                      <th>Solicitante</th>
+                      <th>Responsável</th>
+                      <th class="text-center">Nota</th>
+                      <th class="text-center">Estrelas</th>
+                      <th>Comentário</th>
+                      <th>Avaliado em</th>
+                      <th class="text-center">Situação</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rptAvalTbody">
+                    <tr><td colspan="9" class="text-center py-4 text-muted">
+                      <div class="spinner-border spinner-border-sm me-2"></div>Carregando...
+                    </td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="rpt-pagination" id="rptAvalPagination">
+                <span id="rptAvalPaginaInfo">—</span>
+                <div class="d-flex gap-1">
+                  <button class="btn btn-sm btn-outline-secondary" id="rptAvalBtnAnt" onclick="rptAvalPagina(-1)"><i class="bi bi-chevron-left"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary" id="rptAvalBtnProx" onclick="rptAvalPagina(1)"><i class="bi bi-chevron-right"></i></button>
+                </div>
+              </div>
+            </div>
+
+          </div><!-- /tabAvaliacoes -->
+
+        </div><!-- /rptContent -->
+      </div><!-- /content -->
+    </div><!-- /main-content -->
+  </div><!-- /container-main -->
+
+  <!-- SCRIPTS (mesma ordem que tickets.html) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/js/route-protection.js"></script>
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+
+  <script>
+  // ============================================================
+  //  RELATÓRIOS DE TICKETS
+  //  Acesso: RESPONSAVEL_GRUPO | ADMIN | TI | MANAGER
+  // ============================================================
+
+  // ── apiRequest wrapper (api.js expõe API_BASE_URL, tickets.js não é incluído) ──
+  async function apiRequest(method, endpoint, body = null) {
+    const token = localStorage.getItem('cpe_token');
+    const opts  = { method, headers: { 'Content-Type': 'application/json' } };
+    if (token) opts.headers['Authorization'] = `Bearer ${token}`;
+    if (body)  opts.body = JSON.stringify(body);
+    const base = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : 'http://127.0.0.1:8000';
+    const res  = await fetch(`${base}/api${endpoint}`, opts);
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw e; }
+    return res.json();
+  }
+
+  const RPT_ROLES_OK = ['RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'];
+  const RPT_POR_PAGINA = 20;
+
+  let rptDados       = [];   // todos os tickets carregados
+  let rptFiltrados   = [];   // após busca na tabela
+  let rptPaginaAtual = 1;
+  let rptOrdenacao   = { col: 'created_at', asc: false };
+
+  // ── Status helpers ────────────────────────────────────────────
+  const STATUS_LABEL = { 1:'Aberto', 2:'Em Andamento', 3:'Aguardando', 4:'Resolvido', 5:'Fechado' };
+  const STATUS_CLASS = { 1:'s-open', 2:'s-progress', 3:'s-waiting', 4:'s-resolved', 5:'s-closed' };
+
+  function _esc(s) {
+    return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function _fmt_date(s) {
+    if (!s) return '—';
+    const d = new Date(s);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+  }
+  function _fmt_sla(mins) {
+    if (!mins) return '—';
+    const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
+    return [d && `${d}d`, h && `${h}h`, m && `${m}m`].filter(Boolean).join(' ');
+  }
+
+  // ── Classificar SLA no cliente ────────────────────────────────
+  function _classifSLA(t) {
+    if (!t.sla_minutos) return 'sem_sla';
+    const iniciado = t.sla_iniciado_em ? new Date(t.sla_iniciado_em) : null;
+    if (!iniciado) return 'sem_sla';
+    const concluido   = t.sla_concluido_em  ? new Date(t.sla_concluido_em)  : null;
+    const estourou    = t.sla_estourou_em   ? new Date(t.sla_estourou_em)   : null;
+    const pausados    = t.sla_minutos_pausados || 0;
+    const finalizado  = [4,5].includes(t.status_id);
+
+    if (estourou) return finalizado ? 'estourado_ok' : 'estourado';
+    if (t.sla_status === 'concluido') return 'ok';
+
+    const ref    = finalizado ? (concluido || new Date(t.updated_at || Date.now())) : new Date();
+    const mins   = Math.max(0, (ref - iniciado) / 60000 - pausados);
+    if (mins > t.sla_minutos) return finalizado ? 'estourado_ok' : 'estourado';
+    const pct = mins / t.sla_minutos;
+    if (pct >= 0.8) return 'proximo';
+    return 'ok';
+  }
+
+  function _classifPR(t) {
+    if (!t.sla_pr_minutos) return null;
+    const iniciado = t.sla_iniciado_em ? new Date(t.sla_iniciado_em) : null;
+    if (!iniciado) return null;
+    const pr = t.sla_primeira_resposta_em ? new Date(t.sla_primeira_resposta_em) : null;
+    const pausados = t.sla_minutos_pausados || 0;
+    if (pr) {
+      const mins = Math.max(0, (pr - iniciado) / 60000 - pausados);
+      return mins <= t.sla_pr_minutos ? 'ok' : 'estourado';
+    }
+    const finalizado = [4,5].includes(t.status_id);
+    const ref  = finalizado ? new Date(t.updated_at || Date.now()) : new Date();
+    const mins = Math.max(0, (ref - iniciado) / 60000 - pausados);
+    return mins > t.sla_pr_minutos ? 'estourado' : 'aguardando';
+  }
+
+  function _slaDot(classif) {
+    const map = { ok:'sla-ok', proximo:'sla-warn', estourado:'sla-bad', estourado_ok:'sla-bad', aguardando:'sla-warn', sem_sla:'sla-none' };
+    return `<span class="sla-dot ${map[classif]||'sla-none'}"></span>`;
+  }
+
+  function _slaLabel(classif) {
+    const map = { ok:'No Prazo', proximo:'Próx. Vencer', estourado:'Estourado', estourado_ok:'Estourado (conc.)', aguardando:'Aguardando', sem_sla:'—' };
+    return map[classif] || '—';
+  }
+
+  // ── KPI helpers ───────────────────────────────────────────────
+  function _kpi(cor, icon, label, valor, sub) {
+    const bgMap  = { purple:'#f5f0ff', green:'#ecfdf5', red:'#fff1f2', yellow:'#fffbeb', blue:'#eff6ff', gray:'#f9fafb' };
+    const fgMap  = { purple:'#6f42c1', green:'#059669', red:'#dc2626', yellow:'#d97706', blue:'#2563eb', gray:'#4b5563' };
+    const bg = bgMap[cor]||'#f9fafb', fg = fgMap[cor]||'#374151';
+    return `
+      <div class="col-6 col-md-4 col-lg-2">
+        <div class="rpt-kpi">
+          <div class="rpt-kpi-icon" style="background:${bg};color:${fg}"><i class="bi ${icon}"></i></div>
+          <div class="rpt-kpi-value" style="color:${fg}">${valor}</div>
+          <div class="rpt-kpi-label">${label}</div>
+          ${sub ? `<div class="rpt-kpi-sub">${sub}</div>` : ''}
+        </div>
+      </div>`;
+  }
+
+  // ── INIT — aguarda nav.js inicializar o usuário ───────────────
+  function _rptInit() {
+    const user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+
+    if (!user || !RPT_ROLES_OK.includes(user.role)) {
+      document.getElementById('accessDenied').classList.remove('d-none');
+      return;
+    }
+
+    document.getElementById('rptContent').classList.remove('d-none');
+
+    // Preencher responsáveis do grupo
+    _carregarResponsaveis(user);
+
+    // Datas padrão: mês corrente
+    const hoje = new Date();
+    const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    document.getElementById('rptDataInicio').value = ini.toISOString().slice(0,10);
+    document.getElementById('rptDataFim').value    = hoje.toISOString().slice(0,10);
+
+    rptCarregar();
+  }
+
+  // Nav.js chama window.onNavReady ou dispara evento 'navReady'
+  // Aguarda o usuário estar disponível via polling
+  (function _aguardarNav() {
+    let tries = 0;
+    const t = setInterval(() => {
+      const user = (typeof getCurrentUser === 'function') ? getCurrentUser() : null;
+      if (user || ++tries > 50) { clearInterval(t); _rptInit(); }
+    }, 100);
+  })();
+
+  async function _carregarResponsaveis(user) {
+    try {
+      const tickets = await apiRequest('GET', `/tickets/?usuario_id=${user.id}&limite=500`);
+      const map = {};
+      tickets.forEach(t => {
+        if (t.responsavel_id && t.responsavel_nome) map[t.responsavel_id] = t.responsavel_nome;
+      });
+      const sel = document.getElementById('rptResponsavel');
+      Object.entries(map).sort((a,b)=>a[1].localeCompare(b[1])).forEach(([id, nome]) => {
+        sel.insertAdjacentHTML('beforeend', `<option value="${id}">${_esc(nome)}</option>`);
+      });
+    } catch(_) {}
+  }
+
+  // ── CARREGAR ──────────────────────────────────────────────────
+  async function rptCarregar() {
+    const user = getCurrentUser();
+    if (!user) return;
+
+    const dataIni   = document.getElementById('rptDataInicio').value;
+    const dataFim   = document.getElementById('rptDataFim').value;
+    const statusId  = document.getElementById('rptStatus').value;
+    const respId    = document.getElementById('rptResponsavel').value;
+
+    let url = `/tickets/?usuario_id=${user.id}&limite=500`;
+    if (dataIni)  url += `&data_inicio=${dataIni}`;
+    if (dataFim)  url += `&data_fim=${dataFim}`;
+    if (statusId) url += `&status_id=${statusId}`;
+    if (respId)   url += `&responsavel_id=${respId}`;
+
+    document.getElementById('rptTbody').innerHTML =
+      '<tr><td colspan="8" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Carregando...</td></tr>';
+    document.getElementById('rptKpiRow').innerHTML = '';
+
+    try {
+      rptDados = await apiRequest('GET', url);
+    } catch(e) {
+      document.getElementById('rptTbody').innerHTML =
+        `<tr><td colspan="8" class="text-center py-3 text-danger"><i class="bi bi-exclamation-circle me-1"></i>Erro: ${e.detail||e.message||'tente novamente'}</td></tr>`;
+      return;
+    }
+
+    // Atualizar subtítulo
+    const periodo = dataIni && dataFim
+      ? `${new Date(dataIni+'T00:00').toLocaleDateString('pt-BR')} → ${new Date(dataFim+'T00:00').toLocaleDateString('pt-BR')}`
+      : 'Todos os períodos';
+    document.getElementById('rptSubtitulo').textContent = `${periodo} · ${rptDados.length} ticket(s) encontrado(s)`;
+
+    _renderKPIs();
+    rptPaginaAtual = 1;
+    rptBusca.value = '';
+    rptFiltrarTabela();
+  }
+
+  // ── KPIs ──────────────────────────────────────────────────────
+  function _renderKPIs() {
+    const t = rptDados;
+    const total     = t.length;
+    const aberto    = t.filter(x=>x.status_id===1).length;
+    const andamento = t.filter(x=>x.status_id===2).length;
+    const aguard    = t.filter(x=>x.status_id===3).length;
+    const resolvido = t.filter(x=>x.status_id===4).length;
+    const fechado   = t.filter(x=>x.status_id===5).length;
+
+    const slaClassif  = t.map(_classifSLA);
+    const ok          = slaClassif.filter(s=>s==='ok').length;
+    const proximo     = slaClassif.filter(s=>s==='proximo').length;
+    const estourado   = slaClassif.filter(s=>['estourado','estourado_ok'].includes(s)).length;
+    const semSla      = slaClassif.filter(s=>s==='sem_sla').length;
+
+    const prClassif   = t.map(_classifPR);
+    const prOk        = prClassif.filter(s=>s==='ok').length;
+    const prBad       = prClassif.filter(s=>s==='estourado').length;
+    const temPR       = prOk + prBad + prClassif.filter(s=>s==='aguardando').length > 0;
+
+    const pct = (v, d) => d > 0 ? ` ${Math.round(v/d*100)}%` : '';
+
+    document.getElementById('rptKpiRow').innerHTML = [
+      _kpi('blue',   'bi-ticket-perforated-fill', 'Total',        total,     ''),
+      _kpi('yellow', 'bi-folder2-open',            'Abertos',     aberto,    ''),
+      _kpi('purple', 'bi-hourglass-split',         'Em Andamento',andamento, ''),
+      _kpi('green',  'bi-check-circle-fill',        'Resolvidos',  resolvido, ''),
+      _kpi('gray',   'bi-lock',                    'Fechados',    fechado,   ''),
+      _kpi('red',    'bi-x-circle-fill',            'SLA Estourado',estourado,`de ${total - semSla} com SLA`),
+    ].join('');
+
+    const slaRow = document.getElementById('rptKpiSlaRow');
+    if (temPR || ok > 0 || proximo > 0) {
+      slaRow.style.cssText = '';
+      slaRow.innerHTML = [
+        _kpi('green',  'bi-check-circle',           'SLA no Prazo',  ok,       pct(ok, total-semSla)),
+        _kpi('yellow', 'bi-exclamation-circle',      'Próx. de Vencer',proximo, pct(proximo, total-semSla)),
+        _kpi('gray',   'bi-dash-circle',             'Sem SLA',       semSla,   ''),
+        ...(temPR ? [
+          _kpi('green',  'bi-reply-fill',            '1ª Resp. OK',   prOk,    pct(prOk, prOk+prBad)),
+          _kpi('red',    'bi-reply-fill',            '1ª Resp. Est.', prBad,   pct(prBad, prOk+prBad)),
+        ] : []),
+      ].join('');
+    }
+  }
+
+  // ── FILTRAR TABELA (busca local) ──────────────────────────────
+  function rptFiltrarTabela() {
+    const q         = (document.getElementById('rptBusca').value||'').toLowerCase();
+    const slaFiltro = document.getElementById('rptSlaFiltro').value;
+
+    rptFiltrados = rptDados.filter(t => {
+      // Busca textual
+      const txt = [t.numero, t.assunto, t.solicitante_nome, t.responsavel_nome, STATUS_LABEL[t.status_id]]
+        .join(' ').toLowerCase();
+      if (q && !txt.includes(q)) return false;
+
+      // Filtro SLA
+      if (slaFiltro) {
+        const s = _classifSLA(t);
+        if (slaFiltro === 'ok'       && s !== 'ok')       return false;
+        if (slaFiltro === 'estourado'&& !['estourado','estourado_ok'].includes(s)) return false;
+        if (slaFiltro === 'proximo'  && s !== 'proximo')  return false;
+        if (slaFiltro === 'sem_sla'  && s !== 'sem_sla')  return false;
+      }
+      return true;
+    });
+
+    // Ordenar
+    const col = rptOrdenacao.col;
+    rptFiltrados.sort((a,b) => {
+      let va = a[col]||'', vb = b[col]||'';
+      if (typeof va === 'number') return rptOrdenacao.asc ? va-vb : vb-va;
+      return rptOrdenacao.asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+    });
+
+    rptPaginaAtual = 1;
+    _renderTabela();
+  }
+
+  function rptOrdenar(col) {
+    if (rptOrdenacao.col === col) rptOrdenacao.asc = !rptOrdenacao.asc;
+    else { rptOrdenacao.col = col; rptOrdenacao.asc = true; }
+    rptFiltrarTabela();
+  }
+
+  // ── RENDERIZAR TABELA ─────────────────────────────────────────
+  function _renderTabela() {
+    const total  = rptFiltrados.length;
+    const inicio = (rptPaginaAtual - 1) * RPT_POR_PAGINA;
+    const fim    = Math.min(inicio + RPT_POR_PAGINA, total);
+    const pagina = rptFiltrados.slice(inicio, fim);
+
+    document.getElementById('rptContagem').textContent = `${total} resultado(s)`;
+    document.getElementById('rptPaginaInfo').textContent = total > 0
+      ? `Exibindo ${inicio+1}–${fim} de ${total}`
+      : 'Nenhum resultado';
+    document.getElementById('rptBtnAnterior').disabled = rptPaginaAtual <= 1;
+    document.getElementById('rptBtnProximo').disabled  = fim >= total;
+
+    if (!pagina.length) {
+      document.getElementById('rptTbody').innerHTML =
+        '<tr><td colspan="8" class="text-center py-5 text-muted"><i class="bi bi-inbox" style="font-size:2rem;opacity:.3;display:block;margin-bottom:.5rem;"></i>Nenhum ticket encontrado.</td></tr>';
+      return;
+    }
+
+    document.getElementById('rptTbody').innerHTML = pagina.map(t => {
+      const sla     = _classifSLA(t);
+      const pr      = _classifPR(t);
+      const slaText = sla !== 'sem_sla'
+        ? `${_slaDot(sla)}${_slaLabel(sla)}${t.sla_minutos ? `<br><small class="text-muted">${_fmt_sla(t.sla_minutos)}</small>` : ''}`
+        : '<span class="text-muted">—</span>';
+      const prText  = pr
+        ? `${_slaDot(pr === 'ok' ? 'ok' : pr === 'aguardando' ? 'aguardando' : 'estourado')}${pr === 'ok' ? 'No Prazo' : pr === 'aguardando' ? 'Aguardando' : 'Estourado'}<br><small class="text-muted">${_fmt_sla(t.sla_pr_minutos)}</small>`
+        : '<span class="text-muted">—</span>';
+
+      return `
+        <tr>
+          <td><a href="/SistemaCPE/web/pages/tickets.html?id=${t.id}" class="fw-semibold text-decoration-none" style="color:#6f42c1;">${_esc(t.numero||'#'+t.id)}</a></td>
+          <td style="max-width:220px;"><span class="d-block text-truncate" title="${_esc(t.assunto)}">${_esc(t.assunto)}</span></td>
+          <td>${_esc(t.solicitante_nome||'—')}</td>
+          <td>${t.responsavel_nome ? _esc(t.responsavel_nome) : '<span class="text-muted fst-italic">Não atribuído</span>'}</td>
+          <td><span class="badge-status ${STATUS_CLASS[t.status_id]||'s-open'}">${STATUS_LABEL[t.status_id]||'—'}</span></td>
+          <td style="font-size:.78rem;">${slaText}</td>
+          <td style="font-size:.78rem;">${prText}</td>
+          <td style="font-size:.78rem;white-space:nowrap;">${_fmt_date(t.created_at)}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  function rptPagina(delta) {
+    rptPaginaAtual += delta;
+    _renderTabela();
+  }
+
+  function rptLimparFiltros() {
+    const hoje = new Date();
+    const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    document.getElementById('rptDataInicio').value  = ini.toISOString().slice(0,10);
+    document.getElementById('rptDataFim').value     = hoje.toISOString().slice(0,10);
+    document.getElementById('rptStatus').value      = '';
+    document.getElementById('rptResponsavel').value = '';
+    document.getElementById('rptSlaFiltro').value   = '';
+    document.getElementById('rptBusca').value       = '';
+    rptCarregar();
+  }
+
+  // ── TROCA DE ABA ─────────────────────────────────────────────
+  function rptMostrarAba(aba) {
+    document.getElementById('tabTickets').style.display    = aba === 'tickets'    ? '' : 'none';
+    document.getElementById('tabAvaliacoes').style.display = aba === 'avaliacoes' ? '' : 'none';
+    document.getElementById('tabTicketsBtn').classList.toggle('active',    aba === 'tickets');
+    document.getElementById('tabAvaliacoesBtn').classList.toggle('active', aba === 'avaliacoes');
+    if (aba === 'avaliacoes') rptAvalCarregar();
+  }
+
+  // ── AVALIAÇÕES — estado ───────────────────────────────────────
+  let _rptAvalDados = [];
+  let _rptAvalPag   = 1;
+  const _RPT_AVAL_PP = 50;
+
+  async function rptAvalCarregar(pagina = 1) {
+    _rptAvalPag = pagina;
+    const user = (typeof getCurrentUser === 'function') ? getCurrentUser() : {};
+
+    const di   = document.getElementById('rptAvalDi').value;
+    const df   = document.getElementById('rptAvalDf').value;
+    const eMin = document.getElementById('rptAvalEMin').value;
+    const eMax = document.getElementById('rptAvalEMax').value;
+    const sit  = document.getElementById('rptAvalSit').value;
+
+    const p = new URLSearchParams({ usuario_id: user.id, pagina, por_pagina: _RPT_AVAL_PP });
+    if (di)   p.append('data_inicio', di);
+    if (df)   p.append('data_fim', df);
+    if (eMin) p.append('estrelas_min', eMin);
+    if (eMax) p.append('estrelas_max', eMax);
+    if (sit === '1') p.append('apenas_avaliados', 'true');
+
+    const pMembro = new URLSearchParams({ usuario_id: user.id });
+    if (di) pMembro.append('data_inicio', di);
+    if (df) pMembro.append('data_fim', df);
+
+    try {
+      const [data, resumo, porResp] = await Promise.all([
+        apiRequest('GET', `/avaliacoes?${p}`),
+        apiRequest('GET', `/avaliacoes/resumo?usuario_id=${user.id}`),
+        apiRequest('GET', `/avaliacoes/por-responsavel?${pMembro}`)
+      ]);
+      _rptRenderAvalKpis(resumo);
+      _rptRenderAvalTermometro(resumo);
+      _rptRenderAvalDist(resumo);
+      _rptRenderMembroAval(porResp.membros || []);
+      _rptRenderAvalTabela(data);
+      document.getElementById('rptAvalSubtitulo').textContent =
+        `${data.total} avaliação(ões) encontrada(s)`;
+    } catch (err) {
+      document.getElementById('rptAvalTbody').innerHTML =
+        `<tr><td colspan="9" class="text-center text-danger py-4">
+          <i class="bi bi-exclamation-circle me-2"></i>Erro ao carregar avaliações.
+        </td></tr>`;
+      console.error('[AVAL]', err);
+    }
+  }
+
+  function rptAvalLimpar() {
+    document.getElementById('rptAvalDi').value   = '';
+    document.getElementById('rptAvalDf').value   = '';
+    document.getElementById('rptAvalEMin').value = '';
+    document.getElementById('rptAvalEMax').value = '';
+    document.getElementById('rptAvalSit').value  = '';
+    rptAvalCarregar(1);
+  }
+
+  function rptAvalPagina(delta) { rptAvalCarregar(_rptAvalPag + delta); }
+
+  // ── TERMÔMETRO ────────────────────────────────────────────────
+  function _rptRenderAvalTermometro(r) {
+    const media   = r.media || 0;
+    const total   = r.total_avaliados || 0;
+    const termEl  = document.getElementById('rptAvalTermometro');
+
+    if (total === 0) { termEl.style.display = 'none'; return; }
+    termEl.style.display = '';
+
+    // Classificação e cor
+    let label, cor, corHex;
+    if (media >= 8)      { label = 'Excelente'; cor = 'classif-exc';  corHex = '#059669'; }
+    else if (media >= 6) { label = 'Bom';       cor = 'classif-bom';  corHex = '#3b82f6'; }
+    else if (media >= 4) { label = 'Mediano';   cor = 'classif-med';  corHex = '#f59e0b'; }
+    else                  { label = 'Crítico';   cor = 'classif-crit'; corHex = '#ef4444'; }
+
+    // Gauge SVG — arco de 0° (esq) a 180° (dir): total = 283px de comprimento
+    const pct    = Math.min(media / 10, 1);
+    const offset = 283 - (pct * 283);           // dashoffset decresce conforme sobe
+    const angleDeg = -90 + pct * 180;           // agulha de -90° (esq) a +90° (dir)
+
+    const arc    = document.getElementById('rptAvalGaugeArc');
+    const needle = document.getElementById('rptAvalGaugeNeedle');
+    const val    = document.getElementById('rptAvalGaugeVal');
+    const lbl    = document.getElementById('rptAvalGaugeLabel');
+
+    // Pequeno delay para a transição CSS funcionar
+    setTimeout(() => {
+      arc.setAttribute('stroke', corHex);
+      arc.setAttribute('stroke-dashoffset', offset);
+      needle.setAttribute('transform', `rotate(${angleDeg},100,110)`);
+    }, 80);
+
+    val.textContent   = media.toFixed(1);
+    val.style.color   = corHex;
+    lbl.textContent   = label;
+    lbl.style.color   = corHex;
+
+    // Mini-KPIs ao lado
+    const pctPos = total > 0 ? Math.round(r.positivas / total * 100) : 0;
+    const pctNeg = total > 0 ? Math.round(r.negativas / total * 100) : 0;
+    document.getElementById('rptAvalMiniKpis').innerHTML = `
+      <div class="col-6">
+        <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;text-align:center;">
+          <div style="font-size:1.3rem;font-weight:800;color:#059669;">${pctPos}%</div>
+          <div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Satisfeitos</div>
         </div>
       </div>
-    </div>
-  </div>
+      <div class="col-6">
+        <div style="background:#fef2f2;border-radius:8px;padding:10px 12px;text-align:center;">
+          <div style="font-size:1.3rem;font-weight:800;color:#dc2626;">${pctNeg}%</div>
+          <div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Insatisfeitos</div>
+        </div>
+      </div>
+      <div class="col-6 mt-1">
+        <div style="background:#fffbeb;border-radius:8px;padding:10px 12px;text-align:center;">
+          <div style="font-size:1.3rem;font-weight:800;color:#d97706;">${r.pendentes}</div>
+          <div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Pendentes</div>
+        </div>
+      </div>
+      <div class="col-6 mt-1">
+        <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;text-align:center;">
+          <div style="font-size:1.3rem;font-weight:800;color:#475569;">${total}</div>
+          <div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Avaliações</div>
+        </div>
+      </div>`;
+  }
 
-  <!-- ============================================================ -->
-  <!-- MODAL: Gerar Novo Relatório -->
-  <!-- ============================================================ -->
-  <div class="modal fade" id="reportModal" tabindex="-1" aria-labelledby="reportModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="reportModalLabel">
-            <i class="bi bi-file-earmark-plus"></i> Gerar Novo Relatório
-          </h5>
+  // ── TABELA INDIVIDUAL ──────────────────────────────────────────
+  function _rptRenderMembroAval(membros) {
+    const section = document.getElementById('rptAvalMembroSection');
+    const tbody   = document.getElementById('rptAvalMembroTbody');
+
+    if (!membros || membros.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = '';
+
+    const colors = ['#3b82f6','#059669','#a855f7','#f97316','#14b8a6','#ef4444','#6366f1','#ec4899'];
+
+    tbody.innerHTML = membros.map((m, idx) => {
+      const media  = m.media || 0;
+      const total  = m.total_avaliados || 0;
+      const pct    = Math.round(media / 10 * 100);
+      const inicial = (m.responsavel_nome || '?')[0].toUpperCase();
+      const avatarCor = colors[idx % colors.length];
+
+      let classifLabel, classifCls, barCor;
+      if (media >= 8)      { classifLabel = 'Excelente'; classifCls = 'classif-exc';  barCor = '#059669'; }
+      else if (media >= 6) { classifLabel = 'Bom';       classifCls = 'classif-bom';  barCor = '#3b82f6'; }
+      else if (media >= 4) { classifLabel = 'Mediano';   classifCls = 'classif-med';  barCor = '#f59e0b'; }
+      else                  { classifLabel = 'Crítico';   classifCls = 'classif-crit'; barCor = '#ef4444'; }
+
+      const pctPos = total > 0 ? Math.round(m.positivas / total * 100) : 0;
+      const pctNeu = total > 0 ? Math.round(m.neutras   / total * 100) : 0;
+      const pctNeg = total > 0 ? Math.round(m.negativas / total * 100) : 0;
+
+      return `<tr>
+        <td>
+          <div class="d-flex align-items-center gap-2">
+            <div style="width:30px;height:30px;border-radius:50%;background:${avatarCor};color:#fff;
+                        display:flex;align-items:center;justify-content:center;font-size:.8rem;
+                        font-weight:700;flex-shrink:0;">${inicial}</div>
+            <span class="fw-semibold" style="font-size:.83rem;">${m.responsavel_nome || '—'}</span>
+          </div>
+        </td>
+        <td class="text-center fw-bold">${total}</td>
+        <td class="text-center">
+          <span style="font-size:1.05rem;font-weight:800;color:${barCor};">${media.toFixed(1)}</span>
+          <small class="text-muted">/10</small>
+        </td>
+        <td>
+          <div class="d-flex align-items-center gap-2">
+            <div class="aval-membro-bar flex-grow-1">
+              <div class="aval-membro-fill" style="width:${pct}%;background:${barCor};"></div>
+            </div>
+            <small style="color:${barCor};font-weight:700;min-width:30px;">${pct}%</small>
+          </div>
+        </td>
+        <td class="text-center">
+          <span class="fw-semibold text-success">${m.positivas}</span>
+          <small class="text-muted d-block" style="font-size:.7rem;">${pctPos}%</small>
+        </td>
+        <td class="text-center">
+          <span class="fw-semibold text-warning">${m.neutras}</span>
+          <small class="text-muted d-block" style="font-size:.7rem;">${pctNeu}%</small>
+        </td>
+        <td class="text-center">
+          ${m.negativas > 0
+            ? `<span class="fw-semibold text-danger">${m.negativas}</span><small class="text-muted d-block" style="font-size:.7rem;">${pctNeg}%</small>`
+            : `<span class="text-muted">—</span>`}
+        </td>
+        <td class="text-center">
+          <span class="badge" style="background:#f3f4f6;color:#374151;font-size:.75rem;">${m.menor_nota}★</span>
+        </td>
+        <td class="text-center">
+          <span class="badge" style="background:#f3f4f6;color:#374151;font-size:.75rem;">${m.maior_nota}★</span>
+        </td>
+        <td class="text-center">
+          <span class="classif-badge ${classifCls}">${classifLabel}</span>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function _rptRenderAvalKpis(r) {
+    const media   = r.media || 0;
+    const cor     = media >= 8 ? '#059669' : media >= 5 ? '#d97706' : '#dc2626';
+    document.getElementById('rptAvalKpis').innerHTML = `
+      <div class="col-6 col-md-2">
+        <div class="rpt-kpi">
+          <div class="rpt-kpi-icon" style="background:#fef3c7;color:#d97706;"><i class="bi bi-star-fill"></i></div>
+          <div class="rpt-kpi-value" style="color:${cor}">${media.toFixed(1)}</div>
+          <div class="rpt-kpi-label">Média Geral</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="rpt-kpi">
+          <div class="rpt-kpi-icon" style="background:#d1fae5;color:#059669;"><i class="bi bi-check-circle-fill"></i></div>
+          <div class="rpt-kpi-value">${r.total_avaliados}</div>
+          <div class="rpt-kpi-label">Avaliados</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="rpt-kpi">
+          <div class="rpt-kpi-icon" style="background:#d1fae5;color:#059669;"><i class="bi bi-emoji-smile"></i></div>
+          <div class="rpt-kpi-value" style="color:#059669">${r.positivas}</div>
+          <div class="rpt-kpi-label">Positivas (8-10)</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="rpt-kpi">
+          <div class="rpt-kpi-icon" style="background:#fef3c7;color:#d97706;"><i class="bi bi-emoji-neutral"></i></div>
+          <div class="rpt-kpi-value" style="color:#d97706">${r.neutras}</div>
+          <div class="rpt-kpi-label">Neutras (4-7)</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="rpt-kpi">
+          <div class="rpt-kpi-icon" style="background:#fee2e2;color:#dc2626;"><i class="bi bi-emoji-frown"></i></div>
+          <div class="rpt-kpi-value" style="color:#dc2626">${r.negativas}</div>
+          <div class="rpt-kpi-label">Negativas (1-3)</div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="rpt-kpi">
+          <div class="rpt-kpi-icon" style="background:#f0f9ff;color:#0284c7;"><i class="bi bi-hourglass-split"></i></div>
+          <div class="rpt-kpi-value" style="color:#0284c7">${r.pendentes}</div>
+          <div class="rpt-kpi-label">Pendentes</div>
+          <div class="rpt-kpi-sub">${r.expiradas} expiradas</div>
+        </div>
+      </div>`;
+  }
+
+  function _rptRenderAvalDist(r) {
+    const dist  = r.distribuicao || {};
+    const total = r.total_avaliados || 1;
+    const el    = document.getElementById('rptAvalDist');
+    const bars  = document.getElementById('rptAvalDistBars');
+    let html = '';
+    for (let s = 10; s >= 1; s--) {
+      const qtd = dist[String(s)] || 0;
+      const pct = Math.round(qtd / total * 100);
+      const cor = s >= 8 ? '#059669' : s >= 4 ? '#d97706' : '#dc2626';
+      html += `
+        <div class="d-flex align-items-center gap-2 mb-2" style="font-size:.8rem;">
+          <span style="width:28px;text-align:right;font-weight:600;">${s}★</span>
+          <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;">
+            <div style="width:${pct}%;height:100%;background:${cor};border-radius:4px;"></div>
+          </div>
+          <span style="width:36px;color:#6b7280;">${qtd}</span>
+          <span style="width:38px;color:#9ca3af;">${pct}%</span>
+        </div>`;
+    }
+    bars.innerHTML = html;
+    el.style.display = r.total_avaliados > 0 ? '' : 'none';
+  }
+
+  function _rptRenderAvalTabela(data) {
+    const { avaliacoes, total, pagina, por_pagina } = data;
+    const tbody = document.getElementById('rptAvalTbody');
+
+    if (!avaliacoes || avaliacoes.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" class="text-center py-4 text-muted">
+        <i class="bi bi-star me-2"></i>Nenhuma avaliação encontrada.</td></tr>`;
+    } else {
+      tbody.innerHTML = avaliacoes.map(a => {
+        const avaliado = !!a.avaliado_em;
+        const expirado = !avaliado && a.expira_em && new Date(a.expira_em) < new Date();
+        const estrelas = a.estrelas || 0;
+
+        let notaBadge, situacao;
+        if (!avaliado && expirado) {
+          notaBadge = `<span class="badge bg-secondary-subtle text-secondary">—</span>`;
+          situacao  = `<span class="badge" style="background:#f3f4f6;color:#6b7280;font-size:.7rem;">Expirado</span>`;
+        } else if (!avaliado) {
+          notaBadge = `<span class="badge bg-warning-subtle text-warning">Pendente</span>`;
+          situacao  = `<span class="badge bg-warning-subtle text-warning" style="font-size:.7rem;">Aguardando</span>`;
+        } else {
+          const cls = estrelas >= 8 ? 'bg-success-subtle text-success' : estrelas >= 4 ? 'bg-warning-subtle text-warning' : 'bg-danger-subtle text-danger';
+          notaBadge = `<span class="badge ${cls} fw-bold">${estrelas}/10</span>`;
+          situacao  = `<span class="badge bg-success-subtle text-success" style="font-size:.7rem;">Avaliado</span>`;
+        }
+
+        let starsHtml = '—';
+        if (avaliado) {
+          starsHtml = '<span style="color:#f59e0b;font-size:.8rem;">';
+          for (let i = 1; i <= 10; i++) starsHtml += `<i class="bi bi-star${i<=estrelas?'-fill':''}"></i>`;
+          starsHtml += '</span>';
+        }
+
+        const coment = a.comentario
+          ? `<span style="max-width:180px;display:inline-block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${(a.comentario||'').replace(/"/g,'&quot;')}">${(a.comentario||'').replace(/</g,'&lt;')}</span>`
+          : '<span class="text-muted">—</span>';
+
+        const avalDt = a.avaliado_em
+          ? new Date(a.avaliado_em).toLocaleDateString('pt-BR')
+          : '—';
+
+        // Serializa objeto para double-click (só avaliados têm detalhe útil)
+        const dataAttr = avaliado ? `ondblclick="abrirDetalheAvaliacao(this)" data-aval='${JSON.stringify({
+          numero:           a.numero || '',
+          assunto:          a.assunto || '',
+          solicitante_nome: a.solicitante_nome || '',
+          responsavel_nome: a.responsavel_nome || '—',
+          estrelas:         estrelas,
+          comentario:       a.comentario || '',
+          avaliado_em:      a.avaliado_em || ''
+        }).replace(/'/g, "&#39;")}'` : '';
+
+        return `<tr style="${avaliado ? 'cursor:pointer;' : ''}" ${dataAttr}>
+          <td><small class="fw-semibold text-primary">${a.numero||''}</small></td>
+          <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${(a.assunto||'').replace(/"/g,'')}">${a.assunto||''}</td>
+          <td>${a.solicitante_nome||''}</td>
+          <td>${a.responsavel_nome||'—'}</td>
+          <td class="text-center">${notaBadge}</td>
+          <td class="text-center">${starsHtml}</td>
+          <td>${coment}</td>
+          <td style="white-space:nowrap;">${avalDt}</td>
+          <td class="text-center">${situacao}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    const totalPag = Math.ceil(total / por_pagina);
+    document.getElementById('rptAvalContagem').textContent  = `${total} avaliação(ões)`;
+    document.getElementById('rptAvalPaginaInfo').textContent = `Página ${pagina} de ${totalPag || 1}`;
+    document.getElementById('rptAvalBtnAnt').disabled  = pagina <= 1;
+    document.getElementById('rptAvalBtnProx').disabled = pagina >= totalPag;
+  }
+
+  // ── DETALHE AVALIAÇÃO (double-click) ─────────────────────────
+  function abrirDetalheAvaliacao(row) {
+    const raw = row.getAttribute('data-aval');
+    if (!raw) return;
+    let a;
+    try { a = JSON.parse(raw.replace(/&#39;/g, "'")); } catch { return; }
+
+    const estrelas = a.estrelas || 0;
+    let starsHtml = '';
+    for (let i = 1; i <= 10; i++)
+      starsHtml += `<i class="bi bi-star${i <= estrelas ? '-fill' : ''}"
+        style="font-size:1.4rem;color:${i <= estrelas ? '#f59e0b' : '#d1d5db'};"></i>`;
+
+    let corNota, labelNota;
+    if (estrelas >= 8)      { corNota = '#059669'; labelNota = 'Excelente'; }
+    else if (estrelas >= 6) { corNota = '#3b82f6'; labelNota = 'Bom'; }
+    else if (estrelas >= 4) { corNota = '#d97706'; labelNota = 'Mediano'; }
+    else                    { corNota = '#dc2626'; labelNota = 'Crítico'; }
+
+    const dt = a.avaliado_em
+      ? new Date(a.avaliado_em).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+      : '—';
+
+    document.getElementById('rptAvalDetNumero').textContent   = a.numero;
+    document.getElementById('rptAvalDetAssunto').textContent  = a.assunto;
+    document.getElementById('rptAvalDetSolic').textContent    = a.solicitante_nome;
+    document.getElementById('rptAvalDetResp').textContent     = a.responsavel_nome;
+    document.getElementById('rptAvalDetDt').textContent       = dt;
+    document.getElementById('rptAvalDetStars').innerHTML      = starsHtml;
+    document.getElementById('rptAvalDetNota').textContent      = `${estrelas}/10`;
+    document.getElementById('rptAvalDetNota').style.color      = corNota;
+    const lbl = document.getElementById('rptAvalDetLabel');
+    lbl.textContent        = labelNota;
+    lbl.style.color        = corNota;
+    lbl.style.background   = corNota + '1a';
+    lbl.style.border       = `1px solid ${corNota}44`;
+
+    const coment = document.getElementById('rptAvalDetComent');
+    if (a.comentario) {
+      coment.textContent    = a.comentario;
+      coment.closest('.rpt-aval-coment-wrap').style.display = '';
+    } else {
+      coment.closest('.rpt-aval-coment-wrap').style.display = 'none';
+    }
+
+    new bootstrap.Modal(document.getElementById('rptAvalDetalheModal')).show();
+  }
+
+  // ── EXPORT CSV ────────────────────────────────────────────────
+  function rptExportCSV() {
+    const cols  = ['Número','Assunto','Solicitante','Responsável','Status','SLA','1ª Resposta','Criado em'];
+    const rows  = rptFiltrados.map(t => [
+      t.numero || t.id,
+      `"${(t.assunto||'').replace(/"/g,'""')}"`,
+      t.solicitante_nome || '',
+      t.responsavel_nome || '',
+      STATUS_LABEL[t.status_id] || '',
+      _slaLabel(_classifSLA(t)),
+      _classifPR(t) ? (_classifPR(t) === 'ok' ? 'No Prazo' : _classifPR(t) === 'aguardando' ? 'Aguardando' : 'Estourado') : '',
+      t.created_at ? new Date(t.created_at).toLocaleString('pt-BR') : '',
+    ].join(';'));
+
+    const csv     = [cols.join(';'), ...rows].join('\n');
+    const blob    = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url     = URL.createObjectURL(blob);
+    const a       = document.createElement('a');
+    const hoje    = new Date().toISOString().slice(0,10);
+    a.href        = url;
+    a.download    = `relatorio-tickets-${hoje}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+  </script>
+
+  <!-- ── Modal: Detalhe de Avaliação ── -->
+  <div class="modal fade" id="rptAvalDetalheModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-md">
+      <div class="modal-content" style="border-radius:14px;overflow:hidden;">
+
+        <!-- Header amber -->
+        <div class="modal-header" style="background:#fffbeb;border-bottom:2px solid #f59e0b;padding:14px 20px;">
+          <div>
+            <div style="font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#92400e;margin-bottom:2px;">
+              Avaliação do Ticket
+            </div>
+            <h5 class="modal-title mb-0" style="font-weight:700;color:#1f2937;">
+              <span style="color:#f59e0b;">#</span><span id="rptAvalDetNumero">—</span>
+              <span style="font-weight:400;font-size:.9rem;color:#6b7280;margin-left:6px;" id="rptAvalDetAssunto">—</span>
+            </h5>
+          </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
 
-        <div class="modal-body" style="padding: 2rem;">
-          <!-- Alert de Erro -->
-          <div class="alert alert-danger d-none" id="modalAlertBox" role="alert">
-            <i class="bi bi-exclamation-circle"></i>
-            <span id="modalAlertMessage"></span>
+        <div class="modal-body" style="padding:20px 24px;">
+
+          <!-- Info row -->
+          <div class="row g-3 mb-3">
+            <div class="col-sm-4">
+              <div style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#9ca3af;letter-spacing:.04em;">Solicitante</div>
+              <div id="rptAvalDetSolic" style="font-size:.88rem;font-weight:600;color:#374151;margin-top:2px;">—</div>
+            </div>
+            <div class="col-sm-4">
+              <div style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#9ca3af;letter-spacing:.04em;">Responsável</div>
+              <div id="rptAvalDetResp" style="font-size:.88rem;font-weight:600;color:#374151;margin-top:2px;">—</div>
+            </div>
+            <div class="col-sm-4">
+              <div style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#9ca3af;letter-spacing:.04em;">Avaliado em</div>
+              <div id="rptAvalDetDt" style="font-size:.88rem;font-weight:600;color:#374151;margin-top:2px;">—</div>
+            </div>
           </div>
 
-          <!-- Formulário -->
-          <form id="reportForm" novalidate>
-            <div class="mb-3">
-              <label for="reportTitle" class="form-label">
-                <i class="bi bi-input-cursor"></i> Título do Relatório <span style="color: #dc2626;">*</span>
-              </label>
-              <input type="text" class="form-control" id="reportTitle"
-                placeholder="Ex: Relatório de Tickets - Março 2024" required />
+          <!-- Divider -->
+          <hr style="border-color:#f3f4f6;margin:12px 0;">
+
+          <!-- Stars + Nota -->
+          <div class="d-flex align-items-center gap-3 mb-3" style="flex-wrap:wrap;">
+            <div id="rptAvalDetStars" style="display:flex;gap:3px;font-size:1.4rem;"></div>
+            <div>
+              <span id="rptAvalDetNota" style="font-size:2rem;font-weight:700;color:#1f2937;line-height:1;">—</span>
             </div>
+            <span id="rptAvalDetLabel" class="badge" style="font-size:.78rem;padding:5px 12px;border-radius:20px;">—</span>
+          </div>
 
-            <div class="row">
-              <div class="col-md-6 mb-3">
-                <label for="reportType" class="form-label">
-                  <i class="bi bi-tag"></i> Tipo <span style="color: #dc2626;">*</span>
-                </label>
-                <select class="form-select" id="reportType" required>
-                  <option value="">Selecione o tipo...</option>
-                  <option value="tickets">Tickets</option>
-                  <option value="projects">Projetos</option>
-                  <option value="tasks">Tarefas</option>
-                  <option value="inventory">Inventário</option>
-                </select>
-              </div>
-
-              <div class="col-md-6 mb-3">
-                <label for="reportFormat" class="form-label">
-                  <i class="bi bi-file-pdf"></i> Formato <span style="color: #dc2626;">*</span>
-                </label>
-                <select class="form-select" id="reportFormat" required>
-                  <option value="">Selecione o formato...</option>
-                  <option value="pdf">PDF</option>
-                  <option value="excel">Excel</option>
-                  <option value="csv">CSV</option>
-                </select>
-              </div>
+          <!-- Comment -->
+          <div id="rptAvalDetComentWrap" class="rpt-aval-coment-wrap" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;">
+            <div style="font-size:.7rem;font-weight:600;text-transform:uppercase;color:#9ca3af;letter-spacing:.04em;margin-bottom:6px;">
+              <i class="bi bi-chat-left-text me-1"></i>Comentário
             </div>
+            <p id="rptAvalDetComent" style="margin:0;font-size:.88rem;color:#374151;white-space:pre-wrap;line-height:1.6;">—</p>
+          </div>
 
-            <div class="row">
-              <div class="col-md-6 mb-3">
-                <label for="reportStartDate" class="form-label">
-                  <i class="bi bi-calendar"></i> Data Início
-                </label>
-                <input type="date" class="form-control" id="reportStartDate" />
-              </div>
-
-              <div class="col-md-6 mb-3">
-                <label for="reportEndDate" class="form-label">
-                  <i class="bi bi-calendar"></i> Data Fim
-                </label>
-                <input type="date" class="form-control" id="reportEndDate" />
-              </div>
-            </div>
-
-            <div class="mb-3">
-              <label for="reportDescription" class="form-label">
-                <i class="bi bi-file-text"></i> Descrição
-              </label>
-              <textarea class="form-control" id="reportDescription" rows="3"
-                placeholder="Descrição do relatório..."></textarea>
-            </div>
-
-            <div class="form-check mb-3">
-              <input class="form-check-input" type="checkbox" id="reportSchedule">
-              <label class="form-check-label" for="reportSchedule">
-                <i class="bi bi-clock"></i> Agendar geração automática
-              </label>
-            </div>
-
-            <div id="scheduleOptions" class="d-none">
-              <div class="mb-3">
-                <label for="reportScheduleType" class="form-label">
-                  <i class="bi bi-repeat"></i> Frequência
-                </label>
-                <select class="form-select" id="reportScheduleType">
-                  <option value="weekly">Semanal</option>
-                  <option value="monthly">Mensal</option>
-                  <option value="quarterly">Trimestral</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="d-flex gap-2">
-              <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
-                <i class="bi bi-check-lg"></i> Gerar Relatório
-              </button>
-              <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">
-                <i class="bi bi-x-lg"></i> Cancelar
-              </button>
-            </div>
-          </form>
         </div>
+
+        <div class="modal-footer" style="border-top:1px solid #f3f4f6;padding:12px 20px;">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+        </div>
+
       </div>
     </div>
   </div>
 
-  <!-- ============================================================ -->
-  <!-- 📦 SCRIPTS -->
-  <!-- ============================================================ -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
-
-  <!-- ============================================================ -->
-  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
-  <!-- ============================================================ -->
-  <script>
-    console.log("\n" + "=".repeat(80));
-    console.log("[REPORTS/PAGE] 📄 Inicializando página de Relatórios");
-    console.log("[REPORTS/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
-    console.log("=".repeat(80) + "\n");
-
-    document.addEventListener("DOMContentLoaded", async () => {
-      console.log("[REPORTS/INIT] 📋 DOM Carregado");
-
-      try {
-        // ===== Mostrar Conteúdo =====
-        const loadingPage = document.getElementById("loadingPage");
-        const containerMain = document.querySelector(".container-main");
-        
-        loadingPage.style.display = "none";
-        containerMain.style.display = "flex";
-        
-        console.log("[REPORTS/INIT] ✅ Página inicializada com sucesso");
-        console.log("=".repeat(80) + "\n");
-
-        // ===== Carregar Relatórios =====
-        await loadReports();
-
-      } catch (err) {
-        console.error("[REPORTS/INIT] ❌ ERRO NA INICIALIZAÇÃO");
-        console.error("[REPORTS/INIT] 📍 Mensagem:", err.message);
-        console.error("[REPORTS/INIT] 🔗 Stack:", err.stack);
-        console.error("=".repeat(80) + "\n");
-        
-        showError("Erro ao inicializar página: " + err.message);
-      }
-    });
-  </script>
-
-  <!-- ============================================================ -->
-  <!-- 🔧 FUNÇÕES DA PÁGINA -->
-  <!-- ============================================================ -->
-  <script>
-    let reports = [];
-    let selectedReportId = null;
-    let currentTab = "all";
-
-    /**
-     * ✅ Carrega os relatórios
-     */
-    async function loadReports() {
-      console.log("\n[REPORTS/LOAD] 📥 Carregando relatórios...");
-
-      try {
-        // Simular dados de API - substitua pela chamada real
-        reports = [
-          {
-            id: 1,
-            title: "Relatório de Tickets - Março 2024",
-            type: "tickets",
-            format: "pdf",
-            description: "Análise completa de tickets abertos e fechados em março",
-            startDate: "2024-03-01",
-            endDate: "2024-03-31",
-            scheduled: true,
-            scheduleType: "monthly",
-            shared: false,
-            createdBy: "João Silva",
-            created: "2024-03-01",
-            records: 245
-          },
-          {
-            id: 2,
-            title: "Desempenho de Projetos",
-            type: "projects",
-            format: "excel",
-            description: "Relatório de progresso e KPIs dos projetos ativos",
-            startDate: "2024-02-01",
-            endDate: "2024-03-31",
-            scheduled: true,
-            scheduleType: "monthly",
-            shared: true,
-            createdBy: "Maria Santos",
-            created: "2024-02-01",
-            records: 6
-          },
-          {
-            id: 3,
-            title: "Tarefas Concluídas",
-            type: "tasks",
-            format: "pdf",
-            description: "Resumo de tarefas concluídas e equipes envolvidas",
-            startDate: "2024-01-01",
-            endDate: "2024-03-31",
-            scheduled: false,
-            scheduleType: null,
-            shared: false,
-            createdBy: "Carlos Oliveira",
-            created: "2024-03-15",
-            records: 189
-          },
-          {
-            id: 4,
-            title: "Inventário de Produtos",
-            type: "inventory",
-            format: "excel",
-            description: "Controle de estoque e movimentações do mês",
-            startDate: "2024-03-01",
-            endDate: "2024-03-31",
-            scheduled: true,
-            scheduleType: "weekly",
-            shared: true,
-            createdBy: "Ana Paula",
-            created: "2024-03-10",
-            records: 542
-          },
-          {
-            id: 5,
-            title: "Tickets por Categoria",
-            type: "tickets",
-            format: "pdf",
-            description: "Distribuição de tickets por categoria de suporte",
-            startDate: "2024-03-01",
-            endDate: "2024-03-31",
-            scheduled: false,
-            scheduleType: null,
-            shared: false,
-            createdBy: "João Silva",
-            created: "2024-03-20",
-            records: 245
-          },
-          {
-            id: 6,
-            title: "Análise de Tarefas por Departamento",
-            type: "tasks",
-            format: "csv",
-            description: "Distribuição e conclusão de tarefas por equipe",
-            startDate: "2024-01-01",
-            endDate: "2024-03-31",
-            scheduled: true,
-            scheduleType: "monthly",
-            shared: true,
-            createdBy: "Roberto Martins",
-            created: "2024-03-05",
-            records: 189
-          },
-          {
-            id: 7,
-            title: "Relatório de Inventário Trimestral",
-            type: "inventory",
-            format: "pdf",
-            description: "Análise completa do inventário do primeiro trimestre",
-            startDate: "2024-01-01",
-            endDate: "2024-03-31",
-            scheduled: false,
-            scheduleType: null,
-            shared: true,
-            createdBy: "Fernanda Gomes",
-            created: "2024-03-25",
-            records: 1203
-          },
-          {
-            id: 8,
-            title: "Projetos por Status",
-            type: "projects",
-            format: "csv",
-            description: "Distribuição de projetos por status de andamento",
-            startDate: "2024-03-01",
-            endDate: "2024-03-31",
-            scheduled: true,
-            scheduleType: "weekly",
-            shared: false,
-            createdBy: "Lucas Pereira",
-            created: "2024-03-18",
-            records: 6
-          }
-        ];
-
-        console.log("[REPORTS/LOAD] ✓", reports.length, "relatórios carregados");
-        renderReports(filterReports());
-        updateStatistics();
-        console.log("[REPORTS/LOAD] ✅ Relatórios renderizados\n");
-
-      } catch (err) {
-        console.error("[REPORTS/LOAD] ✗ Erro:", err.message);
-        showError("Erro ao carregar relatórios: " + err.message);
-        reports = [];
-      }
-    }
-
-    /**
-     * ✅ Filtra os relatórios
-     */
-    function filterReports() {
-      console.log("[REPORTS/FILTER] 🔍 Aplicando filtros");
-      let filtered = reports;
-
-      // Filtro por tipo/tab
-      if (currentTab !== "all") {
-        filtered = filtered.filter(r => r.type === currentTab);
-        console.log("[REPORTS/FILTER] ├─ Por tipo:", currentTab, "=", filtered.length);
-      }
-
-      // Filtro por tipo de relatório
-      const typeFilter = document.getElementById("typeFilter")?.value || "";
-      if (typeFilter) {
-        filtered = filtered.filter(r => r.type === typeFilter);
-        console.log("[REPORTS/FILTER] ├─ Por tipo (dropdown):", typeFilter, "=", filtered.length);
-      }
-
-      // Filtro por busca
-      const searchTerm = document.getElementById("searchInput")?.value?.toLowerCase() || "";
-      if (searchTerm) {
-        filtered = filtered.filter(r =>
-          r.title.toLowerCase().includes(searchTerm) ||
-          r.description.toLowerCase().includes(searchTerm) ||
-          r.createdBy.toLowerCase().includes(searchTerm)
-        );
-        console.log("[REPORTS/FILTER] └─ Por busca:", searchTerm, "=", filtered.length);
-      }
-
-      console.log("[REPORTS/FILTER] ✓ Filtro aplicado");
-      return filtered;
-    }
-
-    /**
-     * ✅ Renderiza os relatórios
-     */
-    function renderReports(list = reports) {
-      console.log("[REPORTS/RENDER] 🎨 Renderizando", list.length, "relatórios");
-      const grid = document.getElementById("reportsGrid");
-
-      if (!list || list.length === 0) {
-        grid.innerHTML = `
-          <div style="grid-column: 1 / -1;">
-            <div class="empty-state">
-              <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
-              <p>Nenhum relatório encontrado</p>
-              <p style="font-size: 12px; margin-top: 1rem;">Clique em "Gerar Relatório" para criar um</p>
-            </div>
-          </div>
-        `;
-        return;
-      }
-
-      grid.innerHTML = list.map(report => `
-        <div class="report-card">
-          <div class="report-header">
-            <div class="report-icon"><i class="bi bi-file-earmark-${report.format}"></i></div>
-            <div class="report-title">${report.title}</div>
-            <div class="report-description">${report.description}</div>
-          </div>
-
-          <div class="report-body">
-            <div class="report-meta">
-              <span class="meta-badge meta-active"><i class="bi bi-tag"></i> ${getTypeLabel(report.type)}</span>
-              <span class="meta-badge meta-monthly"><i class="bi bi-file"></i> ${report.format.toUpperCase()}</span>
-              ${report.scheduled ? `<span class="meta-badge meta-weekly"><i class="bi bi-clock"></i> Agendado</span>` : ''}
-              ${report.shared ? `<span class="meta-badge meta-active"><i class="bi bi-share2"></i> Compartilhado</span>` : ''}
-            </div>
-
-            <div class="report-info">
-              <div class="report-info-item">
-                <i class="bi bi-calendar"></i>
-                <span>${new Date(report.startDate).toLocaleDateString('pt-BR')} até ${new Date(report.endDate).toLocaleDateString('pt-BR')}</span>
-              </div>
-              <div class="report-info-item">
-                <i class="bi bi-person"></i>
-                <span>${report.createdBy}</span>
-              </div>
-              <div class="report-info-item">
-                <i class="bi bi-file"></i>
-                <span>${report.records} registros</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="report-footer">
-            <button class="btn-report-action" onclick="downloadReport(${report.id}, '${report.format}')">
-              <i class="bi bi-download"></i> Download
-            </button>
-            <button class="btn-report-action" onclick="viewReport(${report.id})">
-              <i class="bi bi-eye"></i> Visualizar
-            </button>
-            <button class="btn-report-action danger" onclick="deleteReport(${report.id}, '${report.title.replace(/'/g, "\\'")}')">
-              <i class="bi bi-trash"></i> Deletar
-            </button>
-          </div>
-        </div>
-      `).join("");
-    }
-
-    /**
-     * ✅ Retorna o label do tipo de relatório
-     */
-    function getTypeLabel(type) {
-      const labels = {
-        tickets: "🎫 Tickets",
-        projects: "📁 Projetos",
-        tasks: "✓ Tarefas",
-        inventory: "📦 Inventário"
-      };
-      return labels[type] || type;
-    }
-
-    /**
-     * ✅ Atualiza as estatísticas
-     */
-    function updateStatistics() {
-      console.log("[REPORTS/STATS] 📊 Atualizando estatísticas");
-
-      const total = reports.length;
-      const monthly = reports.filter(r => {
-        const date = new Date(r.created);
-        const now = new Date();
-        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-      }).length;
-      const scheduled = reports.filter(r => r.scheduled).length;
-      const shared = reports.filter(r => r.shared).length;
-
-      document.getElementById("totalReports").textContent = total;
-      document.getElementById("monthlyReports").textContent = monthly;
-      document.getElementById("scheduledReports").textContent = scheduled;
-      document.getElementById("sharedReports").textContent = shared;
-
-      console.log("[REPORTS/STATS] ✓ Total:", total, "| Mês:", monthly, "| Agendados:", scheduled, "| Compartilhados:", shared);
-    }
-
-    /**
-     * ✅ Alterna entre as abas
-     */
-    function switchTab(tab) {
-      console.log("[REPORTS/TAB] 📑 Alternando para aba:", tab);
-      currentTab = tab;
-
-      // Atualiza buttons ativos
-      document.querySelectorAll(".tab-button").forEach(btn => {
-        btn.classList.remove("active");
-      });
-      event.target.closest(".tab-button")?.classList.add("active");
-
-      renderReports(filterReports());
-      console.log("[REPORTS/TAB] ✓ Aba alterada com sucesso");
-    }
-
-    /**
-     * ✅ Mostra mensagem de erro
-     */
-    function showError(message) {
-      console.log("[REPORTS/ALERT] ❌ Erro:", message);
-      const alertBox = document.getElementById("alertBox");
-      const alertMessage = document.getElementById("alertMessage");
-      if (alertBox && alertMessage) {
-        alertMessage.textContent = message;
-        alertBox.classList.remove("d-none");
-        setTimeout(() => {
-          alertBox.classList.add("d-none");
-        }, 5000);
-      }
-    }
-
-    /**
-     * ✅ Mostra mensagem de sucesso
-     */
-    function showSuccess(message) {
-      console.log("[REPORTS/ALERT] ✅ Sucesso:", message);
-      const successBox = document.getElementById("successBox");
-      const successMessage = document.getElementById("successMessage");
-      if (successBox && successMessage) {
-        successMessage.textContent = message;
-        successBox.classList.remove("d-none");
-        setTimeout(() => {
-          successBox.classList.add("d-none");
-        }, 5000);
-      }
-    }
-
-    /**
-     * ✅ Mostra mensagem de erro no modal
-     */
-    function showModalError(message) {
-      console.log("[REPORTS/MODAL] ⚠️ Erro no modal:", message);
-      const modalAlert = document.getElementById("modalAlertBox");
-      const modalAlertMsg = document.getElementById("modalAlertMessage");
-      if (modalAlert && modalAlertMsg) {
-        modalAlertMsg.textContent = message;
-        modalAlert.classList.remove("d-none");
-      }
-    }
-
-    /**
-     * ✅ Limpa erros do modal
-     */
-    function clearModalError() {
-      const modalAlert = document.getElementById("modalAlertBox");
-      if (modalAlert) {
-        modalAlert.classList.add("d-none");
-      }
-    }
-
-    /**
-     * ✅ Download de relatório
-     */
-    function downloadReport(reportId, format) {
-      const report = reports.find(r => r.id === reportId);
-      if (!report) {
-        console.error("[REPORTS/DOWNLOAD] ✗ Relatório não encontrado");
-        return;
-      }
-
-      console.log("[REPORTS/DOWNLOAD] 📥 Baixando relatório:", reportId, "em", format);
-      showSuccess(`Relatório "${report.title}" foi baixado com sucesso em ${format.toUpperCase()}!`);
-    }
-
-    /**
-     * ✅ Visualiza um relatório
-     */
-    function viewReport(reportId) {
-      const report = reports.find(r => r.id === reportId);
-      if (!report) {
-        console.error("[REPORTS/VIEW] ✗ Relatório não encontrado");
-        return;
-      }
-
-      console.log("[REPORTS/VIEW] 👁️ Visualizando relatório:", reportId);
-      showSuccess(`Abrindo relatório "${report.title}"...`);
-    }
-
-    /**
-     * ✅ Deleta um relatório
-     */
-    function deleteReport(reportId, reportTitle) {
-      console.log("[REPORTS/DELETE] 🗑️ Deletando relatório:", reportId);
-
-      if (!confirm(`Tem certeza que deseja deletar o relatório "${reportTitle}"?\n\nEsta ação não pode ser desfeita!`)) {
-        console.log("[REPORTS/DELETE] ⏭️ Deleção cancelada pelo usuário");
-        return;
-      }
-
-      try {
-        reports = reports.filter(r => r.id !== reportId);
-        console.log("[REPORTS/DELETE] ✓ Relatório deletado com sucesso");
-        showSuccess(`Relatório "${reportTitle}" deletado com sucesso!`);
-        renderReports(filterReports());
-        updateStatistics();
-
-      } catch (err) {
-        console.error("[REPORTS/DELETE] ✗ Erro:", err.message);
-        showError("Erro ao deletar relatório: " + err.message);
-      }
-    }
-
-    /**
-     * ✅ Submissão do formulário
-     */
-    document.getElementById("reportForm")?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-
-      const title = document.getElementById("reportTitle")?.value?.trim();
-      const type = document.getElementById("reportType")?.value;
-      const format = document.getElementById("reportFormat")?.value;
-      const startDate = document.getElementById("reportStartDate")?.value;
-      const endDate = document.getElementById("reportEndDate")?.value;
-      const description = document.getElementById("reportDescription")?.value?.trim();
-      const schedule = document.getElementById("reportSchedule")?.checked;
-      const scheduleType = document.getElementById("reportScheduleType")?.value;
-
-      console.log("[REPORTS/SUBMIT] 📝 Processando relatório:", { title, type, format });
-
-      if (!title || !type || !format) {
-        console.warn("[REPORTS/SUBMIT] ⚠️ Campos obrigatórios não preenchidos");
-        showModalError("Preencha os campos obrigatórios (Título, Tipo e Formato)!");
-        return;
-      }
-
-      try {
-        const submitBtn = document.getElementById("submitBtn");
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gerando...';
-
-        // Simular delay de processamento
-        await new Promise(resolve => setTimeout(resolve, 1200));
-
-        const newReport = {
-          id: Math.max(...reports.map(r => r.id), 0) + 1,
-          title,
-          type,
-          format,
-          description: description || "(Sem descrição)",
-          startDate: startDate || new Date().toISOString().split('T')[0],
-          endDate: endDate || new Date().toISOString().split('T')[0],
-          scheduled: schedule,
-          scheduleType: schedule ? scheduleType : null,
-          shared: false,
-          createdBy: "Usuário Atual",
-          created: new Date().toISOString().split('T')[0],
-          records: Math.floor(Math.random() * 500) + 50
-        };
-
-        reports.push(newReport);
-        console.log("[REPORTS/SUBMIT] ✓ Relatório gerado com sucesso:", newReport);
-        showSuccess("Relatório gerado com sucesso!");
-
-        document.getElementById("reportForm").reset();
-        const modal = bootstrap.Modal.getInstance(document.getElementById("reportModal"));
-        if (modal) modal.hide();
-
-        renderReports(filterReports());
-        updateStatistics();
-
-      } catch (err) {
-        console.error("[REPORTS/SUBMIT] ✗ Erro:", err.message);
-        showModalError(err.message || "Erro ao gerar relatório!");
-      } finally {
-        const submitBtn = document.getElementById("submitBtn");
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Gerar Relatório';
-      }
-    });
-
-    /**
-     * ✅ Event listeners para filtros
-     */
-    document.getElementById("searchInput")?.addEventListener("input", () => {
-      console.log("[REPORTS/SEARCH] 🔎 Buscando...");
-      renderReports(filterReports());
-    });
-
-    document.getElementById("typeFilter")?.addEventListener("change", () => {
-      console.log("[REPORTS/SEARCH] 📋 Filtrando por tipo...");
-      renderReports(filterReports());
-    });
-
-    /**
-     * ✅ Toggle agendamento
-     */
-    document.getElementById("reportSchedule")?.addEventListener("change", (e) => {
-      console.log("[REPORTS/SCHEDULE] ⏰ Toggle agendamento:", e.target.checked);
-      const scheduleOptions = document.getElementById("scheduleOptions");
-      if (e.target.checked) {
-        scheduleOptions.classList.remove("d-none");
-      } else {
-        scheduleOptions.classList.add("d-none");
-      }
-    });
-
-    /**
-     * ✅ Reset modal quando abrir
-     */
-    document.getElementById("reportModal")?.addEventListener("show.bs.modal", () => {
-      console.log("[REPORTS/MODAL] 📂 Modal aberto");
-      document.getElementById("reportForm").reset();
-      document.getElementById("reportModalLabel").innerHTML = '<i class="bi bi-file-earmark-plus"></i> Gerar Novo Relatório';
-      document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Gerar Relatório';
-      clearModalError();
-      document.getElementById("scheduleOptions").classList.add("d-none");
-      document.getElementById("reportSchedule").checked = false;
-    });
-
-    /**
-     * ✅ Reset quando fechar
-     */
-    document.getElementById("reportModal")?.addEventListener("hidden.bs.modal", () => {
-      console.log("[REPORTS/MODAL] 🔒 Modal fechado");
-      selectedReportId = null;
-    });
-
-    console.log("[REPORTS] ✅ Script carregado sem autenticação");
-  </script>
-
 </body>
-
 </html>

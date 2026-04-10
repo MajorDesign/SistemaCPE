@@ -44,15 +44,16 @@ class NotificacaoCriar(BaseModel):
     @classmethod
     def validar_tipo(cls, v):
         tipos_validos = [
-            "info", 
-            "aviso", 
-            "erro", 
-            "sucesso", 
-            "ticket_criado", 
-            "nova_resposta", 
-            "status_alterado", 
-            "atribuido", 
-            "comentario_interno"
+            "info",
+            "aviso",
+            "erro",
+            "sucesso",
+            "ticket_criado",
+            "nova_resposta",
+            "status_alterado",
+            "atribuido",
+            "comentario_interno",
+            "avaliacao_pendente"
         ]
         if v not in tipos_validos:
             raise ValueError(f"Tipo inválido. Válidos: {tipos_validos}")

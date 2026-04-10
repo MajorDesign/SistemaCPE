@@ -309,6 +309,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ✅ Abre ticket automaticamente se vier de notificação (?ticket_id=X)
     checkUrlTicketId();
 
+    // ✅ Verifica avaliações pendentes e exibe popup se necessário
+    setTimeout(verificarAvaliacoesPendentes, 1500);
+
     console.log("[TICKETS] ✅ Sistema carregado com sucesso!");
 
   } catch (erro) {
@@ -346,70 +349,116 @@ function applyRolePermissions() {
  * Chamado toda vez que o modal é aberto, pois depende do ticket visualizado.
  */
 function applyDetailPermissions(ticket) {
-  const admin           = isAdmin();
-  const responsavel     = isResponsavelGrupo();
-  const gestor          = isGestor();
-  const userId          = getCurrentUserId();
-  const isSolicitante   = ticket.solicitante_id === userId;
+  const admin                 = isAdmin();
+  const userId                = getCurrentUserId();
+  const isSolicitante         = ticket.solicitante_id === userId;
   const isResponsavelDoTicket = ticket.assignedTo === userId;
-  // USER pode interagir (responder) apenas se for o responsável atribuído ao ticket
-  const podeInteragir   = gestor || isSolicitante || isResponsavelDoTicket;
+  const semResponsavel        = !ticket.assignedTo;
+  const ticketResolvido       = ticket.status_id === 4;
+  const ticketFechado         = ticket.status_id === 5;
+  const ticketEncerrado       = ticketResolvido || ticketFechado;
+  const reopen_count          = ticket.reopen_count || 0;
 
-  // Aba "Ações" — apenas gestores
+  // ── Aba "Ações": visível para solicitante, responsável do ticket ou admin ──
+  const podeAcessarAcoes = admin || isSolicitante || isResponsavelDoTicket;
   const tabActions = document.querySelector('[onclick="switchTab(event, \'actions\')"]');
-  if (tabActions) tabActions.style.display = gestor ? '' : 'none';
+  if (tabActions) tabActions.style.display = podeAcessarAcoes ? '' : 'none';
 
-  // Aba "Comentário Interno" — apenas admin completo
-  const tabInternal = document.querySelector('[onclick="switchReplyMode(event, \'internal\')"]');
-  if (tabInternal) tabInternal.style.display = admin ? '' : 'none';
+  // ── Seção "Finalizar": APENAS o responsável do ticket, enquanto não encerrado ──
+  const sectionFinalizar = document.getElementById('sectionFinalizarChamado');
+  if (sectionFinalizar)
+    sectionFinalizar.style.display = (isResponsavelDoTicket && !ticketEncerrado) ? '' : 'none';
 
-  // Formulário de resposta pública — visível só para quem pode interagir
-  const replyForm = document.getElementById('detailReplyForm');
-  if (replyForm) {
-    replyForm.style.display = podeInteragir ? '' : 'none';
-    if (!podeInteragir) {
-      // Exibe aviso de somente leitura
-      const existing = document.getElementById('readonlyNotice');
-      if (!existing) {
-        const notice = document.createElement('p');
-        notice.id = 'readonlyNotice';
-        notice.className = 'text-muted text-center py-2';
-        notice.innerHTML = '<i class="bi bi-eye"></i> Você pode visualizar este chamado mas não pode interagir. Aguarde ser atribuído.';
-        replyForm.parentNode.insertBefore(notice, replyForm);
+  // ── Seção "Reabrir": APENAS o solicitante, quando resolvido, até 2 vezes ──
+  const sectionReabrir = document.getElementById('sectionReabrirChamado');
+  if (sectionReabrir) {
+    if (isSolicitante && ticketResolvido) {
+      sectionReabrir.style.display = '';
+      const esgotado = document.getElementById('reabrirEsgotado');
+      const btnReabrir = document.getElementById('btnReopenChamado');
+      if (reopen_count >= 2) {
+        if (esgotado)  esgotado.style.display  = '';
+        if (btnReabrir) btnReabrir.style.display = 'none';
+      } else {
+        if (esgotado)  esgotado.style.display  = 'none';
+        if (btnReabrir) btnReabrir.style.display = '';
       }
     } else {
-      document.getElementById('readonlyNotice')?.remove();
+      sectionReabrir.style.display = 'none';
     }
   }
 
-  // Botão "Deletar":
-  // - Gestores: sempre
-  // - USER: apenas o próprio ticket (solicitante)
-  const btnDeletar = document.getElementById('btnDeletarTicket');
-  if (btnDeletar) {
-    btnDeletar.style.display = (gestor || isSolicitante) ? '' : 'none';
+  // ── Seção "Alterar Status": APENAS o responsável do ticket, enquanto não encerrado ──
+  const sectionStatus = document.getElementById('sectionAlterarStatus');
+  if (sectionStatus)
+    sectionStatus.style.display = (isResponsavelDoTicket && !ticketEncerrado) ? '' : 'none';
+
+  // ── Seção "Atribuir Responsável": apenas admins ──
+  const sectionAtribuir = document.getElementById('sectionAtribuirResponsavel');
+  if (sectionAtribuir) sectionAtribuir.style.display = admin ? '' : 'none';
+
+  // ── Aba "Comentário Interno": apenas admin ──
+  const tabInternal = document.querySelector('[onclick="switchReplyMode(event, \'internal\')"]');
+  if (tabInternal) tabInternal.style.display = admin ? '' : 'none';
+
+  // ── Formulário de resposta: oculto se encerrado ou sem permissão ──
+  const podeInteragir = !ticketEncerrado && (admin || isSolicitante || isResponsavelDoTicket);
+  const replyForm = document.getElementById('detailReplyForm');
+  if (replyForm) {
+    replyForm.style.display = podeInteragir ? '' : 'none';
+    document.getElementById('readonlyNotice')?.remove();
+    if (!podeInteragir) {
+      const notice = document.createElement('p');
+      notice.id = 'readonlyNotice';
+      notice.className = 'text-muted text-center py-2 small';
+      notice.innerHTML = ticketEncerrado
+        ? '<i class="bi bi-lock"></i> Chamado encerrado — somente visualização.'
+        : '<i class="bi bi-eye"></i> Você pode visualizar este chamado mas não pode interagir.';
+      replyForm.parentNode.insertBefore(notice, replyForm);
+    }
   }
 
-  // Botão "Assumir": visível quando o ticket NÃO tem responsável e o usuário é do mesmo grupo
+  // ── Ticket encerrado: aplicar overlay cinza ──
+  const modalBody = document.querySelector('#ticketDetailModal .modal-body');
+  if (modalBody) {
+    if (ticketEncerrado) modalBody.classList.add('ticket-encerrado');
+    else                 modalBody.classList.remove('ticket-encerrado');
+  }
+
+  // ── Botão "Deletar": apenas RESPONSAVEL_GRUPO ──
+  const btnDeletar = document.getElementById('btnDeletarTicket');
+  if (btnDeletar) btnDeletar.style.display = isResponsavelGrupo() ? '' : 'none';
+
+  // ── Botão "Assumir": sem responsável + mesmo grupo + não encerrado ──
   const btnAssumir = document.getElementById('btnAssumirTicket');
   if (btnAssumir) {
     const user = getCurrentUser();
-    const semResponsavel = !ticket.assignedTo || ticket.assignedTo === null;
     const mesmoGrupo = admin || (user.group_id && user.group_id === ticket.group_id);
-    const ticketAberto = ticket.status !== 'Fechado' && ticket.status !== 'Cancelado';
-    const podeAssumir = semResponsavel && mesmoGrupo && ticketAberto;
-    btnAssumir.classList.toggle('d-none', !podeAssumir);
+    btnAssumir.classList.toggle('d-none', !(semResponsavel && mesmoGrupo && !ticketEncerrado));
   }
 
-  // Botão "Desistir": visível apenas para quem é o responsável atual
+  // ── Botão "Desistir": apenas o responsável atual, não encerrado ──
   const btnDevolver = document.getElementById('btnDevolverTicket');
-  if (btnDevolver) {
-    const ticketAberto = ticket.status !== 'Fechado' && ticket.status !== 'Cancelado';
-    const podeDevolver = isResponsavelDoTicket && ticketAberto;
-    btnDevolver.classList.toggle('d-none', !podeDevolver);
+  if (btnDevolver)
+    btnDevolver.classList.toggle('d-none', !(isResponsavelDoTicket && !ticketEncerrado));
+
+  // ── Botão "Encaminhar":
+  //    - Sem responsável: solicitante OU membros do grupo podem encaminhar
+  //    - Com responsável (atendimento iniciado): APENAS o responsável
+  //    - Nunca quando encerrado
+  const btnEncaminhar = document.getElementById('btnEncaminharTicket');
+  if (btnEncaminhar) {
+    const user = getCurrentUser();
+    const mesmoGrupo = admin || (user.group_id && user.group_id === ticket.group_id);
+    const podeEncaminhar = !ticketEncerrado && (
+      semResponsavel
+        ? (isSolicitante || mesmoGrupo)
+        : (isResponsavelDoTicket || admin)
+    );
+    btnEncaminhar.classList.toggle('d-none', !podeEncaminhar);
   }
 
-  console.log(`[PERMISSAO] ✅ Modal | gestor:${gestor} | solicitante:${isSolicitante} | responsavelTicket:${isResponsavelDoTicket} | podeInteragir:${podeInteragir}`);
+  console.log(`[PERMISSAO] ✅ Modal | solicitante:${isSolicitante} | responsavelTicket:${isResponsavelDoTicket} | encerrado:${ticketEncerrado}`);
 }
 
 // =========================================
@@ -762,9 +811,11 @@ async function loadTickets() {
         group_id:        t.group_id          || null,
         priority:        mapPriorityFromApi(t.prioridade_id),
         status:          mapStatusFromApi(t.status_id),
+        status_id:       t.status_id,
         assignedTo:      t.responsavel_id,
         assignedName:    t.responsavel_nome || "Não atribuído",
         solicitante_id:  t.solicitante_id,
+        reopen_count:    t.reopen_count || 0,
         createdAt:       formatDate(t.created_at),
         createdAtFull:   t.created_at,
         updatedAt:       formatDate(t.updated_at),
@@ -808,8 +859,8 @@ function isNewTicket(ticket) {
 
 function mapPriorityFromApi(id) { return { 1: 'low', 2: 'medium', 3: 'high', 4: 'urgent' }[id] || 'medium'; }
 function mapPriorityToApi(p)    { return { 'low': 1, 'medium': 2, 'high': 3, 'urgent': 4 }[p] || 2; }
-function mapStatusFromApi(id)   { return { 1: 'open', 2: 'in-progress', 3: 'resolved', 4: 'closed' }[id] || 'open'; }
-function mapStatusToApi(s)      { return { 'open': 1, 'in-progress': 2, 'resolved': 3, 'closed': 4 }[s] || 1; }
+function mapStatusFromApi(id)   { return { 1: 'open', 2: 'in-progress', 3: 'waiting', 4: 'resolved', 5: 'closed' }[id] || 'open'; }
+function mapStatusToApi(s)      { return { 'open': 1, 'in-progress': 2, 'waiting': 3, 'resolved': 4, 'closed': 5 }[s] || 1; }
 function formatDate(d)          { return d ? new Date(d).toLocaleDateString('pt-BR') : 'N/A'; }
 function formatDateTime(d)      { return d ? new Date(d).toLocaleString('pt-BR')     : 'N/A'; }
 
@@ -894,8 +945,8 @@ function renderTable() {
     const initial = t.userName.charAt(0).toUpperCase() || "?";
     const checked = selectedTickets.has(t.id) ? 'checked' : '';
 
-    // ✅ Botão deletar na linha: gestor (admin/responsável) vê sempre; USER só vê o próprio ticket
-    const podeDeletar = gestor || t.solicitante_id === userId;
+    // ✅ Botão deletar na linha: apenas RESPONSAVEL_GRUPO pode deletar
+    const podeDeletar = isResponsavelGrupo();
     const btnDeletar  = podeDeletar
       ? `<button class="btn btn-sm btn-danger" onclick="deleteTicketRow(${t.id})" title="Deletar"><i class="bi bi-trash"></i></button>`
       : '';
@@ -1392,30 +1443,81 @@ function switchReplyMode(event, mode) {
 // 21. AÇÕES DO MODAL DE DETALHE
 // =========================================
 
-async function resolveTicket() {
-  console.log(`[ACTION] 🏁 Finalizando ticket #${viewingTicketId}...`);
+// Mantido como alias para compatibilidade de chamadas antigas
+async function resolveTicket() { await finalizarTicket(); }
 
+async function finalizarTicket() {
+  if (!viewingTicketId) return;
   const userId = getCurrentUserId();
 
-  // ✅ usuario_id obrigatório no PUT
-  const result = await apiRequest(
-    'PUT',
-    `/tickets/${viewingTicketId}?usuario_id=${userId}`,
-    { status_id: mapStatusToApi('resolved') }
-  );
+  try {
+    const token = localStorage.getItem('cpe_token') || '';
+    const res = await fetch(`${API_BASE}/tickets/${viewingTicketId}/finalizar`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:    JSON.stringify({ usuario_id: userId })
+    });
 
-  if (result) {
-    showSuccess("✅ Ticket finalizado com sucesso!");
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showError(err.detail || 'Erro ao finalizar o chamado.');
+      return;
+    }
+
+    showSuccess('✅ Chamado finalizado com sucesso!');
+    bootstrap.Modal.getInstance(document.getElementById('ticketDetailModal'))?.hide();
     await loadTickets();
 
-    const updatedTicket = tickets.find(t => t.id === viewingTicketId);
-    if (updatedTicket) {
-      document.getElementById("detailStatusQuick").innerHTML = getStatusBadge(updatedTicket.status);
-      document.getElementById("detailStatus").innerHTML      = getStatusBadge(updatedTicket.status);
-      document.getElementById("detailStatusSelect").value   = updatedTicket.status;
+  } catch (e) {
+    console.error('[FINALIZAR] Erro:', e);
+    showError('Erro de conexão ao finalizar o chamado.');
+  }
+}
+
+// ── Reabrir chamado ──────────────────────────────
+function reabrirChamado() {
+  if (!viewingTicketId) return;
+  document.getElementById('reabrirJustificativa').value = '';
+  document.getElementById('reabrirError').classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('reabrirModal')).show();
+}
+
+async function submitReabrir() {
+  if (!viewingTicketId) return;
+  const userId   = getCurrentUserId();
+  const justText = document.getElementById('reabrirJustificativa').value.trim();
+  const errorEl  = document.getElementById('reabrirError');
+
+  if (justText.length < 5) {
+    errorEl.textContent = 'Informe uma justificativa com pelo menos 5 caracteres.';
+    errorEl.classList.remove('d-none');
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('cpe_token') || '';
+    const res = await fetch(`${API_BASE}/tickets/${viewingTicketId}/reabrir`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body:    JSON.stringify({ usuario_id: userId, justificativa: justText })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      errorEl.textContent = err.detail || 'Erro ao reabrir o chamado.';
+      errorEl.classList.remove('d-none');
+      return;
     }
-  } else {
-    showError("❌ Erro ao tentar finalizar o ticket.");
+
+    bootstrap.Modal.getInstance(document.getElementById('reabrirModal'))?.hide();
+    bootstrap.Modal.getInstance(document.getElementById('ticketDetailModal'))?.hide();
+    showSuccess('🔄 Chamado reaberto com sucesso!');
+    await loadTickets();
+
+  } catch (e) {
+    console.error('[REABRIR] Erro:', e);
+    errorEl.textContent = 'Erro de conexão ao reabrir o chamado.';
+    errorEl.classList.remove('d-none');
   }
 }
 
@@ -1786,3 +1888,133 @@ function showError(msg)   { showAlert("alertBox",    msg); console.error(`[ALERT
 function showSuccess(msg) { showAlert("successBox",  msg); console.log(`[ALERTA] ${msg}`);   }
 
 console.log("[TICKETS] 🎉 Script carregado completamente!");
+
+// =========================================
+// 27. SISTEMA DE AVALIAÇÃO DE CHAMADOS
+// =========================================
+
+let _avaliacaoPendente = null; // ticket atual sendo avaliado
+
+/**
+ * Verifica se há avaliações pendentes para o usuário logado.
+ * Exibe popup para as que ainda não foram mostradas 2x.
+ */
+async function verificarAvaliacoesPendentes() {
+  const userId = getCurrentUserId();
+  if (!userId) return;
+
+  try {
+    const pendentes = await apiRequest('GET', `/avaliacoes/pendentes?usuario_id=${userId}`);
+    if (!pendentes || pendentes.length === 0) return;
+
+    // Mostra o primeiro da fila
+    _abrirPopupAvaliacao(pendentes[0]);
+  } catch (err) {
+    console.warn('[AVAL] Erro ao verificar pendentes:', err);
+  }
+}
+
+function _abrirPopupAvaliacao(aval) {
+  _avaliacaoPendente = aval;
+
+  // Preenche modal
+  document.getElementById('avalModalNumero').textContent  = aval.numero || `#${aval.ticket_id}`;
+  document.getElementById('avalModalAssunto').textContent = aval.assunto || '—';
+  document.getElementById('avalModalResp').textContent    = aval.responsavel_nome || '—';
+  document.getElementById('avalStarInput').value          = '';
+  document.getElementById('avalComentario').value         = '';
+  document.getElementById('avalComentarioWrap').classList.add('d-none');
+  document.getElementById('avalComentarioObrig').classList.add('d-none');
+  document.getElementById('avalErro').textContent         = '';
+  document.getElementById('avalBtnEnviar').disabled       = true;
+  _renderAvalStars(0);
+
+  // Registra que o popup foi exibido
+  apiRequest('POST', `/avaliacoes/popup-visto/${aval.ticket_id}?usuario_id=${getCurrentUserId()}`)
+    .catch(() => {});
+
+  const modal = new bootstrap.Modal(document.getElementById('avaliacaoModal'), { backdrop: 'static', keyboard: false });
+  modal.show();
+}
+
+function _renderAvalStars(selected) {
+  const container = document.getElementById('avalStarsContainer');
+  let html = '';
+  for (let i = 1; i <= 10; i++) {
+    const filled = i <= selected;
+    html += `<i class="bi bi-star${filled ? '-fill' : ''} aval-star"
+               style="font-size:1.6rem;cursor:pointer;color:${filled ? '#f59e0b' : '#d1d5db'};transition:color .1s;"
+               data-val="${i}"
+               onmouseover="_hoverStars(${i})"
+               onmouseout="_renderAvalStars(parseInt(document.getElementById('avalStarInput').value)||0)"
+               onclick="_selecionarEstrela(${i})"></i>`;
+  }
+  container.innerHTML = html;
+}
+
+function _hoverStars(n) {
+  const container = document.getElementById('avalStarsContainer');
+  container.querySelectorAll('.aval-star').forEach((el, idx) => {
+    const filled = idx + 1 <= n;
+    el.className  = `bi bi-star${filled ? '-fill' : ''} aval-star`;
+    el.style.color = filled ? '#f59e0b' : '#d1d5db';
+  });
+}
+
+function _selecionarEstrela(n) {
+  document.getElementById('avalStarInput').value = n;
+  _renderAvalStars(n);
+
+  // Comentário obrigatório se < 4
+  const wrap  = document.getElementById('avalComentarioWrap');
+  const obrig = document.getElementById('avalComentarioObrig');
+  if (n < 4) {
+    wrap.classList.remove('d-none');
+    obrig.classList.remove('d-none');
+  } else {
+    wrap.classList.remove('d-none');
+    obrig.classList.add('d-none');
+  }
+
+  document.getElementById('avalBtnEnviar').disabled = false;
+}
+
+async function submitAvaliacao() {
+  if (!_avaliacaoPendente) return;
+  const estrelas   = parseInt(document.getElementById('avalStarInput').value);
+  const comentario = document.getElementById('avalComentario').value.trim();
+  const erroEl     = document.getElementById('avalErro');
+
+  if (!estrelas) { erroEl.textContent = 'Selecione uma nota antes de enviar.'; return; }
+  if (estrelas < 4 && !comentario) {
+    erroEl.textContent = 'Comentário obrigatório para notas abaixo de 4 estrelas.';
+    document.getElementById('avalComentario').focus();
+    return;
+  }
+
+  const btn = document.getElementById('avalBtnEnviar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando...';
+  erroEl.textContent = '';
+
+  try {
+    await apiRequest('POST', `/avaliacoes/${_avaliacaoPendente.ticket_id}`, {
+      usuario_id: getCurrentUserId(),
+      estrelas,
+      comentario: comentario || null
+    });
+
+    bootstrap.Modal.getInstance(document.getElementById('avaliacaoModal'))?.hide();
+    showSuccess('✅ Avaliação enviada! Obrigado pelo seu feedback.');
+    _avaliacaoPendente = null;
+  } catch (err) {
+    erroEl.textContent = err?.detail || 'Erro ao enviar avaliação. Tente novamente.';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send me-1"></i>Enviar Avaliação';
+  }
+}
+
+function pularAvaliacao() {
+  bootstrap.Modal.getInstance(document.getElementById('avaliacaoModal'))?.hide();
+  _avaliacaoPendente = null;
+}

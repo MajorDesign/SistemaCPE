@@ -15,10 +15,11 @@ logger = logging.getLogger(__name__)
 class SLAService:
 
     @staticmethod
-    def criar_sla(conn, ticket_id: int, categoria_id: int, sla_minutos: int):
+    def criar_sla(conn, ticket_id: int, categoria_id: int, sla_minutos: int,
+                  sla_primeira_resposta_minutos: int = None):
         """
-        Cria o registro de SLA para o ticket assim que ele é associado a uma categoria com SLA.
-        Status inicial: aguardando (não começa a contar até alguém assumir).
+        Cria o registro de SLA para o ticket assim que ele é criado.
+        Status inicial: em_andamento — a contagem começa imediatamente na criação do ticket.
         """
         cursor = conn.cursor(dictionary=True)
         try:
@@ -29,12 +30,45 @@ class SLAService:
 
             cursor.execute(
                 """
-                INSERT INTO ticket_sla (ticket_id, categoria_id, sla_minutos, status)
-                VALUES (%s, %s, %s, 'aguardando')
+                INSERT INTO ticket_sla
+                    (ticket_id, categoria_id, sla_minutos, sla_primeira_resposta_minutos,
+                     status, iniciado_em)
+                VALUES (%s, %s, %s, %s, 'em_andamento', NOW())
                 """,
-                (ticket_id, categoria_id, sla_minutos)
+                (ticket_id, categoria_id, sla_minutos, sla_primeira_resposta_minutos)
             )
-            logger.info(f"[SLA] Criado para ticket #{ticket_id} — {sla_minutos} min")
+            logger.info(
+                f"[SLA] Criado e iniciado para ticket #{ticket_id} — "
+                f"{sla_minutos} min total"
+                + (f", {sla_primeira_resposta_minutos} min 1ª resposta"
+                   if sla_primeira_resposta_minutos else "")
+            )
+        finally:
+            cursor.close()
+
+    @staticmethod
+    def registrar_primeira_resposta(conn, ticket_id: int) -> bool:
+        """
+        Registra o momento da primeira resposta pública do suporte ao ticket.
+        Só atua se o ticket tem SLA de primeira resposta e ainda não foi registrada.
+        Retorna True se registrou.
+        """
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute(
+                """
+                UPDATE ticket_sla
+                SET primeira_resposta_em = NOW()
+                WHERE ticket_id = %s
+                  AND primeira_resposta_em IS NULL
+                  AND sla_primeira_resposta_minutos IS NOT NULL
+                """,
+                (ticket_id,)
+            )
+            updated = cursor.rowcount > 0
+            if updated:
+                logger.info(f"[SLA] Primeira resposta registrada para ticket #{ticket_id}")
+            return updated
         finally:
             cursor.close()
 
@@ -139,7 +173,12 @@ class SLAService:
 
     @staticmethod
     def concluir_sla(conn, ticket_id: int):
-        """Marca SLA como concluído (ticket fechado/resolvido dentro do prazo)."""
+        """
+        Marca SLA como concluído quando o ticket é finalizado (status 4 ou 5).
+        - Se SLA estava em andamento/pausado: marca como 'concluido' e registra concluido_em.
+        - Se SLA já havia estourado: preserva status 'estourado' mas registra concluido_em
+          para calcular o tempo de atraso (quanto tempo após o breach o ticket foi fechado).
+        """
         cursor = conn.cursor(dictionary=True)
         try:
             cursor.execute(
@@ -147,15 +186,38 @@ class SLAService:
                 (ticket_id,)
             )
             sla = cursor.fetchone()
-            if not sla or sla["status"] in ("concluido", "estourado"):
+            if not sla:
                 return
-            cursor.execute(
-                "UPDATE ticket_sla SET status='concluido', concluido_em=%s WHERE ticket_id=%s",
-                (datetime.now(), ticket_id)
-            )
-            logger.info(f"[SLA] Concluído para ticket #{ticket_id}")
+
+            agora = datetime.now()
+
+            if sla["status"] == "estourado":
+                # Registra quando foi finalizado sem mudar o status de estourado
+                cursor.execute(
+                    "UPDATE ticket_sla SET concluido_em = %s WHERE ticket_id = %s AND concluido_em IS NULL",
+                    (agora, ticket_id)
+                )
+                logger.info(f"[SLA] Ticket #{ticket_id} finalizado APÓS estouro — concluido_em registrado")
+            elif sla["status"] == "concluido":
+                return  # Já concluído, nada a fazer
+            else:
+                # em_andamento ou pausado → conclui dentro do prazo
+                cursor.execute(
+                    "UPDATE ticket_sla SET status='concluido', concluido_em=%s WHERE ticket_id=%s",
+                    (agora, ticket_id)
+                )
+                logger.info(f"[SLA] Concluído para ticket #{ticket_id}")
         finally:
             cursor.close()
+
+    @staticmethod
+    def _fmt_tempo(minutos: int) -> str:
+        """Formata minutos: exibe em dias se >= 1440."""
+        m = abs(int(minutos))
+        if m >= 1440:
+            dias = m / 1440
+            return f"{int(dias)}d" if dias == int(dias) else f"{dias:.1f}d"
+        return f"{m}min"
 
     @staticmethod
     def calcular_status_sla(sla: dict) -> dict:
@@ -208,15 +270,17 @@ class SLAService:
         percentual        = round((minutos_ativos / sla_total * 100), 1) if sla_total > 0 else 0
         estourado         = minutos_ativos > sla_total or status == "estourado"
 
+        fmt = SLAService._fmt_tempo
+
         if estourado or status == "estourado":
             cor   = "vermelho"
-            label = f"SLA estourado há {abs(minutos_restantes)} min"
+            label = f"SLA estourado há {fmt(abs(minutos_restantes))}"
         elif percentual >= 50:
             cor   = "amarelo"
-            label = f"Restam {minutos_restantes} min"
+            label = f"Restam {fmt(minutos_restantes)}"
         else:
             cor   = "verde"
-            label = f"Restam {minutos_restantes} min"
+            label = f"Restam {fmt(minutos_restantes)}"
 
         if status == "pausado":
             label = f"Pausado — {label}"

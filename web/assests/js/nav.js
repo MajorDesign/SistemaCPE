@@ -29,7 +29,8 @@ function escapeHtml(text) {
 
 const globalMenu = [
   { path: "/SistemaCPE/index.html", label: "Dashboard", icon: "bi-speedometer2", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
-  { path: "/SistemaCPE/web/pages/tickets.html", label: "Tickets", icon: "bi-ticket", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/tickets.html",    label: "Tickets",    icon: "bi-ticket",     requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/avaliacoes.html", label: "Avaliações", icon: "bi-star-fill",  requiredRoles: ["RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/users.html", label: "Usuários", icon: "bi-people", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/groups.html", label: "Gerenciar Grupos", icon: "bi-diagram-3", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/chat.html", label: "Chat", icon: "bi-chat-dots", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },

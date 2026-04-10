@@ -202,7 +202,7 @@ class TicketCriar(BaseModel):
         return v.strip()
 
 class TicketAtualizar(BaseModel):
-    status_id: Optional[int] = Field(None, ge=1, le=4)
+    status_id: Optional[int] = Field(None, ge=1, le=5)
     prioridade_id: Optional[int] = Field(None, ge=1, le=4)
     responsavel_id: Optional[int] = Field(None, gt=0)
     group_id: Optional[int] = Field(None, gt=0)
@@ -338,18 +338,59 @@ def obter_role_usuario(cursor, usuario_id: int) -> str:
     return row["role"] or "USER"
 
 def gerar_numero_ticket(cursor, group_id: int):
-    # ✅ CORRIGIDO: Atualizado para usar cpe_grupo
-    # Data: 06/04/2026 19:45
-    cursor.execute("SELECT name FROM `cpe_grupo` WHERE id = %s", (group_id,))
-    g = cursor.fetchone()
-    prefixo = (g["name"][:3].upper() if g and g.get("name") else "TKT")
-    cursor.execute(
-        "SELECT COUNT(*) as count FROM tickets WHERE group_id = %s AND YEAR(created_at) = YEAR(NOW())",
-        (group_id,)
-    )
-    c = cursor.fetchone()
-    seq = (c["count"] + 1) if c else 1
-    return f"{prefixo}-{datetime.now().year}-{seq:05d}"
+    """
+    ✅ CORRIGIDO: Gera número único de ticket com lock para evitar duplicação
+    
+    Problema: Race condition quando múltiplos usuários criam tickets simultaneamente
+    Solução: Usar FOR UPDATE para bloquear a query enquanto está sendo processada
+    
+    Data: 08/04/2026 17:30 - Ask cpp
+    """
+    try:
+        # 1. Obter prefix do grupo
+        cursor.execute(
+            "SELECT name FROM `cpe_grupo` WHERE id = %s AND id > 0",
+            (group_id,)
+        )
+        grupo = cursor.fetchone()
+        
+        if not grupo:
+            raise ValueError(f"Grupo #{group_id} não encontrado")
+        
+        # Usar primeiras 3 letras do nome (ex: "Suporte" → "SUP")
+        prefixo = grupo["name"][:3].upper()
+        
+        # 2. Obter ano atual
+        ano_atual = datetime.now().year
+        
+        # 3. ✅ CRÍTICO: Usar FOR UPDATE para evitar race condition
+        # FOR UPDATE bloqueia a leitura enquanto está sendo processada
+        # Isso impede que dois usuários gerem o mesmo número simultaneamente
+        cursor.execute(
+            """
+            SELECT COALESCE(MAX(CAST(SUBSTRING(numero, -5) AS UNSIGNED)), 0) + 1 as proximo_numero
+            FROM tickets
+            WHERE numero LIKE %s
+            FOR UPDATE
+            """,
+            (f"{prefixo}-{ano_atual}-%",)
+        )
+        
+        resultado = cursor.fetchone()
+        proximo_numero = resultado.get("proximo_numero", 1) if resultado else 1
+        
+        # 4. Formatar o número final (ex: SUP-2026-00001)
+        numero_formatado = f"{prefixo}-{ano_atual}-{str(proximo_numero).zfill(5)}"
+        
+        logger.info(f"  ✓ Número de ticket gerado: {numero_formatado}")
+        return numero_formatado
+        
+    except Exception as e:
+        logger.error(f"  ❌ Erro ao gerar número de ticket: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao gerar número de ticket: {str(e)}"
+        )
 
 # ================================================== 
 # [FIM] ✅ VALIDAÇÕES
@@ -412,8 +453,10 @@ async def obter_tickets(
     status_id: Optional[int] = Query(None, gt=0),
     responsavel_id: Optional[int] = Query(None, gt=0),
     prioridade_id: Optional[int] = Query(None, gt=0),
+    data_inicio: Optional[str] = Query(None, description="Filtro de data inicial (YYYY-MM-DD)"),
+    data_fim: Optional[str] = Query(None, description="Filtro de data final (YYYY-MM-DD)"),
     pular: int = Query(0, ge=0),
-    limite: int = Query(LIMITE_PADRAO, ge=1, le=LIMITE_MAXIMO)
+    limite: int = Query(LIMITE_PADRAO, ge=1, le=500)
 ):
     # ✅ CORRIGIDO: Adicionar filtro de acesso baseado em ROLE + GROUP_ID
     # Data: 06/04/2026 19:45
@@ -437,16 +480,31 @@ async def obter_tickets(
         if role_usuario in ROLES_ADMIN:  # ADMIN, TI, MANAGER
             logger.info(f"  ✓ Usuário é {role_usuario} — pode ver TODOS os tickets")
             # Admin vê tudo
+       # Linhas 440-450
+
         elif role_usuario == "RESPONSAVEL_GRUPO":
-            logger.info(f"  ✓ Usuário é RESPONSAVEL_GRUPO — pode ver TODOS do seu group_id={group_id_usuario}")
-            # Responsável vê apenas tickets do seu grupo
-            filtros.append("t.group_id = %s")
+            # 08/04/2026 14:36 - Ask cpp - BUG FIX: Validar group_id preenchido
+            if not group_id_usuario:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Usuário RESPONSAVEL_GRUPO sem grupo atribuído no sistema"
+                )
+            # RESPONSAVEL_GRUPO vê:
+            # 1. Tickets direcionados ao seu grupo (t.group_id = seu grupo)
+            # 2. Tickets abertos por QUALQUER membro do seu grupo (solicitante.group_id = seu grupo)
+            logger.info(f"  ✓ Usuário é RESPONSAVEL_GRUPO — vê tickets do grupo #{group_id_usuario} + tickets abertos por membros do grupo")
+            filtros.append(
+                "(t.group_id = %s OR t.solicitante_id IN "
+                "(SELECT id FROM users WHERE group_id = %s AND is_active = 1))"
+            )
+            params.append(group_id_usuario)
             params.append(group_id_usuario)
         else:  # USER
-            logger.info(f"  ✓ Usuário é USER — pode ver todos os tickets do seu grupo (group_id={group_id_usuario})")
-            # User vê todos os tickets do seu grupo (somente leitura se não for o responsável)
-            filtros.append("t.group_id = %s")
+            logger.info(f"  ✓ Usuário é USER — pode ver tickets do seu grupo OU seus próprios tickets")
+            # 08/04/2026 14:35 - Ask cpp - BUG FIX: User sempre vê seu próprio ticket
+            filtros.append("(t.group_id = %s OR t.solicitante_id = %s)")
             params.append(group_id_usuario)
+            params.append(usuario_id)  # Permitir visualizar ticket que ele criou
 
         # ✅ STEP 3: Aplicar filtros adicionais do frontend
         if grupo_id:
@@ -461,6 +519,12 @@ async def obter_tickets(
         if prioridade_id:
             filtros.append("t.prioridade_id = %s")
             params.append(prioridade_id)
+        if data_inicio:
+            filtros.append("DATE(t.created_at) >= %s")
+            params.append(data_inicio)
+        if data_fim:
+            filtros.append("DATE(t.created_at) <= %s")
+            params.append(data_fim)
 
         where = ("WHERE " + " AND ".join(filtros)) if filtros else ""
         
@@ -477,11 +541,14 @@ async def obter_tickets(
                 g.name  AS group_name,
                 ts.status        AS sla_status,
                 ts.sla_minutos   AS sla_minutos,
+                ts.sla_primeira_resposta_minutos AS sla_pr_minutos,
                 ts.iniciado_em   AS sla_iniciado_em,
                 ts.pausado_em    AS sla_pausado_em,
                 ts.minutos_pausados AS sla_minutos_pausados,
                 ts.estourou_em   AS sla_estourou_em,
-                ts.concluido_em  AS sla_concluido_em
+                ts.concluido_em  AS sla_concluido_em,
+                ts.primeira_resposta_em AS sla_primeira_resposta_em,
+                t.reopen_count
             FROM tickets t
             LEFT JOIN users u            ON t.solicitante_id = u.id
             LEFT JOIN users r            ON t.responsavel_id = r.id
@@ -535,11 +602,355 @@ async def obter_tickets(
         if conexao:
             conexao.close()
 
-# ================================================== 
+# ==================================================
 # [FIM] GET - OBTER TICKETS
 # Data: 06/04/2026 19:45
 # ==================================================
-            
+
+# ========================================
+# 📊 DASHBOARD - ESTATÍSTICAS DE SLA
+# Data: 08/04/2026 17:00 - Ask cpp
+# NOTA: deve ficar ANTES de /{ticket_id} para evitar conflito de rota
+# ========================================
+
+class DashboardSLAResposta(BaseModel):
+    periodo: str
+    resumo_geral: dict
+    por_usuario: List[dict]
+
+@tickets_router.get("/dashboard/sla", response_model=DashboardSLAResposta)
+async def dashboard_sla(
+    usuario_id: int = Query(..., gt=0, description="ID do usuário logado para filtrar permissões"),
+    grupo_id: Optional[int] = Query(None, gt=0, description="Filtrar por grupo específico (apenas RESPONSAVEL_GRUPO)")
+):
+    """
+    📊 Retorna estatísticas de SLA para o dashboard
+
+    ✅ USER vê apenas seu desempenho
+    ✅ RESPONSAVEL_GRUPO vê desempenho de todos do seu grupo (por membro)
+    ✅ ADMIN vê todos
+    """
+    log_inicio("dashboard_sla", usuario_id=usuario_id, grupo_id=grupo_id)
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        usuario = validar_usuario_existe(cursor, usuario_id)
+        role_usuario = usuario.get("role") or "USER"
+        group_id_usuario = usuario.get("group_id")
+        e_admin = role_usuario in ROLES_ADMIN
+
+        filtros = []
+        params = []
+
+        if e_admin:
+            pass  # Admin vê tudo
+        elif role_usuario == "RESPONSAVEL_GRUPO":
+            if not group_id_usuario:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Usuário RESPONSAVEL_GRUPO sem grupo atribuído no sistema"
+                )
+            # Apenas tickets do grupo — responsável pertence ao grupo do gestor
+            filtros.append("t.group_id = %s")
+            params.append(group_id_usuario)
+        else:
+            # Usuário comum vê tickets onde é o responsável (atendente)
+            filtros.append("t.responsavel_id = %s")
+            params.append(usuario_id)
+
+        if grupo_id:
+            if not e_admin and role_usuario != "RESPONSAVEL_GRUPO":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Apenas RESPONSAVEL_GRUPO ou ADMIN podem filtrar por grupo"
+                )
+            filtros.append("t.group_id = %s")
+            params.append(grupo_id)
+
+        where = ("WHERE " + " AND ".join(filtros)) if filtros else ""
+
+        periodo = datetime.now().strftime("%B/%Y") \
+            .replace("January","Janeiro").replace("February","Fevereiro") \
+            .replace("March","Março").replace("April","Abril") \
+            .replace("May","Maio").replace("June","Junho") \
+            .replace("July","Julho").replace("August","Agosto") \
+            .replace("September","Setembro").replace("October","Outubro") \
+            .replace("November","Novembro").replace("December","Dezembro")
+
+        sql_tickets = f"""
+            SELECT
+                t.id, t.numero, t.solicitante_id, t.responsavel_id,
+                ts.sla_minutos, ts.iniciado_em, ts.minutos_pausados,
+                ts.estourou_em, ts.concluido_em, ts.status AS sla_db_status,
+                ts.sla_primeira_resposta_minutos, ts.primeira_resposta_em,
+                t.status_id, t.updated_at
+            FROM tickets t
+            LEFT JOIN ticket_sla ts ON ts.ticket_id = t.id
+            {where}
+            ORDER BY t.created_at DESC
+        """
+        cursor.execute(sql_tickets, params)
+        tickets = cursor.fetchall()
+
+        def classificar_sla_pr(ticket):
+            """
+            Classifica SLA de primeira resposta:
+            'no_prazo' | 'estourado' | 'proximo_vencer' | 'aguardando' | None
+            """
+            sla_pr = ticket.get("sla_primeira_resposta_minutos")
+            if not sla_pr:
+                return None
+            iniciado_em   = ticket.get("iniciado_em")
+            pr_em         = ticket.get("primeira_resposta_em")
+            pausados      = ticket.get("minutos_pausados") or 0
+            finalizado    = (ticket.get("status_id") or 0) in (4, 5)
+
+            if isinstance(iniciado_em, str) and iniciado_em:
+                iniciado_em = dt.fromisoformat(iniciado_em.replace("Z", "+00:00"))
+            if isinstance(pr_em, str) and pr_em:
+                pr_em = dt.fromisoformat(pr_em.replace("Z", "+00:00"))
+
+            # Primeira resposta já registrada → compara com prazo
+            if pr_em and iniciado_em:
+                mins = max(0, int((pr_em - iniciado_em).total_seconds() / 60) - pausados)
+                return "no_prazo" if mins <= sla_pr else "estourado"
+
+            if iniciado_em:
+                if finalizado:
+                    # Ticket finalizado sem primeira_resposta_em → usa updated_at como proxy
+                    ref = ticket.get("updated_at") or dt.now()
+                    if isinstance(ref, str):
+                        ref = dt.fromisoformat(ref.replace("Z", "+00:00"))
+                    mins = max(0, int((ref - iniciado_em).total_seconds() / 60) - pausados)
+                    return "estourado" if mins > sla_pr else "no_prazo"
+                # Ticket ativo ainda sem primeira resposta
+                agora = dt.now(iniciado_em.tzinfo) if iniciado_em.tzinfo else dt.now()
+                mins = max(0, int((agora - iniciado_em).total_seconds() / 60) - pausados)
+                if mins > sla_pr:
+                    return "estourado"
+                pct_pr = (mins / sla_pr * 100) if sla_pr > 0 else 0
+                return "proximo_vencer" if pct_pr >= 80 else "aguardando"
+            return None
+
+        def classificar_sla(ticket):
+            """
+            Retorna: "estourado" | "estourado_concluido" | "concluido" |
+                     "proximo_vencer" | "dentro_prazo" | None
+            """
+            from datetime import datetime as dt
+
+            sla_db_status = ticket.get("sla_db_status")
+
+            # Sem SLA configurado → ignorar
+            if not ticket.get("sla_minutos"):
+                return None
+
+            iniciado_em = ticket.get("iniciado_em")
+            estourou_em = ticket.get("estourou_em")
+            concluido_em = ticket.get("concluido_em")
+            ticket_finalizado = (ticket.get("status_id") or 0) in (4, 5)
+
+            # ── Já marcado como estourado no banco ──
+            if sla_db_status == "estourado" or estourou_em:
+                return "estourado_concluido" if ticket_finalizado else "estourado"
+
+            # ── Concluído dentro do prazo ──
+            if sla_db_status == "concluido":
+                return "concluido"
+
+            # ── Ticket finalizado: calcular com concluido_em ou updated_at como proxy ──
+            if ticket_finalizado and iniciado_em:
+                ref = concluido_em or ticket.get("updated_at")
+                if ref:
+                    if isinstance(iniciado_em, str):
+                        iniciado_em = dt.fromisoformat(iniciado_em.replace("Z", "+00:00"))
+                    if isinstance(ref, str):
+                        ref = dt.fromisoformat(ref.replace("Z", "+00:00"))
+                    mins_ativos = max(0, int((ref - iniciado_em).total_seconds() / 60) - (ticket.get("minutos_pausados") or 0))
+                    return "estourado_concluido" if mins_ativos > ticket["sla_minutos"] else "concluido"
+
+            # ── SLA em andamento: calcular em tempo real ──
+            if iniciado_em and sla_db_status in ("em_andamento", "pausado", None):
+                if isinstance(iniciado_em, str):
+                    iniciado_em = dt.fromisoformat(iniciado_em.replace("Z", "+00:00"))
+                agora = dt.now(iniciado_em.tzinfo) if iniciado_em.tzinfo else dt.now()
+                mins_liquidos = int((agora - iniciado_em).total_seconds() / 60) - (ticket.get("minutos_pausados") or 0)
+                if mins_liquidos > ticket["sla_minutos"]:
+                    return "estourado"
+                percentual = (mins_liquidos / ticket["sla_minutos"]) * 100
+                return "proximo_vencer" if percentual >= 80 else "dentro_prazo"
+
+            return None
+
+        from datetime import datetime as dt
+
+        agrupar_por_responsavel = e_admin or role_usuario == "RESPONSAVEL_GRUPO"
+
+        # ── Passagem 1: KPIs gerais (TODOS os tickets, independente de responsavel) ──
+        kpi = {"total": 0, "em_andamento": 0, "finalizados": 0,
+               "estourado": 0, "dentro_prazo": 0, "proximo_vencer": 0,
+               "pr_no_prazo": 0, "pr_estourado": 0, "pr_aguardando": 0,
+               "pr_proximo_vencer": 0}
+
+        for ticket in tickets:
+            sla_status    = classificar_sla(ticket)
+            sla_pr_status = classificar_sla_pr(ticket)
+            kpi["total"] += 1
+            if (ticket.get("status_id") or 0) in (4, 5):
+                kpi["finalizados"] += 1
+            else:
+                kpi["em_andamento"] += 1
+            if sla_status in ("estourado", "estourado_concluido"):
+                kpi["estourado"] += 1
+            elif sla_status == "concluido":
+                kpi["dentro_prazo"] += 1
+            elif sla_status == "proximo_vencer":
+                kpi["proximo_vencer"] += 1
+            elif sla_status == "dentro_prazo":
+                kpi["dentro_prazo"] += 1
+            if sla_pr_status == "no_prazo":
+                kpi["pr_no_prazo"] += 1
+            elif sla_pr_status == "estourado":
+                kpi["pr_estourado"] += 1
+            elif sla_pr_status == "proximo_vencer":
+                kpi["pr_proximo_vencer"] += 1
+            elif sla_pr_status == "aguardando":
+                kpi["pr_aguardando"] += 1
+
+        # ── Passagem 2: métricas por pessoa (só tickets com responsavel_id ou solicitante_id) ──
+        tickets_classificados = {}
+
+        for ticket in tickets:
+            sla_status    = classificar_sla(ticket)
+            sla_pr_status = classificar_sla_pr(ticket)
+            uid = ticket.get("responsavel_id") if agrupar_por_responsavel else ticket.get("solicitante_id")
+            if uid is None:
+                continue
+
+            if uid not in tickets_classificados:
+                tickets_classificados[uid] = {
+                    "estourado": 0, "dentro_prazo": 0, "proximo_vencer": 0,
+                    "em_andamento": 0, "finalizados": 0, "total": 0,
+                    "soma_minutos_atraso": 0, "qtd_atraso": 0,
+                    "pr_no_prazo": 0, "pr_estourado": 0, "pr_proximo_vencer": 0,
+                }
+
+            if sla_status in ("estourado", "estourado_concluido"):
+                tickets_classificados[uid]["estourado"] += 1
+                estourou_em = ticket.get("estourou_em")
+                concluido_em = ticket.get("concluido_em")
+                if estourou_em:
+                    ref = concluido_em if concluido_em else dt.now()
+                    if isinstance(estourou_em, str):
+                        estourou_em = dt.fromisoformat(estourou_em.replace("Z", "+00:00"))
+                    if isinstance(ref, str):
+                        ref = dt.fromisoformat(ref.replace("Z", "+00:00"))
+                    try:
+                        mins_atraso = max(0, int((ref - estourou_em).total_seconds() / 60))
+                        tickets_classificados[uid]["soma_minutos_atraso"] += mins_atraso
+                        tickets_classificados[uid]["qtd_atraso"] += 1
+                    except Exception:
+                        pass
+            elif sla_status == "concluido":
+                tickets_classificados[uid]["dentro_prazo"] += 1
+            elif sla_status == "proximo_vencer":
+                tickets_classificados[uid]["proximo_vencer"] += 1
+            elif sla_status == "dentro_prazo":
+                tickets_classificados[uid]["dentro_prazo"] += 1
+
+            if sla_pr_status == "no_prazo":
+                tickets_classificados[uid]["pr_no_prazo"] += 1
+            elif sla_pr_status == "estourado":
+                tickets_classificados[uid]["pr_estourado"] += 1
+            elif sla_pr_status == "proximo_vencer":
+                tickets_classificados[uid]["pr_proximo_vencer"] += 1
+
+            if (ticket.get("status_id") or 0) in (4, 5):
+                tickets_classificados[uid]["finalizados"] += 1
+            else:
+                tickets_classificados[uid]["em_andamento"] += 1
+
+            tickets_classificados[uid]["total"] += 1
+
+        total_geral          = kpi["total"]
+        estourado_geral      = kpi["estourado"]
+        dentro_prazo_geral   = kpi["dentro_prazo"]
+        proximo_vencer_geral = kpi["proximo_vencer"]
+
+        def pct(v, t): return round(v / t * 100, 1) if t > 0 else 0.0
+        def fmt_atraso(soma, qtd):
+            if qtd == 0: return None
+            m = round(soma / qtd)
+            if m >= 1440:
+                dias = m / 1440
+                return f"{int(dias)}d" if dias == int(dias) else f"{dias:.1f}d"
+            return f"{m}min"
+
+        resumo_geral = {
+            "total_tickets":      total_geral,
+            "em_andamento":       kpi["em_andamento"],
+            "finalizados":        kpi["finalizados"],
+            "sla_estourado":      {"qtd": estourado_geral,      "percentual": pct(estourado_geral,      total_geral)},
+            "sla_dentro_prazo":   {"qtd": dentro_prazo_geral,   "percentual": pct(dentro_prazo_geral,   total_geral)},
+            "sla_proximo_vencer": {"qtd": proximo_vencer_geral, "percentual": pct(proximo_vencer_geral, total_geral)},
+            "sla_pr_no_prazo":       {"qtd": kpi["pr_no_prazo"],        "percentual": pct(kpi["pr_no_prazo"],        total_geral)},
+            "sla_pr_estourado":      {"qtd": kpi["pr_estourado"],       "percentual": pct(kpi["pr_estourado"],       total_geral)},
+            "sla_pr_proximo_vencer": {"qtd": kpi["pr_proximo_vencer"],  "percentual": pct(kpi["pr_proximo_vencer"],  total_geral)},
+            "sla_pr_aguardando":     {"qtd": kpi["pr_aguardando"],      "percentual": pct(kpi["pr_aguardando"],      total_geral)},
+        }
+
+        # Para RESPONSAVEL_GRUPO: busca IDs dos membros do grupo para filtrar por_usuario
+        ids_do_grupo = set()
+        if role_usuario == "RESPONSAVEL_GRUPO" and group_id_usuario:
+            cursor.execute(
+                "SELECT id FROM users WHERE group_id = %s AND is_active = 1",
+                (group_id_usuario,)
+            )
+            ids_do_grupo = {row["id"] for row in cursor.fetchall()}
+
+        por_usuario = []
+        if e_admin or role_usuario == "RESPONSAVEL_GRUPO":
+            for uid_agrup, d in tickets_classificados.items():
+                # RESPONSAVEL_GRUPO só vê membros do próprio grupo
+                if role_usuario == "RESPONSAVEL_GRUPO" and uid_agrup not in ids_do_grupo:
+                    continue
+                cursor.execute("SELECT id, name FROM users WHERE id = %s", (uid_agrup,))
+                row = cursor.fetchone()
+                nome = row["name"] if row else f"Usuário #{uid_agrup}"
+                t = d["total"]
+                por_usuario.append({
+                    "usuario_id":    uid_agrup,
+                    "usuario_nome":  nome,
+                    "total_tickets": t,
+                    "em_andamento":  d["em_andamento"],
+                    "finalizados":   d["finalizados"],
+                    "atraso_medio":  fmt_atraso(d["soma_minutos_atraso"], d["qtd_atraso"]),
+                    "sla_estourado":      {"qtd": d["estourado"],      "percentual": pct(d["estourado"],      t)},
+                    "sla_dentro_prazo":   {"qtd": d["dentro_prazo"],   "percentual": pct(d["dentro_prazo"],   t)},
+                    "sla_proximo_vencer": {"qtd": d["proximo_vencer"],  "percentual": pct(d["proximo_vencer"], t)},
+                    "sla_pr_no_prazo":       {"qtd": d["pr_no_prazo"],       "percentual": pct(d["pr_no_prazo"],       t)},
+                    "sla_pr_estourado":      {"qtd": d["pr_estourado"],      "percentual": pct(d["pr_estourado"],      t)},
+                    "sla_pr_proximo_vencer": {"qtd": d["pr_proximo_vencer"], "percentual": pct(d["pr_proximo_vencer"], t)},
+                })
+
+        log_fim("sucesso", periodo=periodo, total_tickets=total_geral)
+        return {"periodo": periodo, "resumo_geral": resumo_geral, "por_usuario": por_usuario}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_fim("erro", erro=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    finally:
+        if cursor:  cursor.close()
+        if conexao: conexao.close()
+
+# ========================================
+# [FIM] 📊 DASHBOARD - ESTATÍSTICAS DE SLA
+# ========================================
+
 
 @tickets_router.get("/{ticket_id}", response_model=TicketResposta)
 async def obter_ticket(ticket_id: int = Path(..., gt=0)):
@@ -603,6 +1014,8 @@ except Exception:
         def concluir_sla(*_): pass
         @staticmethod
         def calcular_status_sla(_): return None
+        @staticmethod
+        def registrar_primeira_resposta(*_): return False
 
 # =========================================
 # 🙋 ASSUMIR / DEVOLVER TICKET
@@ -951,6 +1364,25 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
                 detail="O ticket já pertence a este grupo"
             )
 
+        # Permissão de encaminhamento:
+        # - Se o ticket já tem responsável (atendimento iniciado): apenas o próprio
+        #   responsável ou admin pode encaminhar.
+        # - Se ainda sem responsável: solicitante ou admin podem encaminhar.
+        responsavel_atual = ticket_db.get("responsavel_id")
+        if not e_admin:
+            if responsavel_atual and responsavel_atual != payload.usuario_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="O chamado já está em atendimento. Apenas o responsável pode encaminhar."
+                )
+            if not responsavel_atual and ticket_db.get("solicitante_id") != payload.usuario_id:
+                # Usuário não é solicitante nem responsável — deve ser do mesmo grupo pelo menos
+                if usuario.get("group_id") != ticket_db.get("group_id"):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Sem permissão para encaminhar este chamado."
+                    )
+
         # Buscar nome do grupo destino para logs/notificação
         cursor.execute("SELECT name FROM `cpe_grupo` WHERE id = %s", (payload.group_id,))
         grupo_destino = cursor.fetchone()
@@ -1018,7 +1450,257 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
         if cursor:  cursor.close()
         if conexao: conexao.close()
 
-# ================================================== 
+# ==================================================
+# FINALIZAR TICKET
+# Apenas o responsável atual pode finalizar.
+# Registra primeira_resposta_em, conclui SLA, muda status → Resolvido (4).
+# ==================================================
+
+class FinalizarPayload(BaseModel):
+    usuario_id: int = Field(..., gt=0)
+
+@tickets_router.post("/{ticket_id}/finalizar")
+async def finalizar_ticket(ticket_id: int, payload: FinalizarPayload):
+    """Finaliza o chamado. Apenas o responsável atual pode executar."""
+    log_inicio("finalizar_ticket", ticket_id=ticket_id, usuario_id=payload.usuario_id)
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        ticket_db = validar_ticket_existe(cursor, ticket_id)
+        usuario   = validar_usuario_existe(cursor, payload.usuario_id)
+        role      = usuario.get("role") or "USER"
+        e_admin   = role in ROLES_ADMIN
+
+        responsavel_id = ticket_db.get("responsavel_id")
+
+        # Apenas o responsável ou admin pode finalizar
+        if not e_admin and responsavel_id != payload.usuario_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas o responsável pelo atendimento pode finalizar o chamado."
+            )
+
+        if ticket_db.get("status_id") in (4, 5):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Este chamado já está finalizado."
+            )
+
+        # Buscar a primeira mensagem pública enviada pelo suporte (não pelo solicitante)
+        cursor.execute(
+            """
+            SELECT created_at FROM ticket_interacoes
+            WHERE ticket_id = %s
+              AND usuario_id != %s
+              AND (tipo = 'mensagem' OR tipo = '')
+              AND publico = 1
+            ORDER BY created_at ASC
+            LIMIT 1
+            """,
+            (ticket_id, ticket_db["solicitante_id"])
+        )
+        primeira_msg = cursor.fetchone()
+        primeira_resposta_at = primeira_msg["created_at"] if primeira_msg else datetime.now()
+
+        # Atualizar ticket: status Resolvido, registrar tempos
+        cursor.execute(
+            """
+            UPDATE tickets
+            SET status_id        = 4,
+                resolvido_em     = NOW(),
+                primeira_resposta_em = COALESCE(primeira_resposta_em, %s),
+                updated_at       = NOW()
+            WHERE id = %s
+            """,
+            (primeira_resposta_at, ticket_id)
+        )
+
+        # Registrar primeira_resposta_em no ticket_sla (se ainda não registrado)
+        cursor.execute(
+            """
+            UPDATE ticket_sla
+            SET primeira_resposta_em = COALESCE(primeira_resposta_em, %s)
+            WHERE ticket_id = %s
+            """,
+            (primeira_resposta_at, ticket_id)
+        )
+        conexao.commit()
+
+        # Concluir SLA
+        SLAService.concluir_sla(conexao, ticket_id)
+        conexao.commit()
+
+        # Registrar interação de resolução
+        nome_usuario = usuario.get("name") or f"Usuário #{payload.usuario_id}"
+        cursor.execute(
+            """
+            INSERT INTO ticket_interacoes
+                (ticket_id, usuario_id, tipo, mensagem, publico, created_at)
+            VALUES (%s, %s, 'resolucao', %s, 1, NOW())
+            """,
+            (ticket_id, payload.usuario_id,
+             f"✅ Chamado finalizado por {nome_usuario}.")
+        )
+        conexao.commit()
+
+        # Notificar solicitante — resolução
+        criar_notificacao_no_banco(
+            conexao, ticket_id, ticket_db["solicitante_id"],
+            "ticket_resolvido",
+            f"Seu chamado foi resolvido por {nome_usuario}. "
+            f"Caso não esteja satisfeito, você pode reabri-lo."
+        )
+
+        # Criar registro de avaliação pendente (prazo 7 dias)
+        numero_ticket = ticket_db.get("numero") or f"#{ticket_id}"
+        try:
+            cursor.execute(
+                """
+                INSERT IGNORE INTO ticket_avaliacoes
+                    (ticket_id, solicitante_id, responsavel_id, group_id, expira_em)
+                VALUES (%s, %s, %s, %s, DATE_ADD(NOW(), INTERVAL 7 DAY))
+                """,
+                (ticket_id, ticket_db["solicitante_id"], responsavel_id,
+                 ticket_db.get("group_id"))
+            )
+            conexao.commit()
+
+            # Notificar solicitante sobre avaliação pendente
+            criar_notificacao_no_banco(
+                conexao, ticket_id, ticket_db["solicitante_id"],
+                "avaliacao_pendente",
+                f"📋 Avalie o atendimento do chamado {numero_ticket}. "
+                f"Sua opinião é importante! Você tem 7 dias para avaliar."
+            )
+        except Exception as e_aval:
+            logger.warning(f"  ⚠️ Não foi possível criar avaliação pendente: {e_aval}")
+
+        logger.info(f"  ✅ Ticket #{ticket_id} finalizado por {nome_usuario}")
+        return {"success": True, "message": "Chamado finalizado com sucesso."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conexao: conexao.rollback()
+        logger.error(f"  ❌ Erro ao finalizar ticket: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:  cursor.close()
+        if conexao: conexao.close()
+
+
+# ==================================================
+# REABRIR TICKET
+# Apenas o solicitante pode reabrir. Máximo 2 vezes.
+# Requer justificativa, que fica no histórico.
+# ==================================================
+
+class ReopenPayload(BaseModel):
+    usuario_id:    int = Field(..., gt=0)
+    justificativa: str = Field(..., min_length=5, max_length=500)
+
+@tickets_router.post("/{ticket_id}/reabrir")
+async def reabrir_ticket(ticket_id: int, payload: ReopenPayload):
+    """Reabre um chamado resolvido. Apenas o solicitante pode reabrir (máx. 2 vezes)."""
+    log_inicio("reabrir_ticket", ticket_id=ticket_id, usuario_id=payload.usuario_id)
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        ticket_db = validar_ticket_existe(cursor, ticket_id)
+
+        # Apenas o solicitante pode reabrir
+        if ticket_db["solicitante_id"] != payload.usuario_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Apenas quem abriu o chamado pode reabrí-lo."
+            )
+
+        # Ticket precisa estar Resolvido (4)
+        if ticket_db.get("status_id") != 4:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Apenas chamados com status 'Resolvido' podem ser reabertos."
+            )
+
+        reopen_count = ticket_db.get("reopen_count") or 0
+        if reopen_count >= 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Este chamado já foi reaberto o número máximo de vezes (2). Por favor, abra um novo chamado."
+            )
+
+        # Novo status: Em Andamento se ainda tem responsável, senão Aberto
+        novo_status = 2 if ticket_db.get("responsavel_id") else 1
+
+        cursor.execute(
+            """
+            UPDATE tickets
+            SET status_id    = %s,
+                resolvido_em = NULL,
+                reopen_count = reopen_count + 1,
+                updated_at   = NOW()
+            WHERE id = %s
+            """,
+            (novo_status, ticket_id)
+        )
+
+        # Reativar SLA se estava concluído
+        cursor.execute(
+            """
+            UPDATE ticket_sla
+            SET status = 'em_andamento', concluido_em = NULL
+            WHERE ticket_id = %s AND status = 'concluido'
+            """,
+            (ticket_id,)
+        )
+        conexao.commit()
+
+        # Registrar interação com justificativa
+        usuario   = validar_usuario_existe(cursor, payload.usuario_id)
+        nome      = usuario.get("name") or f"Usuário #{payload.usuario_id}"
+        cursor.execute(
+            """
+            INSERT INTO ticket_interacoes
+                (ticket_id, usuario_id, tipo, mensagem, publico, created_at)
+            VALUES (%s, %s, 'reabertura', %s, 1, NOW())
+            """,
+            (ticket_id, payload.usuario_id,
+             f"🔄 Chamado reaberto por {nome}.\nJustificativa: {payload.justificativa}")
+        )
+        conexao.commit()
+
+        # Notificar responsável (se houver)
+        if ticket_db.get("responsavel_id"):
+            criar_notificacao_no_banco(
+                conexao, ticket_id, ticket_db["responsavel_id"],
+                "ticket_reaberto",
+                f"O chamado foi reaberto por {nome}: {payload.justificativa[:100]}"
+            )
+
+        novo_reopen = reopen_count + 1
+        logger.info(f"  ✅ Ticket #{ticket_id} reaberto por {nome} ({novo_reopen}/2)")
+        return {
+            "success":      True,
+            "message":      "Chamado reaberto com sucesso.",
+            "reopen_count": novo_reopen
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        if conexao: conexao.rollback()
+        logger.error(f"  ❌ Erro ao reabrir ticket: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor:  cursor.close()
+        if conexao: conexao.close()
+
+
+# ==================================================
 # [FIM] GET - OBTER TICKET ÚNICO
 # Data: 06/04/2026 19:45
 # ==================================================
@@ -1085,17 +1767,42 @@ async def criar_ticket(payload: TicketCriar):
         ticket_id = cursor.lastrowid
         logger.info(f"  ✓ Ticket inserido no banco com ID: {ticket_id}")
 
-        # ── SLA: criar registro se categoria tem SLA definido ──
+        # ── SLA: criar registro se categoria (ou subcategoria) tem SLA definido ──
         if payload.categoria_id:
             cursor.execute(
-                "SELECT sla_minutos FROM categorias WHERE id = %s AND ativo = 1",
+                "SELECT sla_minutos, sla_primeira_resposta_minutos FROM categorias WHERE id = %s AND ativo = 1",
                 (payload.categoria_id,)
             )
             cat = cursor.fetchone()
-            if cat and cat.get("sla_minutos"):
-                SLAService.criar_sla(conexao, ticket_id, payload.categoria_id, cat["sla_minutos"])
+
+            # Valores base da categoria
+            sla_total = cat.get("sla_minutos") if cat else None
+            sla_primeira_resposta = cat.get("sla_primeira_resposta_minutos") if cat else None
+
+            # Subcategoria pode sobrescrever os valores da categoria
+            if payload.subcategoria_id:
+                cursor.execute(
+                    "SELECT sla_minutos, sla_primeira_resposta_minutos "
+                    "FROM subcategorias WHERE id = %s AND ativo = 1",
+                    (payload.subcategoria_id,)
+                )
+                sub = cursor.fetchone()
+                if sub:
+                    if sub.get("sla_minutos"):
+                        sla_total = sub["sla_minutos"]
+                    if sub.get("sla_primeira_resposta_minutos"):
+                        sla_primeira_resposta = sub["sla_primeira_resposta_minutos"]
+
+            if sla_total:
+                SLAService.criar_sla(
+                    conexao, ticket_id, payload.categoria_id, sla_total,
+                    sla_primeira_resposta_minutos=sla_primeira_resposta
+                )
                 conexao.commit()
-                logger.info(f"  ✓ SLA criado: {cat['sla_minutos']} min para ticket #{ticket_id}")
+                logger.info(
+                    f"  ✓ SLA criado: {sla_total} min para ticket #{ticket_id}"
+                    + (f" | 1ª resposta: {sla_primeira_resposta} min" if sla_primeira_resposta else "")
+                )
 
         # ========================================
         # 🆔 GERAR ID ALFANUMÉRICA
@@ -1140,15 +1847,15 @@ async def criar_ticket(payload: TicketCriar):
             logger.info(f"    ✓ Notificação enviada via serviço")
         except Exception as e:
             logger.warning(f"    ⚠️ Serviço indisponível: {str(e)}")
-            # Fallback: notificar responsáveis do grupo diretamente no banco
+            # Fallback: notificar TODOS os usuários ativos do grupo diretamente no banco
             cursor.execute(
-                "SELECT id FROM users WHERE group_id = %s AND role = 'RESPONSAVEL_GRUPO' AND is_active = 1",
+                "SELECT id FROM users WHERE group_id = %s AND is_active = 1",
                 (payload.group_id,)
             )
-            responsaveis = cursor.fetchall()
-            for resp in responsaveis:
+            membros = cursor.fetchall()
+            for membro in membros:
                 criar_notificacao_no_banco(
-                    conexao, ticket_id, resp["id"],
+                    conexao, ticket_id, membro["id"],
                     "ticket_criado",
                     f"Novo chamado de {nome_solicitante}: {payload.assunto}"
                 )
@@ -1197,33 +1904,50 @@ async def atualizar_ticket(
         # ✅ Buscar o role de quem está fazendo a alteração
         role_atual = obter_role_usuario(cursor, usuario_id)
         e_admin = role_atual in ROLES_ADMIN
+        usuario_db = validar_usuario_existe(cursor, usuario_id)
+        group_id_usuario = usuario_db.get("group_id")
 
-        logger.info(f"  ├─ Usuário #{usuario_id} | Role: {role_atual} | Admin: {e_admin}")
+        logger.info(f"  ├─ Usuário #{usuario_id} | Role: {role_atual} | Admin: {e_admin} | Group: {group_id_usuario}")
 
-        # ✅ Usuário USER só pode alterar tickets onde ele é o solicitante
-        if not e_admin:
-            if ticket_db["solicitante_id"] != usuario_id:
+        is_solicitante_do_ticket  = ticket_db["solicitante_id"] == usuario_id
+        is_responsavel_do_ticket  = ticket_db.get("responsavel_id") == usuario_id
+
+        if role_atual == "USER":
+            # USER só pode alterar tickets em que é solicitante OU responsável
+            if not is_solicitante_do_ticket and not is_responsavel_do_ticket:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Você não tem permissão para alterar este ticket"
                 )
 
-            # Campos que USER não pode alterar
             campos_bloqueados = {}
+
             if payload.status_id is not None:
-                campos_bloqueados["status_id"] = payload.status_id
+                if is_responsavel_do_ticket:
+                    pass  # Responsável pode alterar status livremente
+                elif is_solicitante_do_ticket and payload.status_id != 4:
+                    # Solicitante só pode "confirmar resolução" (status 4 = Resolvido)
+                    campos_bloqueados["status_id"] = payload.status_id
+
+            # USER nunca pode reatribuir responsável ou mudar grupo
             if payload.responsavel_id is not None:
                 campos_bloqueados["responsavel_id"] = payload.responsavel_id
             if payload.group_id is not None:
                 campos_bloqueados["group_id"] = payload.group_id
 
             if campos_bloqueados:
-                logger.warning(
-                    f"  ⚠️ Usuário USER tentou alterar campos restritos: {list(campos_bloqueados.keys())}"
-                )
+                logger.warning(f"  ⚠️ USER #{usuario_id} tentou alterar campos restritos: {list(campos_bloqueados.keys())}")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Usuários comuns não podem alterar status, responsável ou setor do ticket"
+                    detail="Você não tem permissão para alterar esses campos"
+                )
+
+        # ✅ RESPONSAVEL_GRUPO só pode alterar tickets do seu próprio grupo
+        elif role_atual == "RESPONSAVEL_GRUPO":
+            if ticket_db["group_id"] != group_id_usuario:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Você só pode alterar tickets do seu grupo"
                 )
 
         # Montar os campos a atualizar
@@ -1237,8 +1961,26 @@ async def atualizar_ticket(
             updates.append("prioridade_id = %s")
             params.append(payload.prioridade_id)
 
+        # 08/04/2026 16:55 - Ask cpp - BUG FIX: Validar permissão de atribuição para RESPONSAVEL_GRUPO
         if payload.responsavel_id is not None:
-            validar_usuario_existe(cursor, payload.responsavel_id)
+            # Apenas ADMIN ou RESPONSAVEL_GRUPO podem atribuir
+            if not e_admin and role_atual != "RESPONSAVEL_GRUPO":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Apenas responsáveis do grupo ou admins podem atribuir chamados"
+                )
+            
+            responsavel_usuario = validar_usuario_existe(cursor, payload.responsavel_id)
+            # 08/04/2026 16:35 - Ask cpp - BUG FIX: Validar responsável pertence ao mesmo grupo do ticket
+            responsavel_group_id = responsavel_usuario.get("group_id")
+            
+            # Se não é admin e o responsável NÃO pertence ao mesmo grupo do ticket
+            if not e_admin and responsavel_group_id != ticket_db["group_id"]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Você só pode atribuir pessoas do seu próprio grupo"
+                )
+            
             updates.append("responsavel_id = %s")
             params.append(payload.responsavel_id)
 
@@ -1268,6 +2010,12 @@ async def atualizar_ticket(
             f"UPDATE tickets SET {', '.join(updates)} WHERE id = %s",
             params
         )
+
+        # ✅ SLA: parar contagem quando ticket é finalizado (Resolvido=4 ou Fechado=5)
+        if payload.status_id in (4, 5):
+            SLAService.concluir_sla(conexao, ticket_id)
+            logger.info(f"  ✓ SLA encerrado — ticket #{ticket_id} finalizado com status {payload.status_id}")
+
         conexao.commit()
 
         # 🔔 NOTIFICAR ALTERAÇÕES
@@ -1327,7 +2075,6 @@ async def atualizar_ticket(
             cursor.close()
         if conexao:
             conexao.close()
-
 
 @tickets_router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def deletar_ticket(
@@ -1512,6 +2259,14 @@ async def criar_interacao(payload: InteracaoCriar):
         conexao.commit()
         interacao_id = cursor.lastrowid
         logger.info(f"  ✓ Interação #{interacao_id} inserida com sucesso")
+
+        # ── Registrar primeira resposta do suporte (SLA de primeira resposta) ──
+        if publico_final == 1 and payload.usuario_id != ticket_db.get("solicitante_id"):
+            try:
+                if SLAService.registrar_primeira_resposta(conexao, payload.ticket_id):
+                    conexao.commit()
+            except Exception:
+                pass  # Não bloqueia a interação se SLA falhar
 
         # ========================================
         # 🔔 NOTIFICAÇÕES (MANTÉM FUNCIONANDO)
@@ -1710,3 +2465,4 @@ async def criar_interacao(payload: InteracaoCriar):
 # ========================================
 # FIM DA FUNÇÃO - 31/03/2026 15:30
 # ========================================
+

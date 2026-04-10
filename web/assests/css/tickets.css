@@ -1626,5 +1626,148 @@
 }
 
 /* ========================================
+   DASHBOARD SLA
+   ======================================== */
+
+.dashboard-sla-container {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.dashboard-sla-toggle {
+  border-radius: 0 !important;
+  background: #f8fafc;
+  border: none !important;
+  color: #334155;
+  font-size: .85rem;
+  font-weight: 600;
+  padding: 10px 14px;
+  transition: background .15s;
+}
+
+.dashboard-sla-toggle:hover {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.dashboard-sla-content {
+  padding: 16px;
+  background: #fff;
+}
+
+/* KPI Cards — layout compacto */
+.sla-kpi-card {
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  border-left: 3px solid transparent;
+  transition: transform .15s, box-shadow .15s;
+}
+
+.sla-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 3px 10px rgba(0,0,0,.08);
+}
+
+.sla-kpi-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.sla-kpi-icon {
+  font-size: .85rem;
+  opacity: .85;
+}
+
+.sla-kpi-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sla-kpi-sub {
+  font-size: .72rem;
+  color: #94a3b8;
+  margin-left: auto;
+}
+
+.sla-kpi-label {
+  font-size: .68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #64748b;
+  margin-top: 3px;
+}
+
+/* Skeleton loader */
+.sla-kpi-skeleton {
+  background: #f1f5f9 !important;
+  animation: slaSkeleton 1.2s ease-in-out infinite;
+}
+
+.sla-skeleton-line {
+  background: #e2e8f0;
+  border-radius: 4px;
+  display: block;
+}
+
+@keyframes slaSkeleton {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .5; }
+}
+
+/* Avatar de membro */
+.sla-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.sla-avatar-blue   { background: #3b82f6; }
+.sla-avatar-green  { background: #22c55e; }
+.sla-avatar-purple { background: #a855f7; }
+.sla-avatar-orange { background: #f97316; }
+.sla-avatar-teal   { background: #14b8a6; }
+.sla-avatar-red    { background: #ef4444; }
+.sla-avatar-indigo { background: #6366f1; }
+.sla-avatar-pink   { background: #ec4899; }
+
+/* Responsivo: cards menores em telas pequenas */
+@media (max-width: 576px) {
+  .sla-kpi-value { font-size: 1.1rem; }
+  .sla-kpi-card  { padding: 8px 10px; }
+}
+
+/* ========================================
    FIM DOS ESTILOS - 31/03/2026 15:10
    ======================================== */
+/* ── Ticket encerrado (Resolvido/Fechado): overlay acinzentado ── */
+.ticket-encerrado {
+  position: relative;
+}
+.ticket-encerrado::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(243, 244, 246, 0.45);
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 1;
+}
+.ticket-encerrado .ticket-detail-tab,
+.ticket-encerrado #tab-history,
+.ticket-encerrado #sectionReabrirChamado {
+  position: relative;
+  z-index: 2;
+}

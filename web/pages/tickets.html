@@ -4,17 +4,43 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- ========================================
+       FONTES
+       ======================================== -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- ========================================
+       FRAMEWORKS CSS
+       ======================================== -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  
+  <!-- ========================================
+       ESTILOS GLOBAIS
+       ======================================== -->
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css">
+  
   <title>Tickets - CPE Control</title>
+  
+  <!-- ========================================
+       SCRIPTS DE PROTEÇÃO (rodas PRIMEIRO)
+       ======================================== -->
   <script src="/SistemaCPE/web/assests/js/per_usuario/access-config.js"></script>
   <script src="/SistemaCPE/web/assests/js/per_usuario/page-access-control.js"></script>
+  
+  <!-- ========================================
+       SCRIPTS DE FUNCIONALIDADE
+       ======================================== -->
+  <script src="/SistemaCPE/web/assests/js/dashboard-sla.js"></script>
+  
+  <!-- ========================================
+       VERIFICAÇÃO DE ACESSO
+       ======================================== -->
   <script>checkPageAccess('TICKETS');</script>
 </head>
 
@@ -61,7 +87,8 @@
               tickets.js → applyRolePermissions() oculta este botão para USER.
               Apenas ADMIN / TI / MANAGER enxergam.
             -->
-            <button id="btnAlterar" class="btn btn-warning btn-sm" onclick="editSelected()" title="Editar ticket selecionado">
+            <button id="btnAlterar" class="btn btn-warning btn-sm" onclick="editSelected()"
+              title="Editar ticket selecionado">
               <i class="bi bi-pencil-square"></i> Alterar
             </button>
 
@@ -75,7 +102,8 @@
               tickets.js → applyRolePermissions() oculta este botão para USER.
               Apenas ADMIN / TI / MANAGER enxergam.
             -->
-            <button id="btnAtribuir" class="btn btn-info btn-sm" onclick="assignSelected()" title="Atribuir ticket(s) selecionado(s)">
+            <button id="btnAtribuir" class="btn btn-info btn-sm" onclick="assignSelected()"
+              title="Atribuir ticket(s) selecionado(s)">
               <i class="bi bi-person-check"></i> Atribuir
             </button>
 
@@ -144,6 +172,68 @@
             <span class="stat-value" id="resolvedTickets">0</span>
           </div>
         </div>
+        <!-- ========================================
+             DASHBOARD SLA - ABA RETRÁTIL
+             ======================================== -->
+        <div class="dashboard-sla-container mb-3">
+          <button class="btn btn-outline-primary btn-sm w-100 text-start dashboard-sla-toggle" onclick="toggleDashboardSLA(this)">
+            <i class="bi bi-graph-up me-1"></i>
+            <span id="slaDashboardTitle">Dashboard SLA</span>
+            <i class="bi bi-chevron-down toggle-icon ms-2 float-end mt-1"></i>
+          </button>
+
+          <!-- CONTEÚDO RETRÁTIL -->
+          <div class="dashboard-sla-content d-none mt-2">
+
+            <!-- HEADER: período + refresh -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <span class="badge bg-light text-dark border fw-normal px-2 py-1">
+                <i class="bi bi-calendar3 me-1 text-primary"></i>
+                <span id="slaPeriodo">—</span>
+              </span>
+              <button class="btn btn-sm btn-outline-secondary" onclick="recarregarDashboardSLA()" title="Recarregar">
+                <i class="bi bi-arrow-clockwise"></i>
+              </button>
+            </div>
+
+            <!-- KPI CARDS (renderizados pelo JS) -->
+            <div class="row g-2 mb-2" id="slaKpiCards"></div>
+
+            <!-- BLOCO SLA PRIMEIRA RESPOSTA (renderizado pelo JS se houver dados) -->
+            <div id="slaPrimeiraRespostaSection" style="display:none" class="mb-3"></div>
+
+            <!-- TABELA DE MEMBROS (só RESPONSAVEL_GRUPO / ADMIN) -->
+            <div id="slaMembroSection" style="display:none">
+              <h6 class="fw-semibold mb-2 text-secondary" style="font-size:.8rem;text-transform:uppercase;letter-spacing:.05em">
+                <i class="bi bi-people me-1"></i>Desempenho Individual do Grupo
+              </h6>
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Membro</th>
+                      <th class="text-center">Total</th>
+                      <th class="text-center">Andamento</th>
+                      <th class="text-center">Finalizados</th>
+                      <th class="text-center"><i class="bi bi-check-circle text-success"></i> SLA No Prazo</th>
+                      <th class="text-center"><i class="bi bi-x-circle text-danger"></i> SLA Estourado</th>
+                      <th class="text-center"><i class="bi bi-reply-fill text-success"></i> 1ª Resp. OK</th>
+                      <th class="text-center"><i class="bi bi-reply-fill text-danger"></i> 1ª Resp. Est.</th>
+                      <th class="text-center">Atraso Médio</th>
+                      <th class="text-center" style="min-width:130px">Taxa de Sucesso</th>
+                    </tr>
+                  </thead>
+                  <tbody id="slaMembroTableBody">
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ESTADO: loading / erro / vazio -->
+            <div id="slaDashboardMsg" class="text-center py-3 text-muted" style="display:none"></div>
+
+          </div><!-- /dashboard-sla-content -->
+        </div><!-- /dashboard-sla-container -->
 
         <!-- ========================================
              TABLE
@@ -182,7 +272,8 @@
         <div class="pagination-bar mt-3">
           <div>
             <span>Mostrando</span>
-            <select id="itemsPerPage" class="form-select form-select-sm d-inline-block w-auto" onchange="changeItemsPerPage(this.value)">
+            <select id="itemsPerPage" class="form-select form-select-sm d-inline-block w-auto"
+              onchange="changeItemsPerPage(this.value)">
               <option value="10">10</option>
               <option value="25" selected>25</option>
               <option value="50">50</option>
@@ -194,8 +285,8 @@
             <button class="btn btn-sm btn-outline-secondary" onclick="previousPage()">
               <i class="bi bi-chevron-left"></i>
             </button>
-            <input type="number" id="currentPage" class="form-control form-control-sm text-center"
-                   value="1" min="1" onchange="goToPage(this.value)" style="width:60px;">
+            <input type="number" id="currentPage" class="form-control form-control-sm text-center" value="1" min="1"
+              onchange="goToPage(this.value)" style="width:60px;">
             <span>/ <span id="totalPages">1</span></span>
             <button class="btn btn-sm btn-outline-secondary" onclick="nextPage()">
               <i class="bi bi-chevron-right"></i>
@@ -322,8 +413,7 @@
                         <i class="bi bi-chat"></i> Resposta para o Usuário
                       </label>
                       <textarea class="form-control" id="detailReplyText"
-                                placeholder="Digite sua resposta que será enviada para o usuário..."
-                                required></textarea>
+                        placeholder="Digite sua resposta que será enviada para o usuário..." required></textarea>
                       <small class="text-muted d-block mt-2">
                         O usuário receberá uma notificação desta resposta
                       </small>
@@ -342,8 +432,7 @@
                         <i class="bi bi-eye-slash"></i> Comentário Interno
                       </label>
                       <textarea class="form-control" id="detailInternalText"
-                                placeholder="Apenas a equipe verá este comentário..."
-                                required></textarea>
+                        placeholder="Apenas a equipe verá este comentário..." required></textarea>
                       <small class="text-muted d-block mt-2">
                         Não será visível para o usuário solicitante
                       </small>
@@ -407,12 +496,14 @@
                 <div class="detail-col" style="flex:1;">
                   <span class="detail-label"><i class="bi bi-stopwatch"></i> SLA</span>
                   <div id="detailSLABadge"></div>
-                  <div id="detailSLABar" class="mt-1" style="height:6px;border-radius:3px;background:#e9ecef;overflow:hidden;">
+                  <div id="detailSLABar" class="mt-1"
+                    style="height:6px;border-radius:3px;background:#e9ecef;overflow:hidden;">
                     <div id="detailSLABarFill" style="height:100%;width:0%;transition:width .4s;"></div>
                   </div>
                   <small id="detailSLALabel" class="text-muted"></small>
                 </div>
-                <div class="detail-col d-flex align-items-end gap-2" id="detailSLAControls" style="display:none!important;">
+                <div class="detail-col d-flex align-items-end gap-2" id="detailSLAControls"
+                  style="display:none!important;">
                   <button class="btn btn-sm btn-outline-warning" onclick="pausarSLAManual()" id="btnSLAPausar">
                     <i class="bi bi-pause-circle"></i> Pausar SLA
                   </button>
@@ -425,27 +516,51 @@
             </div>
           </div><!-- /tab-details -->
 
-          <!-- ====== TAB 3: AÇÕES (apenas ADMIN / TI / MANAGER) ====== -->
+          <!-- ====== TAB 3: AÇÕES ====== -->
           <div class="ticket-detail-content" id="tab-actions">
             <div class="actions-grid">
 
-              <!-- Finalizar chamado -->
-              <div class="action-section">
+              <!-- Finalizar — apenas o responsável do ticket -->
+              <div class="action-section" id="sectionFinalizarChamado">
                 <div class="action-section-title">
-                  <i class="bi bi-check2-circle"></i> Ação Rápida
+                  <i class="bi bi-check2-circle"></i> Finalizar Chamado
                 </div>
                 <div class="select-action">
-                  <p class="text-muted small mb-2">Muda o status do ticket para "Resolvido".</p>
-                  <button class="btn btn-success w-100" onclick="resolveTicket()">
+                  <p class="text-muted small mb-2">
+                    Marca o chamado como <strong>Resolvido</strong> e registra o SLA.
+                  </p>
+                  <button class="btn btn-success w-100" onclick="finalizarTicket()">
                     <i class="bi bi-check-lg"></i> Finalizar Chamado
                   </button>
                 </div>
               </div>
 
+              <!-- Reabrir — apenas o solicitante, quando resolvido -->
+              <div class="action-section" id="sectionReabrirChamado" style="display:none;">
+                <div class="action-section-title" style="color:#d97706;">
+                  <i class="bi bi-arrow-counterclockwise"></i> Reabrir Chamado
+                </div>
+                <div class="select-action">
+                  <!-- Mensagem quando reaberturas esgotadas -->
+                  <div id="reabrirEsgotado" class="alert alert-warning py-2 px-3 small mb-2" style="display:none;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Este chamado já foi reaberto <strong>2 vezes</strong>. Por favor,
+                    <a href="#" onclick="document.getElementById('ticketDetailModal')&&bootstrap.Modal.getInstance(document.getElementById('ticketDetailModal'))?.hide()" class="alert-link">abra um novo chamado</a>.
+                  </div>
+                  <p class="text-muted small mb-2">
+                    Não ficou satisfeito com a resolução? Informe uma justificativa.
+                  </p>
+                  <button class="btn btn-warning w-100" id="btnReopenChamado" onclick="reabrirChamado()">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reabrir Chamado
+                  </button>
+                </div>
+              </div>
+
               <!-- Alterar status -->
-              <div class="action-section">
+              <!-- Visível para: gestor | responsável do ticket -->
+              <div class="action-section" id="sectionAlterarStatus">
                 <div class="action-section-title">
-                  <i class="bi bi-gear"></i> Alterar Status
+                  <i class="bi bi-arrow-left-right"></i> Alterar Status
                 </div>
                 <div class="select-action">
                   <label>Novo Status</label>
@@ -453,18 +568,15 @@
                     <option value="">Selecione um status...</option>
                     <option value="open">Aberto</option>
                     <option value="in-progress">Em Andamento</option>
+                    <option value="waiting">Aguardando</option>
                     <option value="resolved">Resolvido</option>
                     <option value="closed">Fechado</option>
                   </select>
                 </div>
               </div>
 
-              <!--
-                Atribuir responsável.
-                Usuário não escolhe o responsável — apenas ADMIN / TI / MANAGER
-                têm acesso a esta aba, conforme applyDetailPermissions().
-              -->
-              <div class="action-section">
+              <!-- Atribuir responsável — apenas gestores -->
+              <div class="action-section" id="sectionAtribuirResponsavel">
                 <div class="action-section-title">
                   <i class="bi bi-person-check"></i> Atribuir a
                 </div>
@@ -472,7 +584,6 @@
                   <label>Responsável</label>
                   <select id="detailAssignSelect" class="form-select form-select-sm" onchange="updateTicketAssign()">
                     <option value="">Não atribuído</option>
-                    <!-- Preenchido dinamicamente por tickets.js → populateUserDropdowns() -->
                   </select>
                 </div>
               </div>
@@ -494,20 +605,17 @@
             que não é o solicitante do ticket.
             Admin sempre vê. USER só vê no próprio ticket.
           -->
-          <button id="btnAssumirTicket" type="button" class="btn btn-sm btn-success d-none"
-                  onclick="assumirTicket()">
+          <button id="btnAssumirTicket" type="button" class="btn btn-sm btn-success d-none" onclick="assumirTicket()">
             <i class="bi bi-hand-index-thumb"></i> Assumir Atendimento
           </button>
           <button id="btnDevolverTicket" type="button" class="btn btn-sm btn-outline-secondary d-none"
-                  onclick="devolverTicket()">
+            onclick="devolverTicket()">
             <i class="bi bi-arrow-return-left"></i> Desistir
           </button>
-          <button id="btnEncaminharTicket" type="button" class="btn btn-sm btn-warning"
-                  onclick="openForwardModal()">
+          <button id="btnEncaminharTicket" type="button" class="btn btn-sm btn-warning d-none" onclick="openForwardModal()">
             <i class="bi bi-arrow-right-circle"></i> Encaminhar
           </button>
-          <button id="btnDeletarTicket" type="button" class="btn btn-sm btn-danger"
-                  onclick="deleteViewingTicket()">
+          <button id="btnDeletarTicket" type="button" class="btn btn-sm btn-danger" onclick="deleteViewingTicket()">
             <i class="bi bi-trash"></i> Deletar
           </button>
         </div>
@@ -540,8 +648,7 @@
               <label class="form-label">
                 Assunto <span class="text-danger">*</span>
               </label>
-              <input type="text" class="form-control" id="ticketTitle"
-                     placeholder="Título do ticket" required>
+              <input type="text" class="form-control" id="ticketTitle" placeholder="Título do ticket" required>
               <small class="text-muted">Mínimo 3 caracteres</small>
             </div>
 
@@ -550,8 +657,8 @@
               <label class="form-label">
                 Descrição <span class="text-danger">*</span>
               </label>
-              <textarea class="form-control" id="ticketDescription" rows="4"
-                        placeholder="Descreva o problema..." required></textarea>
+              <textarea class="form-control" id="ticketDescription" rows="4" placeholder="Descreva o problema..."
+                required></textarea>
               <small class="text-muted">Mínimo 5 caracteres</small>
             </div>
 
@@ -561,8 +668,7 @@
             -->
             <div class="mb-3">
               <label class="form-label">Solicitante</label>
-              <input type="text" class="form-control" id="ticketClient"
-                     placeholder="Seu nome" readonly>
+              <input type="text" class="form-control" id="ticketClient" placeholder="Seu nome" readonly>
               <small class="text-muted">Preenchido automaticamente com seus dados</small>
             </div>
 
@@ -572,8 +678,7 @@
             -->
             <div class="mb-3">
               <label class="form-label">Email</label>
-              <input type="email" class="form-control" id="ticketEmail"
-                     placeholder="Seu email" readonly>
+              <input type="email" class="form-control" id="ticketEmail" placeholder="Seu email" readonly>
               <small class="text-muted">Preenchido automaticamente com seus dados</small>
             </div>
 
@@ -644,7 +749,7 @@
             comportamento correto e compatível com todos os browsers modernos.
           -->
           <button type="button" class="btn btn-sm btn-primary"
-                  onclick="document.getElementById('ticketForm').requestSubmit()">
+            onclick="document.getElementById('ticketForm').requestSubmit()">
             <i class="bi bi-check-lg"></i> Criar Ticket
           </button>
         </div>
@@ -695,7 +800,7 @@
             Cancelar
           </button>
           <button type="button" class="btn btn-sm btn-primary"
-                  onclick="document.getElementById('assignForm').requestSubmit()">
+            onclick="document.getElementById('assignForm').requestSubmit()">
             <i class="bi bi-check-lg"></i> Atribuir
           </button>
         </div>
@@ -722,7 +827,8 @@
           <div id="forwardError" class="alert alert-danger d-none"></div>
 
           <p class="text-muted small mb-3">
-            O chamado será encaminhado para o grupo selecionado. O responsável atual será removido e o responsável do grupo de destino será notificado.
+            O chamado será encaminhado para o grupo selecionado. O responsável atual será removido e o responsável do
+            grupo de destino será notificado.
           </p>
 
           <!-- Grupo de destino -->
@@ -752,7 +858,7 @@
               <i class="bi bi-chat-left-text"></i> Motivo do Encaminhamento
             </label>
             <textarea class="form-control" id="forwardMotivo" rows="3"
-                      placeholder="Descreva o motivo do encaminhamento..."></textarea>
+              placeholder="Descreva o motivo do encaminhamento..."></textarea>
           </div>
         </div>
 
@@ -778,11 +884,12 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <p class="text-muted small">O chamado voltará para a fila do setor sem responsável. Isso ficará registrado no histórico.</p>
+          <p class="text-muted small">O chamado voltará para a fila do setor sem responsável. Isso ficará registrado no
+            histórico.</p>
           <div class="mb-3">
             <label class="form-label fw-semibold">Motivo (opcional)</label>
             <textarea class="form-control" id="devolverMotivo" rows="2"
-                      placeholder="Por que está devolvendo?"></textarea>
+              placeholder="Por que está devolvendo?"></textarea>
           </div>
         </div>
         <div class="modal-footer">
@@ -794,6 +901,113 @@
       </div>
     </div>
   </div><!-- /devolverModal -->
+
+  <!-- ========================================
+       MODAL — REABRIR CHAMADO
+       ======================================== -->
+  <div class="modal fade" id="reabrirModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#fffbeb; border-bottom:2px solid #f59e0b;">
+          <h5 class="modal-title" style="color:#92400e;">
+            <i class="bi bi-arrow-counterclockwise"></i> Reabrir Chamado
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Informe o motivo pelo qual o chamado não foi resolvido satisfatoriamente.
+            Essa justificativa ficará registrada no histórico.
+          </p>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Justificativa <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="reabrirJustificativa" rows="3"
+              placeholder="Descreva por que o problema não foi resolvido..." maxlength="500"></textarea>
+          </div>
+          <div class="alert alert-danger d-none py-2 px-3 small" id="reabrirError"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-warning" onclick="submitReabrir()">
+            <i class="bi bi-arrow-counterclockwise"></i> Confirmar Reabertura
+          </button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /reabrirModal -->
+
+  <!-- ========================================
+       MODAL — AVALIAÇÃO DE CHAMADO
+       ======================================== -->
+  <div class="modal fade" id="avaliacaoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+      <div class="modal-content border-0 shadow-lg">
+        <!-- Header âmbar -->
+        <div class="modal-header py-3" style="background:#fffbeb;border-bottom:2px solid #f59e0b;">
+          <div>
+            <h5 class="modal-title fw-bold mb-0" style="color:#92400e;">
+              <i class="bi bi-star-fill text-warning me-2"></i>Avaliar Atendimento
+            </h5>
+            <small class="text-muted">Sua opinião é confidencial e não será compartilhada com outros usuários</small>
+          </div>
+        </div>
+        <div class="modal-body p-4">
+          <!-- Info do chamado -->
+          <div class="bg-light rounded-3 p-3 mb-4" style="border-left:3px solid #f59e0b;">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <div class="fw-bold text-primary" id="avalModalNumero" style="font-size:.9rem;"></div>
+                <div class="text-muted" id="avalModalAssunto" style="font-size:.85rem;"></div>
+              </div>
+              <div class="text-end">
+                <small class="text-muted d-block">Atendido por</small>
+                <small class="fw-semibold" id="avalModalResp"></small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pergunta -->
+          <p class="fw-semibold mb-2 text-center" style="font-size:.9rem;color:#374151;">
+            Como você avalia o atendimento recebido?
+          </p>
+          <p class="text-muted text-center mb-3" style="font-size:.78rem;">
+            1 = Péssimo &nbsp;•&nbsp; 10 = Excelente
+          </p>
+
+          <!-- Estrelas -->
+          <div class="d-flex justify-content-center gap-1 mb-1" id="avalStarsContainer">
+            <!-- Renderizado pelo JS -->
+          </div>
+          <input type="hidden" id="avalStarInput">
+          <p class="text-center text-muted mb-3" style="font-size:.75rem;">Clique para selecionar</p>
+
+          <!-- Comentário (aparece ao selecionar estrelas) -->
+          <div id="avalComentarioWrap" class="d-none">
+            <label class="form-label fw-semibold small">
+              Comentário
+              <span id="avalComentarioObrig" class="text-danger d-none">*obrigatório</span>
+              <span class="text-muted fw-normal">(opcional para notas ≥ 4)</span>
+            </label>
+            <textarea class="form-control form-control-sm" id="avalComentario"
+              rows="3" maxlength="2000"
+              placeholder="Descreva sua experiência com o atendimento..."></textarea>
+          </div>
+
+          <!-- Erro -->
+          <p class="text-danger mt-2 mb-0 small" id="avalErro"></p>
+        </div>
+        <div class="modal-footer border-0 pt-0 px-4 pb-4 d-flex justify-content-between">
+          <button class="btn btn-link text-muted btn-sm p-0" onclick="pularAvaliacao()">
+            Avaliar depois
+          </button>
+          <button class="btn btn-warning text-white px-4" id="avalBtnEnviar"
+            onclick="submitAvaliacao()" disabled>
+            <i class="bi bi-send me-1"></i>Enviar Avaliação
+          </button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /avaliacaoModal -->
 
   <!-- ========================================
        SCRIPTS

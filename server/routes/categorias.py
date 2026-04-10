@@ -57,30 +57,36 @@ async def check_permissao_categorias(usuario_id: int):
 # =========================================
 
 class CategoriaCreate(BaseModel):
-    group_id:     int           = Field(..., gt=0)
-    nome:         str           = Field(..., min_length=2, max_length=255)
-    descricao:    Optional[str] = Field(None, max_length=500)
-    sla_minutos:  Optional[int] = Field(None, ge=1, description="SLA em minutos. None = sem SLA.")
-    usuario_id:   int           = Field(..., gt=0)
+    group_id:                       int           = Field(..., gt=0)
+    nome:                           str           = Field(..., min_length=2, max_length=255)
+    descricao:                      Optional[str] = Field(None, max_length=500)
+    sla_minutos:                    Optional[int] = Field(None, ge=1, description="SLA total em minutos. None = sem SLA.")
+    sla_primeira_resposta_minutos:  Optional[int] = Field(None, ge=1, description="SLA de primeira resposta em minutos. None = sem SLA de 1ª resposta.")
+    usuario_id:                     int           = Field(..., gt=0)
 
 class CategoriaUpdate(BaseModel):
-    nome:         Optional[str]  = Field(None, min_length=2, max_length=255)
-    descricao:    Optional[str]  = Field(None, max_length=500)
-    sla_minutos:  Optional[int]  = Field(None, ge=0, description="0 = remover SLA; >0 = novo valor em minutos")
-    ativo:        Optional[bool] = None
-    usuario_id:   int            = Field(..., gt=0)
+    nome:                           Optional[str]  = Field(None, min_length=2, max_length=255)
+    descricao:                      Optional[str]  = Field(None, max_length=500)
+    sla_minutos:                    Optional[int]  = Field(None, ge=0, description="0 = remover SLA; >0 = novo valor em minutos")
+    sla_primeira_resposta_minutos:  Optional[int]  = Field(None, ge=0, description="0 = remover SLA de 1ª resposta; >0 = novo valor em minutos")
+    ativo:                          Optional[bool] = None
+    usuario_id:                     int            = Field(..., gt=0)
 
 class SubcategoriaCreate(BaseModel):
-    categoria_id: int           = Field(..., gt=0)
-    nome:         str           = Field(..., min_length=2, max_length=255)
-    descricao:    Optional[str] = Field(None, max_length=500)
-    usuario_id:   int           = Field(..., gt=0)
+    categoria_id:                   int           = Field(..., gt=0)
+    nome:                           str           = Field(..., min_length=2, max_length=255)
+    descricao:                      Optional[str] = Field(None, max_length=500)
+    sla_minutos:                    Optional[int] = Field(None, ge=1, description="SLA total em minutos. None = herda da categoria.")
+    sla_primeira_resposta_minutos:  Optional[int] = Field(None, ge=1, description="SLA de primeira resposta em minutos. None = herda da categoria.")
+    usuario_id:                     int           = Field(..., gt=0)
 
 class SubcategoriaUpdate(BaseModel):
-    nome:        Optional[str]  = Field(None, min_length=2, max_length=255)
-    descricao:   Optional[str]  = Field(None, max_length=500)
-    ativo:       Optional[bool] = None
-    usuario_id:  int            = Field(..., gt=0)
+    nome:                           Optional[str]  = Field(None, min_length=2, max_length=255)
+    descricao:                      Optional[str]  = Field(None, max_length=500)
+    sla_minutos:                    Optional[int]  = Field(None, ge=0, description="0 = remover SLA; >0 = novo valor em minutos")
+    sla_primeira_resposta_minutos:  Optional[int]  = Field(None, ge=0, description="0 = remover SLA de 1ª resposta; >0 = novo valor em minutos")
+    ativo:                          Optional[bool] = None
+    usuario_id:                     int            = Field(..., gt=0)
 
 
 # =========================================
@@ -126,14 +132,14 @@ async def listar_categorias(group_id: int = Query(..., gt=0)):
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT id, group_id, nome, descricao, sla_minutos, ativo, created_at "
+            "SELECT id, group_id, nome, descricao, sla_minutos, sla_primeira_resposta_minutos, ativo, created_at "
             "FROM categorias WHERE group_id = %s AND ativo = 1 ORDER BY nome",
             (group_id,)
         )
         cats = cursor.fetchall()
         for cat in cats:
             cursor.execute(
-                "SELECT id, categoria_id, nome, descricao, ativo, created_at "
+                "SELECT id, categoria_id, nome, descricao, sla_minutos, sla_primeira_resposta_minutos, ativo, created_at "
                 "FROM subcategorias WHERE categoria_id = %s AND ativo = 1 ORDER BY nome",
                 (cat["id"],)
             )
@@ -157,14 +163,17 @@ async def criar_categoria(payload: CategoriaCreate):
             raise HTTPException(status_code=404, detail=f"Grupo #{payload.group_id} nao encontrado")
 
         cursor.execute(
-            "INSERT INTO categorias (group_id, nome, descricao, sla_minutos) VALUES (%s, %s, %s, %s)",
-            (payload.group_id, payload.nome.strip(), payload.descricao, payload.sla_minutos or None)
+            "INSERT INTO categorias (group_id, nome, descricao, sla_minutos, sla_primeira_resposta_minutos) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (payload.group_id, payload.nome.strip(), payload.descricao,
+             payload.sla_minutos or None, payload.sla_primeira_resposta_minutos or None)
         )
         conn.commit()
         cat_id = cursor.lastrowid
 
         cursor.execute(
-            "SELECT id, group_id, nome, descricao, sla_minutos, ativo, created_at FROM categorias WHERE id = %s",
+            "SELECT id, group_id, nome, descricao, sla_minutos, sla_primeira_resposta_minutos, ativo, created_at "
+            "FROM categorias WHERE id = %s",
             (cat_id,)
         )
         nova = cursor.fetchone()
@@ -201,9 +210,11 @@ async def atualizar_categoria(categoria_id: int = Path(..., gt=0), payload: Cate
         if payload.descricao   is not None: updates.append("descricao = %s");   params.append(payload.descricao)
         if payload.ativo       is not None: updates.append("ativo = %s");       params.append(1 if payload.ativo else 0)
         if payload.sla_minutos is not None:
-            # 0 = remover SLA; >0 = definir valor
             sla_val = payload.sla_minutos if payload.sla_minutos > 0 else None
             updates.append("sla_minutos = %s"); params.append(sla_val)
+        if payload.sla_primeira_resposta_minutos is not None:
+            pr_val = payload.sla_primeira_resposta_minutos if payload.sla_primeira_resposta_minutos > 0 else None
+            updates.append("sla_primeira_resposta_minutos = %s"); params.append(pr_val)
 
         if not updates:
             raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
@@ -212,7 +223,11 @@ async def atualizar_categoria(categoria_id: int = Path(..., gt=0), payload: Cate
         cursor.execute(f"UPDATE categorias SET {', '.join(updates)} WHERE id = %s", params)
         conn.commit()
 
-        cursor.execute("SELECT id, group_id, nome, descricao, sla_minutos, ativo FROM categorias WHERE id = %s", (categoria_id,))
+        cursor.execute(
+            "SELECT id, group_id, nome, descricao, sla_minutos, sla_primeira_resposta_minutos, ativo "
+            "FROM categorias WHERE id = %s",
+            (categoria_id,)
+        )
         return cursor.fetchone()
 
     except HTTPException:
@@ -268,7 +283,7 @@ async def listar_subcategorias(categoria_id: int = Query(..., gt=0)):
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT id, categoria_id, nome, descricao, ativo, created_at "
+            "SELECT id, categoria_id, nome, descricao, sla_minutos, sla_primeira_resposta_minutos, ativo, created_at "
             "FROM subcategorias WHERE categoria_id = %s AND ativo = 1 ORDER BY nome",
             (categoria_id,)
         )
@@ -291,14 +306,17 @@ async def criar_subcategoria(payload: SubcategoriaCreate):
             raise HTTPException(status_code=404, detail="Categoria nao encontrada ou inativa")
 
         cursor.execute(
-            "INSERT INTO subcategorias (categoria_id, nome, descricao) VALUES (%s, %s, %s)",
-            (payload.categoria_id, payload.nome.strip(), payload.descricao)
+            "INSERT INTO subcategorias (categoria_id, nome, descricao, sla_minutos, sla_primeira_resposta_minutos) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (payload.categoria_id, payload.nome.strip(), payload.descricao,
+             payload.sla_minutos or None, payload.sla_primeira_resposta_minutos or None)
         )
         conn.commit()
         sub_id = cursor.lastrowid
 
         cursor.execute(
-            "SELECT id, categoria_id, nome, descricao, ativo, created_at FROM subcategorias WHERE id = %s",
+            "SELECT id, categoria_id, nome, descricao, sla_minutos, sla_primeira_resposta_minutos, ativo, created_at "
+            "FROM subcategorias WHERE id = %s",
             (sub_id,)
         )
         nova = cursor.fetchone()
@@ -333,6 +351,12 @@ async def atualizar_subcategoria(subcategoria_id: int = Path(..., gt=0), payload
         if payload.nome      is not None: updates.append("nome = %s");      params.append(payload.nome.strip())
         if payload.descricao is not None: updates.append("descricao = %s"); params.append(payload.descricao)
         if payload.ativo     is not None: updates.append("ativo = %s");     params.append(1 if payload.ativo else 0)
+        if payload.sla_minutos is not None:
+            sla_val = payload.sla_minutos if payload.sla_minutos > 0 else None
+            updates.append("sla_minutos = %s"); params.append(sla_val)
+        if payload.sla_primeira_resposta_minutos is not None:
+            pr_val = payload.sla_primeira_resposta_minutos if payload.sla_primeira_resposta_minutos > 0 else None
+            updates.append("sla_primeira_resposta_minutos = %s"); params.append(pr_val)
 
         if not updates:
             raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
@@ -341,7 +365,11 @@ async def atualizar_subcategoria(subcategoria_id: int = Path(..., gt=0), payload
         cursor.execute(f"UPDATE subcategorias SET {', '.join(updates)} WHERE id = %s", params)
         conn.commit()
 
-        cursor.execute("SELECT id, categoria_id, nome, descricao, ativo FROM subcategorias WHERE id = %s", (subcategoria_id,))
+        cursor.execute(
+            "SELECT id, categoria_id, nome, descricao, sla_minutos, sla_primeira_resposta_minutos, ativo "
+            "FROM subcategorias WHERE id = %s",
+            (subcategoria_id,)
+        )
         return cursor.fetchone()
 
     except HTTPException:

@@ -777,7 +777,161 @@
     animation: slideIn 0.3s ease;
     border: 2px solid var(--border-color);
   }
+  /* =========================================
+   MODAL CATEGORIAS - REFATORADO
+   ========================================= */
+
+#categoriasModal .modal-dialog {
+  max-width: 1200px !important;
+  margin: 1.75rem auto !important;
+}
+
+#categoriasModal .modal-content {
+  max-width: 100% !important;
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+#categoriasModal .modal-header {
+  background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%) !important;
+  border-bottom: 3px solid #d97706 !important;
+  padding: 18px 24px !important;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+#categoriasModal .modal-header .modal-title,
+#categoriasModal .modal-header h5 {
+  color: white !important;
+  font-weight: 700 !important;
+  font-size: 1.2rem !important;
+  text-transform: none;
+  letter-spacing: normal;
+  margin: 0 !important;
+}
+
+#categoriasModal .modal-header small {
+  color: rgba(255, 255, 255, 0.85) !important;
+  display: block;
+  font-size: 0.85rem;
+  margin-top: 2px;
+}
+
+#categoriasModal .btn-close-white {
+  filter: brightness(0) invert(1) !important;
+  opacity: 0.8 !important;
+}
+
+#categoriasModal .btn-close-white:hover {
+  opacity: 1 !important;
+}
+
+#categoriasModal .modal-body {
+  padding: 0 !important;
+  min-height: 650px;
+}
+
+#categoriasModal .modal-footer {
+  background: #f3f4f6 !important;
+  border-top: 1px solid #e5e7eb !important;
+  padding: 14px 20px !important;
+  margin-top: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#categoriasModal .modal-footer small {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* ✅ Ajusta o grid 2 colunas */
+#categoriasModal .row.g-0 {
+  min-height: 600px;
+}
+
+#categoriasModal .col-lg-5 {
+  border-right: 1px solid #e5e7eb;
+}
+
+/* ✅ Botões do modal */
+#categoriasModal .btn-warning {
+  background-color: #f59e0b !important;
+  border-color: #f59e0b !important;
+  color: white !important;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+}
+
+#categoriasModal .btn-warning:hover {
+  background-color: #d97706 !important;
+  border-color: #d97706 !important;
+  transform: translateY(-1px);
+}
+
+#categoriasModal .btn-outline-secondary {
+  border-color: #e5e7eb !important;
+  color: #4b5563 !important;
+}
+
+#categoriasModal .btn-outline-secondary:hover {
+  background-color: #f9fafb !important;
+  border-color: #9ca3af !important;
+}
+
+#categoriasModal .btn-lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+}
+
+/* ✅ Responsividade */
+@media (max-width: 1024px) {
+  #categoriasModal .modal-dialog {
+    max-width: 95vw !important;
+  }
   
+  #categoriasModal .col-lg-5 {
+    max-width: 100% !important;
+    flex: 0 0 35% !important;
+  }
+  
+  #categoriasModal .col-lg-7 {
+    max-width: 100% !important;
+    flex: 0 0 65% !important;
+  }
+}
+
+@media (max-width: 768px) {
+  #categoriasModal .modal-dialog {
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+  
+  #categoriasModal .modal-content {
+    border-radius: 0;
+    max-height: 100vh;
+  }
+  
+  #categoriasModal .row.g-0 {
+    flex-direction: column;
+  }
+  
+  #categoriasModal .col-lg-5,
+  #categoriasModal .col-lg-7 {
+    max-width: 100% !important;
+    flex: 0 0 100% !important;
+    border-right: none !important;
+  }
+  
+  #categoriasModal .modal-body {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+  }
+}
   @keyframes slideIn {
     from {
       transform: translateY(-50px);

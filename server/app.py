@@ -925,6 +925,16 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ REGISTRAR ROUTER DE AVALIAÇÕES (EXTERNO)
+try:
+    from routes.avaliacoes import avaliacoes_router
+    app.include_router(avaliacoes_router)
+    logger.info("✅ Router de Avaliações registrado: /api/avaliacoes")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Avaliações: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 logger.info("")
 logger.info("✅ TODOS OS ROUTERS REGISTRADOS!")
 logger.info("=" * 100)
