@@ -53,7 +53,10 @@ class NotificacaoCriar(BaseModel):
             "status_alterado",
             "atribuido",
             "comentario_interno",
-            "avaliacao_pendente"
+            "avaliacao_pendente",
+            "convite_task",
+            "convite_aceito_task",
+            "convite_recusado_task",
         ]
         if v not in tipos_validos:
             raise ValueError(f"Tipo inválido. Válidos: {tipos_validos}")
@@ -72,7 +75,7 @@ class NotificacaoAtualizar(BaseModel):
 
 class NotificacaoResposta(BaseModel):
     id: int
-    ticket_id: int
+    ticket_id: Optional[int] = None
     usuario_id: int
     mensagem: str
     tipo: str

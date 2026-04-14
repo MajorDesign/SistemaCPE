@@ -11,6 +11,28 @@ from utils import normalize_string
 
 router = APIRouter(prefix="/api/groups", tags=["Groups"])
 
+
+# =========================================
+# 🏢 LIST DEPARTMENTS
+# =========================================
+
+@router.get("/departments")
+async def list_departments():
+    """Lista todos os departamentos disponíveis"""
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT id, name FROM departments ORDER BY name")
+            ).mappings().all()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[DEPARTMENTS/LIST] ✗ Erro: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Erro ao listar departamentos: {str(e)}"
+        )
+
+
 # =========================================
 # 👥 LIST GROUPS
 # =========================================
@@ -118,34 +140,41 @@ async def create_group(
 
         name = normalize_string(data.get("name", ""))
         description = normalize_string(data.get("description", ""))
+        department_id = data.get("department_id")
 
         if not name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Nome do grupo obrigatório"
             )
+        if not department_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Departamento obrigatório"
+            )
 
         # Verifica se já existe
         with engine.connect() as conn:
             existing = conn.execute(
-                text("SELECT id FROM `cpe_grupo` WHERE name = :name LIMIT 1"),
-                {"name": name}
+                text("SELECT id FROM `cpe_grupo` WHERE name = :name AND department_id = :dept_id LIMIT 1"),
+                {"name": name, "dept_id": department_id}
             ).mappings().first()
 
             if existing:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Grupo com este nome já existe"
+                    detail="Grupo com este nome já existe neste departamento"
                 )
 
         # Cria novo grupo
         with engine.begin() as conn:
             conn.execute(
                 text("""
-                    INSERT INTO `cpe_grupo` (name, description, is_active)
-                    VALUES (:name, :description, 1)
+                    INSERT INTO `cpe_grupo` (department_id, name, description, is_active)
+                    VALUES (:department_id, :name, :description, 1)
                 """),
                 {
+                    "department_id": department_id,
                     "name": name,
                     "description": description or None,
                 }

@@ -102,7 +102,7 @@ class GroupBase(BaseModel):
     description: Optional[str] = Field(None, max_length=500)
 
 class GroupCreate(GroupBase):
-    department_id: Optional[int] = None
+    department_id: int = Field(..., gt=0)
 
 class GroupUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=3, max_length=255)
@@ -452,6 +452,114 @@ async def get_groups():
             cursor.close()
         if conn:
             conn.close()
+
+@groups_router.get("/departments")
+async def list_departments():
+    """Lista todos os departamentos disponíveis"""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT d.id, d.name, d.description, d.created_at,
+                   COUNT(g.id) AS total_grupos
+            FROM departments d
+            LEFT JOIN cpe_grupo g ON g.department_id = d.id
+            GROUP BY d.id, d.name, d.description, d.created_at
+            ORDER BY d.name
+        """)
+        rows = cursor.fetchall()
+        return convert_datetime_list(rows)
+    except Exception as err:
+        logger.error(f"[DEPARTMENTS] ERRO: {str(err)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao listar departamentos: {str(err)}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+@groups_router.post("/departments", status_code=status.HTTP_201_CREATED)
+async def create_department(data: dict):
+    """Cria um novo departamento"""
+    name = (data.get("name") or "").strip()
+    description = (data.get("description") or "").strip() or None
+    if not name or len(name) < 2:
+        raise HTTPException(status_code=400, detail="Nome do departamento obrigatório (mínimo 2 caracteres)")
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id FROM departments WHERE name = %s", (name,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Departamento com este nome já existe")
+        cursor.execute("INSERT INTO departments (name, description) VALUES (%s, %s)", (name, description))
+        conn.commit()
+        new_id = cursor.lastrowid
+        cursor.execute("SELECT id, name, description, created_at FROM departments WHERE id = %s", (new_id,))
+        dept = cursor.fetchone()
+        dept["total_grupos"] = 0
+        return convert_datetime_to_string(dept)
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[DEPARTMENTS/CREATE] ERRO: {str(err)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao criar departamento: {str(err)}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+@groups_router.put("/departments/{dept_id}")
+async def update_department(dept_id: int, data: dict):
+    """Atualiza um departamento"""
+    name = (data.get("name") or "").strip()
+    description = data.get("description")
+    if description is not None:
+        description = description.strip() or None
+    if not name or len(name) < 2:
+        raise HTTPException(status_code=400, detail="Nome do departamento obrigatório (mínimo 2 caracteres)")
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id FROM departments WHERE name = %s AND id != %s", (name, dept_id))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Já existe outro departamento com este nome")
+        cursor.execute("UPDATE departments SET name = %s, description = %s WHERE id = %s", (name, description, dept_id))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Departamento não encontrado")
+        conn.commit()
+        return {"ok": True, "id": dept_id, "name": name}
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[DEPARTMENTS/UPDATE] ERRO: {str(err)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar departamento: {str(err)}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+@groups_router.delete("/departments/{dept_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_department(dept_id: int):
+    """Deleta um departamento (só se não tiver grupos vinculados)"""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT COUNT(*) AS total FROM cpe_grupo WHERE department_id = %s", (dept_id,))
+        row = cursor.fetchone()
+        if row and row["total"] > 0:
+            raise HTTPException(status_code=400, detail=f"Não é possível excluir: {row['total']} grupo(s) vinculado(s) a este departamento")
+        cursor.execute("DELETE FROM departments WHERE id = %s", (dept_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Departamento não encontrado")
+        conn.commit()
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[DEPARTMENTS/DELETE] ERRO: {str(err)}")
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir departamento: {str(err)}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 @groups_router.get("/{group_id}")
 async def get_group(group_id: int):
@@ -932,6 +1040,16 @@ try:
     logger.info("✅ Router de Avaliações registrado: /api/avaliacoes")
 except Exception as err:
     logger.error(f"❌ Erro ao registrar router de Avaliações: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+# ✅ REGISTRAR ROUTER DE TASKS (EXTERNO)
+try:
+    from routes.tasks import tasks_router
+    app.include_router(tasks_router)
+    logger.info("✅ Router de Tasks registrado: /api/tasks")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Tasks: {str(err)}")
     import traceback
     logger.error(traceback.format_exc())
 
