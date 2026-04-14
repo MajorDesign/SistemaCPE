@@ -473,7 +473,7 @@ async function loadNotifications() {
     
     console.log("[NAV/NOTIFICATIONS] 📡 Carregando notificações...");
     
-    const response = await fetch(`${NOTIFICATIONS_API}?usuario_id=${currentUserId}&limite=20`);
+    const response = await fetch(`${NOTIFICATIONS_API}/usuario/${currentUserId}?limite=20`);
     
     if (response.status === 404) {
       console.warn("[NAV/NOTIFICATIONS] ⚠️ Endpoint não encontrado, usando localStorage");
@@ -642,8 +642,8 @@ function renderNotificationList() {
     const unreadClass = notif.lido ? "" : "unread";
     
     return `
-      <div class="notification-item ${unreadClass}" 
-           onclick="handleNotificationClick(${notif.id}, ${notif.ticket_id})"
+      <div class="notification-item ${unreadClass}"
+           onclick="handleNotificationClick(${notif.id}, ${notif.ticket_id}, '${notif.tipo}')"
            data-notification-id="${notif.id}">
         
         <div class="notification-icon ${notif.tipo}">
@@ -703,19 +703,25 @@ function closeNotificationPanel(event) {
 }
 
 // Clique em notificação: marca como lida e redireciona para o ticket
-async function handleNotificationClick(notificationId, ticketId) {
-  console.log("[NAV/NOTIFICATIONS] 🔗 Clique #" + notificationId + " | Ticket #" + ticketId);
-  
+async function handleNotificationClick(notificationId, ticketId, tipo) {
+  console.log("[NAV/NOTIFICATIONS] 🔗 Clique #" + notificationId + " | Ticket #" + ticketId + " | Tipo: " + tipo);
+
   try {
     // Marcar como lida
     await markNotificationAsRead(notificationId);
-    
+
     // Fechar painel
     closeNotificationPanel();
-    
-    // ✅ Navegar para o ticket — tickets.js lerá ?ticket_id= e abrirá o modal
-    window.location.href = `/SistemaCPE/web/pages/tickets.html?ticket_id=${ticketId}`;
-    
+
+    // Redirecionar baseado no tipo
+    if (tipo && tipo.includes('convite') && tipo.includes('task')) {
+      // Convites de quadro → ir para Tarefas
+      window.location.href = '/SistemaCPE/web/pages/tasks.html';
+    } else if (ticketId) {
+      // Notificação de ticket → ir para ticket
+      window.location.href = `/SistemaCPE/web/pages/tickets.html?ticket_id=${ticketId}`;
+    }
+
   } catch (error) {
     console.error("[NAV/NOTIFICATIONS] ❌ Erro:", error);
   }
@@ -790,45 +796,57 @@ async function markAllAsRead() {
 //  "nova_resposta","status_alterado","atribuido","comentario_interno")
 function getNotificationIcon(tipo) {
   const icons = {
-    "ticket_criado":      "🎫",
-    "nova_resposta":      "💬",
-    "status_alterado":    "🔄",
-    "atribuido":          "👤",
-    "comentario_interno": "🔒",
-    "info":               "ℹ️",
-    "aviso":              "⚠️",
-    "erro":               "❌",
-    "sucesso":            "✅"
+    "ticket_criado":        "🎫",
+    "nova_resposta":        "💬",
+    "status_alterado":      "🔄",
+    "atribuido":            "👤",
+    "comentario_interno":   "🔒",
+    "avaliacao_pendente":   "⭐",
+    "convite_task":         "📩",
+    "convite_aceito_task":  "✅",
+    "convite_recusado_task":"❌",
+    "info":                 "ℹ️",
+    "aviso":                "⚠️",
+    "erro":                 "❌",
+    "sucesso":              "✅"
   };
   return icons[tipo] || "📬";
 }
 
 function getTipoLabel(tipo) {
   const labels = {
-    "ticket_criado":      "Ticket Criado",
-    "nova_resposta":      "Nova Resposta",
-    "status_alterado":    "Status Alterado",
-    "atribuido":          "Ticket Atribuído",
-    "comentario_interno": "Comentário Interno",
-    "info":               "Informação",
-    "aviso":              "Aviso",
-    "erro":               "Erro",
-    "sucesso":            "Sucesso"
+    "ticket_criado":        "Ticket Criado",
+    "nova_resposta":        "Nova Resposta",
+    "status_alterado":      "Status Alterado",
+    "atribuido":            "Ticket Atribuído",
+    "comentario_interno":   "Comentário Interno",
+    "avaliacao_pendente":   "Avaliação Pendente",
+    "convite_task":         "Convite de Quadro",
+    "convite_aceito_task":  "Convite Aceito",
+    "convite_recusado_task":"Convite Recusado",
+    "info":                 "Informação",
+    "aviso":                "Aviso",
+    "erro":                 "Erro",
+    "sucesso":              "Sucesso"
   };
   return labels[tipo] || "Notificação";
 }
 
 function getTipoBadgeText(tipo) {
   const texts = {
-    "ticket_criado":      "Criado",
-    "nova_resposta":      "Resposta",
-    "status_alterado":    "Status",
-    "atribuido":          "Atribuído",
-    "comentario_interno": "Interno",
-    "info":               "Info",
-    "aviso":              "Aviso",
-    "erro":               "Erro",
-    "sucesso":            "Sucesso"
+    "ticket_criado":        "Criado",
+    "nova_resposta":        "Resposta",
+    "status_alterado":      "Status",
+    "atribuido":            "Atribuído",
+    "comentario_interno":   "Interno",
+    "avaliacao_pendente":   "Avaliação",
+    "convite_task":         "Convite",
+    "convite_aceito_task":  "Aceito",
+    "convite_recusado_task":"Recusado",
+    "info":                 "Info",
+    "aviso":                "Aviso",
+    "erro":                 "Erro",
+    "sucesso":              "Sucesso"
   };
   return texts[tipo] || tipo;
 }

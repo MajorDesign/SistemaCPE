@@ -12,7 +12,8 @@
             "driver": "MySQL",
             "name": "Meu MySQL Local",
             "database": "cpe_plus",
-            "username": "root"
+            "username": "root",
+            "password": "Cpe@7482"
         }
     ]
 }
