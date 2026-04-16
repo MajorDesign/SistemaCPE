@@ -10,6 +10,7 @@ import logging
 import os
 from typing import Optional
 from dotenv import load_dotenv
+<<<<<<< HEAD
 from sqlalchemy import create_engine
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -18,6 +19,11 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 _database_url = os.getenv("DATABASE_URL", "mysql+pymysql://root:@127.0.0.1:3306/cpe_plus")
 engine = create_engine(_database_url, pool_pre_ping=True)
 
+=======
+
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 # =========================================
 # CONFIGURACAO DE LOGGING
 # =========================================
@@ -31,7 +37,10 @@ DB_CONFIG = {
     "user":     os.getenv("MYSQL_USER",     "root"),
     "password": os.getenv("MYSQL_PASSWORD", ""),
     "database": os.getenv("MYSQL_DB",       "cpe_plus"),
+<<<<<<< HEAD
     "use_pure": True,  # evita segfault do C extension no mysql-connector 9.x
+=======
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 }
 
 logger.info("=" * 90)

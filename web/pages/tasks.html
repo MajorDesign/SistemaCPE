@@ -3906,7 +3906,10 @@ async function dpCarregarHistoricoStatus(tarefaId) {
 
     const fmtMin = m => {
       if (m == null || m < 0) return '—';
+<<<<<<< HEAD
       m = Math.round(m);
+=======
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
       if (m < 60) return `${m}m`;
       const h = Math.floor(m / 60), rm = m % 60;
       if (h < 24) return rm ? `${h}h ${rm}m` : `${h}h`;
@@ -3953,7 +3956,10 @@ async function dpCarregarTempoUsuarios(tarefaId) {
 
     const fmtMin = m => {
       if (!m || m <= 0) return '—';
+<<<<<<< HEAD
       m = Math.round(m);
+=======
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
       if (m < 60) return `${m}m`;
       const h = Math.floor(m / 60), rm = m % 60;
       if (h < 24) return rm ? `${h}h ${rm}m` : `${h}h`;
@@ -4245,7 +4251,10 @@ async function _renderRelatorio() {
 
     const fmtMin = m => {
       if (!m || m <= 0) return '—';
+<<<<<<< HEAD
       m = Math.round(m);
+=======
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
       if (m < 60) return `${m}m`;
       const h = Math.floor(m/60), rm = m%60;
       if (h < 24) return rm ? `${h}h ${rm}m` : `${h}h`;

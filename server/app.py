@@ -11,9 +11,14 @@ Gerenciamento de Usuarios, Grupos, Tickets e Notificacoes com Autenticacao Bcryp
 # =========================================
 # 1. IMPORTACOES BASE
 # =========================================
+<<<<<<< HEAD
 from fastapi import FastAPI, HTTPException, APIRouter, status, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+=======
+from fastapi import FastAPI, HTTPException, APIRouter, status, Query
+from fastapi.middleware.cors import CORSMiddleware
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional, List
 import logging
@@ -252,7 +257,11 @@ auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 # ==================================================
 
 @auth_router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
+<<<<<<< HEAD
 def login(login_data: LoginRequest, response: Response):
+=======
+async def login(login_data: LoginRequest):
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
     """Realiza login do usuario"""
     logger.info("\n" + "=" * 100)
     logger.info("[AUTH] 🔐 TENTATIVA DE LOGIN")
@@ -370,6 +379,7 @@ def login(login_data: LoginRequest, response: Response):
             logger.error(f"[AUTH] ❌ ERRO DE VALIDACAO: {str(validation_err)}")
             raise
 
+<<<<<<< HEAD
         # GERAR TOKEN DE SESSÃO (HMAC — mesmo formato usado por fleet.py e security.py)
         logger.info("[AUTH] 🔐 Gerando token de sessão HMAC...")
 
@@ -378,12 +388,22 @@ def login(login_data: LoginRequest, response: Response):
             from config import COOKIE_NAME, SESSION_MAX_AGE_SECONDS
             session_token = make_session_token(user['id'])
             logger.info(f"[AUTH]   ✓ Token gerado: {session_token[:30]}...")
+=======
+        # GERAR TOKEN
+        logger.info("[AUTH] 🔐 Gerando token de autenticacao...")
+        
+        try:
+            token_data = f"{user['id']}:{int(time.time())}"
+            access_token = hashlib.sha256(token_data.encode()).hexdigest()
+            logger.info(f"[AUTH]   ✓ Token gerado: {access_token[:30]}...")
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
         except Exception as token_err:
             logger.error(f"[AUTH] ❌ Erro ao gerar token: {str(token_err)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Erro ao gerar token: {str(token_err)}"
             )
+<<<<<<< HEAD
 
         # Definir cookie HTTP-only (para autenticação server-side)
         response.set_cookie(
@@ -397,6 +417,9 @@ def login(login_data: LoginRequest, response: Response):
         )
         logger.info(f"[AUTH]   ✓ Cookie '{COOKIE_NAME}' definido na resposta")
 
+=======
+        
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
         logger.info("[AUTH] ✅ LOGIN BEM-SUCEDIDO!")
         logger.info("=" * 100 + "\n")
 
@@ -404,7 +427,11 @@ def login(login_data: LoginRequest, response: Response):
             success=True,
             message=f"Bem-vindo, {user['name']}!",
             user=user_response,
+<<<<<<< HEAD
             access_token=session_token,   # mesmo token — frontend salva no localStorage
+=======
+            access_token=access_token,
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
             token_type="bearer"
         )
 
@@ -1067,6 +1094,7 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+<<<<<<< HEAD
 # ✅ REGISTRAR ROUTER DE FROTAS (EXTERNO)
 try:
     from routes.fleet import router as fleet_router
@@ -1088,6 +1116,8 @@ try:
 except Exception as err:
     logger.warning(f"⚠️ Não foi possível montar uploads estáticos: {str(err)}")
 
+=======
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 logger.info("")
 logger.info("✅ TODOS OS ROUTERS REGISTRADOS!")
 logger.info("=" * 100)

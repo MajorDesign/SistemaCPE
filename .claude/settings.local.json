@@ -44,6 +44,7 @@
       "Bash(curl -s --retry 5 --retry-delay 1 --retry-connrefused -X POST \"http://127.0.0.1:8000/api/tasks/6/comentarios\" -H \"Content-Type: application/json\" -d \"{\\\\\"autor_id\\\\\":20,\\\\\"texto\\\\\":\\\\\"teste\\\\\"}\")",
       "Bash(curl -s \"http://127.0.0.1:8000/api/tasks/espacos/6/relatorio-grupos?usuario_id=20\")",
       "Bash(curl -s \"http://127.0.0.1:8000/api/tasks/espacos/4/relatorio-grupos?usuario_id=20\")",
+<<<<<<< HEAD
       "Bash(curl -s -X POST \"http://127.0.0.1:8000/api/tasks/6/comentarios\" -H \"Content-Type: application/json\" -d \"{\\\\\"autor_id\\\\\":20,\\\\\"texto\\\\\":\\\\\"teste final\\\\\"}\")",
       "Bash(.venv/Scripts/activate.bat)",
       "Bash(python app.py)",
@@ -124,6 +125,9 @@
       "Bash(taskkill /F /PID 8276)",
       "Bash(taskkill /F /IM python.exe /T sleep 2 tasklist)",
       "Bash(.venv/Scripts/python.exe -c \"import py_compile; py_compile.compile\\('routes/fleet.py', doraise=True\\); print\\('OK'\\)\")"
+=======
+      "Bash(curl -s -X POST \"http://127.0.0.1:8000/api/tasks/6/comentarios\" -H \"Content-Type: application/json\" -d \"{\\\\\"autor_id\\\\\":20,\\\\\"texto\\\\\":\\\\\"teste final\\\\\"}\")"
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
     ]
   }
 }

@@ -71,7 +71,11 @@ CREATE TABLE IF NOT EXISTS `categorias_task` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_espaco` (`espaco_id`)
+<<<<<<< HEAD
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 -- --------------------------------------------------------
 
@@ -89,7 +93,11 @@ CREATE TABLE IF NOT EXISTS `comentarios_task` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_tarefa` (`tarefa_id`)
+<<<<<<< HEAD
 ) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `comentarios_task`
@@ -211,7 +219,11 @@ CREATE TABLE IF NOT EXISTS `documents` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `fk_docs_owner` (`owner_user_id`)
+<<<<<<< HEAD
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 -- --------------------------------------------------------
 
@@ -233,7 +245,11 @@ CREATE TABLE IF NOT EXISTS `espacos_task` (
   PRIMARY KEY (`id`),
   KEY `idx_group` (`group_id`),
   KEY `idx_criador` (`criador_id`)
+<<<<<<< HEAD
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `espacos_task`
@@ -258,7 +274,11 @@ CREATE TABLE IF NOT EXISTS `espaco_grupos_task` (
   `adicionado_em` datetime DEFAULT CURRENT_TIMESTAMP,
   `adicionado_por` int DEFAULT NULL,
   PRIMARY KEY (`espaco_id`,`group_id`)
+<<<<<<< HEAD
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `espaco_grupos_task`
@@ -285,7 +305,11 @@ CREATE TABLE IF NOT EXISTS `espaco_grupo_sla_task` (
   `status_id` int NOT NULL,
   `sla_minutos` int NOT NULL DEFAULT '60',
   PRIMARY KEY (`espaco_id`,`group_id`,`status_id`)
+<<<<<<< HEAD
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `espaco_grupo_sla_task`
@@ -323,7 +347,11 @@ CREATE TABLE IF NOT EXISTS `espaco_membros_task` (
   UNIQUE KEY `uk_eu` (`espaco_id`,`usuario_id`),
   KEY `idx_espaco` (`espaco_id`),
   KEY `idx_usuario` (`usuario_id`)
+<<<<<<< HEAD
 ) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `espaco_membros_task`
@@ -364,7 +392,11 @@ CREATE TABLE IF NOT EXISTS `etapas_task` (
   PRIMARY KEY (`id`),
   KEY `idx_tarefa` (`tarefa_id`),
   KEY `idx_group` (`group_id`)
+<<<<<<< HEAD
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 -- --------------------------------------------------------
 
@@ -383,7 +415,11 @@ CREATE TABLE IF NOT EXISTS `historico_task` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_tarefa` (`tarefa_id`)
+<<<<<<< HEAD
 ) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=InnoDB AUTO_INCREMENT=64 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `historico_task`
@@ -473,7 +509,11 @@ CREATE TABLE IF NOT EXISTS `notificacoes` (
   KEY `idx_usuario_lido` (`usuario_id`,`lido`) COMMENT 'Busca rápida de notificações não lidas por usuário',
   KEY `idx_usuario_criado` (`usuario_id`,`created_at`) COMMENT 'Timeline de notificações por data',
   KEY `idx_ticket_id` (`ticket_id`) COMMENT 'Buscar notificações de um ticket específico'
+<<<<<<< HEAD
 ) ENGINE=MyISAM AUTO_INCREMENT=169 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=MyISAM AUTO_INCREMENT=169 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `notificacoes`
@@ -667,7 +707,11 @@ CREATE TABLE IF NOT EXISTS `status_task` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_group` (`group_id`)
+<<<<<<< HEAD
 ) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=InnoDB AUTO_INCREMENT=24 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `status_task`
@@ -742,7 +786,11 @@ CREATE TABLE IF NOT EXISTS `subtarefas_task` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_tarefa` (`tarefa_id`)
+<<<<<<< HEAD
 ) ENGINE=MyISAM AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=MyISAM AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `subtarefas_task`
@@ -790,7 +838,11 @@ CREATE TABLE IF NOT EXISTS `tarefas_task` (
   KEY `idx_group` (`group_id`),
   KEY `idx_status` (`status_id`),
   KEY `idx_responsavel` (`responsavel_id`)
+<<<<<<< HEAD
 ) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `tarefas_task`
@@ -816,7 +868,11 @@ CREATE TABLE IF NOT EXISTS `tarefa_categorias_task` (
   `tarefa_id` int NOT NULL,
   `categoria_id` int NOT NULL,
   PRIMARY KEY (`tarefa_id`,`categoria_id`)
+<<<<<<< HEAD
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 -- --------------------------------------------------------
 
@@ -838,7 +894,11 @@ CREATE TABLE IF NOT EXISTS `tarefa_historico_status_task` (
   PRIMARY KEY (`id`),
   KEY `idx_tarefa` (`tarefa_id`),
   KEY `idx_status` (`status_id`)
+<<<<<<< HEAD
 ) ENGINE=MyISAM AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=MyISAM AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `tarefa_historico_status_task`
@@ -877,7 +937,11 @@ CREATE TABLE IF NOT EXISTS `tarefa_membros_task` (
   `tarefa_id` int NOT NULL,
   `usuario_id` int NOT NULL,
   PRIMARY KEY (`tarefa_id`,`usuario_id`)
+<<<<<<< HEAD
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 -- --------------------------------------------------------
 
@@ -1286,7 +1350,11 @@ CREATE TABLE IF NOT EXISTS `users` (
   UNIQUE KEY `username` (`username`),
   KEY `idx_department` (`department_id`),
   KEY `idx_group` (`group_id`)
+<<<<<<< HEAD
 ) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+=======
+) ENGINE=InnoDB AUTO_INCREMENT=29 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+>>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
 
 --
 -- Despejando dados para a tabela `users`
