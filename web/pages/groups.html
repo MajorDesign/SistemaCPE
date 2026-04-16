@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gerenciar Grupos - CPE Control</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
+    rel="stylesheet">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <!-- ===== CSS IMPORTS ===== -->
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/app.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/components.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/groups.css">
+  <script src="/SistemaCPE/web/assests/js/per_usuario/access-config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/per_usuario/page-access-control.js"></script>
+  <script>checkPageAccess('GROUPS');</script>
+</head>
+
+<body>
+  <!-- ============================================================ -->
+  <!-- 🔒 LOADING PAGE -->
+  <!-- ============================================================ -->
+  <div id="loadingPage" class="loading-page">
+    <div class="loading-content">
+      <div class="spinner-border" role="status">
+        <span class="visually-hidden">Carregando...</span>
+      </div>
+      <p>Inicializando página...</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- NAVBAR - Gerado por nav.js -->
+  <!-- ============================================================ -->
+  <nav id="navbar-container"></nav>
+
+  <!-- ============================================================ -->
+  <!-- CONTAINER PRINCIPAL -->
+  <!-- ============================================================ -->
+  <div class="container-main">
+    <!-- ===== SIDEBAR - Gerado por nav.js ===== -->
+    <div id="sidebar-container"></div>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <div class="main-content">
+      <div class="content">
+        <!-- ===== ALERTS ===== -->
+        <div class="alert alert-danger d-none" id="alertBox" role="alert">
+          <i class="bi bi-exclamation-circle"></i>
+          <span id="alertMessage"></span>
+        </div>
+
+        <div class="alert alert-success d-none" id="successBox" role="alert">
+          <i class="bi bi-check-circle"></i>
+          <span id="successMessage">Operação realizada com sucesso!</span>
+        </div>
+
+        <!-- ===== PAGE HEADER ===== -->
+        <div class="page-header">
+          <h2 class="page-title">
+            <i class="bi bi-folder-plus"></i> Meus Grupos
+          </h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-sm" onclick="toggleDeptPanel()" title="Gerenciar departamentos"
+              style="background:#ffc107;color:#333;border:none;border-radius:6px;font-size:.82rem;font-weight:500;padding:6px 14px;">
+              <i class="bi bi-building me-1"></i>Departamentos
+            </button>
+            <button class="btn-new-group" id="btnNewGroup" data-bs-toggle="modal" data-bs-target="#groupModal">
+              <i class="bi bi-plus-lg"></i> Novo Grupo
+            </button>
+          </div>
+        </div>
+
+        <!-- ===== DEPARTMENTS PANEL ===== -->
+        <div id="deptPanel" style="display:none;margin-bottom:20px;">
+          <div style="background:#f8f9fa;border:1px solid #e2e6ea;border-radius:10px;padding:16px 20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <h6 style="margin:0;color:#172b4d;font-weight:600;"><i class="bi bi-building me-2"></i>Departamentos</h6>
+              <button class="btn btn-sm btn-primary" onclick="deptAbrirForm(null)"><i class="bi bi-plus-lg me-1"></i>Novo Departamento</button>
+            </div>
+            <!-- Form inline criar/editar -->
+            <div id="deptForm" style="display:none;margin-bottom:14px;padding:12px;background:#fff;border-radius:8px;border:1px solid #dfe1e6;">
+              <input type="hidden" id="deptEditId" value="">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+                <div style="flex:1;min-width:180px;">
+                  <label style="font-size:.72rem;color:#5e6c84;margin-bottom:2px;display:block;">Nome *</label>
+                  <input type="text" id="deptNome" class="form-control form-control-sm" placeholder="Ex: Logística" maxlength="100">
+                </div>
+                <div style="flex:2;min-width:200px;">
+                  <label style="font-size:.72rem;color:#5e6c84;margin-bottom:2px;display:block;">Descrição</label>
+                  <input type="text" id="deptDescricao" class="form-control form-control-sm" placeholder="Opcional" maxlength="255">
+                </div>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn btn-sm btn-success" onclick="deptSalvar()"><i class="bi bi-check-lg"></i> Salvar</button>
+                  <button class="btn btn-sm btn-outline-secondary" onclick="deptFecharForm()"><i class="bi bi-x-lg"></i></button>
+                </div>
+              </div>
+              <div id="deptFormErro" class="text-danger mt-1" style="font-size:.78rem;display:none;"></div>
+            </div>
+            <!-- Lista departamentos -->
+            <div id="deptLista" style="color:#5e6c84;font-size:.82rem;">Carregando...</div>
+          </div>
+        </div>
+
+        <!-- ===== GROUPS GRID ===== -->
+        <div class="groups-container" id="groupsList">
+          <div class="empty-state">
+            <div class="empty-state-icon">
+              <i class="bi bi-inbox"></i>
+            </div>
+            <p>Carregando grupos...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Novo/Editar Grupo -->
+  <!-- ============================================================ -->
+  <div class="modal fade" id="groupModal" tabindex="-1" aria-labelledby="groupModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="groupModalLabel">
+            <i class="bi bi-plus-square"></i> Novo Grupo
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+
+        <div class="modal-body">
+          <!-- ===== MODAL ALERT ===== -->
+          <div class="alert alert-danger d-none" id="modalAlertBox" role="alert">
+            <i class="bi bi-exclamation-circle"></i>
+            <span id="modalAlertMessage"></span>
+          </div>
+
+          <!-- ===== FORM ===== -->
+          <form id="groupForm" novalidate>
+            <!-- Departamento -->
+            <div class="mb-3">
+              <label for="groupDepartment" class="form-label">
+                <i class="bi bi-building"></i> Departamento <span class="text-danger">*</span>
+              </label>
+              <select class="form-select" id="groupDepartment" required>
+                <option value="">— Selecione o departamento —</option>
+              </select>
+            </div>
+
+            <!-- Nome do Grupo -->
+            <div class="mb-3">
+              <label for="groupName" class="form-label">
+                <i class="bi bi-input-cursor"></i> Nome do Grupo <span class="text-danger">*</span>
+              </label>
+              <input
+                type="text"
+                class="form-control"
+                id="groupName"
+                placeholder="Ex: Suporte Técnico"
+                required
+                minlength="3"
+                maxlength="255"
+              />
+              <small class="form-text text-muted">Mínimo 3 caracteres</small>
+            </div>
+
+            <!-- Descrição -->
+            <div class="mb-3">
+              <label for="groupDescription" class="form-label">
+                <i class="bi bi-file-text"></i> Descrição
+              </label>
+              <textarea
+                class="form-control"
+                id="groupDescription"
+                rows="4"
+                placeholder="Descreva o propósito deste grupo..."
+                maxlength="500"
+              ></textarea>
+              <small class="form-text text-muted">Opcional - Máximo 500 caracteres</small>
+            </div>
+
+            <!-- Botões -->
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
+                <i class="bi bi-check-lg"></i> Criar Grupo
+              </button>
+              <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">
+                <i class="bi bi-x-lg"></i> Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 📦 SCRIPTS -->
+  <!-- ============================================================ -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/js/api.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 VARIÁVEIS GLOBAIS -->
+  <!-- ============================================================ -->
+  <script>
+    let groups = [];
+    let selectedGroupId = null;
+    const API_URL      = 'http://localhost:8000/api/groups/';
+    const API_BASE     = 'http://localhost:8000/api';
+
+    // Usuário logado (para verificação de role e permissões)
+    function getCurrentUser() {
+      try { return JSON.parse(localStorage.getItem('cpe_user') || '{}'); } catch { return {}; }
+    }
+    function getCurrentUserId() {
+      const u = getCurrentUser();
+      return u.id || u.usuario_id || null;
+    }
+
+    // Resolvida na inicialização — indica se o usuário pode gerenciar categorias
+    // (ADMIN/TI por role, ou via exceção MANAGE_CATEGORIES no banco)
+    let _podeGerenciarCat = false;
+
+    async function resolverPermissaoCategorias() {
+      const userId = getCurrentUserId();
+      if (!userId) { _podeGerenciarCat = false; return; }
+      try {
+        const res  = await fetch(`${API_BASE}/categorias/check-permissao?usuario_id=${userId}`);
+        const data = await res.json();
+        _podeGerenciarCat = data.pode === true;
+      } catch (e) {
+        _podeGerenciarCat = false;
+      }
+    }
+
+    console.log("[GROUPS/CONFIG] 🔌 Variáveis globais inicializadas");
+    console.log("[GROUPS/CONFIG] 📍 API Groups URL:", API_URL);
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
+  <!-- ============================================================ -->
+  <script>
+    console.log("\n" + "=".repeat(80));
+    console.log("[GROUPS/PAGE] 📄 Inicializando página de Gerenciamento de Grupos");
+    console.log("[GROUPS/PAGE] 🔗 Conectado ao FastAPI em http://localhost:8000");
+    console.log("=".repeat(80) + "\n");
+
+    document.addEventListener("DOMContentLoaded", async () => {
+      console.log("[GROUPS/INIT] 📋 DOM Carregado");
+
+      try {
+        // ===== Aguardar nav.js estar pronto =====
+        await new Promise(resolve => {
+          const checkNav = setInterval(() => {
+            const navContainer = document.getElementById("navbar-container");
+            if (navContainer && navContainer.innerHTML.trim() !== "") {
+              clearInterval(checkNav);
+              resolve();
+            }
+          }, 100);
+          setTimeout(() => {
+            clearInterval(checkNav);
+            resolve();
+          }, 5000);
+        });
+
+        // ===== Mostrar Conteúdo =====
+        const loadingPage = document.getElementById("loadingPage");
+        const containerMain = document.querySelector(".container-main");
+        
+        if (loadingPage) loadingPage.style.display = "none";
+        if (containerMain) containerMain.style.display = "flex";
+        
+        console.log("[GROUPS/INIT] ✅ Página inicializada com sucesso");
+
+        // ===== Resolver permissão de categorias e carregar grupos =====
+        await resolverPermissaoCategorias();
+        await loadGroups();
+
+        console.log("=".repeat(80) + "\n");
+
+      } catch (err) {
+        console.error("[GROUPS/INIT] ❌ ERRO NA INICIALIZAÇÃO");
+        console.error("[GROUPS/INIT] 📍 Mensagem:", err.message);
+        console.error("[GROUPS/INIT] 🔗 Stack:", err.stack);
+        console.error("=".repeat(80) + "\n");
+        
+        showError("Erro ao inicializar página: " + err.message);
+      }
+    });
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÃO: loadGroups() -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: loadGroups()
+     * DESCRIÇÃO: Carrega os grupos da API FastAPI
+     */
+    async function loadGroups() {
+      console.log("\n[GROUPS/LOAD] 📥 Carregando grupos da API FastAPI...");
+
+      try {
+        const response = await fetch(API_URL, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          console.error(`[GROUPS/LOAD] ✗ Erro HTTP: ${response.status}`);
+          showError(`Erro ao carregar grupos: HTTP ${response.status}`);
+          groups = [];
+          renderGroups();
+          return;
+        }
+
+        groups = await response.json();
+        console.log(`[GROUPS/LOAD] ✓ ${groups.length} grupo(s) carregado(s)`);
+        renderGroups();
+        console.log("[GROUPS/LOAD] ✅ Grupos renderizados\n");
+
+      } catch (err) {
+        console.error("[GROUPS/LOAD] ✗ Erro:", err.message);
+        showError("Erro ao carregar grupos: " + err.message);
+        groups = [];
+        renderGroups();
+      }
+    }
+    /**
+     * ✅ FIM: loadGroups()
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÃO: renderGroups() -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: renderGroups()
+     * DESCRIÇÃO: Renderiza os grupos na página
+     */
+    function renderGroups() {
+      console.log("[GROUPS/RENDER] 🎨 Renderizando grupos");
+      const groupsList = document.getElementById("groupsList");
+
+      if (!groupsList) {
+        console.error("[GROUPS/RENDER] ✗ Elemento #groupsList não encontrado");
+        return;
+      }
+
+      if (!groups || groups.length === 0) {
+        groupsList.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">
+              <i class="bi bi-inbox"></i>
+            </div>
+            <p>Nenhum grupo encontrado</p>
+            <p style="font-size: 12px; margin-top: 1rem;">Clique em "Novo Grupo" para criar um</p>
+          </div>
+        `;
+        console.log("[GROUPS/RENDER] ℹ️ Nenhum grupo para renderizar");
+        return;
+      }
+
+      // helper: formata minutos em "Xd Xh Xm"
+      function formatarSLA(mins) {
+        if (!mins) return null;
+        const d = Math.floor(mins / 1440);
+        const h = Math.floor((mins % 1440) / 60);
+        const m = mins % 60;
+        return [d && `${d}d`, h && `${h}h`, m && `${m}m`].filter(Boolean).join(' ');
+      }
+
+      groupsList.innerHTML = groups.map(group => {
+        const createdDate = formatDate(group.created_at);
+        const description = group.description || "Sem descrição";
+        
+        return `
+          <div class="group-card">
+            <div class="group-header-content">
+              <div class="group-icon">
+                <i class="bi bi-people-fill"></i>
+              </div>
+              <div class="group-header">
+                <div class="group-name">${escapeHtml(group.name)}</div>
+                <div class="group-description">${escapeHtml(description)}</div>
+              </div>
+            </div>
+
+            <div class="group-meta">
+              <div class="group-meta-item">
+                <i class="bi bi-calendar"></i>
+                <span>${createdDate}</span>
+              </div>
+              <div class="group-meta-item">
+                <i class="bi bi-info-circle"></i>
+                <span>ID: ${group.id}</span>
+              </div>
+            </div>
+
+            <div class="group-actions">
+              <button class="btn-group-action" onclick="editGroup(${group.id}, event)">
+                <i class="bi bi-pencil"></i> Editar
+              </button>
+              ${_podeGerenciarCat ? `
+              <button class="btn-group-action" style="background:#6f42c1;color:#fff;" onclick="abrirGerenciarCategorias(${group.id}, '${group.name.replace(/'/g, "\\'")}', event)">
+                <i class="bi bi-tags"></i> Categorias
+              </button>` : ''}
+              <button class="btn-group-action danger" onclick="deleteGroup(${group.id}, '${group.name.replace(/'/g, "\\'")}', event)">
+                <i class="bi bi-trash"></i> Deletar
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      console.log(`[GROUPS/RENDER] ✓ ${groups.length} grupo(s) renderizado(s)`);
+    }
+    /**
+     * ✅ FIM: renderGroups()
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÃO: escapeHtml() -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: escapeHtml()
+     * DESCRIÇÃO: Escapa caracteres especiais em HTML (segurança contra XSS)
+     */
+    function escapeHtml(text) {
+      if (!text || typeof text !== 'string') {
+        return '';
+      }
+
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+
+      return text.replace(/[&<>"']/g, char => map[char]);
+    }
+    /**
+     * ✅ FIM: escapeHtml()
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÃO: formatDate() -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: formatDate()
+     * DESCRIÇÃO: Formata data para formato brasileiro
+     */
+    function formatDate(dateString) {
+      if (!dateString) return "Sem data";
+      try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString("pt-BR", { 
+          weekday: "short",
+          year: "numeric",
+          month: "short", 
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      } catch (err) {
+        return "Data inválida";
+      }
+    }
+    /**
+     * ✅ FIM: formatDate()
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÃO: showError() -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: showError()
+     * DESCRIÇÃO: Mostra mensagem de erro na página
+     */
+    function showError(message) {
+      console.log(`[GROUPS/ALERT] ❌ Erro: ${message}`);
+
+      const alertBox = document.getElementById("alertBox");
+      const alertMessage = document.getElementById("alertMessage");
+      if (!alertBox || !alertMessage) return;
+
+      alertMessage.textContent = message;
+      alertBox.classList.remove("d-none");
+      setTimeout(() => {
+        alertBox.classList.add("d-none");
+      }, 5000);
+    }
+    /**
+     * ✅ FIM: showError()
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÃO: showSuccess() -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: showSuccess()
+     * DESCRIÇÃO: Mostra mensagem de sucesso na página
+     */
+    function showSuccess(message) {
+      console.log(`[GROUPS/ALERT] ✅ Sucesso: ${message}`);
+
+      const successBox = document.getElementById("successBox");
+      const successMessage = document.getElementById("successMessage");
+      if (!successBox || !successMessage) return;
+
+      successMessage.textContent = message;
+      successBox.classList.remove("d-none");
+      setTimeout(() => {
+        successBox.classList.add("d-none");
+      }, 5000);
+    }
+    /**
+     * ✅ FIM: showSuccess()
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÃO: showModalError() -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: showModalError()
+     * DESCRIÇÃO: Mostra mensagem de erro dentro do modal
+     */
+    function showModalError(message) {
+      console.log(`[GROUPS/MODAL/ERROR] ⚠️ ${message}`);
+
+      const modalAlert = document.getElementById("modalAlertBox");
+      const modalAlertMsg = document.getElementById("modalAlertMessage");
+      if (modalAlert && modalAlertMsg) {
+        modalAlertMsg.textContent = message;
+        modalAlert.classList.remove("d-none");
+      }
+    }
+    /**
+     * ✅ FIM: showModalError()
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÃO: hideModalError() -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: hideModalError()
+     * DESCRIÇÃO: Esconde mensagem de erro no modal
+     */
+    function hideModalError() {
+      const modalAlert = document.getElementById("modalAlertBox");
+      if (modalAlert) {
+        modalAlert.classList.add("d-none");
+      }
+    }
+    /**
+     * ✅ FIM: hideModalError()
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÃO: editGroup() -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: editGroup()
+     * DESCRIÇÃO: Abre modal para editar um grupo
+     */
+    function editGroup(groupId, event) {
+      event.preventDefault();
+
+      console.log("[GROUPS/EDIT] ✏️ Editando grupo:", groupId);
+
+      const group = groups.find(g => g.id === groupId);
+      if (!group) {
+        console.error("[GROUPS/EDIT] ✗ Grupo não encontrado");
+        showError("Grupo não encontrado");
+        return;
+      }
+
+      selectedGroupId = groupId;
+      document.getElementById("groupModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Grupo';
+      document.getElementById("groupName").value = group.name;
+      document.getElementById("groupDescription").value = group.description || '';
+      document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Grupo';
+
+      hideModalError();
+      const modal = new bootstrap.Modal(document.getElementById("groupModal"));
+      modal.show();
+    }
+    /**
+     * ✅ FIM: editGroup()
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 FUNÇÃO: deleteGroup() -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: deleteGroup()
+     * DESCRIÇÃO: Deleta um grupo via API FastAPI
+     */
+    function deleteGroup(groupId, groupName, event) {
+      event.preventDefault();
+
+      console.log("[GROUPS/DELETE] 🗑️ Deletando grupo:", groupId);
+
+      if (!confirm(`Tem certeza que deseja deletar o grupo "${groupName}"?`)) {
+        console.log("[GROUPS/DELETE] ⏭️ Deleção cancelada pelo usuário");
+        return;
+      }
+
+      fetch(`${API_URL}${groupId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+        .then(response => {
+          if (response.status === 204 || response.ok) {
+            console.log("[GROUPS/DELETE] ✓ Grupo deletado com sucesso");
+            showSuccess(`Grupo "${groupName}" deletado com sucesso!`);
+            loadGroups();
+          } else if (response.status === 404) {
+            throw new Error('Grupo não encontrado');
+          } else {
+            return response.json().then(result => {
+              throw new Error(result.detail || 'Erro ao deletar');
+            });
+          }
+        })
+        .catch(err => {
+          console.error("[GROUPS/DELETE] ❌ Erro:", err.message);
+          showError("Erro ao deletar grupo: " + err.message);
+        });
+    }
+    /**
+     * ✅ FIM: deleteGroup()
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🏢 DEPARTAMENTOS CRUD -->
+  <!-- ============================================================ -->
+  <script>
+    let deptPanelOpen = false;
+
+    function toggleDeptPanel() {
+      deptPanelOpen = !deptPanelOpen;
+      document.getElementById('deptPanel').style.display = deptPanelOpen ? 'block' : 'none';
+      if (deptPanelOpen) deptCarregar();
+    }
+
+    async function deptCarregar() {
+      const el = document.getElementById('deptLista');
+      el.innerHTML = '<span style="color:#8993a4;">Carregando...</span>';
+      try {
+        const depts = await fetch(API_URL + 'departments').then(r => r.json());
+        if (!depts.length) {
+          el.innerHTML = '<div style="text-align:center;padding:16px;color:#5e6c84;">Nenhum departamento cadastrado.</div>';
+          return;
+        }
+        el.innerHTML = `
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="border-bottom:2px solid #dfe1e6;">
+                <th style="padding:6px 8px;text-align:left;font-size:.72rem;text-transform:uppercase;color:#5e6c84;">Nome</th>
+                <th style="padding:6px 8px;text-align:left;font-size:.72rem;text-transform:uppercase;color:#5e6c84;">Descrição</th>
+                <th style="padding:6px 8px;text-align:center;font-size:.72rem;text-transform:uppercase;color:#5e6c84;">Grupos</th>
+                <th style="padding:6px 8px;text-align:right;font-size:.72rem;text-transform:uppercase;color:#5e6c84;">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${depts.map(d => `
+                <tr style="border-bottom:1px solid #e9ecef;">
+                  <td style="padding:8px;color:#172b4d;font-weight:500;">${escHtml(d.name)}</td>
+                  <td style="padding:8px;color:#5e6c84;font-size:.82rem;">${escHtml(d.description || '—')}</td>
+                  <td style="padding:8px;text-align:center;color:#ffc107;font-weight:600;">${d.total_grupos || 0}</td>
+                  <td style="padding:8px;text-align:right;">
+                    <button onclick="deptAbrirForm(${d.id}, '${escAttr(d.name)}', '${escAttr(d.description||'')}')"
+                      style="background:none;border:none;color:#0052cc;cursor:pointer;font-size:.85rem;padding:2px 6px;"
+                      title="Editar"><i class="bi bi-pencil"></i></button>
+                    <button onclick="deptExcluir(${d.id}, '${escAttr(d.name)}')"
+                      style="background:none;border:none;color:#bf2600;cursor:pointer;font-size:.85rem;padding:2px 6px;${d.total_grupos > 0 ? 'opacity:.35;cursor:not-allowed;' : ''}"
+                      title="${d.total_grupos > 0 ? 'Remova os grupos antes de excluir' : 'Excluir'}"
+                      ${d.total_grupos > 0 ? 'disabled' : ''}>
+                      <i class="bi bi-trash"></i></button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>`;
+      } catch(e) {
+        el.innerHTML = `<span style="color:#bf2600;">Erro: ${e.message}</span>`;
+      }
+    }
+
+    function escAttr(s) { return String(s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+    function deptAbrirForm(id, nome, descricao) {
+      document.getElementById('deptEditId').value = id || '';
+      document.getElementById('deptNome').value = nome || '';
+      document.getElementById('deptDescricao').value = descricao || '';
+      document.getElementById('deptFormErro').style.display = 'none';
+      document.getElementById('deptForm').style.display = 'block';
+      document.getElementById('deptNome').focus();
+    }
+
+    function deptFecharForm() {
+      document.getElementById('deptForm').style.display = 'none';
+    }
+
+    async function deptSalvar() {
+      const id = document.getElementById('deptEditId').value;
+      const name = document.getElementById('deptNome').value.trim();
+      const description = document.getElementById('deptDescricao').value.trim();
+      const erroEl = document.getElementById('deptFormErro');
+
+      if (!name || name.length < 2) {
+        erroEl.textContent = 'Nome obrigatório (mínimo 2 caracteres)';
+        erroEl.style.display = 'block';
+        return;
+      }
+      erroEl.style.display = 'none';
+
+      try {
+        const url = id ? `${API_URL}departments/${id}` : `${API_URL}departments`;
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, description: description || null })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Erro ${res.status}`);
+        }
+        deptFecharForm();
+        await deptCarregar();
+      } catch(e) {
+        erroEl.textContent = e.message;
+        erroEl.style.display = 'block';
+      }
+    }
+
+    async function deptExcluir(id, nome) {
+      if (!confirm(`Excluir o departamento "${nome}"? Esta ação não pode ser desfeita.`)) return;
+      try {
+        const res = await fetch(`${API_URL}departments/${id}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Erro ${res.status}`);
+        }
+        await deptCarregar();
+      } catch(e) {
+        alert(e.message);
+      }
+    }
+
+    // Funcionalidade escHtml já existe? Garantir disponível neste escopo
+    if (typeof escHtml === 'undefined') {
+      window.escHtml = function(s) {
+        if(!s) return '';
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+      };
+    }
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 EVENTO: Submissão do Formulário -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: Event Listener - Submissão do Formulário
+     * DESCRIÇÃO: Submissão do formulário - CRIA ou ATUALIZA grupo
+     */
+    document.getElementById("groupForm")?.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const name = document.getElementById("groupName")?.value?.trim();
+      const description = document.getElementById("groupDescription")?.value?.trim();
+      const department_id = parseInt(document.getElementById("groupDepartment")?.value) || null;
+
+      console.log("[GROUPS/SUBMIT] 📝 Processando grupo:", { name, department_id, selectedGroupId });
+
+      if (!name) {
+        console.warn("[GROUPS/SUBMIT] ⚠️ Nome não preenchido");
+        showModalError("Preencha o nome do grupo!");
+        return;
+      }
+      if (!department_id && !selectedGroupId) {
+        showModalError("Selecione o departamento!");
+        return;
+      }
+
+      try {
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
+
+        let url, method, body;
+
+        if (selectedGroupId) {
+          // ===== ATUALIZAR GRUPO =====
+          console.log("[GROUPS/SUBMIT] ✏️ Atualizando grupo:", selectedGroupId);
+
+          url = `${API_URL}${selectedGroupId}`;
+          method = 'PUT';
+          body = {
+            name,
+            description: description || null
+          };
+
+        } else {
+          // ===== CRIAR NOVO GRUPO =====
+          console.log("[GROUPS/SUBMIT] ➕ Criando novo grupo");
+
+          url = API_URL;
+          method = 'POST';
+          body = {
+            name,
+            description: description || null,
+            department_id
+          };
+        }
+
+        console.log("[GROUPS/SUBMIT] 📨 Payload enviado:", JSON.stringify(body, null, 2));
+
+        // 📡 Enviar para API
+        const response = await fetch(url, {
+          method: method,
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+
+        console.log(`[GROUPS/SUBMIT] 📥 Status: ${response.status} ${response.statusText}`);
+
+        const result = await response.json();
+
+        if (response.ok) {
+          console.log("[GROUPS/SUBMIT] ✅ Operação bem-sucedida");
+
+          const message = selectedGroupId
+            ? 'Grupo atualizado com sucesso!'
+            : 'Grupo criado com sucesso!';
+
+          showSuccess(message);
+
+          // Fechar modal
+          const modal = bootstrap.Modal.getInstance(document.getElementById("groupModal"));
+          if (modal) modal.hide();
+
+          // Resetar formulário
+          document.getElementById("groupForm").reset();
+          selectedGroupId = null;
+
+          // Recarregar lista após 500ms
+          setTimeout(() => {
+            loadGroups();
+          }, 500);
+
+        } else {
+          console.error("[GROUPS/SUBMIT] ❌ Erro na resposta da API");
+          console.error("[GROUPS/SUBMIT] Status:", response.status);
+
+          let errorMessage = 'Erro ao processar grupo!';
+
+          if (result.detail) {
+            if (Array.isArray(result.detail)) {
+              errorMessage = result.detail.map(err => {
+                const field = err.loc[err.loc.length - 1];
+                return `${field}: ${err.msg}`;
+              }).join(', ');
+            } else {
+              errorMessage = result.detail;
+            }
+          } else if (result.message) {
+            errorMessage = result.message;
+          }
+
+          showModalError(errorMessage);
+        }
+
+      } catch (err) {
+        console.error("[GROUPS/SUBMIT] ❌ Erro na requisição:", err.message);
+        showModalError('Erro ao enviar dados: ' + err.message);
+
+      } finally {
+        const submitBtn = document.getElementById("submitBtn");
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Criar Grupo';
+      }
+    });
+    /**
+     * ✅ FIM: Event Listener - Submissão do Formulário
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 EVENTO: Abertura do Modal -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: Event Listener - Abertura do Modal
+     * DESCRIÇÃO: Quando o modal abre, resetar campos
+     */
+    document.getElementById("groupModal")?.addEventListener("show.bs.modal", async () => {
+      console.log("[GROUPS/MODAL] 📂 Modal aberto");
+
+      if (!selectedGroupId) {
+        document.getElementById("groupModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Novo Grupo';
+        document.getElementById("groupForm").reset();
+        document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Grupo';
+      }
+      hideModalError();
+
+      // Carregar departamentos no select
+      try {
+        const depts = await fetch(API_URL + 'departments').then(r => r.json());
+        const sel = document.getElementById('groupDepartment');
+        sel.innerHTML = '<option value="">— Selecione o departamento —</option>' +
+          depts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      } catch(e) { console.error('[GROUPS/MODAL] Erro ao carregar departamentos:', e); }
+    });
+    /**
+     * ✅ FIM: Event Listener - Abertura do Modal
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 EVENTO: Fechamento do Modal -->
+  <!-- ============================================================ -->
+  <script>
+    /**
+     * ✅ INÍCIO: Event Listener - Fechamento do Modal
+     * DESCRIÇÃO: Quando o modal fecha, resetar variáveis globais
+     */
+    document.getElementById("groupModal")?.addEventListener("hidden.bs.modal", () => {
+      console.log("[GROUPS/MODAL] 🔒 Modal fechado");
+      selectedGroupId = null;
+    });
+    /**
+     * ✅ FIM: Event Listener - Fechamento do Modal
+     */
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🔧 LOG FINAL -->
+  <!-- ============================================================ -->
+  <script>
+    console.log("\n[GROUPS] ✅ Script carregado com integração FastAPI");
+    console.log("[GROUPS] 📝 Funções disponíveis:");
+    console.log("[GROUPS]   ✓ loadGroups()");
+    console.log("[GROUPS]   ✓ renderGroups()");
+    console.log("[GROUPS]   ✓ escapeHtml()");
+    console.log("[GROUPS]   ✓ formatDate()");
+    console.log("[GROUPS]   ✓ showError()");
+    console.log("[GROUPS]   ✓ showSuccess()");
+    console.log("[GROUPS]   ✓ showModalError()");
+    console.log("[GROUPS]   ✓ hideModalError()");
+    console.log("[GROUPS]   ✓ editGroup()");
+    console.log("[GROUPS]   ✓ deleteGroup()");
+    console.log("[GROUPS] 🎯 Pronto para usar!");
+    console.log("[GROUPS]\n" + "=".repeat(80) + "\n");
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: Gerenciar Categorias e Subcategorias                  -->
+  <!-- data-bs-backdrop="static" → não fecha ao clicar fora         -->
+  <!-- ============================================================ -->
+  <div class="modal fade" id="categoriasModal" tabindex="-1" aria-hidden="true"
+       data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width:980px;">
+      <div class="modal-content">
+
+        <div class="modal-header" style="background:#fff; border-bottom:2px solid #f59e0b; padding:14px 20px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <div style="width:40px;height:40px;background:linear-gradient(135deg,#fef3c7,#fde68a);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <i class="bi bi-tags-fill" style="color:#ffc107;font-size:1.2rem;"></i>
+            </div>
+            <div>
+              <h5 class="modal-title mb-0" style="color:#1f2937;font-weight:700;font-size:1rem;">
+                Categorias — <span id="catModalGroupName" style="color:#6f42c1;"></span>
+              </h5>
+              <small style="color:#9ca3af;font-size:.75rem;">Gerencie categorias e subcategorias do grupo</small>
+            </div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body p-0">''
+
+          <!-- ALERTA INTERNO -->
+          <div id="catModalAlert" class="alert alert-danger d-none m-3 mb-0"></div>
+          <div id="catModalSuccess" class="alert alert-success d-none m-3 mb-0"></div>
+
+          <div class="row g-0" style="min-height:580px;">
+
+            <!-- ===== COLUNA ESQUERDA: Lista de categorias ===== -->
+            <div class="col-md-5 border-end d-flex flex-column" style="background:#f9fafb;">
+              <!-- Cabeçalho da coluna -->
+              <div style="padding:12px 16px; background:#fff; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-weight:600; font-size:.85rem; color:#374151;">
+                  <i class="bi bi-list-ul me-1" style="color:#f59e0b;"></i> Categorias
+                </span>
+                <button style="background:#fef3c7;color:#ffc107;border:1px solid #fde68a;border-radius:6px;font-size:.78rem;font-weight:600;padding:4px 10px;cursor:pointer;"
+                        onclick="abrirFormCategoria()">
+                  <i class="bi bi-plus-lg"></i> Nova
+                </button>
+              </div>
+              <!-- Lista -->
+              <div id="catLista" style="padding:12px; overflow-y:auto; flex:1;">
+                <div class="text-muted text-center py-4">
+                  <i class="bi bi-hourglass-split"></i> Carregando...
+                </div>
+              </div>
+            </div>
+
+            <!-- ===== COLUNA DIREITA: Formulário ===== -->
+            <div class="col-md-7">
+              <div class="p-3">
+
+                <!-- Form: Nova/Editar Categoria -->
+                <div id="formCategoriaDiv" class="d-none">
+                  <h6 class="fw-bold mb-3" id="formCatTitulo">
+                    <i class="bi bi-folder-plus"></i> Nova Categoria
+                  </h6>
+                  <input type="hidden" id="editandoCategoriaId">
+
+                  <div class="row g-3 mb-3">
+                    <div class="col-12">
+                      <label class="form-label">Nome <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control" id="catNome"
+                             placeholder="Ex: Hardware, Software, Rede..." maxlength="255">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Descrição <small class="text-muted">(opcional)</small></label>
+                      <textarea class="form-control" id="catDescricao" rows="2"
+                                placeholder="Descrição da categoria..." maxlength="500"></textarea>
+                    </div>
+                  </div>
+
+                  <!-- SLA Total -->
+                  <div class="mb-3 p-3 rounded" style="background:#f0f4ff; border:1px solid #c7d2fe;">
+                    <div class="d-flex align-items-center mb-2">
+                      <span class="badge me-2" style="background:#6f42c1;"><i class="bi bi-stopwatch-fill"></i></span>
+                      <span class="fw-semibold">SLA Total</span>
+                      <small class="text-muted ms-2">— prazo máximo para resolução completa</small>
+                    </div>
+                    <div class="row g-2">
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Dias</label>
+                        <input type="number" class="form-control form-control-sm" id="catSlaDias"
+                               min="0" max="365" placeholder="0" oninput="atualizarPreviewSLA('catSla')">
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Horas</label>
+                        <input type="number" class="form-control form-control-sm" id="catSlaHoras"
+                               min="0" max="23" placeholder="0" oninput="atualizarPreviewSLA('catSla')">
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Minutos</label>
+                        <input type="number" class="form-control form-control-sm" id="catSlaMinutos"
+                               min="0" max="59" placeholder="0" oninput="atualizarPreviewSLA('catSla')">
+                      </div>
+                    </div>
+                    <div id="catSlaPreview" class="mt-1 small text-primary fw-semibold"></div>
+                  </div>
+
+                  <!-- SLA Primeira Resposta -->
+                  <div class="mb-4 p-3 rounded" style="background:#f0fff4; border:1px solid #86efac;">
+                    <div class="d-flex align-items-center mb-2">
+                      <span class="badge me-2 bg-success"><i class="bi bi-reply-fill"></i></span>
+                      <span class="fw-semibold">SLA Primeira Resposta</span>
+                      <small class="text-muted ms-2">— prazo para 1º contato do suporte</small>
+                    </div>
+                    <div class="row g-2">
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Dias</label>
+                        <input type="number" class="form-control form-control-sm" id="catPrDias"
+                               min="0" max="365" placeholder="0" oninput="atualizarPreviewSLA('catPr')">
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Horas</label>
+                        <input type="number" class="form-control form-control-sm" id="catPrHoras"
+                               min="0" max="23" placeholder="0" oninput="atualizarPreviewSLA('catPr')">
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Minutos</label>
+                        <input type="number" class="form-control form-control-sm" id="catPrMinutos"
+                               min="0" max="59" placeholder="0" oninput="atualizarPreviewSLA('catPr')">
+                      </div>
+                    </div>
+                    <div id="catPrPreview" class="mt-1 small text-success fw-semibold"></div>
+                  </div>
+
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-primary" onclick="salvarCategoria()">
+                      <i class="bi bi-check-lg"></i> Salvar Categoria
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="fecharFormularios()">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Form: Nova/Editar Subcategoria -->
+                <div id="formSubcategoriaDiv" class="d-none">
+                  <h6 class="fw-bold mb-1" id="formSubTitulo">
+                    <i class="bi bi-diagram-2"></i> Nova Subcategoria
+                  </h6>
+                  <div class="alert alert-light border py-2 px-3 mb-3 small">
+                    <i class="bi bi-folder-fill text-warning me-1"></i>
+                    Categoria pai: <strong id="formSubCatNome"></strong>
+                    <span class="text-muted ms-1">— SLA deixado em branco herda da categoria pai</span>
+                  </div>
+                  <input type="hidden" id="editandoSubcategoriaId">
+                  <input type="hidden" id="subCategoriaPaiId">
+
+                  <div class="row g-3 mb-3">
+                    <div class="col-12">
+                      <label class="form-label">Nome <span class="text-danger">*</span></label>
+                      <input type="text" class="form-control" id="subNome"
+                             placeholder="Ex: Teclado, Mouse, Monitor..." maxlength="255">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">Descrição <small class="text-muted">(opcional)</small></label>
+                      <textarea class="form-control" id="subDescricao" rows="2"
+                                placeholder="Descrição da subcategoria..." maxlength="500"></textarea>
+                    </div>
+                  </div>
+
+                  <!-- SLA Total (subcategoria) -->
+                  <div class="mb-3 p-3 rounded" style="background:#f0f4ff; border:1px solid #c7d2fe;">
+                    <div class="d-flex align-items-center mb-2">
+                      <span class="badge me-2" style="background:#6f42c1;"><i class="bi bi-stopwatch-fill"></i></span>
+                      <span class="fw-semibold">SLA Total</span>
+                      <small class="text-muted ms-2">— sobrescreve o da categoria pai</small>
+                    </div>
+                    <div class="row g-2">
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Dias</label>
+                        <input type="number" class="form-control form-control-sm" id="subSlaDias"
+                               min="0" max="365" placeholder="0" oninput="atualizarPreviewSLA('subSla')">
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Horas</label>
+                        <input type="number" class="form-control form-control-sm" id="subSlaHoras"
+                               min="0" max="23" placeholder="0" oninput="atualizarPreviewSLA('subSla')">
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Minutos</label>
+                        <input type="number" class="form-control form-control-sm" id="subSlaMinutos"
+                               min="0" max="59" placeholder="0" oninput="atualizarPreviewSLA('subSla')">
+                      </div>
+                    </div>
+                    <div id="subSlaPreview" class="mt-1 small text-primary fw-semibold"></div>
+                  </div>
+
+                  <!-- SLA Primeira Resposta (subcategoria) -->
+                  <div class="mb-4 p-3 rounded" style="background:#f0fff4; border:1px solid #86efac;">
+                    <div class="d-flex align-items-center mb-2">
+                      <span class="badge me-2 bg-success"><i class="bi bi-reply-fill"></i></span>
+                      <span class="fw-semibold">SLA Primeira Resposta</span>
+                      <small class="text-muted ms-2">— sobrescreve o da categoria pai</small>
+                    </div>
+                    <div class="row g-2">
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Dias</label>
+                        <input type="number" class="form-control form-control-sm" id="subPrDias"
+                               min="0" max="365" placeholder="0" oninput="atualizarPreviewSLA('subPr')">
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Horas</label>
+                        <input type="number" class="form-control form-control-sm" id="subPrHoras"
+                               min="0" max="23" placeholder="0" oninput="atualizarPreviewSLA('subPr')">
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small text-muted mb-1">Minutos</label>
+                        <input type="number" class="form-control form-control-sm" id="subPrMinutos"
+                               min="0" max="59" placeholder="0" oninput="atualizarPreviewSLA('subPr')">
+                      </div>
+                    </div>
+                    <div id="subPrPreview" class="mt-1 small text-success fw-semibold"></div>
+                  </div>
+
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-primary" onclick="salvarSubcategoria()">
+                      <i class="bi bi-check-lg"></i> Salvar Subcategoria
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="fecharFormularios()">
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Estado vazio -->
+                <div id="formVazioDiv" class="text-center text-muted py-5">
+                  <div style="width:64px;height:64px;background:#fef9ee;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+                    <i class="bi bi-tags" style="font-size:1.6rem;color:#f59e0b;opacity:.55;"></i>
+                  </div>
+                  <p class="mb-0 small">Selecione uma categoria ou clique em<br><strong style="color:#6f42c1;">+ Nova</strong> para começar.</p>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="background:#fafafa; border-top:1px solid #e5e7eb; padding:10px 20px;">
+          <small style="color:#9ca3af; margin-right:auto;">
+            <i class="bi bi-info-circle me-1" style="color:#f59e0b;"></i> Alterações são salvas imediatamente
+          </small>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- /categoriasModal -->
+
+  <!-- ============================================================ -->
+  <!-- JS: Gerenciamento de Categorias                              -->
+  <!-- ============================================================ -->
+  <script>
+    let catModalGroupId   = null;
+    let categoriasCache   = [];   // lista carregada do backend
+
+    // ── Abre o modal e carrega categorias do grupo ──────────────
+    async function abrirGerenciarCategorias(groupId, groupName, event) {
+      if (event) event.preventDefault();
+      catModalGroupId = groupId;
+      document.getElementById('catModalGroupName').textContent = groupName;
+      fecharFormularios();
+      catModalAlert('', false);
+
+      const modal = new bootstrap.Modal(document.getElementById('categoriasModal'));
+      modal.show();
+      await carregarCategorias();
+    }
+
+    // ── Carrega categorias do backend ───────────────────────────
+    async function carregarCategorias() {
+      document.getElementById('catLista').innerHTML =
+        '<div class="text-muted text-center py-3"><i class="bi bi-hourglass-split"></i> Carregando...</div>';
+
+      try {
+        const res  = await fetch(`${API_BASE}/categorias?group_id=${catModalGroupId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        categoriasCache = await res.json();
+        renderCatLista();
+      } catch (e) {
+        document.getElementById('catLista').innerHTML =
+          `<div class="text-danger text-center py-3"><i class="bi bi-exclamation-circle"></i> Erro ao carregar: ${e.message}</div>`;
+      }
+    }
+
+    // ── Converte minutos em texto legível ─────────────────────────
+    function formatarSLAMin(mins) {
+      if (!mins) return '—';
+      const d = Math.floor(mins / 1440);
+      const h = Math.floor((mins % 1440) / 60);
+      const m = mins % 60;
+      return [d && `${d}d`, h && `${h}h`, m && `${m}m`].filter(Boolean).join(' ') || '0m';
+    }
+
+    // ── Renderiza lista de categorias (com subcategorias) ───────
+    function renderCatLista() {
+      const el = document.getElementById('catLista');
+      if (!categoriasCache.length) {
+        el.innerHTML = '<div class="text-muted text-center py-4 small">Nenhuma categoria ainda.<br>Clique em <strong>+ Nova</strong> para criar.</div>';
+        return;
+      }
+
+      el.innerHTML = categoriasCache.map(cat => {
+        const slaBadge = cat.sla_minutos
+          ? `<span class="badge rounded-pill" style="background:#6f42c1;font-size:.68rem;" title="SLA Total: ${cat.sla_minutos} min"><i class="bi bi-stopwatch"></i> ${formatarSLAMin(cat.sla_minutos)}</span>`
+          : '';
+        const prBadge = cat.sla_primeira_resposta_minutos
+          ? `<span class="badge rounded-pill bg-success ms-1" style="font-size:.68rem;" title="1ª Resposta: ${cat.sla_primeira_resposta_minutos} min"><i class="bi bi-reply"></i> ${formatarSLAMin(cat.sla_primeira_resposta_minutos)}</span>`
+          : '';
+
+        const subRows = (cat.subcategorias || []).map(sub => {
+          const subSlaBadge = sub.sla_minutos
+            ? `<span class="badge rounded-pill ms-1" style="background:#6f42c1;font-size:.65rem;opacity:.85;" title="SLA Total (sub): ${sub.sla_minutos} min"><i class="bi bi-stopwatch"></i> ${formatarSLAMin(sub.sla_minutos)}</span>`
+            : '';
+          const subPrBadge = sub.sla_primeira_resposta_minutos
+            ? `<span class="badge rounded-pill bg-success ms-1" style="font-size:.65rem;opacity:.85;" title="1ª Resp. (sub): ${sub.sla_primeira_resposta_minutos} min"><i class="bi bi-reply"></i> ${formatarSLAMin(sub.sla_primeira_resposta_minutos)}</span>`
+            : '';
+          return `
+          <div class="d-flex align-items-center px-3 py-1 border-top" style="background:#f8f9fa;">
+            <span class="flex-grow-1" style="font-size:.82rem;">
+              <i class="bi bi-arrow-return-right text-muted me-1"></i>
+              <span class="text-secondary">${escapeHtml(sub.nome)}</span>
+              ${subSlaBadge}${subPrBadge}
+            </span>
+            <button class="btn btn-sm btn-link p-0 me-1 text-secondary" title="Editar subcategoria"
+                    onclick="abrirEditarSubcategoria(${sub.id}, ${cat.id}, '${cat.nome.replace(/'/g,"\\'")}')">
+              <i class="bi bi-pencil" style="font-size:.8rem;"></i>
+            </button>
+            <button class="btn btn-sm btn-link p-0 text-danger" title="Excluir"
+                    onclick="deletarSubcategoria(${sub.id}, '${sub.nome.replace(/'/g,"\\'")}')">
+              <i class="bi bi-trash" style="font-size:.8rem;"></i>
+            </button>
+          </div>`;
+        }).join('');
+
+        return `
+        <div class="border rounded mb-2 overflow-hidden shadow-sm">
+          <div class="d-flex align-items-start px-2 py-2 bg-white">
+            <span class="flex-grow-1 fw-semibold" style="font-size:.88rem;line-height:1.4;">
+              <i class="bi bi-folder-fill text-warning me-1"></i>${escapeHtml(cat.nome)}
+              <span class="d-inline-flex flex-wrap gap-1 ms-1">${slaBadge}${prBadge}</span>
+            </span>
+            <div class="d-flex gap-1 ms-1 flex-shrink-0">
+              <button class="btn btn-sm btn-link p-0 text-primary" title="Adicionar subcategoria"
+                      onclick="abrirFormSubcategoria(${cat.id}, '${cat.nome.replace(/'/g,"\\'")}')">
+                <i class="bi bi-plus-circle"></i>
+              </button>
+              <button class="btn btn-sm btn-link p-0 text-secondary" title="Editar"
+                      onclick="abrirEditarCategoria(${cat.id})">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button class="btn btn-sm btn-link p-0 text-danger" title="Excluir"
+                      onclick="deletarCategoria(${cat.id}, '${cat.nome.replace(/'/g,"\\'")}')">
+                <i class="bi bi-trash"></i>
+              </button>
+            </div>
+          </div>
+          ${subRows}
+        </div>`;
+      }).join('');
+    }
+
+    // ── Calcula minutos a partir de um prefixo de inputs (dias/horas/minutos) ─
+    function calcularMinutosDeInputs(prefixo) {
+      const d = parseInt(document.getElementById(prefixo + 'Dias').value)    || 0;
+      const h = parseInt(document.getElementById(prefixo + 'Horas').value)   || 0;
+      const m = parseInt(document.getElementById(prefixo + 'Minutos').value) || 0;
+      return d * 1440 + h * 60 + m;
+    }
+
+    // ── Preview ao digitar SLA — prefixo: 'cat' | 'catPr' | 'sub' | 'subPr' ─
+    function atualizarPreviewSLA(prefixo) {
+      const total   = calcularMinutosDeInputs(prefixo);
+      const preview = document.getElementById(prefixo + 'Preview');
+      if (!preview) return;
+      preview.textContent = total > 0 ? `${formatarSLAMin(total)} (${total} min)` : '';
+    }
+
+    // ── Preenche inputs a partir de minutos totais ────────────────
+    function preencherInputsMinutos(prefixo, totalMinutos) {
+      const t = totalMinutos || 0;
+      document.getElementById(prefixo + 'Dias').value    = Math.floor(t / 1440)          || '';
+      document.getElementById(prefixo + 'Horas').value   = Math.floor((t % 1440) / 60)   || '';
+      document.getElementById(prefixo + 'Minutos').value = t % 60                         || '';
+      atualizarPreviewSLA(prefixo);
+    }
+
+    // ── Formulário: nova categoria ───────────────────────────────
+    function abrirFormCategoria() {
+      fecharFormularios();
+      document.getElementById('formCatTitulo').innerHTML = '<i class="bi bi-folder-plus"></i> Nova Categoria';
+      document.getElementById('editandoCategoriaId').value = '';
+      document.getElementById('catNome').value      = '';
+      document.getElementById('catDescricao').value = '';
+      preencherInputsMinutos('catSla', 0);
+      preencherInputsMinutos('catPr', 0);
+      document.getElementById('formCategoriaDiv').classList.remove('d-none');
+      document.getElementById('formVazioDiv').classList.add('d-none');
+      document.getElementById('catNome').focus();
+    }
+
+    // ── Formulário: editar categoria existente ──────────────────
+    function abrirEditarCategoria(catId) {
+      const cat = categoriasCache.find(c => c.id === catId);
+      if (!cat) return;
+      fecharFormularios();
+      document.getElementById('formCatTitulo').innerHTML = '<i class="bi bi-pencil"></i> Editar Categoria';
+      document.getElementById('editandoCategoriaId').value = catId;
+      document.getElementById('catNome').value      = cat.nome;
+      document.getElementById('catDescricao').value = cat.descricao || '';
+      preencherInputsMinutos('catSla', cat.sla_minutos || 0);
+      preencherInputsMinutos('catPr',  cat.sla_primeira_resposta_minutos || 0);
+      document.getElementById('formCategoriaDiv').classList.remove('d-none');
+      document.getElementById('formVazioDiv').classList.add('d-none');
+      document.getElementById('catNome').focus();
+    }
+
+    // ── Salva categoria (cria ou atualiza) ──────────────────────
+    async function salvarCategoria() {
+      const nome      = document.getElementById('catNome').value.trim();
+      const descricao = document.getElementById('catDescricao').value.trim();
+      const editId    = document.getElementById('editandoCategoriaId').value;
+      const userId    = getCurrentUserId();
+      const slaTotal  = calcularMinutosDeInputs('catSla') || null;
+      const slaPr     = calcularMinutosDeInputs('catPr')  || null;
+
+      if (!nome) { catModalAlert('Informe o nome da categoria.'); return; }
+
+      const body = { nome, descricao: descricao || null,
+                     sla_minutos: slaTotal !== null ? slaTotal : 0,
+                     sla_primeira_resposta_minutos: slaPr !== null ? slaPr : 0,
+                     usuario_id: userId };
+      try {
+        let res;
+        if (editId) {
+          res = await fetch(`${API_BASE}/categorias/${editId}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+          });
+        } else {
+          res = await fetch(`${API_BASE}/categorias/`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...body, group_id: catModalGroupId,
+                                   sla_minutos: slaTotal, sla_primeira_resposta_minutos: slaPr })
+          });
+        }
+        if (!res.ok) { catModalAlert((await res.json().catch(()=>({}))).detail || 'Erro ao salvar.'); return; }
+        catModalSuccess(editId ? 'Categoria atualizada!' : 'Categoria criada!');
+        fecharFormularios();
+        await carregarCategorias();
+      } catch (e) { catModalAlert('Erro de conexão: ' + e.message); }
+    }
+
+    // ── Deletar categoria ────────────────────────────────────────
+    async function deletarCategoria(catId, nome) {
+      if (!confirm(`Excluir a categoria "${nome}" e todas as suas subcategorias?`)) return;
+      const userId = getCurrentUserId();
+      try {
+        const res = await fetch(`${API_BASE}/categorias/${catId}?usuario_id=${userId}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) {
+          catModalAlert((await res.json().catch(()=>({}))).detail || 'Erro ao excluir.'); return;
+        }
+        catModalSuccess('Categoria excluída!');
+        fecharFormularios();
+        await carregarCategorias();
+      } catch (e) { catModalAlert('Erro de conexão: ' + e.message); }
+    }
+
+    // ── Formulário: nova subcategoria ────────────────────────────
+    function abrirFormSubcategoria(catId, catNome) {
+      fecharFormularios();
+      document.getElementById('formSubTitulo').innerHTML      = '<i class="bi bi-diagram-2"></i> Nova Subcategoria';
+      document.getElementById('editandoSubcategoriaId').value = '';
+      document.getElementById('subCategoriaPaiId').value      = catId;
+      document.getElementById('formSubCatNome').textContent   = catNome;
+      document.getElementById('subNome').value      = '';
+      document.getElementById('subDescricao').value = '';
+      preencherInputsMinutos('subSla', 0);
+      preencherInputsMinutos('subPr',  0);
+      document.getElementById('formSubcategoriaDiv').classList.remove('d-none');
+      document.getElementById('formVazioDiv').classList.add('d-none');
+      document.getElementById('subNome').focus();
+    }
+
+    // ── Formulário: editar subcategoria ─────────────────────────
+    function abrirEditarSubcategoria(subId, catId, catNome) {
+      const cat = categoriasCache.find(c => c.id === catId);
+      const sub = cat?.subcategorias?.find(s => s.id === subId);
+      if (!sub) return;
+      fecharFormularios();
+      document.getElementById('formSubTitulo').innerHTML      = '<i class="bi bi-pencil"></i> Editar Subcategoria';
+      document.getElementById('editandoSubcategoriaId').value = subId;
+      document.getElementById('subCategoriaPaiId').value      = catId;
+      document.getElementById('formSubCatNome').textContent   = catNome;
+      document.getElementById('subNome').value      = sub.nome;
+      document.getElementById('subDescricao').value = sub.descricao || '';
+      preencherInputsMinutos('subSla', sub.sla_minutos                   || 0);
+      preencherInputsMinutos('subPr',  sub.sla_primeira_resposta_minutos || 0);
+      document.getElementById('formSubcategoriaDiv').classList.remove('d-none');
+      document.getElementById('formVazioDiv').classList.add('d-none');
+      document.getElementById('subNome').focus();
+    }
+
+    // ── Salva subcategoria (cria ou atualiza) ───────────────────
+    async function salvarSubcategoria() {
+      const nome      = document.getElementById('subNome').value.trim();
+      const descricao = document.getElementById('subDescricao').value.trim();
+      const catId     = parseInt(document.getElementById('subCategoriaPaiId').value);
+      const editId    = document.getElementById('editandoSubcategoriaId').value;
+      const userId    = getCurrentUserId();
+      const slaTotal  = calcularMinutosDeInputs('subSla') || null;
+      const slaPr     = calcularMinutosDeInputs('subPr')  || null;
+
+      if (!nome) { catModalAlert('Informe o nome da subcategoria.'); return; }
+
+      try {
+        let res;
+        if (editId) {
+          res = await fetch(`${API_BASE}/subcategorias/${editId}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nome, descricao: descricao || null,
+                                   sla_minutos: slaTotal !== null ? slaTotal : 0,
+                                   sla_primeira_resposta_minutos: slaPr !== null ? slaPr : 0,
+                                   usuario_id: userId })
+          });
+        } else {
+          res = await fetch(`${API_BASE}/subcategorias/`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ categoria_id: catId, nome, descricao: descricao || null,
+                                   sla_minutos: slaTotal, sla_primeira_resposta_minutos: slaPr,
+                                   usuario_id: userId })
+          });
+        }
+        if (!res.ok) { catModalAlert((await res.json().catch(()=>({}))).detail || 'Erro ao salvar.'); return; }
+        catModalSuccess(editId ? 'Subcategoria atualizada!' : 'Subcategoria criada!');
+        fecharFormularios();
+        await carregarCategorias();
+      } catch (e) { catModalAlert('Erro de conexão: ' + e.message); }
+    }
+
+    // ── Deletar subcategoria ─────────────────────────────────────
+    async function deletarSubcategoria(subId, nome) {
+      if (!confirm(`Excluir a subcategoria "${nome}"?`)) return;
+      const userId = getCurrentUserId();
+      try {
+        const res = await fetch(`${API_BASE}/subcategorias/${subId}?usuario_id=${userId}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) {
+          catModalAlert((await res.json().catch(()=>({}))).detail || 'Erro ao excluir.'); return;
+        }
+        catModalSuccess('Subcategoria excluída!');
+        await carregarCategorias();
+      } catch (e) { catModalAlert('Erro de conexão: ' + e.message); }
+    }
+
+    // ── Helpers de UI ────────────────────────────────────────────
+    function fecharFormularios() {
+      document.getElementById('formCategoriaDiv').classList.add('d-none');
+      document.getElementById('formSubcategoriaDiv').classList.add('d-none');
+      document.getElementById('formVazioDiv').classList.remove('d-none');
+    }
+
+    function catModalAlert(msg, show = true) {
+      const el = document.getElementById('catModalAlert');
+      if (show && msg) { el.textContent = msg; el.classList.remove('d-none'); }
+      else             { el.classList.add('d-none'); }
+      document.getElementById('catModalSuccess').classList.add('d-none');
+    }
+
+    function catModalSuccess(msg) {
+      const el = document.getElementById('catModalSuccess');
+      el.textContent = msg;
+      el.classList.remove('d-none');
+      document.getElementById('catModalAlert').classList.add('d-none');
+      setTimeout(() => el.classList.add('d-none'), 3000);
+    }
+  </script>
+
+</body>
+
+</html>

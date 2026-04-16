@@ -1,0 +1,66 @@
+# =========================================
+# Bloqueando Listagem de Diretórios
+# =========================================
+
+Options -Indexes
+ErrorDocument 403 /SistemaCPE/error.html
+ErrorDocument 404 /SistemaCPE/error.html
+
+# =========================================
+# Reescrita de URLs
+# =========================================
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /SistemaCPE/
+
+  # ===== REGRA 1: PERMITE todos os arquivos e diretórios que existem =====
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # ===== REGRA 2: Bloqueia acesso direto a arquivos sensíveis =====
+  RewriteRule ^\.env$ - [F,L]
+  RewriteRule ^\.git - [F,L]
+  RewriteRule ^server/\.env$ - [F,L]
+  RewriteRule ^\.htaccess$ - [F,L]
+
+  # ===== REGRA 3: Bloqueia diretórios sensíveis =====
+  RewriteRule ^server/?$ - [F,L]
+
+  # ===== REGRA 4: Permite requisições da API =====
+  RewriteRule ^api/ - [L]
+
+  # ===== REGRA 5: Redireciona raiz para login =====
+  RewriteRule ^$ /SistemaCPE/web/login.html [L]
+</IfModule>
+
+# =========================================
+# Headers de Segurança
+# =========================================
+
+<IfModule mod_headers.c>
+  Header set Cache-Control "no-cache, no-store, must-revalidate" "expr=%{CONTENT_TYPE} =~ m#text/html#"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-XSS-Protection "1; mode=block"
+</IfModule>
+
+# =========================================
+# Tipos MIME
+# =========================================
+
+<IfModule mod_mime.c>
+  AddType application/javascript js
+  AddType text/css css
+  AddType image/svg+xml svg svgz
+  AddEncoding gzip svgz
+</IfModule>
+
+# =========================================
+# Compressão Gzip
+# =========================================
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>

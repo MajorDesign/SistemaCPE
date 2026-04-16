@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <!-- ========================================
+       FONTES
+       ======================================== -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- ========================================
+       FRAMEWORKS CSS
+       ======================================== -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  
+  <!-- ========================================
+       ESTILOS GLOBAIS
+       ======================================== -->
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css">
+  
+  <title>Tickets - CPE Control</title>
+  
+  <!-- ========================================
+       SCRIPTS DE PROTEÇÃO (rodas PRIMEIRO)
+       ======================================== -->
+  <script src="/SistemaCPE/web/assests/js/per_usuario/access-config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/per_usuario/page-access-control.js"></script>
+  
+  <!-- ========================================
+       SCRIPTS DE FUNCIONALIDADE
+       ======================================== -->
+  <script src="/SistemaCPE/web/assests/js/dashboard-sla.js"></script>
+  
+  <!-- ========================================
+       VERIFICAÇÃO DE ACESSO
+       ======================================== -->
+  <script>checkPageAccess('TICKETS');</script>
+</head>
+
+<body>
+  <!-- NAVBAR -->
+  <nav id="navbar-container"></nav>
+
+  <div class="container-main">
+    <!-- SIDEBAR -->
+    <div id="sidebar-container"></div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <div class="top-bar">
+        <h1><i class="bi bi-ticket"></i> Tickets</h1>
+        <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
+      </div>
+
+      <div class="content">
+
+        <!-- ========================================
+             ALERTAS
+             ======================================== -->
+        <div class="alert alert-danger d-none" id="alertBox" role="alert">
+          <i class="bi bi-exclamation-circle"></i> <span id="alertMessage"></span>
+        </div>
+        <div class="alert alert-success d-none" id="successBox" role="alert">
+          <i class="bi bi-check-circle"></i> <span id="successMessage"></span>
+        </div>
+
+        <!-- ========================================
+             ACTION BAR
+             ======================================== -->
+        <div class="action-bar mb-3">
+          <div class="btn-group">
+
+            <!-- Novo: visível para todos -->
+            <button class="btn btn-primary btn-sm" onclick="openNewTicketModal()" title="Criar novo ticket">
+              <i class="bi bi-plus-circle"></i> Novo
+            </button>
+
+            <!--
+              ✅ id="btnAlterar" adicionado.
+              tickets.js → applyRolePermissions() oculta este botão para USER.
+              Apenas ADMIN / TI / MANAGER enxergam.
+            -->
+            <button id="btnAlterar" class="btn btn-warning btn-sm" onclick="editSelected()"
+              title="Editar ticket selecionado">
+              <i class="bi bi-pencil-square"></i> Alterar
+            </button>
+
+            <!-- Apagar: visível para todos; backend valida permissão (403 se não for dono) -->
+            <button class="btn btn-danger btn-sm" onclick="deleteSelected()" title="Deletar ticket(s) selecionado(s)">
+              <i class="bi bi-trash"></i> Apagar
+            </button>
+
+            <!--
+              ✅ id="btnAtribuir" adicionado.
+              tickets.js → applyRolePermissions() oculta este botão para USER.
+              Apenas ADMIN / TI / MANAGER enxergam.
+            -->
+            <button id="btnAtribuir" class="btn btn-info btn-sm" onclick="assignSelected()"
+              title="Atribuir ticket(s) selecionado(s)">
+              <i class="bi bi-person-check"></i> Atribuir
+            </button>
+
+          </div>
+
+          <div class="search-filters">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input type="text" id="searchInput" class="form-control" placeholder="Buscar...">
+            </div>
+            <button class="btn btn-outline-secondary btn-sm" onclick="toggleAdvancedFilters()">
+              <i class="bi bi-funnel"></i> Filtros
+            </button>
+          </div>
+        </div>
+
+        <!-- ========================================
+             ADVANCED FILTERS
+             ======================================== -->
+        <div class="advanced-filters d-none mb-3" id="advancedFilters">
+          <div class="row g-2">
+            <div class="col-md-3">
+              <select id="statusFilter" class="form-select form-select-sm" onchange="applyFilters()">
+                <option value="">Status</option>
+                <option value="open">Abertos</option>
+                <option value="in-progress">Em Andamento</option>
+                <option value="resolved">Resolvidos</option>
+                <option value="closed">Fechados</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select id="priorityFilter" class="form-select form-select-sm" onchange="applyFilters()">
+                <option value="">Prioridade</option>
+                <option value="low">Baixa</option>
+                <option value="medium">Média</option>
+                <option value="high">Alta</option>
+                <option value="urgent">Urgente</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <button class="btn btn-outline-danger btn-sm w-100" onclick="clearFilters()">
+                <i class="bi bi-arrow-counterclockwise"></i> Limpar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================
+             STATS
+             ======================================== -->
+        <div class="stats-bar mb-3">
+          <div class="stat-item">
+            <span class="stat-label">Total</span>
+            <span class="stat-value" id="totalTickets">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Abertos</span>
+            <span class="stat-value" id="openTickets">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Andamento</span>
+            <span class="stat-value" id="inProgressTickets">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Resolvidos</span>
+            <span class="stat-value" id="resolvedTickets">0</span>
+          </div>
+        </div>
+        <!-- ========================================
+             DASHBOARD SLA - ABA RETRÁTIL
+             ======================================== -->
+        <div class="dashboard-sla-container mb-3">
+          <button class="btn btn-outline-primary btn-sm w-100 text-start dashboard-sla-toggle" onclick="toggleDashboardSLA(this)">
+            <i class="bi bi-graph-up me-1"></i>
+            <span id="slaDashboardTitle">Dashboard SLA</span>
+            <i class="bi bi-chevron-down toggle-icon ms-2 float-end mt-1"></i>
+          </button>
+
+          <!-- CONTEÚDO RETRÁTIL -->
+          <div class="dashboard-sla-content d-none mt-2">
+
+            <!-- HEADER: período + refresh -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <span class="badge bg-light text-dark border fw-normal px-2 py-1">
+                <i class="bi bi-calendar3 me-1 text-primary"></i>
+                <span id="slaPeriodo">—</span>
+              </span>
+              <button class="btn btn-sm btn-outline-secondary" onclick="recarregarDashboardSLA()" title="Recarregar">
+                <i class="bi bi-arrow-clockwise"></i>
+              </button>
+            </div>
+
+            <!-- KPI CARDS (renderizados pelo JS) -->
+            <div class="row g-2 mb-2" id="slaKpiCards"></div>
+
+            <!-- BLOCO SLA PRIMEIRA RESPOSTA (renderizado pelo JS se houver dados) -->
+            <div id="slaPrimeiraRespostaSection" style="display:none" class="mb-3"></div>
+
+            <!-- TABELA DE MEMBROS (só RESPONSAVEL_GRUPO / ADMIN) -->
+            <div id="slaMembroSection" style="display:none">
+              <h6 class="fw-semibold mb-2 text-secondary" style="font-size:.8rem;text-transform:uppercase;letter-spacing:.05em">
+                <i class="bi bi-people me-1"></i>Desempenho Individual do Grupo
+              </h6>
+              <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Membro</th>
+                      <th class="text-center">Total</th>
+                      <th class="text-center">Andamento</th>
+                      <th class="text-center">Finalizados</th>
+                      <th class="text-center"><i class="bi bi-check-circle text-success"></i> SLA No Prazo</th>
+                      <th class="text-center"><i class="bi bi-x-circle text-danger"></i> SLA Estourado</th>
+                      <th class="text-center"><i class="bi bi-reply-fill text-success"></i> 1ª Resp. OK</th>
+                      <th class="text-center"><i class="bi bi-reply-fill text-danger"></i> 1ª Resp. Est.</th>
+                      <th class="text-center">Atraso Médio</th>
+                      <th class="text-center" style="min-width:130px">Taxa de Sucesso</th>
+                    </tr>
+                  </thead>
+                  <tbody id="slaMembroTableBody">
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- ESTADO: loading / erro / vazio -->
+            <div id="slaDashboardMsg" class="text-center py-3 text-muted" style="display:none"></div>
+
+          </div><!-- /dashboard-sla-content -->
+        </div><!-- /dashboard-sla-container -->
+
+        <!-- ========================================
+             TABLE
+             ======================================== -->
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle">
+            <thead>
+              <tr>
+                <th style="width:40px;">
+                  <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                </th>
+                <th style="width:80px;">ID</th>
+                <th>Usuário</th>
+                <th>Título</th>
+                <th>Prioridade</th>
+                <th>Status</th>
+                <th>Atribuído a</th>
+                <th><i class="bi bi-stopwatch"></i> SLA</th>
+                <th>Data</th>
+                <th style="width:120px;">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="ticketsBody">
+              <tr>
+                <td colspan="8" class="text-center text-muted py-4">
+                  <i class="bi bi-hourglass-split"></i> Carregando...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- ========================================
+             PAGINATION
+             ======================================== -->
+        <div class="pagination-bar mt-3">
+          <div>
+            <span>Mostrando</span>
+            <select id="itemsPerPage" class="form-select form-select-sm d-inline-block w-auto"
+              onchange="changeItemsPerPage(this.value)">
+              <option value="10">10</option>
+              <option value="25" selected>25</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+            <span>de <strong id="totalItems">0</strong></span>
+          </div>
+          <div class="page-controls">
+            <button class="btn btn-sm btn-outline-secondary" onclick="previousPage()">
+              <i class="bi bi-chevron-left"></i>
+            </button>
+            <input type="number" id="currentPage" class="form-control form-control-sm text-center" value="1" min="1"
+              onchange="goToPage(this.value)" style="width:60px;">
+            <span>/ <span id="totalPages">1</span></span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="nextPage()">
+              <i class="bi bi-chevron-right"></i>
+            </button>
+          </div>
+          <div>
+            <span id="paginationText">1 a 25 de 0</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================
+       MODAL - DETALHE DO TICKET
+       ======================================== -->
+  <div class="modal fade" id="ticketDetailModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+      <div class="modal-content">
+
+        <!-- HEADER -->
+        <div class="ticket-detail-header">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <h4 class="mb-1" id="detailTitle"></h4>
+              <small id="detailId"></small>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+        </div>
+
+        <!-- BODY -->
+        <div class="modal-body ticket-modal-body">
+
+          <!-- ====== ABAS PRINCIPAIS ====== -->
+          <div class="ticket-detail-tabs">
+
+            <!-- Chat: visível para todos -->
+            <button class="ticket-detail-tab active" onclick="switchTab(event, 'chat')">
+              <i class="bi bi-chat-dots"></i> Chat & Resposta
+            </button>
+
+            <!-- Detalhes: visível para todos -->
+            <button class="ticket-detail-tab" onclick="switchTab(event, 'details')">
+              <i class="bi bi-info-circle"></i> Detalhes
+            </button>
+
+            <!--
+              Ações: visível apenas para ADMIN / TI / MANAGER.
+              tickets.js → applyDetailPermissions() usa querySelector neste onclick
+              para ocultar/exibir conforme o role do usuário logado.
+            -->
+            <button class="ticket-detail-tab" onclick="switchTab(event, 'actions')">
+              <i class="bi bi-sliders"></i> Ações
+            </button>
+
+          </div>
+
+          <!-- ====== TAB 1: CHAT & RESPOSTA ====== -->
+          <div class="ticket-detail-content active" id="tab-chat">
+            <div class="chat-layout">
+
+              <!-- COLUNA ESQUERDA: descrição e histórico -->
+              <div class="chat-left">
+                <div class="description-section">
+                  <h6 class="section-title"><i class="bi bi-file-text"></i> Descrição do Chamado</h6>
+                  <div class="description-box" id="detailDescription"></div>
+                </div>
+
+                <div class="comments-section">
+                  <h6 class="section-title"><i class="bi bi-chat-dots"></i> Histórico de Comentários</h6>
+                  <div id="detailCommentsList" class="comments-list"></div>
+                </div>
+              </div>
+
+              <!-- COLUNA DIREITA: formulário de resposta -->
+              <div class="chat-right">
+
+                <!-- INFO RÁPIDA -->
+                <div class="ticket-quick-info">
+                  <div class="info-row">
+                    <span class="label">Usuário:</span>
+                    <strong id="detailUserName"></strong>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">Email:</span>
+                    <span id="detailEmail" class="text-break"></span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">Status:</span>
+                    <span id="detailStatusQuick"></span>
+                  </div>
+                  <div class="info-row">
+                    <span class="label">Atribuído:</span>
+                    <strong id="detailAssignedName"></strong>
+                  </div>
+                </div>
+
+                <!-- ABAS DE MODO DE RESPOSTA -->
+                <div class="reply-menu-tabs">
+
+                  <!-- Responder: visível para todos -->
+                  <button class="reply-menu-tab active" onclick="switchReplyMode(event, 'respond')">
+                    <i class="bi bi-chat-left-quote"></i> Responder
+                  </button>
+
+                  <!--
+                    Comentário Interno: visível apenas para ADMIN / TI / MANAGER.
+                    tickets.js → applyDetailPermissions() usa querySelector neste onclick
+                    para ocultar/exibir conforme o role.
+                  -->
+                  <button class="reply-menu-tab" onclick="switchReplyMode(event, 'internal')">
+                    <i class="bi bi-eye-slash"></i> Comentário Interno
+                  </button>
+
+                </div>
+
+                <!-- MODO: RESPONDER (público) -->
+                <div class="reply-mode active" id="reply-respond">
+                  <form id="detailReplyForm">
+                    <div class="mb-3">
+                      <label class="form-label">
+                        <i class="bi bi-chat"></i> Resposta para o Usuário
+                      </label>
+                      <textarea class="form-control" id="detailReplyText"
+                        placeholder="Digite sua resposta que será enviada para o usuário..." required></textarea>
+                      <small class="text-muted d-block mt-2">
+                        O usuário receberá uma notificação desta resposta
+                      </small>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-sm w-100">
+                      <i class="bi bi-send"></i> Enviar Resposta
+                    </button>
+                  </form>
+                </div>
+
+                <!-- MODO: COMENTÁRIO INTERNO (apenas admin) -->
+                <div class="reply-mode" id="reply-internal">
+                  <form id="detailInternalForm">
+                    <div class="mb-3">
+                      <label class="form-label">
+                        <i class="bi bi-eye-slash"></i> Comentário Interno
+                      </label>
+                      <textarea class="form-control" id="detailInternalText"
+                        placeholder="Apenas a equipe verá este comentário..." required></textarea>
+                      <small class="text-muted d-block mt-2">
+                        Não será visível para o usuário solicitante
+                      </small>
+                    </div>
+                    <button type="submit" class="btn btn-warning btn-sm w-100">
+                      <i class="bi bi-bookmark"></i> Salvar Comentário
+                    </button>
+                  </form>
+                </div>
+
+              </div><!-- /chat-right -->
+            </div><!-- /chat-layout -->
+          </div><!-- /tab-chat -->
+
+          <!-- ====== TAB 2: DETALHES ====== -->
+          <div class="ticket-detail-content" id="tab-details">
+            <div class="details-grid">
+              <div class="detail-row">
+                <div class="detail-col">
+                  <span class="detail-label">Usuário</span>
+                  <span class="detail-value" id="detailUserNameDetail"></span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Email</span>
+                  <span class="detail-value" id="detailEmailDetail"></span>
+                </div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-col">
+                  <span class="detail-label">Grupo</span>
+                  <span class="detail-value" id="detailGroup"></span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Prioridade</span>
+                  <span id="detailPriority"></span>
+                </div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-col">
+                  <span class="detail-label">Status</span>
+                  <span id="detailStatus"></span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Atribuído a</span>
+                  <span class="detail-value" id="detailAssignedTo"></span>
+                </div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-col">
+                  <span class="detail-label">Criado em</span>
+                  <span class="detail-value" id="detailCreatedAt"></span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Atualizado em</span>
+                  <span class="detail-value" id="detailUpdatedAt"></span>
+                </div>
+              </div>
+
+              <!-- SLA -->
+              <div class="detail-row" id="detailSLARow" style="display:none;">
+                <div class="detail-col" style="flex:1;">
+                  <span class="detail-label"><i class="bi bi-stopwatch"></i> SLA</span>
+                  <div id="detailSLABadge"></div>
+                  <div id="detailSLABar" class="mt-1"
+                    style="height:6px;border-radius:3px;background:#e9ecef;overflow:hidden;">
+                    <div id="detailSLABarFill" style="height:100%;width:0%;transition:width .4s;"></div>
+                  </div>
+                  <small id="detailSLALabel" class="text-muted"></small>
+                </div>
+                <div class="detail-col d-flex align-items-end gap-2" id="detailSLAControls"
+                  style="display:none!important;">
+                  <button class="btn btn-sm btn-outline-warning" onclick="pausarSLAManual()" id="btnSLAPausar">
+                    <i class="bi bi-pause-circle"></i> Pausar SLA
+                  </button>
+                  <button class="btn btn-sm btn-outline-success d-none" onclick="retomarSLAManual()" id="btnSLARetomar">
+                    <i class="bi bi-play-circle"></i> Retomar SLA
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div><!-- /tab-details -->
+
+          <!-- ====== TAB 3: AÇÕES ====== -->
+          <div class="ticket-detail-content" id="tab-actions">
+            <div class="actions-grid">
+
+              <!-- Finalizar — apenas o responsável do ticket -->
+              <div class="action-section" id="sectionFinalizarChamado">
+                <div class="action-section-title">
+                  <i class="bi bi-check2-circle"></i> Finalizar Chamado
+                </div>
+                <div class="select-action">
+                  <p class="text-muted small mb-2">
+                    Marca o chamado como <strong>Resolvido</strong> e registra o SLA.
+                  </p>
+                  <button class="btn btn-success w-100" onclick="finalizarTicket()">
+                    <i class="bi bi-check-lg"></i> Finalizar Chamado
+                  </button>
+                </div>
+              </div>
+
+              <!-- Reabrir — apenas o solicitante, quando resolvido -->
+              <div class="action-section" id="sectionReabrirChamado" style="display:none;">
+                <div class="action-section-title" style="color:#d97706;">
+                  <i class="bi bi-arrow-counterclockwise"></i> Reabrir Chamado
+                </div>
+                <div class="select-action">
+                  <!-- Mensagem quando reaberturas esgotadas -->
+                  <div id="reabrirEsgotado" class="alert alert-warning py-2 px-3 small mb-2" style="display:none;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Este chamado já foi reaberto <strong>2 vezes</strong>. Por favor,
+                    <a href="#" onclick="document.getElementById('ticketDetailModal')&&bootstrap.Modal.getInstance(document.getElementById('ticketDetailModal'))?.hide()" class="alert-link">abra um novo chamado</a>.
+                  </div>
+                  <p class="text-muted small mb-2">
+                    Não ficou satisfeito com a resolução? Informe uma justificativa.
+                  </p>
+                  <button class="btn btn-warning w-100" id="btnReopenChamado" onclick="reabrirChamado()">
+                    <i class="bi bi-arrow-counterclockwise"></i> Reabrir Chamado
+                  </button>
+                </div>
+              </div>
+
+              <!-- Alterar status -->
+              <!-- Visível para: gestor | responsável do ticket -->
+              <div class="action-section" id="sectionAlterarStatus">
+                <div class="action-section-title">
+                  <i class="bi bi-arrow-left-right"></i> Alterar Status
+                </div>
+                <div class="select-action">
+                  <label>Novo Status</label>
+                  <select id="detailStatusSelect" class="form-select form-select-sm" onchange="updateTicketStatus()">
+                    <option value="">Selecione um status...</option>
+                    <option value="open">Aberto</option>
+                    <option value="in-progress">Em Andamento</option>
+                    <option value="waiting">Aguardando</option>
+                    <option value="resolved">Resolvido</option>
+                    <option value="closed">Fechado</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Atribuir responsável — apenas gestores -->
+              <div class="action-section" id="sectionAtribuirResponsavel">
+                <div class="action-section-title">
+                  <i class="bi bi-person-check"></i> Atribuir a
+                </div>
+                <div class="select-action">
+                  <label>Responsável</label>
+                  <select id="detailAssignSelect" class="form-select form-select-sm" onchange="updateTicketAssign()">
+                    <option value="">Não atribuído</option>
+                  </select>
+                </div>
+              </div>
+
+            </div>
+          </div><!-- /tab-actions -->
+
+        </div><!-- /modal-body -->
+
+        <!-- FOOTER DO MODAL DE DETALHE -->
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+            Fechar
+          </button>
+
+          <!--
+            ✅ id="btnDeletarTicket" adicionado.
+            tickets.js → applyDetailPermissions() oculta este botão para USER
+            que não é o solicitante do ticket.
+            Admin sempre vê. USER só vê no próprio ticket.
+          -->
+          <button id="btnAssumirTicket" type="button" class="btn btn-sm btn-success d-none" onclick="assumirTicket()">
+            <i class="bi bi-hand-index-thumb"></i> Assumir Atendimento
+          </button>
+          <button id="btnDevolverTicket" type="button" class="btn btn-sm btn-outline-secondary d-none"
+            onclick="devolverTicket()">
+            <i class="bi bi-arrow-return-left"></i> Desistir
+          </button>
+          <button id="btnEncaminharTicket" type="button" class="btn btn-sm btn-warning d-none" onclick="openForwardModal()">
+            <i class="bi bi-arrow-right-circle"></i> Encaminhar
+          </button>
+          <button id="btnDeletarTicket" type="button" class="btn btn-sm btn-danger" onclick="deleteViewingTicket()">
+            <i class="bi bi-trash"></i> Deletar
+          </button>
+        </div>
+
+      </div><!-- /modal-content -->
+    </div><!-- /modal-dialog -->
+  </div><!-- /ticketDetailModal -->
+
+  <!-- ========================================
+       MODAL - NOVO / EDITAR TICKET
+       ======================================== -->
+  <div class="modal fade" id="ticketModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content ticket-form-content">
+
+        <!-- HEADER -->
+        <div class="modal-header ticket-form-header">
+          <h5 class="modal-title" id="ticketModalLabel">
+            <i class="bi bi-plus-square"></i> Novo Ticket
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+
+        <!-- BODY -->
+        <div class="modal-body ticket-form-body">
+          <form id="ticketForm">
+
+            <!-- ASSUNTO -->
+            <div class="mb-3">
+              <label class="form-label">
+                Assunto <span class="text-danger">*</span>
+              </label>
+              <input type="text" class="form-control" id="ticketTitle" placeholder="Título do ticket" required>
+              <small class="text-muted">Mínimo 3 caracteres</small>
+            </div>
+
+            <!-- DESCRIÇÃO -->
+            <div class="mb-3">
+              <label class="form-label">
+                Descrição <span class="text-danger">*</span>
+              </label>
+              <textarea class="form-control" id="ticketDescription" rows="4" placeholder="Descreva o problema..."
+                required></textarea>
+              <small class="text-muted">Mínimo 5 caracteres</small>
+            </div>
+
+            <!--
+              SOLICITANTE: readonly, preenchido automaticamente pelo tickets.js
+              com o nome do usuário logado (localStorage cpe_user.name).
+            -->
+            <div class="mb-3">
+              <label class="form-label">Solicitante</label>
+              <input type="text" class="form-control" id="ticketClient" placeholder="Seu nome" readonly>
+              <small class="text-muted">Preenchido automaticamente com seus dados</small>
+            </div>
+
+            <!--
+              EMAIL: readonly, preenchido automaticamente pelo tickets.js
+              com o email do usuário logado (localStorage cpe_user.email).
+            -->
+            <div class="mb-3">
+              <label class="form-label">Email</label>
+              <input type="email" class="form-control" id="ticketEmail" placeholder="Seu email" readonly>
+              <small class="text-muted">Preenchido automaticamente com seus dados</small>
+            </div>
+
+            <!--
+              GRUPO DE DESTINO: o usuario pode escolher qualquer grupo para abrir o chamado.
+              Populado via tickets.js. O grupo do usuario e selecionado por padrao.
+            -->
+            <div class="mb-3">
+              <label class="form-label">
+                Grupo/Setor de Destino <span class="text-danger">*</span>
+              </label>
+              <select class="form-select" id="ticketGroupName" required>
+                <option value="">Carregando grupos...</option>
+              </select>
+              <small class="text-muted">Selecione o grupo que ira atender seu chamado</small>
+            </div>
+
+
+            <!-- CATEGORIA: opcional, aparece após selecionar o grupo -->
+            <div class="mb-3 d-none" id="ticketCategoriaDiv">
+              <label class="form-label">
+                <i class="bi bi-folder"></i> Categoria
+                <small class="text-muted">(opcional)</small>
+              </label>
+              <select class="form-select" id="ticketCategoria">
+                <option value="">Selecione uma categoria...</option>
+              </select>
+            </div>
+
+            <!-- SUBCATEGORIA: opcional, aparece após selecionar categoria com subcategorias -->
+            <div class="mb-3 d-none" id="ticketSubcategoriaDiv">
+              <label class="form-label">
+                <i class="bi bi-diagram-2"></i> Subcategoria
+                <small class="text-muted">(opcional)</small>
+              </label>
+              <select class="form-select" id="ticketSubcategoria">
+                <option value="">Selecione uma subcategoria...</option>
+              </select>
+            </div>
+
+            <!-- PRIORIDADE: único campo editável além de assunto e descrição -->
+            <div class="mb-3">
+              <label class="form-label">
+                Prioridade <span class="text-danger">*</span>
+              </label>
+              <select class="form-select" id="ticketPriority" required>
+                <option value="">Selecione...</option>
+                <option value="low">Baixa</option>
+                <option value="medium" selected>Média</option>
+                <option value="high">Alta</option>
+                <option value="urgent">Urgente</option>
+              </select>
+            </div>
+
+            <!-- Campo oculto: group_id real enviado ao backend -->
+
+          </form>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="modal-footer ticket-form-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          <!--
+            ✅ Corrigido: requestSubmit() em vez de dispatchEvent(new Event('submit')).
+            requestSubmit() aciona a validação nativa do form antes de submeter,
+            comportamento correto e compatível com todos os browsers modernos.
+          -->
+          <button type="button" class="btn btn-sm btn-primary"
+            onclick="document.getElementById('ticketForm').requestSubmit()">
+            <i class="bi bi-check-lg"></i> Criar Ticket
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- /ticketModal -->
+
+  <!-- ========================================
+       MODAL - ATRIBUIR TICKET(S)
+       ======================================== -->
+  <div class="modal fade" id="assignModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content ticket-form-content">
+
+        <!-- HEADER -->
+        <div class="modal-header ticket-form-header">
+          <h5 class="modal-title">
+            <i class="bi bi-person-check"></i> Atribuir Ticket(s)
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+
+        <!-- BODY -->
+        <div class="modal-body ticket-form-body">
+          <p class="text-muted mb-3">
+            <small>
+              Selecione um responsável para os
+              <strong id="assignCountText">1</strong> ticket(s) selecionado(s)
+            </small>
+          </p>
+          <form id="assignForm">
+            <div class="mb-3">
+              <label class="form-label">
+                Responsável <span class="text-danger">*</span>
+              </label>
+              <select class="form-select" id="assignUser" required>
+                <option value="">Selecione um usuário...</option>
+                <!-- Preenchido dinamicamente por tickets.js → populateUserDropdowns() -->
+              </select>
+            </div>
+          </form>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="modal-footer ticket-form-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+            Cancelar
+          </button>
+          <button type="button" class="btn btn-sm btn-primary"
+            onclick="document.getElementById('assignForm').requestSubmit()">
+            <i class="bi bi-check-lg"></i> Atribuir
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- /assignModal -->
+
+  <!-- ========================================
+       MODAL - ENCAMINHAR TICKET
+       ======================================== -->
+  <div class="modal fade" id="forwardModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-md">
+      <div class="modal-content">
+
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-arrow-right-circle"></i> Encaminhar Chamado
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <div id="forwardError" class="alert alert-danger d-none"></div>
+
+          <p class="text-muted small mb-3">
+            O chamado será encaminhado para o grupo selecionado. O responsável atual será removido e o responsável do
+            grupo de destino será notificado.
+          </p>
+
+          <!-- Grupo de destino -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-diagram-3"></i> Grupo de Destino <span class="text-danger">*</span>
+            </label>
+            <select class="form-select" id="forwardGroupSelect">
+              <option value="">Selecione o grupo...</option>
+            </select>
+          </div>
+
+          <!-- Responsável (apenas admin) -->
+          <div class="mb-3 d-none" id="forwardResponsavelDiv">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-person-check"></i> Atribuir a (opcional)
+            </label>
+            <select class="form-select" id="forwardResponsavelSelect">
+              <option value="">Sem atribuição</option>
+            </select>
+            <small class="text-muted">Deixe em branco para que o responsável do grupo atribua.</small>
+          </div>
+
+          <!-- Motivo -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-chat-left-text"></i> Motivo do Encaminhamento
+            </label>
+            <textarea class="form-control" id="forwardMotivo" rows="3"
+              placeholder="Descreva o motivo do encaminhamento..."></textarea>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-warning" onclick="submitForward()">
+            <i class="bi bi-arrow-right-circle"></i> Encaminhar
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- /forwardModal -->
+
+  <!-- Modal: Desistir / Devolver para fila -->
+  <div class="modal fade" id="devolverModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-arrow-return-left"></i> Desistir do Atendimento
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small">O chamado voltará para a fila do setor sem responsável. Isso ficará registrado no
+            histórico.</p>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Motivo (opcional)</label>
+            <textarea class="form-control" id="devolverMotivo" rows="2"
+              placeholder="Por que está devolvendo?"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-outline-danger" onclick="submitDevolver()">
+            <i class="bi bi-arrow-return-left"></i> Confirmar Desistência
+          </button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /devolverModal -->
+
+  <!-- ========================================
+       MODAL — REABRIR CHAMADO
+       ======================================== -->
+  <div class="modal fade" id="reabrirModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#fffbeb; border-bottom:2px solid #f59e0b;">
+          <h5 class="modal-title" style="color:#92400e;">
+            <i class="bi bi-arrow-counterclockwise"></i> Reabrir Chamado
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Informe o motivo pelo qual o chamado não foi resolvido satisfatoriamente.
+            Essa justificativa ficará registrada no histórico.
+          </p>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Justificativa <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="reabrirJustificativa" rows="3"
+              placeholder="Descreva por que o problema não foi resolvido..." maxlength="500"></textarea>
+          </div>
+          <div class="alert alert-danger d-none py-2 px-3 small" id="reabrirError"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-warning" onclick="submitReabrir()">
+            <i class="bi bi-arrow-counterclockwise"></i> Confirmar Reabertura
+          </button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /reabrirModal -->
+
+  <!-- ========================================
+       MODAL — AVALIAÇÃO DE CHAMADO
+       ======================================== -->
+  <div class="modal fade" id="avaliacaoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" style="max-width:480px;">
+      <div class="modal-content border-0 shadow-lg">
+        <!-- Header âmbar -->
+        <div class="modal-header py-3" style="background:#fffbeb;border-bottom:2px solid #f59e0b;">
+          <div>
+            <h5 class="modal-title fw-bold mb-0" style="color:#92400e;">
+              <i class="bi bi-star-fill text-warning me-2"></i>Avaliar Atendimento
+            </h5>
+            <small class="text-muted">Sua opinião é confidencial e não será compartilhada com outros usuários</small>
+          </div>
+        </div>
+        <div class="modal-body p-4">
+          <!-- Info do chamado -->
+          <div class="bg-light rounded-3 p-3 mb-4" style="border-left:3px solid #f59e0b;">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <div class="fw-bold text-primary" id="avalModalNumero" style="font-size:.9rem;"></div>
+                <div class="text-muted" id="avalModalAssunto" style="font-size:.85rem;"></div>
+              </div>
+              <div class="text-end">
+                <small class="text-muted d-block">Atendido por</small>
+                <small class="fw-semibold" id="avalModalResp"></small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pergunta -->
+          <p class="fw-semibold mb-2 text-center" style="font-size:.9rem;color:#374151;">
+            Como você avalia o atendimento recebido?
+          </p>
+          <p class="text-muted text-center mb-3" style="font-size:.78rem;">
+            1 = Péssimo &nbsp;•&nbsp; 10 = Excelente
+          </p>
+
+          <!-- Estrelas -->
+          <div class="d-flex justify-content-center gap-1 mb-1" id="avalStarsContainer">
+            <!-- Renderizado pelo JS -->
+          </div>
+          <input type="hidden" id="avalStarInput">
+          <p class="text-center text-muted mb-3" style="font-size:.75rem;">Clique para selecionar</p>
+
+          <!-- Comentário (aparece ao selecionar estrelas) -->
+          <div id="avalComentarioWrap" class="d-none">
+            <label class="form-label fw-semibold small">
+              Comentário
+              <span id="avalComentarioObrig" class="text-danger d-none">*obrigatório</span>
+              <span class="text-muted fw-normal">(opcional para notas ≥ 4)</span>
+            </label>
+            <textarea class="form-control form-control-sm" id="avalComentario"
+              rows="3" maxlength="2000"
+              placeholder="Descreva sua experiência com o atendimento..."></textarea>
+          </div>
+
+          <!-- Erro -->
+          <p class="text-danger mt-2 mb-0 small" id="avalErro"></p>
+        </div>
+        <div class="modal-footer border-0 pt-0 px-4 pb-4 d-flex justify-content-between">
+          <button class="btn btn-link text-muted btn-sm p-0" onclick="pularAvaliacao()">
+            Avaliar depois
+          </button>
+          <button class="btn btn-warning text-white px-4" id="avalBtnEnviar"
+            onclick="submitAvaliacao()" disabled>
+            <i class="bi bi-send me-1"></i>Enviar Avaliação
+          </button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /avaliacaoModal -->
+
+  <!-- ========================================
+       SCRIPTS
+       ======================================== -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/js/route-protection.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/tickets.js"></script>
+
+</body>
+
+</html>

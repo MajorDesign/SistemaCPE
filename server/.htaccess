@@ -1,0 +1,11 @@
+# Bloqueia acesso completamente a esta pasta
+<FilesMatch ".*">
+  Order allow,deny
+  Deny from all
+</FilesMatch>
+
+# Bloqueie acesso ao .env
+<Files .env>
+  Order allow,deny
+  Deny from all
+</Files>

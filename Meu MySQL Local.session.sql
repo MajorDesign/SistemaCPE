@@ -1,0 +1,1 @@
+SELECT * FROM cpe_grupo;

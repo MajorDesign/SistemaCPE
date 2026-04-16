@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CPE Control - Login</title>
+
+  <!-- ✅ BOOTSTRAP 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+  <!-- ✅ LINK DO LAYOUT.CSS -->
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
+
+</head>
+
+<body class="login-page">
+  <!-- ✅ BACKGROUND COM GRADIENTE -->
+  <div class="login-background"></div>
+
+  <!-- ✅ WRAPPER -->
+  <div class="login-wrapper">
+    <div class="login-container">
+
+      <!-- ✅ HEADER -->
+      <div class="login-header">
+        <div class="login-logo"></div>
+        <h1 class="login-title">CPE Control</h1>
+        <p class="login-subtitle">Sistema de Gerenciamento Inteligente</p>
+      </div>
+
+      <!-- ✅ ALERTAS -->
+      <div class="login-success" id="successAlert">
+        <i class="bi bi-check-circle"></i>
+        <span id="successMessage">Login realizado com sucesso!</span>
+      </div>
+
+      <div class="form-error" id="loginError">
+        <i class="bi bi-exclamation-circle"></i>
+        <span id="errorMessage"></span>
+      </div>
+
+      <!-- ✅ FORMULÁRIO DE LOGIN -->
+      <form class="login-form" id="loginForm" novalidate>
+
+        <!-- ✅ CAMPO DE EMAIL OU USERNAME -->
+        <div class="form-group">
+          <label class="form-label" for="credential">
+            <i class="bi bi-person-circle"></i> Email ou Usuário
+          </label>
+          <input
+            type="text"
+            id="credential"
+            class="form-input"
+            placeholder="seu@email.com ou seu_usuario"
+            autocomplete="username"
+            required
+            autofocus
+            maxlength="255"
+          />
+          <div class="input-helper">
+            <i class="bi bi-info-circle"></i> Use seu email ou nome de usuário cadastrado
+          </div>
+          <div class="input-error" id="credentialError"></div>
+        </div>
+
+        <!-- ✅ CAMPO DE SENHA -->
+        <div class="form-group">
+          <label class="form-label" for="password">
+            <i class="bi bi-lock-fill"></i> Senha
+          </label>
+          <input
+            type="password"
+            id="password"
+            class="form-input"
+            placeholder="••••••••"
+            autocomplete="current-password"
+            required
+            maxlength="255"
+          />
+          <div class="input-helper">
+            <i class="bi bi-info-circle"></i> Mínimo 6 caracteres
+          </div>
+          <div class="input-error" id="passwordError"></div>
+        </div>
+
+        <!-- ✅ BOTÃO DE ENVIO -->
+        <button type="submit" class="login-button" id="submitBtn">
+          <span class="button-spinner"></span>
+          <span class="button-text">
+            <i class="bi bi-box-arrow-in-right"></i> Entrar no Sistema
+          </span>
+        </button>
+
+      </form>
+
+      <!-- ✅ RODAPÉ -->
+      <div class="login-footer">
+        <p>
+          <i class="bi bi-c-circle"></i> 2026 CPE Control - Todos os direitos reservados
+        </p>
+        <p>
+          Versão 2.0.0 • 
+          <a href="#" class="text-decoration-none">Política de Privacidade</a>
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ✅ SCRIPTS -->
+  <script src="/SistemaCPE/web/assests/js/login.js"></script>
+
+</body>
+
+</html>

@@ -1,0 +1,43 @@
+<!-- ============================================================ -->
+<!-- CONTAINER PRINCIPAL - COPIE ISTO EM TODAS AS PÁGINAS -->
+<!-- ============================================================ -->
+<div class="container-main" style="display: none;">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">CPE</div>
+        <div class="sidebar-title">CONTROL</div>
+      </div>
+  
+      <div class="search-box">
+        <input type="text" placeholder="Buscar">
+      </div>
+  
+      <ul class="sidebar-menu"></ul>
+    </div>
+  
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+      <div class="top-bar">
+        <button class="menu-toggle">☰</button>
+        <h1 id="pageTitle"></h1>
+      </div>
+  
+      <div class="content">
+        <!-- Alert Boxes -->
+        <div class="alert alert-danger d-none" id="alertBox" role="alert">
+          <i class="bi bi-exclamation-circle"></i>
+          <span id="alertMessage"></span>
+        </div>
+  
+        <div class="alert alert-success d-none" id="successBox" role="alert">
+          <i class="bi bi-check-circle"></i>
+          <span id="successMessage">Operação realizada com sucesso!</span>
+        </div>
+  
+        <!-- CONTEÚDO ESPECÍFICO AQUI -->
+        <div id="pageContent"></div>
+      </div>
+    </div>
+  </div>
+  <!-- ============================================================ -->
