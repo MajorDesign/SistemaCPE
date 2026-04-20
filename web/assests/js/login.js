@@ -108,10 +108,10 @@
 
       // [INICIO] Fazer requisicao para API
       console.log("[LOGIN] 📡 Enviando requisicao para API...");
-      console.log("[LOGIN]   - URL: http://127.0.0.1:8000/api/auth/login");
+      console.log("[LOGIN]   - URL:", `${API_BASE_URL}/api/auth/login`);
       console.log("[LOGIN]   - Method: POST");
 
-      const response = await fetch("http://127.0.0.1:8000/api/auth/login", {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: "POST",
         credentials: "include",
         headers: {
@@ -299,7 +299,7 @@
   // ====================================
   console.log("\n" + "=".repeat(80));
   console.log("[LOGIN] ✓ Script login.js carregado com sucesso!");
-  console.log("[LOGIN] API: http://127.0.0.1:8000/api/auth/login");
+  console.log("[LOGIN] API:", `${API_BASE_URL}/api/auth/login`);
   console.log("[LOGIN] Aguardando submissao do formulario...");
   console.log("=".repeat(80) + "\n");
 

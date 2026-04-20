@@ -3,9 +3,9 @@
 // ============================================================
 
 if (typeof API_BASE_URL === 'undefined') {
-  // ✅ URL da API
-  window.API_BASE_URL = "http://localhost:8000";
-  console.warn("[CONFIG] API_BASE_URL não encontrada em config.js, usando default");
+  // ✅ URL da API — detecta host automaticamente
+  window.API_BASE_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
+  console.warn("[CONFIG] API_BASE_URL não encontrada em config.js, usando default:", window.API_BASE_URL);
 }
 
 console.log("[CONFIG] API_BASE_URL:", API_BASE_URL);

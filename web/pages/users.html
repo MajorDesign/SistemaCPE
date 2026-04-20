@@ -338,8 +338,9 @@
     let groups = [];
     let selectedUserId = null;
     
-    const API_USERS_URL = 'http://localhost:8000/api/users';
-    const API_GROUPS_URL = 'http://localhost:8000/api/groups';
+    const _API_HOST = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
+    const API_USERS_URL = _API_HOST + '/api/users';
+    const API_GROUPS_URL = _API_HOST + '/api/groups';
 
     console.log("\n" + "=".repeat(80));
     console.log("[USERS] Pagina de Gerenciamento de Usuarios");
@@ -432,7 +433,7 @@
       } catch (err) {
         console.error("[USERS/GROUPS] Erro:", err.message);
         console.error("[USERS/GROUPS] Verifique se:");
-        console.error("[USERS/GROUPS]   1. O servidor FastAPI esta rodando em http://localhost:8000");
+        console.error("[USERS/GROUPS]   1. O servidor FastAPI esta rodando em:", _API_HOST);
         console.error("[USERS/GROUPS]   2. Existem grupos cadastrados em groups.html");
         console.error("[USERS/GROUPS]   3. A API esta respondendo corretamente");
         groups = [];

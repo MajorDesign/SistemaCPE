@@ -1719,8 +1719,9 @@
 <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
 <script>
-const API  = 'http://127.0.0.1:8000/api/tasks';
-const UAPI = 'http://127.0.0.1:8000/api/users';
+const _API_HOST = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
+const API  = _API_HOST + '/api/tasks';
+const UAPI = _API_HOST + '/api/users';
 
 const _raw = localStorage.getItem('cpe_user');
 const ME   = _raw ? JSON.parse(_raw) : null;

@@ -271,7 +271,8 @@ const PAGE_ACCESS_CONFIG = {
   async function fetchPagePermissions() {
     if (_cachedPagePermissions) return _cachedPagePermissions;
     try {
-      const res = await fetch('http://localhost:8000/api/permissions/pages');
+      const _apiBase = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
+      const res = await fetch(`${_apiBase}/api/permissions/pages`);
       const data = await res.json();
       if (data.success) {
         _cachedPagePermissions = data.permissions;
@@ -291,7 +292,8 @@ const PAGE_ACCESS_CONFIG = {
   async function fetchUserExceptions(userId) {
     if (_cachedUserExceptions[userId]) return _cachedUserExceptions[userId];
     try {
-      const res = await fetch(`http://localhost:8000/api/permissions/exceptions/user/${userId}`);
+      const _apiBase = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
+      const res = await fetch(`${_apiBase}/api/permissions/exceptions/user/${userId}`);
       const data = await res.json();
       if (data.success) {
         _cachedUserExceptions[userId] = {

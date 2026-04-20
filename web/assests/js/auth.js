@@ -103,7 +103,7 @@ async function getMe() {
     console.log("[AUTH/GETME] 🔑 Token encontrado");
     console.log("[AUTH/GETME] 📡 Tentando chamar API /api/users/me...");
 
-    const response = await fetch("http://localhost:8000/api/users/me", {
+    const response = await fetch(`${API_BASE_URL}/api/users/me`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -464,7 +464,7 @@ async function logout() {
       const token = getToken();
       if (token) {
         console.log("[AUTH/LOGOUT] 📡 Notificando servidor...");
-        await fetch("http://localhost:8000/api/auth/logout", {
+        await fetch(`${API_BASE_URL}/api/auth/logout`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -511,7 +511,7 @@ async function refreshToken() {
       return null;
     }
 
-    const response = await fetch("http://localhost:8000/api/auth/refresh", {
+    const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

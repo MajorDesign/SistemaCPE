@@ -217,8 +217,9 @@
   <script>
     let groups = [];
     let selectedGroupId = null;
-    const API_URL      = 'http://localhost:8000/api/groups/';
-    const API_BASE     = 'http://localhost:8000/api';
+    const _API_HOST    = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
+    const API_URL      = _API_HOST + '/api/groups/';
+    const API_BASE     = _API_HOST + '/api';
 
     // Usuário logado (para verificação de role e permissões)
     function getCurrentUser() {
@@ -255,7 +256,7 @@
   <script>
     console.log("\n" + "=".repeat(80));
     console.log("[GROUPS/PAGE] 📄 Inicializando página de Gerenciamento de Grupos");
-    console.log("[GROUPS/PAGE] 🔗 Conectado ao FastAPI em http://localhost:8000");
+    console.log("[GROUPS/PAGE] 🔗 Conectado ao FastAPI em:", _API_HOST);
     console.log("=".repeat(80) + "\n");
 
     document.addEventListener("DOMContentLoaded", async () => {
