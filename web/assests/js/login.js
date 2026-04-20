@@ -1,4 +1,10 @@
 (() => {
+  // Detectar URL da API automaticamente (config.js pode nao estar carregado nesta pagina)
+  if (typeof API_BASE_URL === 'undefined') {
+    window.API_BASE_URL = `http://${window.location.hostname || '127.0.0.1'}:8000`;
+    console.log('[LOGIN] API_BASE_URL definido localmente:', window.API_BASE_URL);
+  }
+
   const form = document.getElementById("loginForm");
   const credentialInput = document.getElementById("credential");
   const passwordInput = document.getElementById("password");
