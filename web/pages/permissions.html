@@ -594,7 +594,7 @@
   <!-- FUNCAO: Initialize -->
   <!-- ================================================== -->
   <script>
-    const API = 'http://localhost:8000';
+    const API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
 
     function getToken() {
       return localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token') || '';
@@ -1058,7 +1058,7 @@
 
     function loadUsers() {
       const token = localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token');
-      fetch('http://localhost:8000/api/users', {
+      fetch(`${API}/api/users`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(r => r.json())

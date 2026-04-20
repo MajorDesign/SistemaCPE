@@ -233,7 +233,7 @@ let viewingTicketId  = null;
 let isLoadingTickets = false;
 let isLoadingUsers   = false;
 
-const API_BASE    = 'http://127.0.0.1:8000/api';
+const API_BASE    = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`) + '/api';
 const API_TIMEOUT = 10000;
 
 // Roles com permissão de gerenciamento — espelha o backend (tickets.py)

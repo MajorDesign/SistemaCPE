@@ -428,7 +428,7 @@ function handleLogout(event) {
 let notificationsData = [];
 let currentUserId = null;
 let notificationCheckInterval = null;
-const NOTIFICATIONS_API = "http://localhost:8000/api/notificacoes";
+const NOTIFICATIONS_API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`) + "/api/notificacoes";
 
 // Inicializar notificações
 function initNotifications() {
