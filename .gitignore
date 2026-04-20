@@ -205,3 +205,41 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ============================================================
+# PROJETO CPE
+# ============================================================
+
+# Virtualenvs de qualquer localizacao
+**/.venv/
+server/.venv/
+tools/**/.venv/
+
+# Uploads de usuarios (sao dados, nao codigo)
+web/uploads/contratos/*
+web/uploads/fleet/*
+!web/uploads/contratos/.gitkeep
+!web/uploads/fleet/.gitkeep
+
+# Binarios gerados pelo PyInstaller (tools/termo_notebook)
+tools/**/dist/
+tools/**/build/
+tools/**/__pycache__/
+tools/**/*.spec
+
+# Configuracoes locais por maquina
+tools/**/config.ini
+
+# Arquivos .pyc de tudo
+**/__pycache__/
+**/*.pyc
+
+# Logs
+*.log
+server/*.log
+
+# Variaveis de ambiente sensiveis
+.env
+.env.local
+.env.production
+server/.env

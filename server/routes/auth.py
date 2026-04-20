@@ -32,7 +32,6 @@ router = APIRouter(prefix="/api/auth", tags=["Auth"])
 # =========================================
 
 @router.post("/login")
-<<<<<<< HEAD
 def login(request: Request, data: dict):
     """
     Login do usuário
@@ -74,64 +73,6 @@ def login(request: Request, data: dict):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário inativo")
 
         token = make_session_token(user["id"])
-=======
-async def login(request: Request, data: dict):
-    """
-    Login do usuário
-    Body: { "email": "user@example.com", "password": "senha123" }
-    """
-    print("[AUTH/LOGIN] Iniciando login...")
-    
-    try:
-        email = normalize_email(data.get("email", ""))
-        password = data.get("password", "")
-
-        # Validações
-        if not email or not validate_email_format(email):
-            print("[AUTH/LOGIN] ✗ Email inválido")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email inválido"
-            )
-
-        if not password:
-            print("[AUTH/LOGIN] ✗ Senha não fornecida")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Senha obrigatória"
-            )
-
-        # Busca usuário
-        user = get_user_by_email(email)
-
-        if not user:
-            print(f"[AUTH/LOGIN] ✗ Usuário não encontrado: {email}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email ou senha incorretos"
-            )
-
-        # Verifica senha
-        if not verify_password(password, user["password_hash"]):
-            print(f"[AUTH/LOGIN] ✗ Senha incorreta para: {email}")
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Email ou senha incorretos"
-            )
-
-        # Verifica se está ativo
-        if user["is_active"] != 1:
-            print(f"[AUTH/LOGIN] ✗ Usuário inativo: {email}")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Usuário inativo"
-            )
-
-        # Cria token de sessão
-        token = make_session_token(user["id"])
-
-        # Cria response
->>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
         response = JSONResponse({
             "success": True,
             "id": user["id"],
@@ -140,17 +81,9 @@ async def login(request: Request, data: dict):
             "role": user["role"],
             "message": "Login realizado com sucesso!"
         })
-<<<<<<< HEAD
         set_session_cookie(response, token)
 
         print(f"[AUTH/LOGIN] ✓ Login bem-sucedido: {credential}\n")
-=======
-
-        # Define cookie
-        set_session_cookie(response, token)
-
-        print(f"[AUTH/LOGIN] ✓ Login bem-sucedido: {email}\n")
->>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
         return response
 
     except HTTPException:

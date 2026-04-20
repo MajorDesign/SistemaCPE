@@ -48,10 +48,10 @@ const globalMenu = [
   { path: "/SistemaCPE/web/pages/reports.html", label: "Relatórios", icon: "bi-graph-up", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/billing.html", label: "Faturamento", icon: "bi-credit-card", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/knowledge-base.html", label: "Base de conhecimento", icon: "bi-book", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/contratos.html", label: "Contratos e Termos", icon: "bi-file-earmark-text", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/registrations.html", label: "Cadastros", icon: "bi-person-plus", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/settings.html", label: "Configurações", icon: "bi-gear", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/download-agents.html", label: "Download de Agentes", icon: "bi-download", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
-<<<<<<< HEAD
   // ==================================================
   // ✨ MENU: Módulo de Frotas
   // Data: 15/04/2026
@@ -64,9 +64,6 @@ const globalMenu = [
     external: true
   },
   // ==================================================
-=======
-  // ================================================== 
->>>>>>> 296c60d546f50bc39f8894d961744045aa1e7d96
   // ✨ MENU: Permissões do Sistema
   // Data: 06/04/2026 21:30
   // ==================================================
