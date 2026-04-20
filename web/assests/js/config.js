@@ -20,6 +20,8 @@ const _apiHost = (typeof window !== 'undefined' && window.location && window.loc
   : '127.0.0.1';
 
 const API_BASE_URL = `http://${_apiHost}:${API_PORT}`;
+// Expoe tambem como global (window) para scripts que carregam sem ordem garantida
+if (typeof window !== 'undefined') window.API_BASE_URL = API_BASE_URL;
 
 const SESSION_COOKIE_NAME = "cpe_session";
 const COOKIE_NAME = "cpe_session";
