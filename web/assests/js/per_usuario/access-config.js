@@ -127,6 +127,12 @@ const PAGE_ACCESS_CONFIG = {
       description: 'Base de Conhecimento',
       requiresApproval: false
     },
+
+    'CONTRATOS': {
+      allowedRoles: ['USER', 'RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'],
+      description: 'Contratos e Termos',
+      requiresApproval: false
+    },
     
     'DOWNLOAD_AGENTS': {
       allowedRoles: ['USER', 'RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'],

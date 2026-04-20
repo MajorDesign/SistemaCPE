@@ -89,7 +89,15 @@ def list_vehicles(request: Request):
                     WHERE m.vehicle_id = v.id AND m.status IN ('agendado','em_andamento')
                       AND m.data_entrada IS NOT NULL
                     ORDER BY m.data_entrada LIMIT 1
-                   ) AS manutencao_proxima
+                   ) AS manutencao_proxima,
+                   (SELECT CONCAT(sol.name,'|',TIME_FORMAT(r.horario_inicio,'%%H:%%i'),'|',TIME_FORMAT(r.horario_fim,'%%H:%%i'),'|',r.destino)
+                    FROM fleet_reservations r
+                    JOIN users sol ON sol.id = r.solicitante_id
+                    WHERE r.vehicle_id = v.id AND r.status = 'aprovado'
+                      AND r.data_reserva = CURDATE()
+                      AND r.horario_fim >= CURTIME()
+                    ORDER BY r.horario_inicio LIMIT 1
+                   ) AS reserva_ativa
             FROM fleet_vehicles v
             LEFT JOIN fleet_vehicle_photos p
                    ON p.vehicle_id = v.id AND p.is_current = 1 AND p.angulo = 'frente'
@@ -446,7 +454,7 @@ def create_checklist(request: Request, data: dict):
             JOIN users sol ON sol.id = r.solicitante_id
             WHERE r.vehicle_id = %s AND r.status = 'aprovado'
               AND r.data_reserva = CURDATE()
-              AND ADDTIME(r.horario_inicio, '-00:30:00') <= CURTIME()
+              AND ADDTIME(r.horario_inicio, '-01:00:00') <= CURTIME()
               AND r.horario_fim > CURTIME()
               AND r.solicitante_id != %s
         """, (vehicle_id, user_id))
@@ -2023,6 +2031,30 @@ def get_notifications(request: Request):
                     "vehicle_id": r["vehicle_id"],
                     "reservation_id": r["id"],
                 })
+
+        # Auto-cancelar reservas aprovadas sem checklist após 40 min do horário de início
+        cursor.execute("""
+            SELECT r.id, r.vehicle_id, r.solicitante_id, r.horario_inicio, v.placa
+            FROM fleet_reservations r
+            JOIN fleet_vehicles v ON v.id = r.vehicle_id
+            WHERE r.status = 'aprovado'
+              AND r.data_reserva = CURDATE()
+              AND ADDTIME(r.horario_inicio, '00:40:00') <= CURTIME()
+        """)
+        for r in cursor.fetchall():
+            cursor.execute("""
+                SELECT id FROM fleet_checklists
+                WHERE vehicle_id=%s AND condutor_id=%s AND data_saida=CURDATE()
+                LIMIT 1
+            """, (r["vehicle_id"], r["solicitante_id"]))
+            if not cursor.fetchone():
+                # Sem checklist → cancelar reserva por inatividade
+                cursor.execute("""
+                    UPDATE fleet_reservations
+                    SET status='cancelado',
+                        motivo_rejeicao='Cancelada automaticamente: checklist nao realizado em 40 minutos apos o horario de inicio'
+                    WHERE id=%s
+                """, (r["id"],))
 
         # Auto-corrigir: bloquear veículos que deveriam estar em manutencao
         cursor.execute("""

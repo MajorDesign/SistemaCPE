@@ -178,6 +178,15 @@
         </div>
       </div>
 
+      <!-- Banner: checklist pendente por reserva aprovada -->
+      <div id="pendingChecklistBanner" style="display:none;background:linear-gradient(135deg,#FEF3C7 0%,#FDE68A 100%);border:2px solid #F59E0B;border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:14px">
+        <i class="bi bi-exclamation-triangle-fill" style="font-size:28px;color:#D97706;flex-shrink:0"></i>
+        <div style="flex:1;min-width:0" id="pendingChecklistContent"></div>
+        <button class="btn-fleet btn-fleet-primary" style="background:#D97706;border-color:#D97706" onclick="openChecklistForm()">
+          <i class="bi bi-clipboard-plus"></i> Fazer Checklist Agora
+        </button>
+      </div>
+
       <div class="fleet-filters">
         <select class="fleet-select" id="clStatusFilter" onchange="loadChecklists()" style="max-width:200px">
           <option value="">Todos os status</option>
@@ -259,6 +268,16 @@
         <button class="btn-fleet btn-fleet-primary" onclick="openReservationModal()">
           <i class="bi bi-plus-lg"></i> Nova Reserva
         </button>
+      </div>
+
+      <!-- RESERVAS APROVADAS DE HOJE -->
+      <div id="approvedTodayCard" style="display:none;background:linear-gradient(135deg,#ECFDF5 0%,#D1FAE5 100%);border:2px solid #16A34A;border-radius:12px;padding:16px;margin-bottom:20px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <i class="bi bi-calendar-check-fill" style="font-size:20px;color:#16A34A"></i>
+          <strong style="color:#166534;font-size:14px">RESERVAS APROVADAS DE HOJE</strong>
+          <span id="approvedTodayCount" style="background:#16A34A;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:700;margin-left:auto"></span>
+        </div>
+        <div id="approvedTodayList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
       </div>
 
       <!-- LISTA DE RESERVAS (principal) -->
@@ -387,7 +406,7 @@
         </div>
       </div>
       <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px 14px;font-size:12px;color:#1E40AF;margin-top:8px">
-        <i class="bi bi-info-circle-fill"></i> A reserva será enviada para aprovação do responsável. O veículo ficará indisponível 30 minutos antes do horário de início.
+        <i class="bi bi-info-circle-fill"></i> A reserva será enviada para aprovação do responsável. O veículo ficará indisponível 1 hora antes do horário de início para outros usuários.
       </div>
     </div>
     <div class="fleet-modal-footer">
@@ -1488,7 +1507,11 @@ function renderVehicles(vehicles) {
           <span><i class="bi bi-geo-alt"></i> ${v.unidade||'—'}</span>
           <span><i class="bi bi-speedometer"></i> ${v.km_atual ? Number(v.km_atual).toLocaleString('pt-BR')+' km' : '—'}</span>
         </div>
-        ${badgeStatus(v.status)}
+        ${v.reserva_ativa && v.status === 'ativo' ? (() => {
+          const [nome, hi, hf, dest] = v.reserva_ativa.split('|');
+          return '<span class="fleet-badge" style="background:#EDE9FE;color:#7C3AED"><i class="bi bi-calendar-check-fill"></i> Reservado</span>'
+            + '<div style="font-size:10px;color:#7C3AED;margin-top:4px"><i class="bi bi-person-fill"></i> '+nome+' &bull; '+hi+'-'+hf+'</div>';
+        })() : badgeStatus(v.status)}
         ${v.manutencao_proxima ? '<div style="font-size:10px;color:#D97706;margin-top:4px"><i class="bi bi-tools"></i> '+v.manutencao_proxima+'</div>' : ''}
         ${v.status === 'manutencao' && ['ADMIN','TI','RESPONSAVEL_GRUPO'].includes(currentUser?.role) ? `
           <div style="display:flex;gap:4px;margin-top:8px">
@@ -1741,7 +1764,24 @@ function populateVehicleSelects() {
 /* ============================================================
    CHECKLISTS
    ============================================================ */
+async function checkPendingChecklist() {
+  const banner = document.getElementById('pendingChecklistBanner');
+  if (!banner) return;
+  const data = await apiFetch('/notifications');
+  const alerts = data?.alerts || [];
+  const pending = alerts.find(a => a.type === 'reservation_checklist');
+  if (!pending) { banner.style.display = 'none'; return; }
+  document.getElementById('pendingChecklistContent').innerHTML =
+    '<div style="font-weight:700;font-size:14px;color:#92400E;margin-bottom:4px"><i class="bi bi-clipboard-check"></i> Checklist de saída pendente</div>'
+    + '<div style="font-size:13px;color:#78350F;line-height:1.4">'+pending.message+'</div>'
+    + '<div style="font-size:11px;color:#DC2626;margin-top:4px;font-weight:600"><i class="bi bi-alarm"></i> Atenção: a reserva é cancelada automaticamente após 40 minutos sem checklist</div>';
+  banner.style.display = 'flex';
+}
+
 async function loadChecklists() {
+  // Verificar se tem reserva aprovada hoje sem checklist e mostrar banner
+  await checkPendingChecklist();
+
   const data = await apiFetch('/checklists');
   const filter = document.getElementById('clStatusFilter').value;
   let list = data?.checklists || [];
@@ -2916,8 +2956,42 @@ async function loadCalendar() {
   const data = await apiFetch(url);
   _calReservations = data?.reservations || [];
 
+  renderApprovedToday();
   renderReservationsList();
   renderCalendar();
+}
+
+function renderApprovedToday() {
+  const today = new Date().toISOString().split('T')[0];
+  const approved = _calReservations.filter(r => r.status === 'aprovado' && _resDate(r) === today);
+  const card = document.getElementById('approvedTodayCard');
+  if (!approved.length) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  document.getElementById('approvedTodayCount').textContent = approved.length + ' ativa(s)';
+  document.getElementById('approvedTodayList').innerHTML = approved.map(r => {
+    const now = new Date();
+    const [sh, sm] = r.horario_inicio.split(':').map(Number);
+    const resStart = new Date(); resStart.setHours(sh, sm, 0, 0);
+    const diffMin = Math.round((resStart - now) / 60000);
+    let statusLine = '';
+    if (diffMin > 60) statusLine = '<span style="color:#16A34A;font-size:11px;font-weight:600"><i class="bi bi-clock"></i> Inicia em '+Math.floor(diffMin/60)+'h '+(diffMin%60)+'m</span>';
+    else if (diffMin > 0) statusLine = '<span style="color:#DC2626;font-size:11px;font-weight:700"><i class="bi bi-exclamation-triangle-fill"></i> VEÍCULO BLOQUEADO — inicia em '+diffMin+'m</span>';
+    else {
+      const [eh, em] = r.horario_fim.split(':').map(Number);
+      const resEnd = new Date(); resEnd.setHours(eh, em, 0, 0);
+      if (now < resEnd) statusLine = '<span style="color:#DC2626;font-size:11px;font-weight:700"><i class="bi bi-car-front-fill"></i> EM USO AGORA</span>';
+      else statusLine = '<span style="color:#9CA3AF;font-size:11px"><i class="bi bi-check-circle"></i> Encerrada</span>';
+    }
+    return '<div style="background:#fff;border:1px solid #BBF7D0;border-radius:8px;padding:10px">'
+      + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">'
+      + '  <strong style="font-size:14px;color:#166534">'+r.horario_inicio+' — '+r.horario_fim+'</strong>'
+      + '</div>'
+      + '<div style="font-size:13px;margin-bottom:2px"><i class="bi bi-car-front-fill" style="color:#9CA3AF"></i> <strong>'+r.placa+'</strong> '+r.modelo+'</div>'
+      + '<div style="font-size:12px;color:#6B7280;margin-bottom:2px"><i class="bi bi-person-fill"></i> '+r.solicitante_nome+'</div>'
+      + '<div style="font-size:11px;color:#9CA3AF;margin-bottom:4px"><i class="bi bi-geo-alt"></i> '+r.destino+'</div>'
+      + statusLine
+      + '</div>';
+  }).join('');
 }
 
 function _resDate(r) { return ((r.data_reserva||'').split('T')[0]); }

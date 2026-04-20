@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contratos e Termos - CPE Control</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
+
+  <script src="/SistemaCPE/web/assests/js/per_usuario/access-config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/per_usuario/page-access-control.js"></script>
+  <script>checkPageAccess('CONTRATOS');</script>
+
+  <style>
+    .contr-layout { display:grid; grid-template-columns: 300px 1fr; gap:20px; padding:20px; }
+    .contr-sidebar {
+      background:#fff; border:1px solid #E5E7EB; border-radius:10px;
+      padding:16px; max-height:calc(100vh - 120px); overflow-y:auto;
+    }
+    .contr-sidebar-header {
+      font-size:13px; font-weight:700; color:#6B7280; text-transform:uppercase;
+      letter-spacing:.4px; margin-bottom:12px; display:flex; align-items:center; gap:8px;
+    }
+    .pasta-item {
+      display:flex; align-items:center; gap:4px; padding:6px 8px; border-radius:6px;
+      cursor:pointer; font-size:13px; color:#374151; transition:background .15s;
+      user-select:none;
+    }
+    .pasta-item:hover { background:#F3F4F6; }
+    .pasta-item.active { background:#FEF3C7; color:#92400E; font-weight:600; }
+    .pasta-chevron {
+      width:16px; text-align:center; color:#9CA3AF; font-size:10px; flex-shrink:0;
+      transition:transform .15s;
+    }
+    .pasta-chevron.expanded { transform:rotate(90deg); }
+    .pasta-chevron.empty { visibility:hidden; }
+    .pasta-item .pasta-count {
+      margin-left:auto; background:#E5E7EB; color:#6B7280; font-size:10px;
+      padding:1px 6px; border-radius:10px; font-weight:600;
+    }
+    .pasta-item.active .pasta-count { background:#F59E0B; color:#fff; }
+    .pasta-tree-group {
+      font-weight:700; font-size:11px; color:#9CA3AF; text-transform:uppercase;
+      margin:12px 0 4px; letter-spacing:.5px;
+    }
+    .pasta-children { display:none; }
+    .pasta-children.expanded { display:block; }
+
+    .contr-main {
+      background:#fff; border:1px solid #E5E7EB; border-radius:10px; padding:20px;
+    }
+    .contr-header {
+      display:flex; align-items:center; gap:12px; margin-bottom:20px;
+      padding-bottom:14px; border-bottom:2px solid #F3F4F6;
+    }
+    .contr-title { font-size:18px; font-weight:700; color:#1F2937; }
+    .contr-breadcrumb { font-size:12px; color:#9CA3AF; margin-top:2px; }
+    .contr-breadcrumb a { color:#3B82F6; cursor:pointer; text-decoration:none; }
+    .contr-breadcrumb a:hover { text-decoration:underline; }
+
+    .btn-primary-amarelo {
+      background:#FFC107; color:#1F2937; border:none; padding:8px 14px;
+      border-radius:6px; font-weight:600; font-size:13px; cursor:pointer;
+      display:inline-flex; align-items:center; gap:6px;
+    }
+    .btn-primary-amarelo:hover { background:#F59E0B; }
+    .btn-secondary-cpe {
+      background:#F3F4F6; color:#6B7280; border:1px solid #E5E7EB;
+      padding:8px 14px; border-radius:6px; font-size:13px; cursor:pointer;
+      display:inline-flex; align-items:center; gap:6px; text-decoration:none;
+    }
+    .btn-secondary-cpe:hover { background:#E5E7EB; }
+
+    /* Subpastas no grid */
+    .subfolders-grid {
+      display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px;
+      margin-bottom:20px;
+    }
+    .subfolder-card {
+      display:flex; flex-direction:column; align-items:center; gap:6px;
+      padding:14px 8px; border:1px solid #E5E7EB; border-radius:10px;
+      cursor:pointer; transition:all .15s; text-align:center;
+      user-select:none;
+    }
+    .subfolder-card:hover { border-color:#FFC107; background:#FFFBEB; }
+    .subfolder-card i { font-size:32px; color:#FFC107; }
+    .subfolder-card-name {
+      font-size:12px; font-weight:600; color:#1F2937; word-break:break-word;
+      max-width:100%;
+    }
+    .subfolder-card-count { font-size:10px; color:#9CA3AF; }
+
+    .contrato-card {
+      display:flex; align-items:center; gap:14px; padding:14px;
+      border:1px solid #E5E7EB; border-radius:10px; margin-bottom:10px;
+      transition:all .15s; user-select:none;
+    }
+    .contrato-card:hover { border-color:#FFC107; background:#FFFBEB; }
+    .contrato-icon {
+      width:48px; height:48px; border-radius:8px; display:flex;
+      align-items:center; justify-content:center; font-size:22px; flex-shrink:0;
+    }
+    .contrato-icon.pdf { background:#FEE2E2; color:#DC2626; }
+    .contrato-icon.doc, .contrato-icon.docx { background:#DBEAFE; color:#1E40AF; }
+    .contrato-info { flex:1; min-width:0; }
+    .contrato-nome { font-weight:600; font-size:14px; color:#1F2937; margin-bottom:2px; }
+    .contrato-meta { font-size:11px; color:#9CA3AF; }
+    .contrato-desc { font-size:12px; color:#6B7280; margin-top:4px; }
+    .contrato-actions { display:flex; gap:6px; flex-shrink:0; }
+
+    .contr-empty { text-align:center; padding:40px; color:#9CA3AF; }
+    .contr-empty i { font-size:48px; opacity:.3; display:block; margin-bottom:12px; }
+
+    /* Cut indicator */
+    .cut-item { opacity:.5; filter:grayscale(0.5); }
+
+    /* Drag & drop */
+    .dragging { opacity:.4; }
+    .drop-target-over {
+      background:#DBEAFE !important;
+      border-color:#3B82F6 !important;
+      outline:2px dashed #3B82F6;
+      outline-offset:-2px;
+    }
+
+    /* Section titles */
+    .section-title {
+      font-size:11px; font-weight:700; color:#9CA3AF; text-transform:uppercase;
+      letter-spacing:.5px; margin:16px 0 10px;
+    }
+
+    /* Context Menu */
+    .ctx-menu {
+      position:fixed; z-index:2000; display:none;
+      background:#fff; border:1px solid #E5E7EB; border-radius:8px;
+      box-shadow:0 8px 24px rgba(0,0,0,.15); min-width:180px; padding:4px 0;
+    }
+    .ctx-menu.open { display:block; }
+    .ctx-menu-item {
+      padding:8px 14px; font-size:13px; color:#374151; cursor:pointer;
+      display:flex; align-items:center; gap:10px;
+    }
+    .ctx-menu-item:hover { background:#F3F4F6; }
+    .ctx-menu-item.disabled { color:#D1D5DB; cursor:not-allowed; background:none!important; }
+    .ctx-menu-item.danger { color:#DC2626; }
+    .ctx-menu-item.danger:hover { background:#FEE2E2; }
+    .ctx-menu-divider { height:1px; background:#F3F4F6; margin:4px 0; }
+
+    /* Modais */
+    .cpe-modal-overlay {
+      display:none; position:fixed; inset:0; background:rgba(0,0,0,.5);
+      z-index:1000; align-items:center; justify-content:center;
+    }
+    .cpe-modal-overlay.open { display:flex; }
+    .cpe-modal {
+      background:#fff; border-radius:12px; max-width:520px; width:calc(100% - 40px);
+      max-height:90vh; display:flex; flex-direction:column; overflow:hidden;
+    }
+    .cpe-modal.wide { max-width:90vw; }
+    .cpe-modal-header {
+      padding:14px 20px; border-bottom:1px solid #E5E7EB; display:flex;
+      align-items:center; gap:10px;
+    }
+    .cpe-modal-title { font-weight:700; font-size:16px; color:#1F2937; flex:1; }
+    .cpe-modal-close { background:none; border:none; font-size:22px; color:#9CA3AF; cursor:pointer; }
+    .cpe-modal-body { padding:20px; overflow-y:auto; flex:1; }
+    .cpe-modal-footer {
+      padding:14px 20px; border-top:1px solid #F3F4F6; display:flex;
+      gap:8px; justify-content:flex-end;
+    }
+    .form-group { margin-bottom:14px; }
+    .form-label { font-size:13px; font-weight:600; color:#374151; margin-bottom:6px; display:block; }
+    .form-input, .form-textarea, .form-select {
+      width:100%; padding:8px 12px; border:1px solid #D1D5DB; border-radius:6px;
+      font-size:13px; font-family:inherit;
+    }
+    .form-textarea { min-height:80px; resize:vertical; }
+    .req { color:#DC2626; }
+
+    .prop-row {
+      display:grid; grid-template-columns: 130px 1fr; gap:8px;
+      padding:8px 0; border-bottom:1px solid #F3F4F6; font-size:13px;
+    }
+    .prop-label { font-weight:600; color:#6B7280; }
+    .prop-value { color:#1F2937; word-break:break-word; }
+
+    #pdfViewer { width:100%; height:calc(90vh - 140px); border:none; }
+
+    /* Clipboard banner */
+    #clipboardBanner {
+      background:#EFF6FF; border:1px solid #BFDBFE; border-radius:8px;
+      padding:10px 14px; margin-bottom:14px; font-size:13px;
+      display:none; align-items:center; gap:10px;
+    }
+    #clipboardBanner.show { display:flex; }
+    #clipboardBanner button {
+      background:none; border:none; color:#DC2626; cursor:pointer;
+      font-size:13px; margin-left:auto;
+    }
+  </style>
+</head>
+
+<body>
+  <nav id="navbar-container"></nav>
+
+  <div class="container-main">
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+      <div class="top-bar">
+        <h1><i class="bi bi-file-earmark-text"></i> Contratos e Termos</h1>
+        <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
+      </div>
+
+      <div class="contr-layout">
+        <aside class="contr-sidebar">
+          <div class="contr-sidebar-header">
+            <i class="bi bi-folder-fill" style="color:#FFC107"></i> Pastas
+            <button class="btn-primary-amarelo" style="margin-left:auto;padding:4px 8px;font-size:11px" onclick="openNewFolderModal()" title="Nova pasta">
+              <i class="bi bi-plus-lg"></i>
+            </button>
+          </div>
+          <div id="pastasList"></div>
+        </aside>
+
+        <section class="contr-main">
+          <div class="contr-header">
+            <div style="flex:1">
+              <div class="contr-title" id="mainTitle">Selecione uma pasta</div>
+              <div class="contr-breadcrumb" id="mainBreadcrumb"></div>
+            </div>
+            <button class="btn-secondary-cpe" id="btnNewSubfolder" onclick="openNewSubfolderInCurrent()" style="display:none">
+              <i class="bi bi-folder-plus"></i> Nova subpasta
+            </button>
+            <button class="btn-primary-amarelo" id="btnUpload" onclick="openUploadModal()" style="display:none">
+              <i class="bi bi-upload"></i> Enviar contrato
+            </button>
+          </div>
+
+          <!-- Clipboard banner -->
+          <div id="clipboardBanner">
+            <i class="bi bi-clipboard-check"></i>
+            <span id="clipboardMsg"></span>
+            <button onclick="clearClipboard()"><i class="bi bi-x"></i> Cancelar</button>
+          </div>
+
+          <!-- Barra de pesquisa -->
+          <div style="position:relative;margin-bottom:14px">
+            <i class="bi bi-search" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#9CA3AF"></i>
+            <input class="form-input" id="searchInput" placeholder="Pesquisar pastas e contratos..."
+                   oninput="applyFilter()" style="padding-left:36px">
+          </div>
+
+          <div id="mainArea">
+            <div class="contr-empty">
+              <i class="bi bi-folder2-open"></i>
+              <p>Selecione uma pasta na lateral para ver os contratos</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTEXT MENU -->
+  <div class="ctx-menu" id="ctxMenu">
+    <div class="ctx-menu-item" onclick="ctxAction('copy')"><i class="bi bi-copy"></i> Copiar</div>
+    <div class="ctx-menu-item" onclick="ctxAction('cut')"><i class="bi bi-scissors"></i> Recortar</div>
+    <div class="ctx-menu-item" id="ctxPaste" onclick="ctxAction('paste')"><i class="bi bi-clipboard-plus"></i> Colar</div>
+    <div class="ctx-menu-divider"></div>
+    <div class="ctx-menu-item" onclick="ctxAction('move')"><i class="bi bi-arrows-move"></i> Mover para...</div>
+    <div class="ctx-menu-item danger" onclick="ctxAction('delete')"><i class="bi bi-trash"></i> Excluir</div>
+    <div class="ctx-menu-divider"></div>
+    <div class="ctx-menu-item" onclick="ctxAction('properties')"><i class="bi bi-info-circle"></i> Propriedades</div>
+  </div>
+
+  <!-- MODAL: NOVA PASTA -->
+  <div class="cpe-modal-overlay" id="modalNewFolder">
+    <div class="cpe-modal">
+      <div class="cpe-modal-header">
+        <span class="cpe-modal-title"><i class="bi bi-folder-plus"></i> Nova Pasta</span>
+        <button class="cpe-modal-close" onclick="closeModal('modalNewFolder')">&times;</button>
+      </div>
+      <div class="cpe-modal-body">
+        <div class="form-group">
+          <label class="form-label">Pasta pai <span class="req">*</span></label>
+          <select class="form-select" id="newFolderParent"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nome da pasta <span class="req">*</span></label>
+          <input class="form-input" id="newFolderName" placeholder="Ex: Contratos Notebooks">
+        </div>
+      </div>
+      <div class="cpe-modal-footer">
+        <button class="btn-secondary-cpe" onclick="closeModal('modalNewFolder')">Cancelar</button>
+        <button class="btn-primary-amarelo" onclick="saveNewFolder()"><i class="bi bi-check-lg"></i> Criar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: MOVER -->
+  <div class="cpe-modal-overlay" id="modalMove">
+    <div class="cpe-modal">
+      <div class="cpe-modal-header">
+        <span class="cpe-modal-title"><i class="bi bi-arrows-move"></i> Mover para...</span>
+        <button class="cpe-modal-close" onclick="closeModal('modalMove')">&times;</button>
+      </div>
+      <div class="cpe-modal-body">
+        <div class="form-group">
+          <label class="form-label">Selecione a pasta destino <span class="req">*</span></label>
+          <select class="form-select" id="moveTarget"></select>
+        </div>
+        <div style="font-size:12px;color:#9CA3AF" id="moveInfo"></div>
+      </div>
+      <div class="cpe-modal-footer">
+        <button class="btn-secondary-cpe" onclick="closeModal('modalMove')">Cancelar</button>
+        <button class="btn-primary-amarelo" onclick="confirmMove()"><i class="bi bi-arrow-right"></i> Mover</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PROPRIEDADES -->
+  <div class="cpe-modal-overlay" id="modalProps">
+    <div class="cpe-modal">
+      <div class="cpe-modal-header">
+        <span class="cpe-modal-title"><i class="bi bi-info-circle-fill"></i> Propriedades</span>
+        <button class="cpe-modal-close" onclick="closeModal('modalProps')">&times;</button>
+      </div>
+      <div class="cpe-modal-body" id="propsBody"></div>
+      <div class="cpe-modal-footer">
+        <button class="btn-primary-amarelo" onclick="closeModal('modalProps')">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: UPLOAD -->
+  <div class="cpe-modal-overlay" id="modalUpload">
+    <div class="cpe-modal">
+      <div class="cpe-modal-header">
+        <span class="cpe-modal-title"><i class="bi bi-cloud-upload"></i> Enviar Contrato</span>
+        <button class="cpe-modal-close" onclick="closeModal('modalUpload')">&times;</button>
+      </div>
+      <div class="cpe-modal-body">
+        <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:8px;padding:10px 14px;font-size:12px;color:#92400E;margin-bottom:16px">
+          <i class="bi bi-info-circle-fill"></i> Apenas PDF, DOC ou DOCX. Tamanho máximo: <strong>2 MB</strong>.
+        </div>
+        <div class="form-group">
+          <label class="form-label">Nome do contrato <span class="req">*</span></label>
+          <input class="form-input" id="uploadName" placeholder="Ex: Contrato de locação - Notebook Dell XPS">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Descrição</label>
+          <textarea class="form-textarea" id="uploadDesc" placeholder="Detalhes do contrato (opcional)"></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Arquivo <span class="req">*</span></label>
+          <input class="form-input" id="uploadFile" type="file" accept=".pdf,.doc,.docx">
+          <div style="font-size:11px;color:#9CA3AF;margin-top:4px" id="uploadFileSize"></div>
+        </div>
+      </div>
+      <div class="cpe-modal-footer">
+        <button class="btn-secondary-cpe" onclick="closeModal('modalUpload')">Cancelar</button>
+        <button class="btn-primary-amarelo" onclick="saveUpload()"><i class="bi bi-upload"></i> Enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PDF VIEWER -->
+  <div class="cpe-modal-overlay" id="modalPdfViewer">
+    <div class="cpe-modal wide">
+      <div class="cpe-modal-header">
+        <span class="cpe-modal-title" id="pdfViewerTitle"><i class="bi bi-file-pdf"></i> Visualizar</span>
+        <button class="cpe-modal-close" onclick="closeModal('modalPdfViewer')">&times;</button>
+      </div>
+      <div class="cpe-modal-body" style="padding:0">
+        <iframe id="pdfViewer" src=""></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" style="position:fixed;top:80px;right:20px;z-index:9999"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/route-protection.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+
+<script>
+const API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'http://127.0.0.1:8000') + '/api/contratos';
+let allPastas = [];
+let currentPastaId = null;
+let currentUser = null;
+let _contratosAtuais = [];
+let _expandedFolders = new Set();
+let _clipboard = null;   // { type:'pasta'|'contrato', action:'copy'|'cut', item:{}, name:'' }
+let _ctxTarget = null;   // { type:'pasta'|'contrato', id, data }
+
+/* ==================== INIT ==================== */
+document.addEventListener('DOMContentLoaded', async () => {
+  const userStr = localStorage.getItem('cpe_user');
+  if (!userStr) { window.location.href = '/SistemaCPE/web/login.html'; return; }
+  currentUser = JSON.parse(userStr);
+  renderNavbar();
+  renderSidebar();
+  await loadPastas();
+});
+
+/* ==================== API ==================== */
+function _getToken() {
+  return localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token') || '';
+}
+async function apiFetch(path, options = {}) {
+  const token = _getToken();
+  try {
+    const res = await fetch(API + path, {
+      credentials: 'include',
+      headers: {
+        ...(options.body && !(options.body instanceof FormData) ? {'Content-Type':'application/json'} : {}),
+        'X-Auth-Token': token, ...(options.headers || {}),
+      }, ...options,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { success: false, detail: err.detail || 'Erro' };
+    }
+    return await res.json();
+  } catch(e) { return { success: false, detail: 'Erro de conexao' }; }
+}
+
+/* ==================== PASTAS (SIDEBAR TREE) ==================== */
+async function loadPastas() {
+  const data = await apiFetch('/pastas');
+  allPastas = data?.pastas || [];
+  renderPastasTree();
+}
+
+function renderPastasTree() {
+  const container = document.getElementById('pastasList');
+  if (!allPastas.length) {
+    container.innerHTML = '<div style="color:#9CA3AF;font-size:12px;padding:10px">Nenhuma pasta disponível</div>';
+    return;
+  }
+  const groups = {};
+  allPastas.forEach(p => {
+    if (!groups[p.group_name]) groups[p.group_name] = [];
+    groups[p.group_name].push(p);
+  });
+
+  let html = '';
+  for (const gname in groups) {
+    html += '<div class="pasta-tree-group">'+gname+'</div>';
+    const raiz = groups[gname].find(p => p.is_root);
+    if (raiz) html += _renderPastaItem(raiz, allPastas, 0);
+  }
+  container.innerHTML = html;
+}
+
+function _renderPastaItem(pasta, all, depth) {
+  const children = all.filter(p => p.parent_id === pasta.id);
+  const hasChildren = children.length > 0;
+  const isExpanded = _expandedFolders.has(pasta.id);
+  const indent = depth * 14;
+  const activeCls = currentPastaId === pasta.id ? ' active' : '';
+  const icon = pasta.is_root ? 'bi-briefcase-fill' : (isExpanded ? 'bi-folder2-open' : 'bi-folder-fill');
+  const iconColor = pasta.is_root ? '#FFC107' : (isExpanded ? '#F59E0B' : '#9CA3AF');
+  const chevronCls = hasChildren ? (isExpanded ? 'expanded' : '') : 'empty';
+
+  let html = '<div class="pasta-item'+activeCls+'" style="padding-left:'+(8+indent)+'px"'
+    + (pasta.is_root ? '' : ' draggable="true" ondragstart="onDragStart(event,\'pasta\','+pasta.id+')" ondragend="onDragEnd(event)"')
+    + ' ondragover="onDragOver(event,\'pasta\','+pasta.id+')"'
+    + ' ondragleave="onDragLeave(event)"'
+    + ' ondrop="onDrop(event,\'pasta\','+pasta.id+')"'
+    + ' oncontextmenu="openCtx(event,\'pasta\','+pasta.id+')"'
+    + ' onclick="selectPasta('+pasta.id+')"'
+    + ' ondblclick="selectPasta('+pasta.id+');_expandedFolders.add('+pasta.id+');renderPastasTree()">'
+    + '<span class="pasta-chevron '+chevronCls+'" onclick="event.stopPropagation();toggleExpand('+pasta.id+')">'
+      + (hasChildren ? '<i class="bi bi-chevron-right"></i>' : '')
+    + '</span>'
+    + '<i class="bi '+icon+'" style="color:'+iconColor+'"></i>'
+    + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+pasta.nome+'</span>'
+    + '<span class="pasta-count">'+(pasta.total_contratos||0)+'</span>'
+    + '</div>';
+
+  if (hasChildren) {
+    html += '<div class="pasta-children '+(isExpanded?'expanded':'')+'">';
+    children.forEach(c => { html += _renderPastaItem(c, all, depth + 1); });
+    html += '</div>';
+  }
+  return html;
+}
+
+function toggleExpand(id) {
+  if (_expandedFolders.has(id)) _expandedFolders.delete(id);
+  else _expandedFolders.add(id);
+  renderPastasTree();
+}
+
+/* ==================== SELEÇÃO DE PASTA + MAIN AREA ==================== */
+async function selectPasta(id) {
+  currentPastaId = id;
+  const pasta = allPastas.find(p => p.id === id);
+  if (!pasta) return;
+  _expandedFolders.add(id);
+  renderPastasTree();
+
+  // Breadcrumb clicável
+  const path = [];
+  let cur = pasta;
+  while (cur) {
+    path.unshift(cur);
+    cur = cur.parent_id ? allPastas.find(p => p.id === cur.parent_id) : null;
+  }
+  document.getElementById('mainTitle').innerHTML = '<i class="bi bi-folder-fill" style="color:#FFC107"></i> '+pasta.nome;
+  document.getElementById('mainBreadcrumb').innerHTML = path.map((p,i) =>
+    i < path.length-1
+      ? '<a onclick="selectPasta('+p.id+')">'+p.nome+'</a>'
+      : '<span>'+p.nome+'</span>'
+  ).join(' <span style="color:#D1D5DB">/</span> ');
+
+  document.getElementById('btnUpload').style.display = 'inline-flex';
+  document.getElementById('btnNewSubfolder').style.display = 'inline-flex';
+  document.getElementById('searchInput').value = '';
+
+  await loadContratos();
+  renderMainArea();
+}
+
+function renderMainArea(searchTerm) {
+  const mainArea = document.getElementById('mainArea');
+  if (!currentPastaId) {
+    mainArea.innerHTML = '<div class="contr-empty"><i class="bi bi-folder2-open"></i><p>Selecione uma pasta</p></div>';
+    return;
+  }
+
+  const sub = allPastas.filter(p => p.parent_id === currentPastaId);
+  const q = (searchTerm||'').toLowerCase();
+
+  const subFiltered = q ? sub.filter(p => p.nome.toLowerCase().includes(q)) : sub;
+  const contratosFiltered = q
+    ? _contratosAtuais.filter(c =>
+        (c.nome||'').toLowerCase().includes(q) ||
+        (c.descricao||'').toLowerCase().includes(q) ||
+        (c.uploaded_by_nome||'').toLowerCase().includes(q))
+    : _contratosAtuais;
+
+  let html = '';
+
+  // Subpastas
+  if (subFiltered.length) {
+    html += '<div class="section-title"><i class="bi bi-folder-fill"></i> Subpastas ('+subFiltered.length+')</div>';
+    html += '<div class="subfolders-grid">';
+    subFiltered.forEach(p => {
+      const cutCls = _isInClipboard('pasta', p.id, 'cut') ? ' cut-item' : '';
+      html += '<div class="subfolder-card'+cutCls+'"'
+        + ' draggable="true"'
+        + ' ondragstart="onDragStart(event,\'pasta\','+p.id+')"'
+        + ' ondragend="onDragEnd(event)"'
+        + ' ondragover="onDragOver(event,\'pasta\','+p.id+')"'
+        + ' ondragleave="onDragLeave(event)"'
+        + ' ondrop="onDrop(event,\'pasta\','+p.id+')"'
+        + ' oncontextmenu="openCtx(event,\'pasta\','+p.id+')"'
+        + ' ondblclick="selectPasta('+p.id+')"'
+        + ' title="Duplo clique para abrir, arraste para mover">'
+        + '<i class="bi bi-folder-fill"></i>'
+        + '<div class="subfolder-card-name">'+p.nome+'</div>'
+        + '<div class="subfolder-card-count">'+(p.total_contratos||0)+' arquivo(s)</div>'
+        + '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Contratos
+  if (contratosFiltered.length) {
+    html += '<div class="section-title"><i class="bi bi-file-earmark-text"></i> Arquivos ('+contratosFiltered.length+')</div>';
+    contratosFiltered.forEach(c => {
+      const icon = c.tipo === 'pdf' ? 'bi-file-earmark-pdf-fill' : 'bi-file-earmark-word-fill';
+      const tamKb = Math.round(c.tamanho_bytes / 1024);
+      const canView = c.tipo === 'pdf';
+      const cutCls = _isInClipboard('contrato', c.id, 'cut') ? ' cut-item' : '';
+      html += '<div class="contrato-card'+cutCls+'"'
+        + ' draggable="true"'
+        + ' ondragstart="onDragStart(event,\'contrato\','+c.id+')"'
+        + ' ondragend="onDragEnd(event)"'
+        + ' oncontextmenu="openCtx(event,\'contrato\','+c.id+')">'
+        + '<div class="contrato-icon '+c.tipo+'"><i class="bi '+icon+'"></i></div>'
+        + '<div class="contrato-info">'
+        + '  <div class="contrato-nome">'+c.nome+'</div>'
+        + (c.descricao ? '  <div class="contrato-desc">'+c.descricao+'</div>' : '')
+        + '  <div class="contrato-meta"><i class="bi bi-person-fill"></i> '+(c.uploaded_by_nome||'—')+' &bull; <i class="bi bi-calendar3"></i> '+fmtDatetime(c.created_at)+' &bull; '+tamKb+' KB &bull; '+c.tipo.toUpperCase()+'</div>'
+        + '</div>'
+        + '<div class="contrato-actions">'
+        + (canView
+          ? '<button class="btn-secondary-cpe" onclick="viewPdf(\''+c.arquivo_path+'\',\''+String(c.nome).replace(/\'/g,"\\\'")+'\')"><i class="bi bi-eye"></i> Visualizar</button>'
+          : '<a class="btn-secondary-cpe" href="'+c.arquivo_path+'" target="_blank"><i class="bi bi-download"></i> Baixar</a>')
+        + '</div>'
+        + '</div>';
+    });
+  }
+
+  if (!subFiltered.length && !contratosFiltered.length) {
+    html = q
+      ? '<div class="contr-empty"><i class="bi bi-search"></i><p>Nada encontrado para "<strong>'+searchTerm+'</strong>"</p></div>'
+      : '<div class="contr-empty"><i class="bi bi-folder2-open"></i><p>Pasta vazia — envie um contrato ou crie uma subpasta</p></div>';
+  }
+
+  mainArea.innerHTML = html;
+}
+
+function applyFilter() {
+  const q = document.getElementById('searchInput').value.trim();
+  renderMainArea(q);
+}
+
+/* ==================== CONTRATOS ==================== */
+async function loadContratos() {
+  if (!currentPastaId) return;
+  const data = await apiFetch('?pasta_id=' + currentPastaId);
+  _contratosAtuais = data?.contratos || [];
+}
+
+/* ==================== MODAIS: NOVA PASTA / UPLOAD ==================== */
+function openNewFolderModal(parentId) {
+  const sel = document.getElementById('newFolderParent');
+  sel.innerHTML = allPastas.map(p => {
+    const prefix = p.is_root ? '📁 ' : '  └ ';
+    return '<option value="'+p.id+'">'+prefix+p.group_name+' / '+p.nome+'</option>';
+  }).join('');
+  if (parentId) sel.value = parentId;
+  else if (currentPastaId) sel.value = currentPastaId;
+  document.getElementById('newFolderName').value = '';
+  openModal('modalNewFolder');
+}
+
+function openNewSubfolderInCurrent() {
+  if (!currentPastaId) return;
+  openNewFolderModal(currentPastaId);
+}
+
+async function saveNewFolder() {
+  const parent_id = parseInt(document.getElementById('newFolderParent').value);
+  const nome = document.getElementById('newFolderName').value.trim();
+  if (!nome) { showToast('Nome obrigatorio', 'error'); return; }
+  const res = await apiFetch('/pastas', { method:'POST', body: JSON.stringify({ parent_id, nome }) });
+  if (!res?.success) { showToast(res?.detail || 'Erro', 'error'); return; }
+  showToast('Pasta criada!', 'success');
+  closeModal('modalNewFolder');
+  _expandedFolders.add(parent_id);
+  await loadPastas();
+  renderMainArea();
+}
+
+function openUploadModal() {
+  if (!currentPastaId) { showToast('Selecione uma pasta', 'error'); return; }
+  document.getElementById('uploadName').value = '';
+  document.getElementById('uploadDesc').value = '';
+  document.getElementById('uploadFile').value = '';
+  document.getElementById('uploadFileSize').textContent = '';
+  openModal('modalUpload');
+}
+
+document.addEventListener('change', e => {
+  if (e.target.id === 'uploadFile') {
+    const f = e.target.files[0];
+    if (!f) { document.getElementById('uploadFileSize').textContent = ''; return; }
+    const kb = Math.round(f.size / 1024);
+    const info = document.getElementById('uploadFileSize');
+    if (f.size > 2*1024*1024) info.innerHTML = '<span style="color:#DC2626;font-weight:600"><i class="bi bi-exclamation-triangle-fill"></i> '+kb+' KB — excede 2 MB!</span>';
+    else info.textContent = kb + ' KB';
+  }
+});
+
+async function saveUpload() {
+  const nome = document.getElementById('uploadName').value.trim();
+  const desc = document.getElementById('uploadDesc').value.trim();
+  const fileInput = document.getElementById('uploadFile');
+  const file = fileInput.files[0];
+  if (!nome) { showToast('Nome obrigatorio', 'error'); return; }
+  if (!file) { showToast('Selecione um arquivo', 'error'); return; }
+  if (file.size > 2*1024*1024) { showToast('Arquivo excede 2 MB', 'error'); return; }
+
+  const fd = new FormData();
+  fd.append('pasta_id', currentPastaId);
+  fd.append('nome', nome);
+  fd.append('descricao', desc);
+  fd.append('file', file);
+
+  const res = await fetch(API, {
+    method: 'POST', credentials: 'include',
+    headers: { 'X-Auth-Token': _getToken() }, body: fd,
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j.success) { showToast(j.detail || 'Erro ao enviar', 'error'); return; }
+  showToast('Contrato enviado!', 'success');
+  closeModal('modalUpload');
+  await loadPastas();
+  await loadContratos();
+  renderMainArea();
+}
+
+/* ==================== CONTEXT MENU ==================== */
+function openCtx(ev, type, id) {
+  ev.preventDefault();
+  const data = type === 'pasta'
+    ? allPastas.find(p => p.id === id)
+    : _contratosAtuais.find(c => c.id === id);
+  if (!data) return;
+  if (type === 'pasta' && data.is_root) {
+    showToast('Pastas raiz não permitem essas ações', 'info');
+    return;
+  }
+  _ctxTarget = { type, id, data };
+
+  const menu = document.getElementById('ctxMenu');
+  const paste = document.getElementById('ctxPaste');
+  if (_clipboard) paste.classList.remove('disabled');
+  else paste.classList.add('disabled');
+
+  menu.style.left = ev.clientX + 'px';
+  menu.style.top = ev.clientY + 'px';
+  menu.classList.add('open');
+}
+
+function closeCtx() { document.getElementById('ctxMenu').classList.remove('open'); }
+document.addEventListener('click', e => { if (!e.target.closest('.ctx-menu')) closeCtx(); });
+document.addEventListener('contextmenu', e => { if (!e.target.closest('.pasta-item, .subfolder-card, .contrato-card')) closeCtx(); });
+
+async function ctxAction(action) {
+  closeCtx();
+  if (!_ctxTarget) return;
+  const t = _ctxTarget;
+  if (action === 'copy' || action === 'cut') {
+    _clipboard = { type: t.type, action, id: t.id, name: t.data.nome };
+    document.getElementById('clipboardBanner').classList.add('show');
+    document.getElementById('clipboardMsg').innerHTML =
+      (action === 'copy' ? '<i class="bi bi-copy"></i> Copiado: ' : '<i class="bi bi-scissors"></i> Recortado: ')
+      + '<strong>'+t.data.nome+'</strong> — clique em uma pasta e use "Colar" para finalizar';
+    renderMainArea();
+  } else if (action === 'paste') {
+    await pasteClipboard();
+  } else if (action === 'move') {
+    openMoveModal(t);
+  } else if (action === 'delete') {
+    if (t.type === 'pasta') {
+      if (!confirm('Excluir pasta "'+t.data.nome+'" e todos os arquivos dentro?')) return;
+      const res = await apiFetch('/pastas/'+t.id, { method:'DELETE' });
+      if (!res?.success) { showToast(res?.detail || 'Erro', 'error'); return; }
+      showToast('Pasta excluida', 'success');
+      if (currentPastaId === t.id) currentPastaId = t.data.parent_id;
+      await loadPastas();
+      if (currentPastaId) await loadContratos();
+      renderMainArea();
+    } else {
+      if (!confirm('Excluir contrato "'+t.data.nome+'"?')) return;
+      const res = await apiFetch('/'+t.id, { method:'DELETE' });
+      if (!res?.success) { showToast(res?.detail || 'Erro', 'error'); return; }
+      showToast('Contrato excluido', 'success');
+      await loadPastas();
+      await loadContratos();
+      renderMainArea();
+    }
+  } else if (action === 'properties') {
+    showProperties(t);
+  }
+}
+
+async function pasteClipboard() {
+  if (!_clipboard) { showToast('Clipboard vazio', 'error'); return; }
+  if (!_ctxTarget) return;
+  // Colar sempre dentro da pasta clicada (ou pasta atual se clicou em contrato)
+  const destino = _ctxTarget.type === 'pasta' ? _ctxTarget.id : currentPastaId;
+  if (!destino) { showToast('Selecione uma pasta destino', 'error'); return; }
+
+  if (_clipboard.type === 'pasta') {
+    if (_clipboard.id === destino) { showToast('Origem e destino iguais', 'error'); return; }
+    if (_clipboard.action === 'copy') {
+      const r = await apiFetch('/pastas/'+_clipboard.id+'/copy', { method:'POST', body: JSON.stringify({ parent_id: destino }) });
+      if (!r?.success) { showToast(r?.detail || 'Erro', 'error'); return; }
+    } else {
+      const r = await apiFetch('/pastas/'+_clipboard.id+'/move', { method:'PUT', body: JSON.stringify({ parent_id: destino }) });
+      if (!r?.success) { showToast(r?.detail || 'Erro', 'error'); return; }
+    }
+  } else {
+    if (_clipboard.action === 'copy') {
+      const r = await apiFetch('/'+_clipboard.id+'/copy', { method:'POST', body: JSON.stringify({ pasta_id: destino }) });
+      if (!r?.success) { showToast(r?.detail || 'Erro', 'error'); return; }
+    } else {
+      const r = await apiFetch('/'+_clipboard.id+'/move', { method:'PUT', body: JSON.stringify({ pasta_id: destino }) });
+      if (!r?.success) { showToast(r?.detail || 'Erro', 'error'); return; }
+    }
+  }
+  showToast(_clipboard.action === 'copy' ? 'Copiado com sucesso!' : 'Movido com sucesso!', 'success');
+  clearClipboard();
+  await loadPastas();
+  if (currentPastaId) await loadContratos();
+  renderMainArea();
+}
+
+function clearClipboard() {
+  _clipboard = null;
+  document.getElementById('clipboardBanner').classList.remove('show');
+  renderMainArea();
+}
+
+function _isInClipboard(type, id, action) {
+  return _clipboard && _clipboard.type === type && _clipboard.id === id && _clipboard.action === action;
+}
+
+function openMoveModal(target) {
+  document.getElementById('moveInfo').innerHTML = '<i class="bi bi-'+(target.type==='pasta'?'folder':'file-earmark')+'"></i> <strong>'+target.data.nome+'</strong>';
+  const sel = document.getElementById('moveTarget');
+  sel.innerHTML = allPastas
+    .filter(p => target.type !== 'pasta' || p.id !== target.id) // não pode mover pasta para si mesma
+    .map(p => {
+      const prefix = p.is_root ? '📁 ' : '  └ ';
+      return '<option value="'+p.id+'">'+prefix+p.group_name+' / '+p.nome+'</option>';
+    }).join('');
+  window._moveTarget = target;
+  openModal('modalMove');
+}
+
+async function confirmMove() {
+  const t = window._moveTarget;
+  const destino = parseInt(document.getElementById('moveTarget').value);
+  if (!t || !destino) return;
+  if (t.type === 'pasta') {
+    const r = await apiFetch('/pastas/'+t.id+'/move', { method:'PUT', body: JSON.stringify({ parent_id: destino }) });
+    if (!r?.success) { showToast(r?.detail || 'Erro', 'error'); return; }
+  } else {
+    const r = await apiFetch('/'+t.id+'/move', { method:'PUT', body: JSON.stringify({ pasta_id: destino }) });
+    if (!r?.success) { showToast(r?.detail || 'Erro', 'error'); return; }
+  }
+  showToast('Movido com sucesso!', 'success');
+  closeModal('modalMove');
+  await loadPastas();
+  if (currentPastaId) await loadContratos();
+  renderMainArea();
+}
+
+function showProperties(target) {
+  const body = document.getElementById('propsBody');
+  if (target.type === 'pasta') {
+    const p = target.data;
+    // Contar subpastas e arquivos recursivamente
+    const descendants = _allDescendants(p.id);
+    const totalArquivos = descendants.reduce((a,b) => a + (b.total_contratos||0), 0) + (p.total_contratos||0);
+    body.innerHTML = ''
+      + '<div class="prop-row"><div class="prop-label"><i class="bi bi-folder-fill" style="color:#FFC107"></i> Nome</div><div class="prop-value">'+p.nome+'</div></div>'
+      + '<div class="prop-row"><div class="prop-label">Tipo</div><div class="prop-value">'+(p.is_root?'Pasta raiz (grupo)':'Subpasta')+'</div></div>'
+      + '<div class="prop-row"><div class="prop-label">Grupo</div><div class="prop-value">'+p.group_name+'</div></div>'
+      + '<div class="prop-row"><div class="prop-label">Subpastas</div><div class="prop-value">'+descendants.length+'</div></div>'
+      + '<div class="prop-row"><div class="prop-label">Arquivos (total)</div><div class="prop-value">'+totalArquivos+'</div></div>'
+      + '<div class="prop-row"><div class="prop-label">Criada em</div><div class="prop-value">'+fmtDatetime(p.created_at)+'</div></div>';
+  } else {
+    const c = target.data;
+    body.innerHTML = ''
+      + '<div class="prop-row"><div class="prop-label"><i class="bi bi-file-earmark-text" style="color:#FFC107"></i> Nome</div><div class="prop-value">'+c.nome+'</div></div>'
+      + (c.descricao ? '<div class="prop-row"><div class="prop-label">Descrição</div><div class="prop-value">'+c.descricao+'</div></div>' : '')
+      + '<div class="prop-row"><div class="prop-label">Tipo</div><div class="prop-value">'+c.tipo.toUpperCase()+'</div></div>'
+      + '<div class="prop-row"><div class="prop-label">Tamanho</div><div class="prop-value">'+fmtBytes(c.tamanho_bytes)+'</div></div>'
+      + '<div class="prop-row"><div class="prop-label">Enviado por</div><div class="prop-value">'+(c.uploaded_by_nome||'—')+'</div></div>'
+      + '<div class="prop-row"><div class="prop-label">Criado em</div><div class="prop-value">'+fmtDatetime(c.created_at)+'</div></div>'
+      + '<div class="prop-row"><div class="prop-label">Caminho</div><div class="prop-value" style="font-family:monospace;font-size:11px">'+c.arquivo_path+'</div></div>';
+  }
+  openModal('modalProps');
+}
+
+function _allDescendants(pastaId) {
+  const result = [];
+  function rec(id) {
+    const filhos = allPastas.filter(p => p.parent_id === id);
+    filhos.forEach(f => { result.push(f); rec(f.id); });
+  }
+  rec(pastaId);
+  return result;
+}
+
+/* ==================== DRAG & DROP ==================== */
+let _dragging = null; // { type, id }
+
+function onDragStart(ev, type, id) {
+  _dragging = { type, id };
+  ev.dataTransfer.effectAllowed = 'move';
+  ev.dataTransfer.setData('text/plain', type+':'+id);
+  ev.target.classList.add('dragging');
+}
+
+function onDragEnd(ev) {
+  ev.target.classList.remove('dragging');
+  document.querySelectorAll('.drop-target-over').forEach(el => el.classList.remove('drop-target-over'));
+  _dragging = null;
+}
+
+function onDragOver(ev, targetType, targetId) {
+  if (!_dragging) return;
+  // Só aceita soltar em pastas
+  if (targetType !== 'pasta') return;
+  // Não solta em si mesmo
+  if (_dragging.type === 'pasta' && _dragging.id === targetId) return;
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('drop-target-over');
+}
+
+function onDragLeave(ev) {
+  ev.currentTarget.classList.remove('drop-target-over');
+}
+
+async function onDrop(ev, targetType, targetId) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('drop-target-over');
+  if (!_dragging) return;
+  if (targetType !== 'pasta') return;
+  if (_dragging.type === 'pasta' && _dragging.id === targetId) { _dragging = null; return; }
+
+  const dragged = _dragging;
+  _dragging = null;
+
+  if (dragged.type === 'pasta') {
+    const res = await apiFetch('/pastas/'+dragged.id+'/move', {
+      method:'PUT', body: JSON.stringify({ parent_id: targetId })
+    });
+    if (!res?.success) { showToast(res?.detail || 'Erro ao mover', 'error'); return; }
+    showToast('Pasta movida!', 'success');
+  } else {
+    const res = await apiFetch('/'+dragged.id+'/move', {
+      method:'PUT', body: JSON.stringify({ pasta_id: targetId })
+    });
+    if (!res?.success) { showToast(res?.detail || 'Erro ao mover', 'error'); return; }
+    showToast('Arquivo movido!', 'success');
+  }
+
+  _expandedFolders.add(targetId);
+  await loadPastas();
+  if (currentPastaId) await loadContratos();
+  renderMainArea();
+}
+
+/* ==================== UTILS ==================== */
+function viewPdf(path, title) {
+  document.getElementById('pdfViewerTitle').innerHTML = '<i class="bi bi-file-pdf"></i> '+title;
+  document.getElementById('pdfViewer').src = path;
+  openModal('modalPdfViewer');
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+  if (id === 'modalPdfViewer') document.getElementById('pdfViewer').src = '';
+}
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('cpe-modal-overlay')) closeModal(e.target.id);
+});
+
+function fmtDatetime(s) {
+  if (!s) return '—';
+  const d = new Date(s);
+  return d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+function fmtBytes(b) {
+  if (b < 1024) return b + ' bytes';
+  if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+  return (b/(1024*1024)).toFixed(2) + ' MB';
+}
+
+function showToast(msg, type='info') {
+  const colors = { success:'#16A34A', error:'#DC2626', info:'#3B82F6' };
+  const icons = { success:'bi-check-circle-fill', error:'bi-x-circle-fill', info:'bi-info-circle-fill' };
+  const el = document.createElement('div');
+  el.style.cssText = 'background:#fff;border-left:4px solid '+colors[type]+';box-shadow:0 4px 12px rgba(0,0,0,.1);padding:12px 16px;border-radius:6px;margin-bottom:8px;display:flex;align-items:center;gap:8px;font-size:13px;min-width:260px';
+  el.innerHTML = '<i class="bi '+icons[type]+'" style="color:'+colors[type]+'"></i>'+msg;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+</script>
+</body>
+</html>
