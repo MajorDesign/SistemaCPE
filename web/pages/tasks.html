@@ -715,6 +715,30 @@
     .tk-loading { display:flex; align-items:center; justify-content:center; min-height:60vh; }
     .tk-loading-spinner { width:36px; height:36px; border:3px solid #dfe1e6; border-top-color:#0052cc; border-radius:50%; animation:spin .7s linear infinite; }
     @keyframes spin { to { transform:rotate(360deg); } }
+    @keyframes slideInRight { from { transform:translateX(120%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+    /* Overlay modals — acima de tkDetailModal (z-index:2000) */
+    .tk-overlay-modal {
+      display:none; position:fixed; inset:0; z-index:2100;
+      background:rgba(0,0,0,.55);
+      align-items:center; justify-content:center;
+    }
+    .tk-overlay-modal.show { display:flex; }
+    .tk-overlay-box {
+      background:#22253a; border:1px solid #3d4466; border-radius:8px;
+      width:380px; max-width:92vw;
+    }
+    .tk-overlay-header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:12px 16px; border-bottom:1px solid #3d4466;
+    }
+    .tk-overlay-footer {
+      display:flex; align-items:center; justify-content:flex-end;
+      gap:8px; padding:10px 16px; border-top:1px solid #3d4466;
+    }
+    .tk-overlay-close {
+      background:none; border:none; color:#5e6c84; cursor:pointer; font-size:.85rem; line-height:1;
+    }
+    .tk-overlay-close:hover { color:#c7d0e0; }
 
     /* List view — two modes: table + split detail — LIGHT THEME */
     #tkListWrap { display:none; height:calc(100vh - 200px); background:#f4f5f7; overflow:hidden; }
@@ -1230,8 +1254,20 @@
           style="display:none;background:#fff8e1;color:#ffc107;border-color:#fde68a;">
           <i class="bi bi-arrow-counterclockwise"></i> Reabrir
         </button>
+        <button class="dp-header-btn" id="dpBtnEncaminhar" onclick="abrirModalEncaminhar()" title="Encaminhar para outro grupo"
+          style="display:none;background:#e8f4ff;color:#0052cc;border-color:#bbd4f8;">
+          <i class="bi bi-send"></i> Encaminhar
+        </button>
+        <button class="dp-header-btn" id="dpBtnDevolver" onclick="abrirModalDevolver()" title="Devolver ao grupo anterior"
+          style="display:none;background:#fff3cd;color:#b45309;border-color:#fde68a;">
+          <i class="bi bi-arrow-return-left"></i> Devolver
+        </button>
         <button class="dp-header-btn" onclick="abrirModalEtapa()" id="dpBtnAddEtapa" title="Vincular grupo">
           <i class="bi bi-diagram-2"></i>
+        </button>
+        <button class="dp-header-btn" id="dpBtnSalvar" onclick="dpSalvarTudo()" title="Salvar alterações"
+          style="display:none;background:#f59e0b;color:#1a1d2e;border-color:#f59e0b;font-weight:600;">
+          <i class="bi bi-floppy"></i> Salvar
         </button>
         <button class="dp-header-btn" onclick="dpMoreMenu()" title="Mais opções">
           <i class="bi bi-three-dots"></i>
@@ -1388,10 +1424,13 @@
         </div>
 
         <!-- Categorias -->
-        <div class="dp-info-row" style="flex-wrap:wrap;">
-          <span class="dp-info-key">Categorias</span>
-          <div class="dp-info-val" id="dpCatsRow">
-            <span id="dpCatsVal" style="cursor:pointer;" onclick="dpToggleCatsDD()">Nenhum</span>
+        <div class="dp-info-row" style="flex-wrap:wrap;align-items:flex-start;">
+          <span class="dp-info-key" style="padding-top:2px;">Categorias</span>
+          <div class="dp-info-val" style="flex:1;display:flex;flex-wrap:wrap;align-items:center;gap:4px;">
+            <div id="dpCatsVal" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;"></div>
+            <button id="dpCatAddBtn" onclick="dpToggleCatsDD()"
+              style="display:none;background:none;border:1px dashed #3d4466;color:#8993a4;border-radius:5px;padding:1px 8px;font-size:.75rem;cursor:pointer;line-height:1.6;white-space:nowrap;"
+              title="Adicionar categoria">+ Categoria</button>
           </div>
         </div>
         <div class="dp-popup" id="dpCatsDD" style="min-width:220px;">
@@ -1399,7 +1438,7 @@
           <div id="dpCatList"></div>
           <div id="dpCatCreateHint" style="font-size:.74rem;color:#8993a4;padding:6px 8px;display:none;">
             <div style="display:flex;align-items:center;gap:6px;">
-              <input type="color" id="dpCatNewCor" value="#ffc107" style="width:22px;height:22px;border:1px solid #3d4466;border-radius:3px;cursor:pointer;padding:0;background:none;">
+              <input type="color" id="dpCatNewCor" value="#ffc107" onclick="event.stopPropagation()" style="width:22px;height:22px;border:1px solid #3d4466;border-radius:3px;cursor:pointer;padding:0;background:none;">
               <span>Criar "<strong id="dpCatNewNome"></strong>"</span>
               <button onclick="dpCriarEAssociarCat(document.getElementById('dpCatSearch').value.trim())"
                 style="margin-left:auto;background:#0052cc;color:#fff;border:none;border-radius:4px;padding:2px 8px;font-size:.72rem;cursor:pointer;">Criar</button>
@@ -1435,6 +1474,12 @@
         <div class="dp-info-label" style="margin-top:14px;">Tempo por usuário</div>
         <div id="dpTempoUsuarios" style="font-size:.78rem;color:#8993a4;padding:4px 0;">Carregando...</div>
 
+        <!-- Encaminhamentos -->
+        <div id="dpEncaminhamentosWrap" style="display:none;">
+          <div class="dp-info-label" style="margin-top:14px;">Encaminhamentos</div>
+          <div id="dpEncaminhamentos" style="font-size:.78rem;padding:4px 0;"></div>
+        </div>
+
       </div><!-- /dp-right -->
     </div><!-- /dp-body -->
   </div><!-- /tkDetailContent -->
@@ -1454,6 +1499,13 @@
           <option value="">— Selecionar grupo —</option>
         </select>
         <button class="btn btn-sm btn-primary" onclick="adicionarGrupoEspaco()"><i class="bi bi-plus-lg me-1"></i>Adicionar</button>
+      </div>
+      <!-- Convites pendentes enviados -->
+      <div id="grpConvitesPendentes" style="display:none;margin-bottom:18px;">
+        <div style="font-size:.78rem;font-weight:600;color:#579dff;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">
+          <i class="bi bi-envelope me-1"></i>Convites pendentes
+        </div>
+        <div id="grpConvitesLista"></div>
       </div>
       <div id="grpLista">
         <div style="text-align:center;color:#b0b7c3;padding:30px;">Nenhum grupo adicionado.</div>
@@ -1599,6 +1651,92 @@
           <i class="bi bi-check-lg me-1"></i>Salvar
         </button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Opção ao finalizar em espaço multi-grupo -->
+<div id="modalFinalizarOpcao" class="tk-overlay-modal">
+  <div class="tk-overlay-box" style="max-width:380px;">
+    <div class="tk-overlay-header">
+      <h6 style="color:#c7d0e0;font-size:.88rem;font-weight:700;margin:0;">
+        <i class="bi bi-signpost-2 me-2" style="color:#ffc107;"></i>O que deseja fazer com a tarefa?
+      </h6>
+      <button onclick="_hideModal('modalFinalizarOpcao')" class="tk-overlay-close"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div style="padding:14px 16px;">
+      <p style="color:#8993a4;font-size:.8rem;margin-bottom:0;">
+        Esta tarefa está em uma coluna final e o quadro possui outros grupos participantes.
+      </p>
+    </div>
+    <div class="tk-overlay-footer" style="flex-direction:column;gap:7px;align-items:stretch;">
+      <button class="btn btn-primary btn-sm" onclick="_finalizarOpcaoEncaminhar()">
+        <i class="bi bi-send me-1"></i> Encaminhar para outro grupo (inicia novo SLA)
+      </button>
+      <button class="btn btn-success btn-sm" onclick="_finalizarOpcaoConcluir()">
+        <i class="bi bi-check2-circle me-1"></i> Finalizar definitivamente (tarefa concluída)
+      </button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="_hideModal('modalFinalizarOpcao')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Encaminhar tarefa para outro grupo -->
+<div id="modalEncaminhar" class="tk-overlay-modal">
+  <div class="tk-overlay-box" style="max-width:380px;">
+    <div class="tk-overlay-header">
+      <h6 style="color:#c7d0e0;font-size:.88rem;font-weight:700;margin:0;">
+        <i class="bi bi-send me-2" style="color:#579dff;"></i>Encaminhar tarefa
+      </h6>
+      <button onclick="_hideModal('modalEncaminhar')" class="tk-overlay-close"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div style="padding:16px;">
+      <p style="color:#8993a4;font-size:.8rem;margin-bottom:12px;">Selecione o grupo para onde a tarefa será encaminhada. O SLA do grupo destino iniciará automaticamente.</p>
+      <div class="mb-3">
+        <label class="form-label" style="color:#8993a4;font-size:.78rem;">Grupo destino <span style="color:#ef4444;">*</span></label>
+        <select id="encGrupoSelect" class="form-select form-select-sm"
+          style="background:#1b1c2e;color:#c7d0e0;border-color:#3d4466;font-size:.82rem;">
+          <option value="">— Selecionar grupo —</option>
+        </select>
+      </div>
+      <div id="encaminharErr" class="text-danger d-none" style="font-size:.78rem;"></div>
+    </div>
+    <div class="tk-overlay-footer">
+      <button class="btn btn-sm btn-outline-secondary" onclick="_hideModal('modalEncaminhar')">Cancelar</button>
+      <button class="btn btn-sm btn-primary" onclick="confirmarEncaminhar()">
+        <i class="bi bi-send me-1"></i>Encaminhar
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Devolver tarefa ao grupo anterior -->
+<div id="modalDevolver" class="tk-overlay-modal">
+  <div class="tk-overlay-box" style="max-width:380px;">
+    <div class="tk-overlay-header">
+      <h6 style="color:#c7d0e0;font-size:.88rem;font-weight:700;margin:0;">
+        <i class="bi bi-arrow-return-left me-2" style="color:#ffc107;"></i>Devolver tarefa
+      </h6>
+      <button onclick="_hideModal('modalDevolver')" class="tk-overlay-close"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div style="padding:16px;">
+      <p style="color:#8993a4;font-size:.8rem;margin-bottom:12px;">
+        A tarefa será devolvida para <strong id="devolverGrupoNome" style="color:#c7d0e0;"></strong>.
+        O SLA daquele grupo continuará de onde parou.
+      </p>
+      <div class="mb-2">
+        <label class="form-label" style="color:#8993a4;font-size:.78rem;">Motivo (opcional)</label>
+        <textarea id="devolverMotivo" class="form-control form-control-sm" rows="2"
+          style="background:#1b1c2e;color:#c7d0e0;border-color:#3d4466;font-size:.8rem;resize:none;"
+          placeholder="Descreva o motivo da devolução..."></textarea>
+      </div>
+      <div id="devolverErr" class="text-danger d-none" style="font-size:.78rem;"></div>
+    </div>
+    <div class="tk-overlay-footer">
+      <button class="btn btn-sm btn-outline-secondary" onclick="_hideModal('modalDevolver')">Cancelar</button>
+      <button class="btn btn-sm btn-warning" onclick="confirmarDevolver()" style="color:#1b1c2e;">
+        <i class="bi bi-arrow-return-left me-1"></i>Devolver
+      </button>
     </div>
   </div>
 </div>
@@ -1789,6 +1927,7 @@ function mostrarGaleria() {
   document.getElementById('galleryScreen').style.display = 'block';
   document.getElementById('wizardScreen').classList.remove('show');
   document.getElementById('appScreen').classList.remove('show');
+  _startPoll();
   carregarTemplatesSalvos();
 }
 
@@ -1826,6 +1965,8 @@ function mostrarApp() {
     document.getElementById('spTabConfig').style.display   = '';
     document.getElementById('btnExcluirEspaco').style.display = '';
   }
+
+  _startPoll();
 }
 
 function voltarGaleria() {
@@ -2119,6 +2260,7 @@ async function trocarEspaco(id) {
   document.getElementById('spName').textContent = currentEspaco.nome;
   document.getElementById('spKey').textContent  = currentEspaco.chave;
   await carregarTarefas();
+  _startPoll();
 }
 
 async function excluirEspacoAtual() {
@@ -2225,8 +2367,8 @@ function renderBoard() {
 
   board.innerHTML = allCols.map(col => {
     const isReal = col.id != null;
-    // RESPONSAVEL_GRUPO só personaliza colunas do próprio grupo; ADMIN/TI/MANAGER personalizam tudo
-    const podePersonalizar = isReal && (ROLE !== 'RESPONSAVEL_GRUPO' || col.group_id === GID);
+    // ELEVATED pode personalizar colunas do espaço; backend valida se RESPONSAVEL_GRUPO é membro
+    const podePersonalizar = isReal && ELEVATED;
     return `
     <div class="tk-col" data-status-id="${col.id ?? 'null'}"
          style="background:${col.cor ? col.cor+'0d' : 'var(--tk-bg)'};border-top:3px solid ${col.cor||'#b0b7c3'};"
@@ -2360,13 +2502,24 @@ function _renderCard(t) {
   const cardColor = t.cor_card || prioColors[t.prioridade] || '#5e6c84';
   const cardBg = t.cor_card ? `background:${t.cor_card}12;border:1px solid ${t.cor_card}33;` : '';
 
+  // Encaminhamento: card pertence a outro grupo?
+  const cardOwnedByMe = (ROLE === 'ADMIN' || ROLE === 'TI' || ROLE === 'MANAGER') || t.group_id === GID;
+  const hasActiveEnc = (t.encaminhamentos || []).some(e => !e.devolvido_em);
+  const encBadge = (!cardOwnedByMe && hasActiveEnc)
+    ? `<span style="font-size:.6rem;background:#e8f4ff;color:#0052cc;border:1px solid #bbd4f8;border-radius:3px;padding:1px 5px;margin-left:3px;white-space:nowrap;"><i class="bi bi-send" style="font-size:.55rem;"></i> enc.</span>`
+    : '';
+  const readonlyStyle = !cardOwnedByMe ? 'opacity:.72;' : '';
+
   return `
-    <div class="tk-card ${done?'done':''}" style="border-left:3px solid ${cardColor};${cardBg}"
-         draggable="true" data-card-id="${t.id}"
-         ondragstart="dragStart(event, ${t.id})"
+    <div class="tk-card ${done?'done':''}" style="border-left:3px solid ${cardColor};${cardBg}${readonlyStyle}"
+         draggable="${cardOwnedByMe}" data-card-id="${t.id}"
+         ondragstart="${cardOwnedByMe?`dragStart(event, ${t.id})`:''}"
          onclick="abrirDetalhe(${t.id})">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
-        <span class="tk-card-num" style="margin:0;">${escHtml(t.numero||'#'+t.id)}</span>
+        <div style="display:flex;align-items:center;gap:2px;">
+          <span class="tk-card-num" style="margin:0;">${escHtml(t.numero||'#'+t.id)}</span>
+          ${encBadge}
+        </div>
         ${t.group_name ? `<span style="font-size:.6rem;color:#8993a4;background:#f4f5f7;padding:1px 5px;border-radius:3px;">${escHtml(t.group_name)}</span>` : ''}
       </div>
       <div class="tk-card-title">${escHtml(t.titulo)}</div>
@@ -2777,6 +2930,10 @@ async function abrirDetalhe(id) {
 }
 
 function fecharDetalhe() {
+  if (Object.keys(_pendingChanges).length > 0) {
+    if (!confirm('Existem alterações não salvas. Fechar sem salvar?')) return;
+  }
+  _pendingChanges = {};
   document.getElementById('tkDetailModal').classList.remove('show');
   document.body.style.overflow = '';
   currentTarefa = null;
@@ -2789,6 +2946,8 @@ function autoResizeTextarea(el) {
 }
 
 function _renderDetalhe(t) {
+  _pendingChanges = {};
+  _atualizarBtnSalvar();
   const done = !!t.concluida_em;
   const canManage = ELEVATED && (ROLE !== 'RESPONSAVEL_GRUPO' || GID === t.group_id);
 
@@ -2799,6 +2958,16 @@ function _renderDetalhe(t) {
   // Botão Reabrir — só para RESPONSAVEL_GRUPO do grupo da tarefa (ou ADMIN/TI) quando finalizada
   const canReopen = done && ELEVATED && (ROLE !== 'RESPONSAVEL_GRUPO' || GID === t.group_id);
   document.getElementById('dpBtnReabrir').style.display = canReopen ? '' : 'none';
+
+  // Botão Encaminhar — grupo atual é dono + tarefa em coluna final + não finalizada
+  const ownsTask = (ROLE === 'ADMIN' || ROLE === 'TI' || ROLE === 'MANAGER') || GID === t.group_id;
+  const canEncaminhar = ELEVATED && ownsTask && !done && !!t.status_final;
+  document.getElementById('dpBtnEncaminhar').style.display = canEncaminhar ? '' : 'none';
+
+  // Botão Devolver — quando o grupo recebeu um encaminhamento ativo
+  const activeEnc = (t.encaminhamentos || []).find(e => e.para_grupo_id === GID && !e.devolvido_em);
+  const canDevolver = ELEVATED && ownsTask && !!activeEnc;
+  document.getElementById('dpBtnDevolver').style.display = canDevolver ? '' : 'none';
 
   // Me avatar
   const meInit = (ME?.name || 'U').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase();
@@ -2839,12 +3008,14 @@ function _renderDetalhe(t) {
   _renderDpEtapas(t);
 
   // Categorias
-  _renderDpCats(t.categorias || []);
+  const catAddBtn = document.getElementById('dpCatAddBtn');
+  if (catAddBtn) catAddBtn.style.display = (canManage && !done) ? 'inline-block' : 'none';
+  _renderDpCats(t.categorias || [], canManage && !done);
 
-  // Cor do card (só para ELEVATED — RESPONSAVEL_GRUPO e acima)
+  // Cor do card — RESPONSAVEL_GRUPO e acima, apenas no próprio grupo
   const corCardRow = document.getElementById('dpCorCardRow');
   if (corCardRow) {
-    corCardRow.style.display = ELEVATED ? 'flex' : 'none';
+    corCardRow.style.display = canManage ? 'flex' : 'none';
     document.getElementById('dpCorCard').value = t.cor_card || '#22253a';
   }
 
@@ -2852,6 +3023,13 @@ function _renderDetalhe(t) {
   dpActTab = 'tudo';
   _updateActTabs();
   _carregarAtividade();
+
+  // Encaminhamentos
+  _renderEncaminhamentos(t.encaminhamentos || []);
+
+  // Desabilitar seletor de status para quem não pode gerenciar
+  const statusBtn = document.getElementById('dpStatusBtn');
+  if (statusBtn) statusBtn.disabled = !canManage;
 }
 
 function _renderDpStatus(t) {
@@ -2878,8 +3056,14 @@ async function dpSetStatus(sid) {
   document.getElementById('dpStatusDD').classList.remove('show');
   try {
     currentTarefa = await apiFetch(`/${currentTarefa.id}`, {method:'PUT', body:JSON.stringify({usuario_id:UID, status_id:sid})});
-    _renderDpStatus(currentTarefa);
+    _renderDetalhe(currentTarefa);
     await carregarTarefas();
+
+    // Coluna final → oferecer encaminhamento
+    if (ELEVATED && currentTarefa.status_final) {
+      const ownsTask = ROLE !== 'RESPONSAVEL_GRUPO' || GID === currentTarefa.group_id;
+      if (ownsTask) _oferecer_encaminhar();
+    }
   } catch(e) { alert(e.message); }
 }
 
@@ -2898,13 +3082,12 @@ function dpTogglePrioDD() {
   _dpFecharTodosDD('dpPrioDD');
   document.getElementById('dpPrioDD').classList.toggle('show');
 }
-async function dpSetPrio(prio) {
+function dpSetPrio(prio) {
   document.getElementById('dpPrioDD').classList.remove('show');
-  try {
-    currentTarefa = await apiFetch(`/${currentTarefa.id}`, {method:'PUT', body:JSON.stringify({usuario_id:UID, prioridade:prio})});
-    _renderDpPrio(currentTarefa.prioridade);
-    await carregarTarefas();
-  } catch(e) { alert(e.message); }
+  if (!currentTarefa) return;
+  currentTarefa.prioridade = prio;
+  _renderDpPrio(prio);
+  _marcarPendente('prioridade', prio);
 }
 
 // Assignee
@@ -2929,14 +3112,15 @@ function dpAtribuirAMim() {
   }
   dpSetResp(UID, ME?.name || 'Eu');
 }
-async function dpSetResp(uid, nome) {
+function dpSetResp(uid, nome) {
   document.getElementById('dpRespDD').classList.remove('show');
-  try {
-    currentTarefa = await apiFetch(`/${currentTarefa.id}`, {method:'PUT', body:JSON.stringify({usuario_id:UID, responsavel_id:uid})});
-    document.getElementById('dpRespNome').textContent = nome;
-    document.getElementById('dpRespNome').style.color = '#c7d0e0';
-    await carregarTarefas();
-  } catch(e) { alert(e.message); }
+  if (!currentTarefa) return;
+  currentTarefa.responsavel_id = uid || null;
+  currentTarefa.responsavel_nome = nome || null;
+  const el = document.getElementById('dpRespNome');
+  el.textContent = nome || 'Não atribuído';
+  el.style.color = nome ? '#c7d0e0' : '#8993a4';
+  _marcarPendente('responsavel_id', uid || null);
 }
 function dpFiltrarResp(q) {
   const list = document.getElementById('dpRespList');
@@ -2971,18 +3155,18 @@ async function _dpCarregarCats() {
     dpAllCats = await apiFetch(`/categorias${params}`);
   } catch { dpAllCats = []; }
 }
-function _renderDpCats(cats) {
+function _renderDpCats(cats, podeEditar) {
   const el = document.getElementById('dpCatsVal');
   if (!cats?.length) {
-    el.innerHTML = '<span style="color:#8993a4;cursor:pointer;" onclick="dpToggleCatsDD()">Nenhum</span>';
+    el.innerHTML = '<span style="color:#8993a4;font-size:.82rem;">Nenhuma</span>';
     return;
   }
   el.innerHTML = cats.map(c =>
     `<span class="dp-cat-chip" style="background:${c.cor}22;color:${c.cor};border:1px solid ${c.cor}44;">
        ${escHtml(c.nome)}
-       <button onclick="event.stopPropagation();dpRemoverCat(${c.id})" title="Remover">×</button>
+       ${podeEditar ? `<button onclick="event.stopPropagation();dpRemoverCat(${c.id})" title="Remover">×</button>` : ''}
      </span>`
-  ).join('') + `<span style="color:#579dff;cursor:pointer;font-size:.7rem;margin-left:4px;" onclick="dpToggleCatsDD()">+ add</span>`;
+  ).join('');
 }
 function dpToggleCatsDD() {
   _dpFecharTodosDD('dpCatsDD');
@@ -3011,7 +3195,7 @@ function dpFiltrarCats(q) {
   if (termo && !exactMatch) {
     hint.style.display = 'block';
     newNm.textContent = q.trim();
-    hint.onclick = () => dpCriarEAssociarCat(q.trim());
+    hint.onclick = null;
     // Also handle Enter key
     document.getElementById('dpCatSearch').onkeydown = (e) => {
       if (e.key === 'Enter' && q.trim()) dpCriarEAssociarCat(q.trim());
@@ -3025,14 +3209,14 @@ async function dpAssociarCat(catId) {
   try {
     await apiFetch(`/${currentTarefa.id}/categorias/${catId}?usuario_id=${UID}`, {method:'POST'});
     currentTarefa = await apiFetch(`/${currentTarefa.id}?usuario_id=${UID}`);
-    _renderDpCats(currentTarefa.categorias);
+    _renderDpCats(currentTarefa.categorias, true);
   } catch(e) { alert(e.message); }
 }
 async function dpRemoverCat(catId) {
   try {
     await apiFetch(`/${currentTarefa.id}/categorias/${catId}?usuario_id=${UID}`, {method:'DELETE'});
     currentTarefa = await apiFetch(`/${currentTarefa.id}?usuario_id=${UID}`);
-    _renderDpCats(currentTarefa.categorias);
+    _renderDpCats(currentTarefa.categorias, true);
   } catch(e) { alert(e.message); }
 }
 async function dpCriarEAssociarCat(nome) {
@@ -3326,28 +3510,53 @@ function dpRemoverAnexoComentario() {
   document.getElementById('dpCommentPreview').style.display = 'none';
 }
 
+// ── Save buffer ───────────────────────────────────────────────────────────────
+let _pendingChanges = {};
+function _marcarPendente(campo, valor) {
+  _pendingChanges[campo] = valor;
+  _atualizarBtnSalvar();
+}
+function _atualizarBtnSalvar() {
+  const btn = document.getElementById('dpBtnSalvar');
+  if (!btn) return;
+  btn.style.display = Object.keys(_pendingChanges).length > 0 ? 'inline-flex' : 'none';
+}
+async function dpSalvarTudo() {
+  if (!currentTarefa || !Object.keys(_pendingChanges).length) return;
+  const btn = document.getElementById('dpBtnSalvar');
+  if (btn) btn.disabled = true;
+  try {
+    currentTarefa = await apiFetch(`/${currentTarefa.id}`, {
+      method: 'PUT',
+      body: JSON.stringify({usuario_id: UID, ..._pendingChanges})
+    });
+    _pendingChanges = {};
+    _atualizarBtnSalvar();
+    await carregarTarefas();
+    if (btn) {
+      btn.innerHTML = '<i class="bi bi-check2"></i> Salvo!';
+      setTimeout(() => { btn.innerHTML = '<i class="bi bi-floppy"></i> Salvar'; btn.disabled = false; }, 1500);
+    }
+  } catch(e) {
+    alert(e.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
 // Inline save helpers
-async function dpSalvarTitulo() {
+function dpSalvarTitulo() {
   if (!currentTarefa) return;
   const titulo = document.getElementById('dpTitulo').value.trim();
   if (!titulo || titulo === currentTarefa.titulo) return;
-  try {
-    currentTarefa = await apiFetch(`/${currentTarefa.id}`, {method:'PUT', body:JSON.stringify({usuario_id:UID, titulo})});
-    await carregarTarefas();
-  } catch(e) { alert(e.message); }
+  _marcarPendente('titulo', titulo);
 }
-async function dpSalvarDescricao() {
+function dpSalvarDescricao() {
   if (!currentTarefa) return;
   const el = document.getElementById('dpDescricao');
   const descricao = el.innerHTML.trim();
-  // Não salvar se é só placeholder vazio ou igual
   if (descricao === (currentTarefa.descricao || '')) return;
-  if (descricao === '<br>' || descricao === '') {
-    if (!currentTarefa.descricao) return;
-  }
-  try {
-    currentTarefa = await apiFetch(`/${currentTarefa.id}`, {method:'PUT', body:JSON.stringify({usuario_id:UID, descricao: descricao || ''})});
-  } catch(e) { alert(e.message); }
+  if ((descricao === '<br>' || descricao === '') && !currentTarefa.descricao) return;
+  _marcarPendente('descricao', descricao || '');
 }
 function dpExecCmd(cmd, val) {
   document.execCommand(cmd, false, val || null);
@@ -3416,20 +3625,13 @@ async function _uploadImagem(file) {
   const data = await res.json();
   return data.url;
 }
-async function dpSalvarCampo(campo, valor) {
+function dpSalvarCampo(campo, valor) {
   if (!currentTarefa) return;
-  try {
-    currentTarefa = await apiFetch(`/${currentTarefa.id}`, {method:'PUT', body:JSON.stringify({usuario_id:UID, [campo]:valor})});
-    await carregarTarefas();
-  } catch(e) { alert(e.message); }
+  _marcarPendente(campo, valor);
 }
-async function dpSalvarCorCard(cor) {
+function dpSalvarCorCard(cor) {
   if (!currentTarefa) return;
-  try {
-    currentTarefa = await apiFetch(`/${currentTarefa.id}`, {method:'PUT', body:JSON.stringify({usuario_id:UID, cor_card: cor || ''})});
-    if (cor) document.getElementById('dpCorCard').value = cor;
-    await carregarTarefas();
-  } catch(e) { alert(e.message); }
+  _marcarPendente('cor_card', cor || '');
 }
 async function dpSalvarStartDate(val) {
   if (!currentTarefa) return;
@@ -3561,7 +3763,47 @@ async function salvarTarefa() {
   finally { btn.disabled=false; }
 }
 async function finalizarTarefa() {
-  if (!currentTarefa || !confirm('Finalizar esta tarefa?')) return;
+  if (!currentTarefa) return;
+  // Em espaço multi-grupo, oferecer escolha entre encaminhar e finalizar definitivamente
+  if (ELEVATED && currentEspaco?.id) {
+    try {
+      const grupos = await apiFetch(`/espacos/${currentEspaco.id}/grupos?usuario_id=${UID}`);
+      const outrosGrupos = grupos.filter(g => g.group_id !== currentTarefa.group_id);
+      if (outrosGrupos.length > 0) {
+        _showModal('modalFinalizarOpcao');
+        return;
+      }
+    } catch(_) { /* ignora e continua para o fluxo normal */ }
+  }
+  if (!confirm('Finalizar esta tarefa?')) return;
+  await _executarFinalizar();
+}
+
+async function _oferecer_encaminhar() {
+  // Chamado quando card entra em coluna final — verifica grupos antes de abrir modal
+  if (!currentEspaco?.id || !currentTarefa) return;
+  try {
+    const grupos = await apiFetch(`/espacos/${currentEspaco.id}/grupos?usuario_id=${UID}`);
+    const outrosGrupos = grupos.filter(g => g.group_id !== currentTarefa.group_id);
+    if (outrosGrupos.length > 0) {
+      _showModal('modalFinalizarOpcao');
+    }
+  } catch(_) {}
+}
+
+async function _finalizarOpcaoEncaminhar() {
+  _hideModal('modalFinalizarOpcao');
+  await abrirModalEncaminhar();
+}
+
+async function _finalizarOpcaoConcluir() {
+  _hideModal('modalFinalizarOpcao');
+  if (!confirm('Finalizar definitivamente esta tarefa? Ela será marcada como concluída para todos os grupos.')) return;
+  await _executarFinalizar();
+}
+
+async function _executarFinalizar() {
+  if (!currentTarefa) return;
   try {
     const t = await apiFetch(`/${currentTarefa.id}/finalizar?usuario_id=${UID}`, {method:'POST'});
     currentTarefa = t;
@@ -3588,6 +3830,95 @@ async function deletarTarefa() {
     fecharDetalhe();
     await carregarTarefas();
   } catch(e) { alert(e.message); }
+}
+
+// ── Encaminhamento entre grupos ─────────────────────────────────────────────
+async function abrirModalEncaminhar() {
+  if (!currentTarefa) return;
+  const sel = document.getElementById('encGrupoSelect');
+  sel.innerHTML = '<option value="">— Carregando... —</option>';
+  document.getElementById('encaminharErr').classList.add('d-none');
+  try {
+    const grupos = await apiFetch(`/espacos/${currentEspaco.id}/grupos?usuario_id=${UID}`);
+    const opts = grupos
+      .filter(g => g.group_id !== currentTarefa.group_id)
+      .map(g => `<option value="${g.group_id}">${escHtml(g.group_name)}</option>`)
+      .join('');
+    sel.innerHTML = '<option value="">— Selecionar grupo —</option>' + opts;
+  } catch(e) {
+    sel.innerHTML = '<option value="">Erro ao carregar grupos</option>';
+  }
+  _showModal('modalEncaminhar');
+}
+
+async function confirmarEncaminhar() {
+  const gid = parseInt(document.getElementById('encGrupoSelect').value);
+  const errEl = document.getElementById('encaminharErr');
+  errEl.classList.add('d-none');
+  if (!gid) { errEl.textContent = 'Selecione um grupo destino.'; errEl.classList.remove('d-none'); return; }
+  try {
+    const t = await apiFetch(`/${currentTarefa.id}/encaminhar`, {
+      method: 'POST',
+      body: JSON.stringify({ usuario_id: UID, para_grupo_id: gid })
+    });
+    _hideModal('modalEncaminhar');
+    currentTarefa = t;
+    _renderDetalhe(t);
+    await carregarTarefas();
+    dpCarregarHistoricoStatus(t.id);
+  } catch(e) { errEl.textContent = e.message; errEl.classList.remove('d-none'); }
+}
+
+function abrirModalDevolver() {
+  if (!currentTarefa) return;
+  const activeEnc = (currentTarefa.encaminhamentos || []).find(e => e.para_grupo_id === GID && !e.devolvido_em);
+  document.getElementById('devolverGrupoNome').textContent = activeEnc?.de_grupo_nome || 'grupo anterior';
+  document.getElementById('devolverMotivo').value = '';
+  document.getElementById('devolverErr').classList.add('d-none');
+  _showModal('modalDevolver');
+}
+
+async function confirmarDevolver() {
+  const motivo = document.getElementById('devolverMotivo').value.trim();
+  const errEl = document.getElementById('devolverErr');
+  errEl.classList.add('d-none');
+  try {
+    const t = await apiFetch(`/${currentTarefa.id}/devolver`, {
+      method: 'POST',
+      body: JSON.stringify({ usuario_id: UID, motivo: motivo || null })
+    });
+    _hideModal('modalDevolver');
+    currentTarefa = t;
+    _renderDetalhe(t);
+    await carregarTarefas();
+    dpCarregarHistoricoStatus(t.id);
+  } catch(e) { errEl.textContent = e.message; errEl.classList.remove('d-none'); }
+}
+
+function _renderEncaminhamentos(encs) {
+  const wrap = document.getElementById('dpEncaminhamentosWrap');
+  const el   = document.getElementById('dpEncaminhamentos');
+  if (!encs || !encs.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  const fmtDt = iso => iso
+    ? new Date(iso).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})
+    : '';
+  el.innerHTML = encs.map(e => `
+    <div style="padding:6px 0;border-bottom:1px solid #2c2e47;">
+      <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;">
+        <i class="bi bi-send" style="font-size:.65rem;color:#579dff;flex-shrink:0;"></i>
+        <span style="color:#c7d0e0;font-weight:500;font-size:.78rem;">${escHtml(e.de_grupo_nome)} → ${escHtml(e.para_grupo_nome)}</span>
+        ${!e.devolvido_em ? '<span style="font-size:.65rem;background:#e8f4ff;color:#0052cc;border:1px solid #bbd4f8;border-radius:3px;padding:1px 5px;margin-left:auto;">em andamento</span>' : ''}
+      </div>
+      <div style="color:#8993a4;font-size:.72rem;">por ${escHtml(e.encaminhado_por_nome||'?')} • ${fmtDt(e.encaminhado_em)}</div>
+      ${e.devolvido_em ? `
+        <div style="display:flex;align-items:center;gap:5px;margin-top:4px;">
+          <i class="bi bi-arrow-return-left" style="font-size:.65rem;color:#f59e0b;flex-shrink:0;"></i>
+          <span style="color:#8993a4;font-size:.72rem;">Devolvido por ${escHtml(e.devolvido_por_nome||'?')} • ${fmtDt(e.devolvido_em)}</span>
+        </div>
+        ${e.motivo_devolucao ? `<div style="color:#8993a4;font-size:.72rem;font-style:italic;padding-left:16px;">"${escHtml(e.motivo_devolucao)}"</div>` : ''}
+      ` : ''}
+    </div>`).join('');
 }
 
 // ── Etapas ─────────────────────────────────────────────────────────────────
@@ -3721,6 +4052,15 @@ function _modalErr(id, msg) {
   const el=document.getElementById(id); if(!el)return;
   el.textContent=msg; el.classList.remove('d-none');
 }
+function _showModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'flex';
+}
+function _hideModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'none';
+}
+
 function _fmtDtShort(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
@@ -3728,6 +4068,39 @@ function _fmtDtShort(iso) {
 function escHtml(s) {
   if(!s)return'';
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+// ── Auto-refresh (sync entre usuários) ───────────────────────────────────────
+let _pollTimer = null;
+const _POLL_MS = 20000;
+
+function _startPoll() {
+  _stopPoll();
+  _pollTimer = setInterval(_doPoll, _POLL_MS);
+}
+function _stopPoll() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+}
+async function _doPoll() {
+  carregarConvitesPendentes();
+  if (!currentEspaco) return;
+  if (document.getElementById('tkDetailModal')?.classList.contains('show')) return;
+  if (dragCardId || dragColId) return;
+  try {
+    const params = new URLSearchParams({ usuario_id: UID, espaco_id: currentEspaco.id });
+    const prio = document.getElementById('tkFiltPrio').value;
+    if (prio) params.set('prioridade', prio);
+    const q = document.getElementById('tkSearch').value.trim();
+    if (q) params.set('search', q);
+    if (minhaFila) params.set('minha_fila', 'true');
+    const fresh = await apiFetch(`?${params}`);
+    const hash = arr => arr.map(t => `${t.id}:${t.status_id}:${t.updated_at}`).sort().join('|');
+    if (hash(fresh) !== hash(allTasks)) {
+      allTasks = fresh;
+      filteredTasks = [...allTasks];
+      renderCurrentView();
+    }
+  } catch(_) { /* ignora erros silenciosamente */ }
 }
 
 // ── Drag & Drop ──────────────────────────────────────────────────────────────
@@ -3806,6 +4179,17 @@ async function dropCard(event, newStatusId, colEl) {
       body: JSON.stringify({ usuario_id: UID, status_id: sid })
     });
     await carregarTarefas();
+
+    // Coluna final → oferecer encaminhamento
+    if (ELEVATED && sid) {
+      const targetCol = currentEspaco?.statuses?.find(s => s.id === sid);
+      const movedTask = allTasks.find(t => t.id === cardId);
+      const taskOwned = movedTask && (ROLE !== 'RESPONSAVEL_GRUPO' || movedTask.group_id === GID);
+      if (targetCol?.is_final && taskOwned) {
+        currentTarefa = await apiFetch(`/${cardId}?usuario_id=${UID}`);
+        _oferecer_encaminhar();
+      }
+    }
   } catch(e) {
     alert('Erro ao mover card: ' + e.message);
     await carregarTarefas();
@@ -3963,6 +4347,15 @@ async function dpCarregarTempoUsuarios(tarefaId) {
     };
 
     el.innerHTML = dados.map(u => {
+      if (u.is_idle) {
+        return `<div style="margin-bottom:8px;border-bottom:1px solid #f3f4f6;padding-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <i class="bi bi-clock" style="color:#9ca3af;font-size:.85rem;"></i>
+            <span style="color:#9ca3af;font-style:italic;font-size:.78rem;">Aguardando atribuição</span>
+            <span style="margin-left:auto;font-weight:700;color:#9ca3af;font-size:.75rem;">${fmtMin(u.total_minutos_geral)}</span>
+          </div>
+        </div>`;
+      }
       const statusRows = u.statuses.map(s =>
         `<div style="display:flex;align-items:center;gap:5px;padding:2px 0 2px 14px;">
            <span style="width:6px;height:6px;border-radius:50%;background:${s.status_cor||'#b0b7c3'};flex-shrink:0;display:inline-block;"></span>
@@ -3986,6 +4379,23 @@ async function dpCarregarTempoUsuarios(tarefaId) {
 }
 
 // ── Convites pendentes ────────────────────────────────────────────────────────
+let _convitesPrevIds = null; // null = ainda não inicializado (primeira carga)
+
+function _toastConvite(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = `position:fixed;bottom:24px;right:24px;z-index:9999;
+    background:#0052cc;color:#fff;padding:14px 20px;border-radius:10px;
+    font-size:.85rem;font-weight:600;box-shadow:0 4px 24px rgba(0,0,0,.5);
+    display:flex;align-items:center;gap:10px;max-width:340px;
+    animation:slideInRight .3s ease;`;
+  t.innerHTML = `<i class="bi bi-envelope-exclamation-fill" style="font-size:1.1rem;flex-shrink:0;"></i>
+    <span>${msg}</span>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:1rem;margin-left:auto;opacity:.7;">✕</button>`;
+  document.body.appendChild(t);
+  setTimeout(() => t.style.opacity = '0', 6000);
+  setTimeout(() => t.remove(), 6400);
+}
+
 async function carregarConvitesPendentes() {
   const bannerApp = document.getElementById('tkConvitesBanner');
   const bannerGal = document.getElementById('tkConvitesGaleria');
@@ -3994,8 +4404,18 @@ async function carregarConvitesPendentes() {
     if (!convites.length) {
       if (bannerApp) bannerApp.style.display = 'none';
       if (bannerGal) bannerGal.style.display = 'none';
+      _convitesPrevIds = new Set();
       return;
     }
+
+    // Toast apenas para convites novos detectados após a carga inicial
+    if (_convitesPrevIds !== null) {
+      convites.filter(c => !_convitesPrevIds.has(c.id)).forEach(c => {
+        _toastConvite(`Novo convite: <strong>${escHtml(c.espaco_nome)}</strong> — role até o topo para aceitar.`);
+      });
+    }
+    _convitesPrevIds = new Set(convites.map(c => c.id));
+
     const html = `
       <div style="margin-bottom:8px;font-size:.82rem;font-weight:600;color:#579dff;">
         <i class="bi bi-envelope-open me-1"></i>Convites pendentes (${convites.length})
@@ -4026,7 +4446,6 @@ async function carregarConvitesPendentes() {
       </div>
     `).join('');
 
-    // Renderizar em ambos (app screen e gallery screen)
     if (bannerApp) { bannerApp.innerHTML = html; bannerApp.style.display = 'block'; }
     if (bannerGal) { bannerGal.innerHTML = html; bannerGal.style.display = 'block'; }
   } catch(e) {
@@ -4041,10 +4460,9 @@ async function responderConvite(conviteId, acao) {
   try {
     const res = await apiFetch(`/convites/${conviteId}/${verbo}?usuario_id=${UID}`, { method: 'PUT' });
     alert(res.message || 'Convite respondido!');
-    // Recarregar espaços
     allEspacos = await apiFetch(`/espacos?usuario_id=${UID}`);
-    if (acao === 'aceitar' && allEspacos.length) {
-      currentEspaco = allEspacos[allEspacos.length - 1]; // ir para o espaço aceito
+    if (acao === 'aceitar' && res.espaco_id) {
+      currentEspaco = allEspacos.find(e => e.id === res.espaco_id) || allEspacos[0];
       document.getElementById('galleryScreen').style.display = 'none';
       mostrarApp();
       await carregarTarefas();
@@ -4088,28 +4506,65 @@ function _valorUnidadeParaMins(valor, unidade) {
 }
 
 async function _carregarGruposModal() {
-  // Seção de adicionar grupo visível para todos os ELEVATED
   const addSection = document.getElementById('grpAddSection');
   if (addSection) addSection.style.display = ELEVATED ? 'flex' : 'none';
 
   try {
-    // Carregar grupos participantes do espaço
-    grpEspacoGrupos = await apiFetch(`/espacos/${currentEspaco.id}/grupos`);
+    const [grupos, convitesPend] = await Promise.all([
+      apiFetch(`/espacos/${currentEspaco.id}/grupos`),
+      ELEVATED ? apiFetch(`/espacos/${currentEspaco.id}/convites-pendentes?usuario_id=${UID}`) : Promise.resolve([])
+    ]);
+    grpEspacoGrupos = grupos;
 
     if (ELEVATED) {
-      // Carregar todos os grupos do sistema para o select de adicionar
       grpAllGrupos = await apiFetch(`/grupos/lista`);
       const sel = document.getElementById('grpSelectAdd');
       const participandoIds = new Set(grpEspacoGrupos.map(g => g.group_id));
+      const convidadoIds  = new Set(convitesPend.map(c => c.group_id));
       sel.innerHTML = '<option value="">— Selecionar grupo —</option>' +
         grpAllGrupos
-          .filter(g => !participandoIds.has(g.id) && g.total_membros > 0)
+          .filter(g => !participandoIds.has(g.id) && !convidadoIds.has(g.id) && g.total_membros > 0)
           .map(g => `<option value="${g.id}">${escHtml(g.name)} (${g.total_membros} membro${g.total_membros!==1?'s':''})</option>`)
           .join('');
+
+      _renderConvitesPendentes(convitesPend);
     }
 
     _renderGruposLista();
   } catch(e) { alert('Erro ao carregar grupos: ' + e.message); }
+}
+
+function _renderConvitesPendentes(convites) {
+  const wrap = document.getElementById('grpConvitesPendentes');
+  const lista = document.getElementById('grpConvitesLista');
+  if (!wrap || !lista) return;
+  if (!convites.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  lista.innerHTML = convites.map(c => `
+    <div style="display:flex;align-items:center;justify-content:space-between;
+      padding:8px 12px;margin-bottom:6px;
+      background:#1e2a3a;border:1px solid #2c4a6e;border-radius:6px;font-size:.82rem;">
+      <div>
+        <span style="color:#c7d0e0;font-weight:600;">${escHtml(c.group_name || 'Grupo '+c.group_id)}</span>
+        <span style="color:#8993a4;margin-left:8px;">aguardando resposta</span>
+        <div style="font-size:.72rem;color:#6b778c;margin-top:2px;">
+          Enviado por ${escHtml(c.convidado_por_nome||'?')} · ${_fmtDtShort(c.created_at)}
+        </div>
+      </div>
+      <button onclick="cancelarConviteEspaco(${c.id})"
+        style="background:none;border:1px solid #5a2020;color:#bf2600;border-radius:5px;
+               padding:4px 12px;font-size:.75rem;cursor:pointer;white-space:nowrap;">
+        <i class="bi bi-x-circle me-1"></i>Cancelar
+      </button>
+    </div>`).join('');
+}
+
+async function cancelarConviteEspaco(conviteId) {
+  if (!confirm('Cancelar este convite? O grupo não poderá mais responder a ele.')) return;
+  try {
+    await apiFetch(`/convites/${conviteId}?usuario_id=${UID}`, { method: 'DELETE' });
+    await _carregarGruposModal();
+  } catch(e) { alert('Erro: ' + e.message); }
 }
 
 function _renderGruposLista() {
