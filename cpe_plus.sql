@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Tempo de geração: 16/04/2026 às 22:58
+-- Tempo de geração: 22/04/2026 às 02:35
 -- Versão do servidor: 10.4.32-MariaDB
--- Versão do PHP: 8.2.12
+-- Versão do PHP: 8.0.30
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -65,6 +65,16 @@ CREATE TABLE `categorias_task` (
   `created_at` datetime DEFAULT current_timestamp()
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Despejando dados para a tabela `categorias_task`
+--
+
+INSERT INTO `categorias_task` (`id`, `espaco_id`, `group_id`, `nome`, `cor`, `created_at`) VALUES
+(1, 8, 3, 'exemplo 1', '#ffc107', '2026-04-21 19:55:23'),
+(2, 8, 3, 'exemplo 2', '#474747', '2026-04-21 19:55:38'),
+(3, 8, 3, 'exemplo 3', '#605534', '2026-04-21 20:04:58'),
+(4, 8, 9, 'exemplo 4', '#ffc107', '2026-04-21 20:19:48');
+
 -- --------------------------------------------------------
 
 --
@@ -116,7 +126,9 @@ INSERT INTO `convites_espaco_task` (`id`, `espaco_id`, `group_id`, `convidado_po
 (4, 6, 5, 20, 'pendente', '2026-04-14 11:06:24', NULL, NULL),
 (5, 6, 10, 20, 'aceito', '2026-04-14 11:33:33', '2026-04-14 11:37:00', 27),
 (6, 6, 3, 20, 'aceito', '2026-04-14 14:55:22', '2026-04-14 14:55:29', 20),
-(7, 6, 9, 15, 'pendente', '2026-04-16 13:44:55', NULL, NULL);
+(7, 6, 9, 15, 'recusado', '2026-04-16 13:44:55', '2026-04-21 17:28:22', 25),
+(10, 7, 3, 25, 'aceito', '2026-04-21 18:55:19', '2026-04-21 18:58:33', 20),
+(11, 8, 3, 25, 'aceito', '2026-04-21 18:56:49', '2026-04-21 18:58:31', 20);
 
 -- --------------------------------------------------------
 
@@ -215,7 +227,9 @@ INSERT INTO `espacos_task` (`id`, `nome`, `chave`, `template`, `gerenciado_por`,
 (2, 'Teste de Tarefa', 'TDT', 'tarefa', 'equipe', NULL, 15, '#6554c0', '2026-04-13 18:15:16'),
 (3, 'teste de tarefa', 'TDT', 'tarefa', 'equipe', NULL, 15, '#974f0c', '2026-04-13 18:16:12'),
 (4, 'Processo de venda', 'PDV', 'tarefa', 'equipe', 3, 20, '#974f0c', '2026-04-13 20:51:47'),
-(6, 'Processo de venda novo', 'PDVN', 'tarefa', 'equipe', 3, 20, '#974f0c', '2026-04-14 14:05:42');
+(6, 'Processo de venda novo', 'PDVN', 'tarefa', 'equipe', 3, 20, '#974f0c', '2026-04-14 14:05:42'),
+(7, 'Processo de venda teste final', 'PDVTF', 'tarefa', 'equipe', 9, 25, '#974f0c', '2026-04-21 21:21:02'),
+(8, '123 projeto', '1P', 'gestao', 'equipe', 9, 25, '#ffc107', '2026-04-21 21:56:30');
 
 -- --------------------------------------------------------
 
@@ -240,7 +254,11 @@ INSERT INTO `espaco_grupos_task` (`espaco_id`, `group_id`, `adicionado_em`, `adi
 (4, 10, '2026-04-14 10:32:58', 27),
 (6, 10, '2026-04-14 11:37:00', 27),
 (6, 3, '2026-04-14 14:55:29', 20),
-(4, 3, '2026-04-14 14:58:45', 20);
+(4, 3, '2026-04-14 14:58:45', 20),
+(7, 9, '2026-04-21 18:21:02', 25),
+(8, 9, '2026-04-21 18:56:30', 25),
+(8, 3, '2026-04-21 18:58:31', 20),
+(7, 3, '2026-04-21 18:58:33', 20);
 
 -- --------------------------------------------------------
 
@@ -272,7 +290,19 @@ INSERT INTO `espaco_grupo_sla_task` (`espaco_id`, `group_id`, `status_id`, `sla_
 (6, 10, 20, 120),
 (6, 10, 21, 120),
 (6, 10, 22, 0),
-(6, 10, 23, 0);
+(6, 10, 23, 0),
+(4, 9, 12, 60),
+(4, 9, 15, 0),
+(4, 9, 13, 0),
+(4, 9, 14, 0),
+(7, 9, 24, 0),
+(7, 9, 25, 0),
+(7, 9, 26, 0),
+(7, 9, 27, 0),
+(8, 3, 28, 0),
+(8, 3, 29, 90),
+(8, 3, 30, 0),
+(8, 3, 31, 0);
 
 -- --------------------------------------------------------
 
@@ -300,7 +330,11 @@ INSERT INTO `espaco_membros_task` (`id`, `espaco_id`, `usuario_id`, `funcao`, `c
 (6, 3, 20, 'administrador', '2026-04-13 18:16:12'),
 (7, 3, 19, 'membro', '2026-04-13 18:16:12'),
 (8, 4, 20, 'administrador', '2026-04-13 20:51:47'),
-(10, 6, 20, 'administrador', '2026-04-14 14:05:42');
+(10, 6, 20, 'administrador', '2026-04-14 14:05:42'),
+(11, 7, 25, 'administrador', '2026-04-21 21:21:02'),
+(12, 7, 20, 'membro', '2026-04-21 21:21:02'),
+(13, 8, 25, 'administrador', '2026-04-21 21:56:30'),
+(14, 8, 20, 'membro', '2026-04-21 21:56:30');
 
 -- --------------------------------------------------------
 
@@ -789,7 +823,22 @@ INSERT INTO `historico_task` (`id`, `tarefa_id`, `etapa_id`, `usuario_id`, `acao
 (63, 6, NULL, 20, 'atualizou', 'status: 20', '2026-04-14 20:48:53'),
 (64, 6, NULL, 15, 'atualizou', 'status: 21', '2026-04-15 17:36:57'),
 (65, 6, NULL, 15, 'atualizou', 'status: 20', '2026-04-15 21:06:45'),
-(66, 6, NULL, 15, 'atualizou', 'status: 21', '2026-04-16 16:44:38');
+(66, 6, NULL, 15, 'atualizou', 'status: 21', '2026-04-16 16:44:38'),
+(69, 10, NULL, 25, 'criou', 'Tarefa criada: novo teste', '2026-04-21 22:21:24'),
+(70, 10, NULL, 25, 'atualizou', 'editou', '2026-04-21 22:21:27'),
+(71, 10, NULL, 25, 'atualizou', 'status: 31', '2026-04-21 22:21:37'),
+(72, 10, NULL, 15, 'encaminhou', 'Encaminhada para grupo 3', '2026-04-21 22:28:33'),
+(73, 10, NULL, 20, 'atualizou', 'editou', '2026-04-21 22:30:01'),
+(74, 10, NULL, 20, 'atualizou', 'status: 29', '2026-04-21 22:30:19'),
+(75, 10, NULL, 20, 'finalizou', 'Tarefa finalizada', '2026-04-21 22:44:44'),
+(76, 10, NULL, 20, 'reabriu', 'Tarefa reaberta', '2026-04-21 22:47:39'),
+(77, 10, NULL, 20, 'finalizou', 'Tarefa finalizada', '2026-04-21 22:47:50'),
+(78, 11, NULL, 20, 'criou', 'Tarefa criada: contador de tempo planejado', '2026-04-21 22:48:32'),
+(79, 11, NULL, 20, 'atualizou', 'editou', '2026-04-21 22:49:02'),
+(80, 11, NULL, 20, 'atualizou', 'editou', '2026-04-21 23:05:21'),
+(81, 11, NULL, 20, 'atualizou', 'status: Concluído', '2026-04-21 23:12:25'),
+(82, 11, NULL, 20, 'encaminhou', 'Encaminhada para grupo 9', '2026-04-21 23:12:28'),
+(83, 11, NULL, 25, 'atualizou', 'editou', '2026-04-21 23:19:51');
 
 -- --------------------------------------------------------
 
@@ -901,8 +950,29 @@ INSERT INTO `notificacoes` (`id`, `ticket_id`, `usuario_id`, `mensagem`, `tipo`,
 (166, NULL, 23, 'Seu grupo foi convidado para participar do quadro \"Processo de venda novo\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-14 17:55:22', '2026-04-14 17:55:22'),
 (167, NULL, 24, 'Seu grupo foi convidado para participar do quadro \"Processo de venda novo\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-14 17:55:22', '2026-04-14 17:55:22'),
 (168, NULL, 20, 'O grupo \"assistencia\" aceitou o convite para o quadro \"Processo de venda novo\".', 'convite_aceito_task', 1, '2026-04-14 17:55:29', '2026-04-14 18:15:16'),
-(169, NULL, 25, 'Seu grupo foi convidado para participar do quadro \"Processo de venda novo\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-16 16:44:55', '2026-04-16 16:44:55'),
-(170, NULL, 26, 'Seu grupo foi convidado para participar do quadro \"Processo de venda novo\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-16 16:44:55', '2026-04-16 16:44:55');
+(169, NULL, 25, 'Seu grupo foi convidado para participar do quadro \"Processo de venda novo\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 1, '2026-04-16 16:44:55', '2026-04-21 20:13:54'),
+(170, NULL, 26, 'Seu grupo foi convidado para participar do quadro \"Processo de venda novo\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-16 16:44:55', '2026-04-16 16:44:55'),
+(171, NULL, 15, 'O grupo \"Estoque\" recusou o convite para o quadro \"Processo de venda novo\".', 'convite_recusado_task', 1, '2026-04-21 20:28:22', '2026-04-21 21:31:41'),
+(172, NULL, 20, 'Seu grupo foi convidado para participar do quadro \"Processo de venda teste final\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 1, '2026-04-21 21:21:32', '2026-04-21 22:26:06'),
+(173, NULL, 23, 'Seu grupo foi convidado para participar do quadro \"Processo de venda teste final\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-21 21:21:32', '2026-04-21 21:21:32'),
+(174, NULL, 24, 'Seu grupo foi convidado para participar do quadro \"Processo de venda teste final\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-21 21:21:32', '2026-04-21 21:21:32'),
+(175, NULL, 20, 'Seu grupo foi convidado para participar do quadro \"Processo de venda teste final\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 1, '2026-04-21 21:44:42', '2026-04-21 22:26:06'),
+(176, NULL, 23, 'Seu grupo foi convidado para participar do quadro \"Processo de venda teste final\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-21 21:44:42', '2026-04-21 21:44:42'),
+(177, NULL, 24, 'Seu grupo foi convidado para participar do quadro \"Processo de venda teste final\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-21 21:44:42', '2026-04-21 21:44:42'),
+(178, NULL, 20, 'Seu grupo foi convidado para participar do quadro \"Processo de venda teste final\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 1, '2026-04-21 21:55:19', '2026-04-21 22:26:06'),
+(179, NULL, 23, 'Seu grupo foi convidado para participar do quadro \"Processo de venda teste final\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-21 21:55:19', '2026-04-21 21:55:19'),
+(180, NULL, 24, 'Seu grupo foi convidado para participar do quadro \"Processo de venda teste final\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-21 21:55:19', '2026-04-21 21:55:19'),
+(181, NULL, 20, 'Você foi adicionado ao quadro \"123 projeto\". Acesse Tarefas para ver.', 'convite_task', 1, '2026-04-21 21:56:30', '2026-04-21 22:26:06'),
+(182, NULL, 20, 'Seu grupo foi convidado para participar do quadro \"123 projeto\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 1, '2026-04-21 21:56:49', '2026-04-21 22:26:08'),
+(183, NULL, 23, 'Seu grupo foi convidado para participar do quadro \"123 projeto\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-21 21:56:49', '2026-04-21 21:56:49'),
+(184, NULL, 24, 'Seu grupo foi convidado para participar do quadro \"123 projeto\". Acesse Tarefas para aceitar ou recusar.', 'convite_task', 0, '2026-04-21 21:56:49', '2026-04-21 21:56:49'),
+(185, NULL, 25, 'O grupo \"assistencia\" aceitou o convite para o quadro \"123 projeto\".', 'convite_aceito_task', 1, '2026-04-21 21:58:31', '2026-04-21 21:59:53'),
+(186, NULL, 25, 'O grupo \"assistencia\" aceitou o convite para o quadro \"Processo de venda teste final\".', 'convite_aceito_task', 1, '2026-04-21 21:58:33', '2026-04-21 21:59:53'),
+(187, 10, 20, 'Tarefa \"novo teste\" foi encaminhada para seu grupo.', 'encaminhamento_task', 1, '2026-04-21 22:28:33', '2026-04-21 22:29:46'),
+(188, 10, 23, 'Tarefa \"novo teste\" foi encaminhada para seu grupo.', 'encaminhamento_task', 0, '2026-04-21 22:28:33', '2026-04-21 22:28:33'),
+(189, 10, 24, 'Tarefa \"novo teste\" foi encaminhada para seu grupo.', 'encaminhamento_task', 0, '2026-04-21 22:28:33', '2026-04-21 22:28:33'),
+(190, 11, 25, 'Tarefa \"contador de tempo planejado\" foi encaminhada para seu grupo.', 'encaminhamento_task', 1, '2026-04-21 23:12:28', '2026-04-21 23:13:04'),
+(191, 11, 26, 'Tarefa \"contador de tempo planejado\" foi encaminhada para seu grupo.', 'encaminhamento_task', 0, '2026-04-21 23:12:28', '2026-04-21 23:12:28');
 
 -- --------------------------------------------------------
 
@@ -1011,7 +1081,15 @@ INSERT INTO `status_task` (`id`, `group_id`, `espaco_id`, `nome`, `cor`, `icone`
 (20, 3, 6, 'A Fazer (pegue o seu ticket)', '#1a1a1a', 'bi-circle', 0, 0, '2026-04-14 14:05:42'),
 (21, 3, 6, 'Fazendo', '#f59e0b', 'bi-arrow-right-circle', 1, 0, '2026-04-14 14:05:42'),
 (22, 3, 6, 'Feito', '#10b981', 'bi-check-circle', 3, 1, '2026-04-14 14:05:42'),
-(23, 3, 6, 'Primeira venda confirmada', '#0052cc', 'bi-circle', 2, 0, '2026-04-14 14:06:02');
+(23, 3, 6, 'Primeira venda confirmada', '#0052cc', 'bi-circle', 2, 0, '2026-04-14 14:06:02'),
+(24, 9, 7, 'A Fazer', '#6b7280', 'bi-circle', 0, 0, '2026-04-21 21:21:02'),
+(25, 9, 7, 'Fazendo', '#f59e0b', 'bi-arrow-right-circle', 1, 0, '2026-04-21 21:21:02'),
+(26, 9, 7, 'Feito', '#10b981', 'bi-check-circle', 2, 1, '2026-04-21 21:21:02'),
+(27, 9, 7, 'Primeira venda confirmada', '#0052cc', 'bi-circle', 3, 0, '2026-04-21 21:21:02'),
+(28, 9, 8, 'Planejado', '#6b7280', 'bi-calendar', 0, 0, '2026-04-21 21:56:30'),
+(29, 9, 8, 'Em Andamento', '#000000', 'bi-arrow-right-circle', 1, 0, '2026-04-21 21:56:30'),
+(30, 9, 8, 'Bloqueado', '#ef4444', 'bi-x-circle', 2, 0, '2026-04-21 21:56:30'),
+(31, 9, 8, 'Concluído', '#10b981', 'bi-check-circle', 3, 1, '2026-04-21 21:56:30');
 
 -- --------------------------------------------------------
 
@@ -1068,7 +1146,9 @@ INSERT INTO `subtarefas_task` (`id`, `tarefa_id`, `titulo`, `concluida`, `conclu
 (3, 1, 'Separar itens', 0, NULL, 15, '2026-04-13 17:23:41'),
 (4, 5, 'ainda falta embrulhar', 1, '2026-04-14 18:17:29', 20, '2026-04-14 11:49:13'),
 (5, 5, 'falta alguém levar la depois de embrulhado', 1, '2026-04-14 18:17:30', 20, '2026-04-14 11:49:34'),
-(6, 6, 'pegar o numero com alguém', 1, '2026-04-14 17:11:03', 20, '2026-04-14 14:10:34');
+(6, 6, 'pegar o numero com alguém', 1, '2026-04-14 17:11:03', 20, '2026-04-14 14:10:34'),
+(7, 11, 'teste de sub-tarefa 1', 0, NULL, 20, '2026-04-21 19:49:42'),
+(8, 11, 'teste de sub tarefa 2', 0, NULL, 20, '2026-04-21 19:49:48');
 
 -- --------------------------------------------------------
 
@@ -1111,7 +1191,9 @@ INSERT INTO `tarefas_task` (`id`, `numero`, `titulo`, `descricao`, `prioridade`,
 (4, 'PDV-1', 'Aguardando venda', NULL, 'media', 12, 3, 4, 20, NULL, 0, NULL, NULL, NULL, '2026-04-13 20:54:44', '2026-04-13 20:54:44', NULL, NULL, NULL, 20, NULL),
 (5, 'PDVN-1', 'enviar para estoque', NULL, 'media', 22, 3, 6, 20, 24, 2, NULL, NULL, NULL, '2026-04-14 14:09:12', '2026-04-14 20:09:59', NULL, NULL, NULL, 20, NULL),
 (6, 'PDVN-2', 'Faturar o pedido', 'Preciso faturar o numero do <b>pedido</b>', 'urgente', 21, 3, 6, 20, 15, 0, '2026-04-15 13:48:00', NULL, NULL, '2026-04-14 16:48:11', '2026-04-16 16:44:38', NULL, NULL, NULL, 20, '#000000'),
-(7, 'PDVN-3', 'pegar o pedido', NULL, 'media', 22, 10, 6, 27, 27, 0, NULL, NULL, NULL, '2026-04-14 18:04:14', '2026-04-14 19:25:57', NULL, NULL, NULL, 27, NULL);
+(7, 'PDVN-3', 'pegar o pedido', NULL, 'media', 22, 10, 6, 27, 27, 0, NULL, NULL, NULL, '2026-04-14 18:04:14', '2026-04-14 19:25:57', NULL, NULL, NULL, 27, NULL),
+(10, '1P-1', 'novo teste', NULL, 'media', 31, 3, 8, 25, 20, 0, NULL, '2026-04-21 22:47:50', 20, '2026-04-21 22:21:24', '2026-04-21 22:47:50', NULL, NULL, NULL, 25, NULL),
+(11, '1P-2', 'contador de tempo planejado', 'teste para contar tempo no status planejado&nbsp;', 'media', 28, 9, 8, 20, 25, 0, NULL, NULL, NULL, '2026-04-21 22:48:32', '2026-04-21 23:19:51', NULL, NULL, NULL, 20, NULL);
 
 -- --------------------------------------------------------
 
@@ -1123,6 +1205,44 @@ CREATE TABLE `tarefa_categorias_task` (
   `tarefa_id` int(11) NOT NULL,
   `categoria_id` int(11) NOT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Despejando dados para a tabela `tarefa_categorias_task`
+--
+
+INSERT INTO `tarefa_categorias_task` (`tarefa_id`, `categoria_id`) VALUES
+(11, 1),
+(11, 2),
+(11, 3),
+(11, 4);
+
+-- --------------------------------------------------------
+
+--
+-- Estrutura para tabela `tarefa_encaminhamentos_task`
+--
+
+CREATE TABLE `tarefa_encaminhamentos_task` (
+  `id` int(11) NOT NULL,
+  `tarefa_id` int(11) NOT NULL,
+  `de_grupo_id` int(11) NOT NULL,
+  `para_grupo_id` int(11) NOT NULL,
+  `encaminhado_por` int(11) NOT NULL,
+  `encaminhado_em` datetime NOT NULL DEFAULT current_timestamp(),
+  `status_id_origem` int(11) DEFAULT NULL,
+  `status_id_retorno` int(11) DEFAULT NULL,
+  `devolvido_em` datetime DEFAULT NULL,
+  `devolvido_por` int(11) DEFAULT NULL,
+  `motivo_devolucao` text DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Despejando dados para a tabela `tarefa_encaminhamentos_task`
+--
+
+INSERT INTO `tarefa_encaminhamentos_task` (`id`, `tarefa_id`, `de_grupo_id`, `para_grupo_id`, `encaminhado_por`, `encaminhado_em`, `status_id_origem`, `status_id_retorno`, `devolvido_em`, `devolvido_por`, `motivo_devolucao`) VALUES
+(1, 10, 9, 3, 15, '2026-04-21 22:28:33', 31, 31, NULL, NULL, NULL),
+(2, 11, 3, 9, 20, '2026-04-21 23:12:28', 31, 31, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -1169,7 +1289,28 @@ INSERT INTO `tarefa_historico_status_task` (`id`, `tarefa_id`, `status_id`, `sta
 (20, 6, 20, 'A Fazer (pegue o seu ticket)', '#1a1a1a', 15, NULL, '2026-04-14 20:48:54', '2026-04-15 17:36:57'),
 (21, 6, 21, 'Fazendo', '#f59e0b', 15, NULL, '2026-04-15 17:36:57', '2026-04-15 21:06:45'),
 (22, 6, 20, 'A Fazer (pegue o seu ticket)', '#1a1a1a', 15, NULL, '2026-04-15 21:06:45', '2026-04-16 16:44:38'),
-(23, 6, 21, 'Fazendo', '#f59e0b', 15, NULL, '2026-04-16 16:44:38', NULL);
+(23, 6, 21, 'Fazendo', '#f59e0b', 15, NULL, '2026-04-16 16:44:38', NULL),
+(24, 9, 28, 'Planejado', '#6b7280', NULL, 9, '2026-04-21 22:00:13', '2026-04-21 22:08:07'),
+(25, 9, 31, 'Concluído', '#10b981', NULL, NULL, '2026-04-21 22:08:07', '2026-04-21 22:08:10'),
+(26, 9, 12, 'A Fazer', '#6b7280', NULL, 3, '2026-04-21 22:08:10', '2026-04-21 22:16:52'),
+(27, 9, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:16:52', '2026-04-21 22:17:01'),
+(28, 9, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:17:01', '2026-04-21 22:17:13'),
+(29, 9, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:17:13', '2026-04-21 22:21:08'),
+(30, 9, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:21:08', '2026-04-21 22:21:14'),
+(31, 9, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:21:14', NULL),
+(32, 10, 28, 'Planejado', '#6b7280', NULL, 9, '2026-04-21 22:21:24', '2026-04-21 22:21:37'),
+(33, 10, 31, 'Concluído', '#10b981', 25, 9, '2026-04-21 22:21:37', '2026-04-21 22:21:41'),
+(34, 10, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:21:41', '2026-04-21 22:25:27'),
+(35, 10, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:25:27', '2026-04-21 22:25:34'),
+(36, 10, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:25:34', '2026-04-21 22:26:28'),
+(37, 10, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:26:28', '2026-04-21 22:26:57'),
+(38, 10, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:26:57', '2026-04-21 22:28:33'),
+(39, 10, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:28:33', '2026-04-21 22:30:19'),
+(40, 10, 29, 'Em Andamento', '#3b82f6', 20, 3, '2026-04-21 22:30:19', '2026-04-21 22:47:39'),
+(41, 10, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:47:39', NULL),
+(42, 11, 28, 'Planejado', '#6b7280', NULL, 3, '2026-04-21 22:48:32', '2026-04-21 23:12:25'),
+(43, 11, 31, 'Concluído', '#10b981', 20, 3, '2026-04-21 23:12:25', '2026-04-21 23:12:28'),
+(44, 11, 28, 'Planejado', '#6b7280', NULL, 9, '2026-04-21 23:12:28', NULL);
 
 -- --------------------------------------------------------
 
@@ -1558,6 +1699,13 @@ CREATE TABLE `user_access_exceptions` (
   `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Despejando dados para a tabela `user_access_exceptions`
+--
+
+INSERT INTO `user_access_exceptions` (`id`, `user_id`, `page_name`, `exception_type`, `reason`, `created_by`, `created_at`) VALUES
+(6, 25, 'REPORTS', 'allow', 'teste', 15, '2026-04-21 20:14:50');
+
 -- --------------------------------------------------------
 
 --
@@ -1880,6 +2028,15 @@ ALTER TABLE `tarefa_categorias_task`
   ADD PRIMARY KEY (`tarefa_id`,`categoria_id`);
 
 --
+-- Índices de tabela `tarefa_encaminhamentos_task`
+--
+ALTER TABLE `tarefa_encaminhamentos_task`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_tarefa_id` (`tarefa_id`),
+  ADD KEY `idx_de_grupo` (`de_grupo_id`,`devolvido_em`),
+  ADD KEY `idx_para_grupo` (`para_grupo_id`,`devolvido_em`);
+
+--
 -- Índices de tabela `tarefa_historico_status_task`
 --
 ALTER TABLE `tarefa_historico_status_task`
@@ -2022,7 +2179,7 @@ ALTER TABLE `categorias`
 -- AUTO_INCREMENT de tabela `categorias_task`
 --
 ALTER TABLE `categorias_task`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT de tabela `comentarios_task`
@@ -2034,7 +2191,7 @@ ALTER TABLE `comentarios_task`
 -- AUTO_INCREMENT de tabela `convites_espaco_task`
 --
 ALTER TABLE `convites_espaco_task`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT de tabela `cpe_grupo`
@@ -2058,13 +2215,13 @@ ALTER TABLE `documents`
 -- AUTO_INCREMENT de tabela `espacos_task`
 --
 ALTER TABLE `espacos_task`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT de tabela `espaco_membros_task`
 --
 ALTER TABLE `espaco_membros_task`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
 
 --
 -- AUTO_INCREMENT de tabela `etapas_task`
@@ -2148,13 +2305,13 @@ ALTER TABLE `fleet_vehicle_photos`
 -- AUTO_INCREMENT de tabela `historico_task`
 --
 ALTER TABLE `historico_task`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=67;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=84;
 
 --
 -- AUTO_INCREMENT de tabela `notificacoes`
 --
 ALTER TABLE `notificacoes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=171;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=192;
 
 --
 -- AUTO_INCREMENT de tabela `page_permissions`
@@ -2172,7 +2329,7 @@ ALTER TABLE `passwords`
 -- AUTO_INCREMENT de tabela `status_task`
 --
 ALTER TABLE `status_task`
-  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
+  MODIFY `id` int(10) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
 
 --
 -- AUTO_INCREMENT de tabela `subcategorias`
@@ -2184,19 +2341,25 @@ ALTER TABLE `subcategorias`
 -- AUTO_INCREMENT de tabela `subtarefas_task`
 --
 ALTER TABLE `subtarefas_task`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT de tabela `tarefas_task`
 --
 ALTER TABLE `tarefas_task`
-  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` bigint(20) UNSIGNED NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+
+--
+-- AUTO_INCREMENT de tabela `tarefa_encaminhamentos_task`
+--
+ALTER TABLE `tarefa_encaminhamentos_task`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de tabela `tarefa_historico_status_task`
 --
 ALTER TABLE `tarefa_historico_status_task`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=45;
 
 --
 -- AUTO_INCREMENT de tabela `templates_espaco_task`
@@ -2262,7 +2425,7 @@ ALTER TABLE `users`
 -- AUTO_INCREMENT de tabela `user_access_exceptions`
 --
 ALTER TABLE `user_access_exceptions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- Restrições para tabelas despejadas
