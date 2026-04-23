@@ -1588,8 +1588,34 @@ def atualizar_tarefa(tarefa_id: int, body: TarefaUpdate):
         t = cursor.fetchone()
         if not t:
             raise HTTPException(404, "Tarefa não encontrada.")
-        if u["role"] not in ROLES_ELEVATED and u["group_id"] != t["group_id"]:
-            raise HTTPException(403, "Sem permissão.")
+
+        # Task livre = sem responsável. Qualquer usuário pode se auto-atribuir
+        # (desde que não esteja editando outros campos ao mesmo tempo).
+        task_livre = t["responsavel_id"] is None
+        outros_campos_alterados = any(getattr(body, f) is not None for f in (
+            "titulo","descricao","prioridade","status_id","tempo_estimado",
+            "prazo","start_date","cor_card",
+        ))
+        so_auto_claim = (
+            task_livre
+            and body.responsavel_id is not None
+            and body.responsavel_id == u["id"]
+            and not outros_campos_alterados
+        )
+
+        if not so_auto_claim:
+            if u["role"] not in ROLES_ELEVATED and u["group_id"] != t["group_id"]:
+                raise HTTPException(403, "Sem permissão.")
+
+        # Proteção contra "roubo" de task já atribuída
+        if (body.responsavel_id is not None
+                and body.responsavel_id != (t["responsavel_id"] or 0)
+                and not task_livre):
+            is_admin     = u["role"] in ("ADMIN", "TI", "MANAGER")
+            is_resp_grp  = u["role"] == "RESPONSAVEL_GRUPO" and u["group_id"] == t["group_id"]
+            is_current   = t["responsavel_id"] == u["id"]
+            if not (is_admin or is_resp_grp or is_current):
+                raise HTTPException(403, "Esta tarefa já está atribuída a outra pessoa.")
 
         sets, vals, changes = [], [], []
         if body.titulo         is not None: sets.append("titulo=%s");         vals.append(body.titulo);         changes.append(f"título: {body.titulo}")
@@ -2520,10 +2546,16 @@ def criar_subtarefa(tarefa_id: int, body: SubtarefaCreate):
     cursor = None
     try:
         cursor = conn.cursor(dictionary=True)
-        _usuario(cursor, body.criador_id)
-        cursor.execute("SELECT id FROM tarefas_TASK WHERE id=%s", (tarefa_id,))
-        if not cursor.fetchone():
+        u = _usuario(cursor, body.criador_id)
+        cursor.execute("SELECT id, group_id FROM tarefas_TASK WHERE id=%s", (tarefa_id,))
+        t = cursor.fetchone()
+        if not t:
             raise HTTPException(404, "Tarefa não encontrada.")
+        is_admin = u["role"] in ("ADMIN", "TI", "MANAGER")
+        is_grupo_task = t["group_id"] and u["group_id"] == t["group_id"]
+        task_sem_grupo = not t["group_id"]
+        if not (is_admin or is_grupo_task or task_sem_grupo):
+            raise HTTPException(403, "Você só pode criar subtarefas em tarefas do seu grupo.")
         cursor.execute(
             "INSERT INTO subtarefas_TASK (tarefa_id, titulo, criador_id) VALUES (%s,%s,%s)",
             (tarefa_id, body.titulo, body.criador_id)

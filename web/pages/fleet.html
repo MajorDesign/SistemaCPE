@@ -103,6 +103,11 @@
         <div style="padding:14px 16px;border-bottom:1px solid #F3F4F6;font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px">
           <i class="bi bi-bell-fill" style="color:#FFC107"></i> Notificacoes
           <span id="notifCount" style="margin-left:auto;font-size:12px;color:#9CA3AF"></span>
+          <button id="notifClearAll" onclick="clearAllNotifications()"
+                  style="display:none;background:none;border:none;color:#DC2626;font-size:11px;font-weight:600;cursor:pointer;padding:2px 6px"
+                  title="Dispensar todas">
+            <i class="bi bi-trash"></i> Limpar
+          </button>
         </div>
         <div id="notifList" style="padding:8px"></div>
       </div>
@@ -883,6 +888,32 @@
         <textarea class="fleet-textarea" id="retProblemDesc" placeholder="Descreva detalhadamente o que aconteceu..." style="min-height:80px"></textarea>
       </div>
 
+      <!-- Custos da viagem -->
+      <div class="checklist-section-title"><i class="bi bi-cash-coin"></i> Houve custos durante a viagem?</div>
+      <p style="font-size:12px;color:#6B7280;margin:-8px 0 12px">Marque o que se aplica e informe o valor. Estes custos criarão um registro em Viagens/Custos.</p>
+      <div class="fleet-grid-2" id="retCostsGrid">
+        <label class="fleet-form-group" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #E5E7EB;border-radius:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="retHasAbastec" onchange="toggleCostField('retAbastec', this.checked)">
+          <span style="font-size:13px">⛽ Abastecimento</span>
+          <input class="fleet-input" type="number" step="0.01" min="0" id="retAbastec" placeholder="R$ 0,00" style="display:none;flex:1;margin-left:auto;max-width:130px" onclick="event.stopPropagation()">
+        </label>
+        <label class="fleet-form-group" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #E5E7EB;border-radius:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="retHasLavagem" onchange="toggleCostField('retLavagem', this.checked)">
+          <span style="font-size:13px">🧼 Lavagem</span>
+          <input class="fleet-input" type="number" step="0.01" min="0" id="retLavagem" placeholder="R$ 0,00" style="display:none;flex:1;margin-left:auto;max-width:130px" onclick="event.stopPropagation()">
+        </label>
+        <label class="fleet-form-group" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #E5E7EB;border-radius:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="retHasPedagio" onchange="toggleCostField('retPedagio', this.checked)">
+          <span style="font-size:13px">🛣️ Pedágio</span>
+          <input class="fleet-input" type="number" step="0.01" min="0" id="retPedagio" placeholder="R$ 0,00" style="display:none;flex:1;margin-left:auto;max-width:130px" onclick="event.stopPropagation()">
+        </label>
+        <label class="fleet-form-group" style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid #E5E7EB;border-radius:8px;cursor:pointer;margin:0">
+          <input type="checkbox" id="retHasEstac" onchange="toggleCostField('retEstac', this.checked)">
+          <span style="font-size:13px">🅿️ Estacionamento</span>
+          <input class="fleet-input" type="number" step="0.01" min="0" id="retEstac" placeholder="R$ 0,00" style="display:none;flex:1;margin-left:auto;max-width:130px" onclick="event.stopPropagation()">
+        </label>
+      </div>
+
       <div class="fleet-form-group" style="margin-top:16px">
         <label class="fleet-label">Observações gerais</label>
         <textarea class="fleet-textarea" id="retObs" placeholder="Observações sobre a viagem..."></textarea>
@@ -1274,6 +1305,24 @@ let allLiberadores = [];
 let sigPads = {};
 let chartMonthly = null;
 let chartKm = null;
+let _pendingReservation = null; // reserva pendente de checklist (popula form ao abrir)
+
+// ID do grupo "Frotas" em cpe_grupo — usado para identificar quem pode gerenciar veículos
+const FLEET_GROUP_ID = 13;
+
+// Permite mudar status de veículo (manutenção/revisão → ativo) e selecionar outro condutor
+function canManageFleet() {
+  if (!currentUser) return false;
+  if (currentUser.role === 'ADMIN' || currentUser.role === 'TI') return true;
+  return currentUser.role === 'RESPONSAVEL_GRUPO' && currentUser.group_id === FLEET_GROUP_ID;
+}
+
+// Responsável do grupo Frotas, ADMIN e TI podem vistoriar
+function canInspectFleet() {
+  if (!currentUser) return false;
+  if (currentUser.role === 'ADMIN' || currentUser.role === 'TI') return true;
+  return currentUser.role === 'RESPONSAVEL_GRUPO' && currentUser.group_id === FLEET_GROUP_ID;
+}
 
 /* ============================================================
    INIT
@@ -1302,7 +1351,7 @@ async function init() {
       return;
     }
 
-    currentUser = { id: userData.id, name: userData.name, email: userData.email, role: userData.role };
+    currentUser = { id: userData.id, name: userData.name, email: userData.email, role: userData.role, group_id: userData.group_id ?? null };
     document.getElementById('topbarUser').textContent = currentUser.name;
 
     // Pré-carregar dados comuns
@@ -1513,7 +1562,7 @@ function renderVehicles(vehicles) {
             + '<div style="font-size:10px;color:#7C3AED;margin-top:4px"><i class="bi bi-person-fill"></i> '+nome+' &bull; '+hi+'-'+hf+'</div>';
         })() : badgeStatus(v.status)}
         ${v.manutencao_proxima ? '<div style="font-size:10px;color:#D97706;margin-top:4px"><i class="bi bi-tools"></i> '+v.manutencao_proxima+'</div>' : ''}
-        ${v.status === 'manutencao' && ['ADMIN','TI','RESPONSAVEL_GRUPO'].includes(currentUser?.role) ? `
+        ${v.status === 'manutencao' && canManageFleet() ? `
           <div style="display:flex;gap:4px;margin-top:8px">
             <button class="btn-fleet btn-fleet-sm" style="flex:1;background:#DCFCE7;color:#16A34A;border:1px solid #BBF7D0;font-size:11px"
                     onclick="event.stopPropagation();openCorrigirAvaria(${v.id})">
@@ -1524,12 +1573,12 @@ function renderVehicles(vehicles) {
               <i class="bi bi-unlock"></i> Liberar
             </button>
           </div>` : ''}
-        ${v.status === 'revisao' && ['ADMIN','TI','RESPONSAVEL_GRUPO'].includes(currentUser?.role) ? `
+        ${v.status === 'revisao' && canManageFleet() ? `
           <button class="btn-fleet btn-fleet-sm" style="margin-top:8px;background:#DCFCE7;color:#16A34A;border:1px solid #BBF7D0;width:100%"
                   onclick="event.stopPropagation();liberarVeiculo(${v.id})">
             <i class="bi bi-check-circle-fill"></i> Liberar para uso
           </button>` : ''}
-        ${v.status === 'ativo' ? `
+        ${v.status === 'ativo' && canManageFleet() ? `
           <div style="display:flex;gap:4px;margin-top:8px">
             <button class="btn-fleet btn-fleet-sm" style="flex:1;background:#FEF3C7;color:#D97706;border:1px solid #FDE68A;font-size:11px"
                     onclick="event.stopPropagation();enviarParaManutencao(${v.id})">
@@ -1738,14 +1787,24 @@ async function saveVehicle() {
 }
 
 function populateVehicleSelects() {
-  // Checklist: só veículos ativos SEM manutenção agendada
-  const disponíveis = allVehicles.filter(v => v.status === 'ativo' && !v.manutencao_proxima);
+  // Checklist: só veículos ativos SEM manutenção agendada E sem checklist pendente
+  const disponíveis = allVehicles.filter(v => v.status === 'ativo' && !v.manutencao_proxima && !v.checklist_pendente_id);
   const comManut = allVehicles.filter(v => v.status === 'ativo' && v.manutencao_proxima);
+  const comPendencia = allVehicles.filter(v => v.status === 'ativo' && !v.manutencao_proxima && v.checklist_pendente_id);
   const clSel = document.getElementById('clVehicle');
   if (clSel) {
     const cur = clSel.value;
+    const lblPendente = {
+      'aguardando_vistoria': 'aguardando vistoria',
+      'aprovado':            'aprovado — aguardando início',
+      'em_viagem':           'em viagem',
+      'devolvido':           'devolvido — aguardando vistoria de retorno',
+    };
     clSel.innerHTML = '<option value="">Selecione o veículo...</option>'
       + disponíveis.map(v => '<option value="'+v.id+'">'+v.placa+' — '+v.modelo+' ('+( v.unidade||'')+')</option>').join('')
+      + (comPendencia.length ? '<optgroup label="Indisponíveis (checklist pendente)">'
+        + comPendencia.map(v => '<option value="" disabled style="color:#9CA3AF">'+v.placa+' — '+v.modelo+' ('+(lblPendente[v.checklist_pendente_status]||v.checklist_pendente_status)+')</option>').join('')
+        + '</optgroup>' : '')
       + (comManut.length ? '<optgroup label="Indisponíveis (manutenção agendada)">'
         + comManut.map(v => '<option value="" disabled style="color:#9CA3AF">'+v.placa+' — '+v.modelo+' ('+v.manutencao_proxima+')</option>').join('')
         + '</optgroup>' : '');
@@ -1770,7 +1829,8 @@ async function checkPendingChecklist() {
   const data = await apiFetch('/notifications');
   const alerts = data?.alerts || [];
   const pending = alerts.find(a => a.type === 'reservation_checklist');
-  if (!pending) { banner.style.display = 'none'; return; }
+  if (!pending) { banner.style.display = 'none'; _pendingReservation = null; return; }
+  _pendingReservation = pending;
   document.getElementById('pendingChecklistContent').innerHTML =
     '<div style="font-weight:700;font-size:14px;color:#92400E;margin-bottom:4px"><i class="bi bi-clipboard-check"></i> Checklist de saída pendente</div>'
     + '<div style="font-size:13px;color:#78350F;line-height:1.4">'+pending.message+'</div>'
@@ -1805,7 +1865,7 @@ async function loadChecklists() {
         <button class="btn-fleet btn-fleet-secondary btn-fleet-sm" onclick="viewChecklist(${c.id})" title="Ver detalhes">
           <i class="bi bi-eye"></i>
         </button>
-        ${(c.status === 'aguardando_vistoria' && currentUser?.id !== c.condutor_id) ? `
+        ${(c.status === 'aguardando_vistoria' && canInspectFleet() && currentUser?.id !== c.condutor_id) ? `
           <button class="btn-fleet btn-fleet-sm" style="background:#FEF9C3;color:#92400E;border:1px solid #F59E0B" onclick="openVistoriaSaida(${c.id})" title="Vistoriar saída">
             <i class="bi bi-shield-check"></i>
           </button>` : ''}
@@ -1858,6 +1918,23 @@ function openChecklistForm() {
   // Reset form
   ['clVehicle','clCondutor'].forEach(id => document.getElementById(id).value = '');
   ['clDestino','clKmSaida','clObsVisuais','clObservacoes','clProblemOutros'].forEach(id => document.getElementById(id).value = '');
+  // Se há reserva pendente, usar condutor da reserva; senão o usuário logado
+  const condutorId = _pendingReservation?.solicitante_id || currentUser?.id;
+  const condSel = document.getElementById('clCondutor');
+  if (condSel && condutorId) {
+    const temOpcao = Array.from(condSel.options).some(o => String(o.value) === String(condutorId));
+    if (!temOpcao) {
+      // Garante a opção no select (mesmo que loadMotoristas não tenha incluído)
+      const fallbackNome = _pendingReservation && condutorId !== currentUser?.id
+        ? `Condutor #${condutorId}` : (currentUser?.name || 'Eu');
+      const opt = document.createElement('option');
+      opt.value = condutorId;
+      opt.textContent = fallbackNome;
+      condSel.appendChild(opt);
+    }
+    condSel.value = String(condutorId);
+    condSel.disabled = !canManageFleet();
+  }
   document.getElementById('clDataSaida').value = new Date().toISOString().split('T')[0];
   document.getElementById('clHorarioSaida').value = new Date().toTimeString().slice(0,5);
   document.getElementById('clNivelSaida').value = '0';
@@ -1880,8 +1957,21 @@ function openChecklistForm() {
   document.getElementById('clProblemPhoto').value = '';
   document.getElementById('scratchDiagramWrap').style.display = 'none';
   _blueprintData['scratchBlueprint'] = {};
-  loadVehicles();
   openModal('modalChecklist');
+
+  // Popular veículos e, se houver reserva pendente, pré-preencher veículo/destino
+  loadVehicles().then(() => {
+    if (_pendingReservation) {
+      const vSel = document.getElementById('clVehicle');
+      if (vSel && _pendingReservation.vehicle_id) {
+        vSel.value = String(_pendingReservation.vehicle_id);
+        onVehicleSelect(); // carrega fotos de referência e KM
+      }
+      if (_pendingReservation.destino) {
+        document.getElementById('clDestino').value = _pendingReservation.destino;
+      }
+    }
+  });
 }
 
 async function onVehicleSelect() {
@@ -1892,6 +1982,21 @@ async function onVehicleSelect() {
         <i class="bi bi-car-front" style="font-size:32px;display:block;margin-bottom:8px;opacity:.3"></i>
         Selecione o veículo para exibir as fotos de referência
       </div>`;
+    document.getElementById('clKmSaida').value = '';
+    return;
+  }
+  // Bloqueio proativo: veículo com checklist pendente não pode iniciar novo
+  const vehSel = allVehicles.find(v => v.id === id);
+  if (vehSel?.checklist_pendente_id) {
+    const labels = {
+      'aguardando_vistoria': 'aguardando vistoria de saída',
+      'aprovado':            'aprovado, aguardando início de viagem',
+      'em_viagem':           'em viagem',
+      'devolvido':           'devolvido, aguardando vistoria de retorno',
+    };
+    const lbl = labels[vehSel.checklist_pendente_status] || vehSel.checklist_pendente_status;
+    alert(`Este veículo possui o checklist #${vehSel.checklist_pendente_id} ainda ${lbl}. Finalize-o antes de criar um novo.`);
+    document.getElementById('clVehicle').value = '';
     document.getElementById('clKmSaida').value = '';
     return;
   }
@@ -2065,13 +2170,19 @@ async function openVistoriaSaida(id) {
     vstScratchSection.style.display = 'none';
   }
 
-  // Popular vistoriadores (excluir o condutor)
-  const condutorId = c.condutor_id;
+  // Vistoriador = usuário logado (só responsável do grupo Frotas pode vistoriar)
+  if (!canInspectFleet()) {
+    showToast('Somente o responsável do grupo Frotas pode vistoriar.', 'error');
+    return;
+  }
+  if (currentUser.id === c.condutor_id) {
+    showToast('O condutor não pode vistoriar o próprio checklist.', 'error');
+    return;
+  }
   const sel = document.getElementById('vstLiberador');
-  sel.innerHTML = '<option value="">Selecione...</option>' +
-    allLiberadores
-      .filter(u => u.id !== condutorId)
-      .map(u => `<option value="${u.id}">${u.name} (${u.role})</option>`).join('');
+  sel.innerHTML = `<option value="${currentUser.id}">${currentUser.name}</option>`;
+  sel.value = String(currentUser.id);
+  sel.disabled = true;
 
   openModal('modalVistoriaSaida');
   setTimeout(() => initSigPad('sigVstLiberador', 'hintVstSig'), 100);
@@ -2215,6 +2326,7 @@ async function saveChecklist() {
 
   showToast('Checklist enviado! Aguardando vistoriador.', 'success');
   closeModal('modalChecklist');
+  _pendingReservation = null; // consumida — não preencher mais automaticamente
 
   // Alerta de aguardar vistoriador
   const alertBanner = document.createElement('div');
@@ -2367,7 +2479,7 @@ async function viewChecklist(id) {
   const footer = document.getElementById('checklistDetailFooter');
   footer.innerHTML = '';
 
-  if (c.status === 'aguardando_vistoria' && currentUser?.id !== c.condutor_id) {
+  if (c.status === 'aguardando_vistoria' && canInspectFleet() && currentUser?.id !== c.condutor_id) {
     footer.innerHTML += `<button class="btn-fleet btn-fleet-primary" style="background:#F59E0B;border-color:#F59E0B" onclick="closeModal('modalChecklistDetail');openVistoriaSaida(${c.id})"><i class="bi bi-shield-check"></i> Vistoriar Saída</button>`;
   }
   if (c.status === 'aprovado' && (currentUser?.id === c.condutor_id || ['ADMIN','TI'].includes(currentUser?.role))) {
@@ -2572,8 +2684,26 @@ async function openRetorno(checklistId) {
   const retBox = document.getElementById('retProblemPhotoBox');
   retBox.innerHTML = '<i class="bi bi-camera" style="font-size:28px;color:#FCA5A5"></i><span style="font-size:12px;color:#FCA5A5;margin-top:6px">Clique para anexar foto</span>';
 
+  // Reset custos da viagem
+  ['retHasAbastec','retHasLavagem','retHasPedagio','retHasEstac'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.checked = false;
+  });
+  ['retAbastec','retLavagem','retPedagio','retEstac'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.style.display = 'none'; }
+  });
+
   openModal('modalRetorno');
   setTimeout(() => initSigPad('sigCondutorRetorno', 'hintRetCondSig'), 100);
+}
+
+function toggleCostField(inputId, show) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.style.display = show ? '' : 'none';
+  if (!show) el.value = '';
+  else setTimeout(() => el.focus(), 0);
 }
 
 let _retProblemPhotoFile = null;
@@ -2678,6 +2808,17 @@ async function saveDevolver() {
     problems.push({ item_nome: nome, descricao_adicional: desc });
   });
 
+  // Coletar custos marcados (envia só os marcados)
+  const readCost = (checkId, inputId) =>
+    document.getElementById(checkId)?.checked ? (parseFloat(document.getElementById(inputId).value) || 0) : 0;
+  const custos = {
+    combustivel:    readCost('retHasAbastec', 'retAbastec'),
+    lavagem:        readCost('retHasLavagem', 'retLavagem'),
+    pedagio:        readCost('retHasPedagio', 'retPedagio'),
+    estacionamento: readCost('retHasEstac',   'retEstac'),
+  };
+  const temCustos = Object.values(custos).some(v => v > 0);
+
   const body = {
     data_retorno: data_r,
     horario_retorno: hora_r,
@@ -2686,6 +2827,7 @@ async function saveDevolver() {
     assinatura_condutor_retorno: sig,
     retorno_obs: document.getElementById('retObs').value,
     problems,
+    custos,
   };
 
   const res = await apiFetch(`/checklists/${id}/devolver`, { method:'PUT', body: JSON.stringify(body) });
@@ -2762,6 +2904,12 @@ async function saveDevolver() {
   setTimeout(() => alertBanner.remove(), 8000);
 
   loadChecklists();
+
+  // Se houve custos, redireciona para Viagens/Custos
+  if (temCustos) {
+    showSection('trips');
+    setTimeout(() => loadTrips && loadTrips(), 150);
+  }
 }
 
 /* ============================================================
@@ -3148,6 +3296,12 @@ async function saveReservation() {
   if (horario_fim <= horario_inicio) {
     showToast('Horario de fim deve ser maior que o inicio', 'error'); return;
   }
+  // Não permitir agendamento retroativo
+  const inicioReserva = new Date(`${data_reserva}T${horario_inicio}:00`);
+  if (inicioReserva < new Date()) {
+    showToast('O horário do agendamento não pode ser menor do que a hora do dia atual.', 'error');
+    return;
+  }
   const res = await apiFetch('/reservations', {
     method: 'POST',
     body: JSON.stringify({ vehicle_id: parseInt(vehicle_id), destino, data_reserva, horario_inicio, horario_fim }),
@@ -3500,9 +3654,25 @@ async function enviarParaRevisao(vehicleId) {
 /* ============================================================
    NOTIFICAÇÕES (sino)
    ============================================================ */
+function _notifKey(a) {
+  // Gera chave única estável por alerta
+  const ref = a.alert_id ?? a.reservation_id ?? a.maintenance_id ?? a.checklist_id ?? a.vehicle_id ?? '';
+  return `${a.type}:${ref}`;
+}
+function _loadDismissed() {
+  try { return new Set(JSON.parse(localStorage.getItem('fleet_dismissed_alerts') || '[]')); }
+  catch { return new Set(); }
+}
+function _saveDismissed(set) {
+  localStorage.setItem('fleet_dismissed_alerts', JSON.stringify([...set]));
+}
+
 async function fetchNotifications() {
   const data = await apiFetch('/notifications');
-  const alerts = data?.alerts || [];
+  const rawAlerts = data?.alerts || [];
+  const dismissed = _loadDismissed();
+  const alerts = rawAlerts.filter(a => !dismissed.has(_notifKey(a)));
+
   const badge = document.getElementById('notifBadge');
   const count = alerts.length;
   if (count > 0) {
@@ -3514,6 +3684,9 @@ async function fetchNotifications() {
   document.getElementById('notifCount').textContent = count ? `${count} alerta(s)` : '';
 
   const list = document.getElementById('notifList');
+  const header = document.getElementById('notifClearAll');
+  if (header) header.style.display = count ? '' : 'none';
+
   if (!count) {
     list.innerHTML = '<div style="text-align:center;padding:24px;color:#9CA3AF;font-size:13px"><i class="bi bi-check-circle" style="font-size:28px;display:block;margin-bottom:8px;opacity:.4"></i>Nenhuma notificacao pendente</div>';
     return;
@@ -3533,9 +3706,49 @@ async function fetchNotifications() {
         <div style="font-size:12px;color:#6B7280;margin-top:2px">${a.message}</div>
         ${isChecklist ? '<div style="margin-top:4px"><span style="background:#FFC107;color:#1F2937;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700">CLIQUE PARA FAZER O CHECKLIST</span></div>' : ''}
       </div>
-      ${a.alert_id ? '<button onclick="event.stopPropagation();dismissKmAlert('+a.alert_id+')" style="background:none;border:none;color:#9CA3AF;cursor:pointer;font-size:16px;flex-shrink:0" title="Dispensar">&times;</button>' : ''}
+      <button onclick="event.stopPropagation();dismissAlert(${idx})"
+              style="background:none;border:none;color:#9CA3AF;cursor:pointer;font-size:18px;flex-shrink:0;line-height:1"
+              title="Dispensar">&times;</button>
     </div>`;
   }).join('');
+}
+
+async function dismissAlert(idx) {
+  const a = window._notifAlerts?.[idx];
+  if (!a) return;
+  const key = _notifKey(a);
+  const dismissed = _loadDismissed();
+  dismissed.add(key);
+  _saveDismissed(dismissed);
+
+  // Também chama endpoints backend que têm persistência
+  try {
+    if (a.type === 'km_alert' && a.alert_id) {
+      await apiFetch(`/km-alerts/${a.alert_id}/dismiss`, { method:'POST' });
+    } else if ((a.type === 'reservation_approved' || a.type === 'reservation_rejected') && a.reservation_id) {
+      await apiFetch(`/reservations/${a.reservation_id}/dismiss-notif`, { method:'POST' });
+    }
+  } catch(e) { /* silencioso — já dispensou localmente */ }
+
+  await fetchNotifications();
+}
+
+async function clearAllNotifications() {
+  if (!window._notifAlerts?.length) return;
+  if (!confirm('Dispensar todas as notificações?')) return;
+  const dismissed = _loadDismissed();
+  for (const a of window._notifAlerts) {
+    dismissed.add(_notifKey(a));
+    try {
+      if (a.type === 'km_alert' && a.alert_id) {
+        await apiFetch(`/km-alerts/${a.alert_id}/dismiss`, { method:'POST' });
+      } else if ((a.type === 'reservation_approved' || a.type === 'reservation_rejected') && a.reservation_id) {
+        await apiFetch(`/reservations/${a.reservation_id}/dismiss-notif`, { method:'POST' });
+      }
+    } catch(e) {}
+  }
+  _saveDismissed(dismissed);
+  await fetchNotifications();
 }
 
 function toggleNotifPanel() {
@@ -3555,6 +3768,22 @@ function handleNotifClick(idx) {
     showSection('checklist');
     // Abrir formulário de checklist automaticamente
     setTimeout(() => openChecklistForm(), 300);
+  } else if (alert.type === 'checklist_vistoria_pendente') {
+    showSection('checklist');
+    if (alert.checklist_id) {
+      setTimeout(() => openVistoriaSaida(alert.checklist_id), 300);
+    }
+  } else if (alert.type === 'checklist_aprovado') {
+    showSection('checklist');
+    if (alert.checklist_id) {
+      setTimeout(() => viewChecklist(alert.checklist_id), 300);
+    }
+  } else if (alert.type === 'checklist_recusado') {
+    showSection('checklist');
+    if (alert.checklist_id) {
+      // Abre modal de devolução direto para condutor corrigir e reenviar
+      setTimeout(() => openRetorno(alert.checklist_id), 300);
+    }
   } else if (alert.type && alert.type.startsWith('reservation')) {
     showSection('scheduling');
     if (alert.reservation_id) {
@@ -3744,6 +3973,20 @@ function openTripModal(trip = null) {
   selV.innerHTML = '<option value="">Selecione...</option>' +
     allVehicles.map(v => `<option value="${v.id}">${v.placa} — ${v.modelo}</option>`).join('');
 
+  // Condutor: pre-seleciona usuário logado. Só responsável frotas pode trocar.
+  const tripCond = document.getElementById('tripCondutor');
+  if (tripCond && currentUser) {
+    const temOpcao = Array.from(tripCond.options).some(o => String(o.value) === String(currentUser.id));
+    if (!temOpcao) {
+      const opt = document.createElement('option');
+      opt.value = currentUser.id;
+      opt.textContent = currentUser.name;
+      tripCond.appendChild(opt);
+    }
+    tripCond.value = String(currentUser.id);
+    tripCond.disabled = !canManageFleet();
+  }
+
   openModal('modalTrip');
 }
 
@@ -3763,6 +4006,7 @@ async function editTrip(id) {
     allVehicles.map(v => `<option value="${v.id}"${v.id===t.vehicle_id?' selected':''}>${v.placa} — ${v.modelo}</option>`).join('');
 
   document.getElementById('tripCondutor').value = t.condutor_id || '';
+  document.getElementById('tripCondutor').disabled = !canManageFleet();
   document.getElementById('tripUnidadeInput').value = t.unidade || '';
   document.getElementById('tripDataSaida').value = t.data_saida?.split('T')[0] || '';
   document.getElementById('tripDataRetorno').value = t.data_retorno?.split('T')[0] || '';

@@ -1313,7 +1313,7 @@
         <!-- Subtarefas -->
         <div class="dp-section-label">Subtarefas</div>
         <div id="dpSubtarefas"></div>
-        <button class="dp-add-subtask" onclick="dpFocarNovaSubtarefa()">
+        <button id="dpBtnAddSubtask" class="dp-add-subtask" onclick="dpFocarNovaSubtarefa()">
           <i class="bi bi-plus"></i> Adicionar subtarefa
         </button>
         <div id="dpNovaSubtarefaWrap" style="display:none;margin-top:4px;">
@@ -2512,8 +2512,8 @@ function _renderCard(t) {
 
   return `
     <div class="tk-card ${done?'done':''}" style="border-left:3px solid ${cardColor};${cardBg}${readonlyStyle}"
-         draggable="${cardOwnedByMe}" data-card-id="${t.id}"
-         ondragstart="${cardOwnedByMe?`dragStart(event, ${t.id})`:''}"
+         draggable="true" data-card-id="${t.id}"
+         ondragstart="dragStart(event, ${t.id})"
          onclick="abrirDetalhe(${t.id})">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
         <div style="display:flex;align-items:center;gap:2px;">
@@ -2523,7 +2523,10 @@ function _renderCard(t) {
         ${t.group_name ? `<span style="font-size:.6rem;color:#8993a4;background:#f4f5f7;padding:1px 5px;border-radius:3px;">${escHtml(t.group_name)}</span>` : ''}
       </div>
       <div class="tk-card-title">${escHtml(t.titulo)}</div>
-      ${t.relator_nome ? `<div style="font-size:.65rem;color:#8993a4;margin-bottom:3px;"><i class="bi bi-person-badge" style="margin-right:2px;"></i>${escHtml(t.relator_nome)}</div>` : ''}
+      ${t.responsavel_nome
+        ? `<div style="font-size:.65rem;color:#8993a4;margin-bottom:3px;"><i class="bi bi-person-badge" style="margin-right:2px;"></i>${escHtml(t.responsavel_nome)}</div>`
+        : `<div style="font-size:.6rem;margin-bottom:3px;"><span style="background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;border-radius:3px;padding:1px 6px;font-weight:600;"><i class="bi bi-unlock" style="font-size:.55rem;margin-right:2px;"></i>LIVRE</span></div>`
+      }
       ${catsHtml ? `<div class="d-flex gap-1 flex-wrap" style="margin-bottom:4px;">${catsHtml}</div>` : ''}
       <div class="d-flex gap-1 flex-wrap mb-1">
         <span class="prio-badge ${PRIO_CLS[t.prioridade]}">${PRIO_LABEL[t.prioridade]}</span>
@@ -2933,7 +2936,7 @@ function fecharDetalhe() {
   if (Object.keys(_pendingChanges).length > 0) {
     if (!confirm('Existem alterações não salvas. Fechar sem salvar?')) return;
   }
-  _pendingChanges = {};
+  _resetarPendencias();
   document.getElementById('tkDetailModal').classList.remove('show');
   document.body.style.overflow = '';
   currentTarefa = null;
@@ -2946,10 +2949,9 @@ function autoResizeTextarea(el) {
 }
 
 function _renderDetalhe(t) {
-  _pendingChanges = {};
-  _atualizarBtnSalvar();
+  _resetarPendencias();
   const done = !!t.concluida_em;
-  const canManage = ELEVATED && (ROLE !== 'RESPONSAVEL_GRUPO' || GID === t.group_id);
+  const canManage = ELEVATED && (ROLE !== 'RESPONSAVEL_GRUPO' || !t.group_id || GID === t.group_id || t.responsavel_id === UID);
 
   // Header
   document.getElementById('dpNumero').textContent = t.numero || '#' + t.id;
@@ -3001,7 +3003,15 @@ function _renderDetalhe(t) {
   // Prazo
   document.getElementById('dpPrazoInp').value = t.prazo ? t.prazo.slice(0,16) : '';
 
-  // Subtarefas
+  // Subtarefas — só do grupo da tarefa (ou ADMIN/TI/MANAGER, ou responsável) podem adicionar
+  const canSub = !done && (
+    ROLE === 'ADMIN' || ROLE === 'TI' || ROLE === 'MANAGER' ||
+    !t.group_id || GID === t.group_id ||
+    t.responsavel_id === UID
+  );
+  const btnAddSub = document.getElementById('dpBtnAddSubtask');
+  if (btnAddSub) btnAddSub.style.display = canSub ? '' : 'none';
+  if (!canSub) dpFecharNovaSubtarefa();
   _renderDpSubtarefas(t.subtarefas || []);
 
   // Etapas (grupos vinculados)
@@ -3106,8 +3116,22 @@ function dpToggleRespDD() {
   }
 }
 function dpAtribuirAMim() {
-  if (ROLE === 'RESPONSAVEL_GRUPO' && currentTarefa?.group_id && currentTarefa.group_id !== GID) {
-    alert('Você só pode atribuir responsáveis a tarefas do seu grupo.');
+  // Já é o responsável
+  if (currentTarefa?.responsavel_id === UID) {
+    alert('Esta tarefa já está atribuída a você.');
+    return;
+  }
+  // Task livre (sem responsável) — qualquer pessoa pode pegar
+  const taskLivre = !currentTarefa?.responsavel_id;
+  if (taskLivre) {
+    dpSetResp(UID, ME?.name || 'Eu');
+    return;
+  }
+  // Task atribuída a outro — só ADMIN/TI/MANAGER ou responsável-grupo do grupo
+  const isAdmin    = ROLE === 'ADMIN' || ROLE === 'TI' || ROLE === 'MANAGER';
+  const isRespGrp  = ROLE === 'RESPONSAVEL_GRUPO' && currentTarefa?.group_id === GID;
+  if (!(isAdmin || isRespGrp)) {
+    alert('Esta tarefa já está atribuída a outra pessoa.');
     return;
   }
   dpSetResp(UID, ME?.name || 'Eu');
@@ -3204,20 +3228,26 @@ function dpFiltrarCats(q) {
     hint.style.display = 'none';
   }
 }
-async function dpAssociarCat(catId) {
+// Categorias são marcadas como pendentes e só persistem ao clicar em Salvar
+function dpAssociarCat(catId) {
   document.getElementById('dpCatsDD').classList.remove('show');
-  try {
-    await apiFetch(`/${currentTarefa.id}/categorias/${catId}?usuario_id=${UID}`, {method:'POST'});
-    currentTarefa = await apiFetch(`/${currentTarefa.id}?usuario_id=${UID}`);
-    _renderDpCats(currentTarefa.categorias, true);
-  } catch(e) { alert(e.message); }
+  if (!currentTarefa) return;
+  if ((currentTarefa.categorias || []).some(c => c.id === catId)) return;
+  const cat = dpAllCats.find(c => c.id === catId);
+  if (!cat) return;
+  currentTarefa.categorias = [...(currentTarefa.categorias || []), cat];
+  if (_pendingCatsRemove.has(catId)) _pendingCatsRemove.delete(catId);
+  else _pendingCatsAdd.add(catId);
+  _marcarCatsPendente();
+  _renderDpCats(currentTarefa.categorias, true);
 }
-async function dpRemoverCat(catId) {
-  try {
-    await apiFetch(`/${currentTarefa.id}/categorias/${catId}?usuario_id=${UID}`, {method:'DELETE'});
-    currentTarefa = await apiFetch(`/${currentTarefa.id}?usuario_id=${UID}`);
-    _renderDpCats(currentTarefa.categorias, true);
-  } catch(e) { alert(e.message); }
+function dpRemoverCat(catId) {
+  if (!currentTarefa) return;
+  currentTarefa.categorias = (currentTarefa.categorias || []).filter(c => c.id !== catId);
+  if (_pendingCatsAdd.has(catId)) _pendingCatsAdd.delete(catId);
+  else _pendingCatsRemove.add(catId);
+  _marcarCatsPendente();
+  _renderDpCats(currentTarefa.categorias, true);
 }
 async function dpCriarEAssociarCat(nome) {
   if (!nome) return;
@@ -3225,10 +3255,10 @@ async function dpCriarEAssociarCat(nome) {
   const corEl = document.getElementById('dpCatNewCor');
   const cor = corEl ? corEl.value : '#ffc107';
   try {
+    // Criar no banco já (precisa de id) mas ainda pendente de associação
     const cat = await apiFetch('/categorias', {method:'POST', body:JSON.stringify({usuario_id:UID, espaco_id:currentEspaco?.id, group_id:GID, nome, cor})});
     dpAllCats.push(cat);
-    await dpAssociarCat(cat.id);
-    await carregarTarefas(); // Refresh cards to show new label
+    dpAssociarCat(cat.id);
   } catch(e) { alert(e.message); }
 }
 
@@ -3512,8 +3542,24 @@ function dpRemoverAnexoComentario() {
 
 // ── Save buffer ───────────────────────────────────────────────────────────────
 let _pendingChanges = {};
+let _pendingCatsAdd    = new Set();
+let _pendingCatsRemove = new Set();
 function _marcarPendente(campo, valor) {
   _pendingChanges[campo] = valor;
+  _atualizarBtnSalvar();
+}
+function _marcarCatsPendente() {
+  if (_pendingCatsAdd.size > 0 || _pendingCatsRemove.size > 0) {
+    _pendingChanges['_cats_marker'] = true;
+  } else {
+    delete _pendingChanges['_cats_marker'];
+  }
+  _atualizarBtnSalvar();
+}
+function _resetarPendencias() {
+  _pendingChanges = {};
+  _pendingCatsAdd.clear();
+  _pendingCatsRemove.clear();
   _atualizarBtnSalvar();
 }
 function _atualizarBtnSalvar() {
@@ -3526,12 +3572,28 @@ async function dpSalvarTudo() {
   const btn = document.getElementById('dpBtnSalvar');
   if (btn) btn.disabled = true;
   try {
-    currentTarefa = await apiFetch(`/${currentTarefa.id}`, {
-      method: 'PUT',
-      body: JSON.stringify({usuario_id: UID, ..._pendingChanges})
-    });
-    _pendingChanges = {};
-    _atualizarBtnSalvar();
+    // Separar markers de campos reais
+    const realChanges = Object.fromEntries(
+      Object.entries(_pendingChanges).filter(([k]) => !k.startsWith('_'))
+    );
+    if (Object.keys(realChanges).length > 0) {
+      currentTarefa = await apiFetch(`/${currentTarefa.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({usuario_id: UID, ...realChanges})
+      });
+    }
+    // Persistir categorias pendentes (remoções primeiro, depois adições)
+    for (const catId of _pendingCatsRemove) {
+      await apiFetch(`/${currentTarefa.id}/categorias/${catId}?usuario_id=${UID}`, {method:'DELETE'});
+    }
+    for (const catId of _pendingCatsAdd) {
+      await apiFetch(`/${currentTarefa.id}/categorias/${catId}?usuario_id=${UID}`, {method:'POST'});
+    }
+    // Recarregar estado final do backend
+    if (_pendingCatsAdd.size || _pendingCatsRemove.size) {
+      currentTarefa = await apiFetch(`/${currentTarefa.id}?usuario_id=${UID}`);
+    }
+    _resetarPendencias();
     await carregarTarefas();
     if (btn) {
       btn.innerHTML = '<i class="bi bi-check2"></i> Salvo!';
@@ -4109,6 +4171,17 @@ let dragColId  = null;
 let dragType   = null; // 'card' | 'col'
 
 function dragStart(event, cardId) {
+  const task = (allTasks || []).find(t => t.id === cardId);
+  const canMove = !task
+    || (ROLE === 'ADMIN' || ROLE === 'TI' || ROLE === 'MANAGER')
+    || !task.group_id
+    || task.group_id === GID
+    || task.responsavel_id === UID;
+  if (!canMove) {
+    event.preventDefault();
+    alert('Esta tarefa não pertence ao seu grupo. Você não pode movimentá-la.');
+    return;
+  }
   dragCardId = cardId;
   dragType   = 'card';
   event.dataTransfer.effectAllowed = 'move';
@@ -4299,6 +4372,9 @@ async function dpCarregarHistoricoStatus(tarefaId) {
       return rh ? `${d}d ${rh}h` : `${d}d`;
     };
 
+    const totalMin = hist.reduce((s, h) => s + (h.duracao_minutos ?? 0), 0);
+    const finalizada = !!currentTarefa?.concluida_em;
+
     el.innerHTML = hist.map(h => {
       const slaKey = `${h.responsavel_group_id}_${h.status_id}`;
       const slaMin = slaMap[slaKey] || 0;
@@ -4318,7 +4394,14 @@ async function dpCarregarHistoricoStatus(tarefaId) {
         <span style="color:#374151;font-weight:600;">${fmtMin(dur)}${aberto}</span>
         ${slaHtml}
       </div>`;
-    }).join('');
+    }).join('') + `
+      <div class="dp-hist-status-row" style="margin-top:6px;padding-top:6px;border-top:1.5px solid ${finalizada ? '#10b981' : '#e5e7eb'};">
+        <span class="dp-hist-dot" style="background:${finalizada ? '#10b981' : '#9ca3af'};"></span>
+        <span style="flex:1;color:${finalizada ? '#065f46' : '#374151'};font-weight:700;text-transform:uppercase;font-size:.72rem;letter-spacing:.3px;">
+          ${finalizada ? 'Tempo total (finalizada)' : 'Total acumulado'}
+        </span>
+        <span style="color:${finalizada ? '#065f46' : '#111827'};font-weight:800;">${fmtMin(totalMin)}</span>
+      </div>`;
   } catch(e) {
     el.innerHTML = '<span style="color:#ff5630;font-size:.74rem;">Erro ao carregar histórico.</span>';
   }

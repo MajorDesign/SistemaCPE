@@ -9,7 +9,15 @@ echo  Abertura muito mais rapida (~1s vs ~8s).
 echo  Deve ser distribuida completa (toda a pasta dist\TermoNotebookCPE\).
 echo.
 
-cd /d "%~dp0"
+REM Sobe de scripts\ para tools\termo_notebook\
+cd /d "%~dp0.."
+
+REM Le versao do VERSION
+set "VER="
+for /f "usebackq delims=" %%v in ("VERSION") do if not defined VER set "VER=%%v"
+if "%VER%"=="" set "VER=0.0.0"
+echo  Versao: v%VER%
+echo.
 
 if not exist ".venv\Scripts\python.exe" (
     echo Criando virtualenv...
@@ -26,6 +34,7 @@ call .venv\Scripts\pyinstaller.exe ^
     --windowed ^
     --name "TermoNotebookCPE" ^
     --add-data "logo.png;." ^
+    --add-data "VERSION;." ^
     --icon=logo.png ^
     --exclude-module matplotlib ^
     --exclude-module numpy ^
