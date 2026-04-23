@@ -60,12 +60,15 @@ AGENTS = {
 }
 
 
-_VERSION_RE = re.compile(r"_v([0-9][0-9.]*)", re.IGNORECASE)
+_VERSION_RE = re.compile(r"_v([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE)
 
 def _extract_version(filename: str) -> str | None:
     """Extrai '1.0.3' de 'TermoNotebookCPE_v1.0.3.exe'."""
     m = _VERSION_RE.search(os.path.basename(filename))
-    return m.group(1) if m else None
+    if not m:
+        return None
+    # Remove ponto/zero sobrando no final (se houver)
+    return m.group(1).rstrip(".")
 
 
 def _find_latest_release(agent: dict) -> tuple[str | None, str | None]:
