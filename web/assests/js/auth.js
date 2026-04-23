@@ -76,28 +76,13 @@ async function getMe() {
     console.log("[AUTH/GETME] 🔍 Buscando dados do usuário...");
 
     const token = getToken();
-    
-    // ✅ SE NÃO HÁ TOKEN, RETORNAR USUÁRIO PÚBLICO
+
+    // Sem token: limpa storage e redireciona para login (não existe mais "Visitante")
     if (!token) {
-      console.log("[AUTH/GETME] 🔓 Sem token - Retornando usuário público");
-      
-      const publicUser = {
-        id: "public",
-        name: "Visitante",
-        email: "public@sistemacpe.local",
-        role: "USER",
-        is_admin: 0,
-        is_manager: 0,
-        is_active: 1,
-        department_id: null,
-        group_id: null,
-        group_name: null,
-        created_at: null,
-        updated_at: null
-      };
-      
-      setCurrentUser(publicUser);
-      return publicUser;
+      console.log("[AUTH/GETME] 🔓 Sem token - redirecionando para login");
+      removeCurrentUser();
+      _redirectToLoginOnce();
+      return null;
     }
 
     console.log("[AUTH/GETME] 🔑 Token encontrado");
@@ -113,34 +98,27 @@ async function getMe() {
 
     console.log("[AUTH/GETME] 📊 Status da resposta:", response.status);
 
-    // ✅ SE API FALHAR, RETORNAR USUÁRIO DO LOCALSTORAGE OU PÚBLICO
+    // API com falha: se token expirado (401) -> login. Demais erros: usar cache local.
     if (!response.ok) {
-      console.warn(`[AUTH/GETME] ⚠️  API retornou ${response.status} - Usando fallback`);
-      
+      console.warn(`[AUTH/GETME] ⚠️  API retornou ${response.status}`);
+
+      if (response.status === 401 || response.status === 403) {
+        removeToken();
+        removeCurrentUser();
+        _redirectToLoginOnce();
+        return null;
+      }
+
       const savedUser = getCurrentUser();
-      if (savedUser && savedUser.id) {
+      if (savedUser && savedUser.id && savedUser.id !== "public") {
         console.log("[AUTH/GETME] ✓ Usando usuário salvo do localStorage");
         return savedUser;
       }
-      
-      // Retornar usuário público
-      const publicUser = {
-        id: "public",
-        name: "Visitante",
-        email: "public@sistemacpe.local",
-        role: "USER",
-        is_admin: 0,
-        is_manager: 0,
-        is_active: 1,
-        department_id: null,
-        group_id: null,
-        group_name: null,
-        created_at: null,
-        updated_at: null
-      };
-      
-      setCurrentUser(publicUser);
-      return publicUser;
+
+      // Sem cache confiável — força login
+      removeCurrentUser();
+      _redirectToLoginOnce();
+      return null;
     }
 
     const data = await response.json();
@@ -148,7 +126,7 @@ async function getMe() {
 
     // ✅ EXTRAIR USUÁRIO
     let user = null;
-    
+
     if (data && data.user && typeof data.user === 'object') {
       user = data.user;
     } else if (data && data.data && typeof data.data === 'object') {
@@ -159,15 +137,10 @@ async function getMe() {
 
     if (!user || !user.id) {
       console.warn("[AUTH/GETME] ⚠️  Usuário inválido na resposta");
-      return getCurrentUser() || {
-        id: "public",
-        name: "Visitante",
-        email: "public@sistemacpe.local",
-        role: "USER",
-        is_admin: 0,
-        is_manager: 0,
-        is_active: 1
-      };
+      removeToken();
+      removeCurrentUser();
+      _redirectToLoginOnce();
+      return null;
     }
 
     // ✅ NORMALIZAR USUÁRIO
@@ -199,25 +172,31 @@ async function getMe() {
 
   } catch (err) {
     console.warn("[AUTH/GETME] ⚠️  Erro ao chamar API:", err.message);
-    console.log("[AUTH/GETME] 🔓 Continuando com modo público");
-    
-    // ✅ RETORNAR USUÁRIO PÚBLICO MESMO COM ERRO
-    const publicUser = {
-      id: "public",
-      name: "Visitante",
-      email: "public@sistemacpe.local",
-      role: "USER",
-      is_admin: 0,
-      is_manager: 0,
-      is_active: 1,
-      department_id: null,
-      group_id: null,
-      group_name: null
-    };
-    
-    setCurrentUser(publicUser);
-    return publicUser;
+    // Rede offline ou API fora do ar — mantém cache local se for user válido,
+    // caso contrário redireciona para login (sem visitante automático).
+    const savedUser = getCurrentUser();
+    if (savedUser && savedUser.id && savedUser.id !== "public") {
+      return savedUser;
+    }
+    removeCurrentUser();
+    _redirectToLoginOnce();
+    return null;
   }
+}
+
+// Helper para evitar múltiplos redirects durante o carregamento
+let _loginRedirectInProgress = false;
+function _redirectToLoginOnce() {
+  if (_loginRedirectInProgress) return;
+  const currentPath = window.location.pathname;
+  if (currentPath.endsWith("/login.html") || currentPath.endsWith("/web/login.html")) {
+    return; // já estamos na página de login
+  }
+  _loginRedirectInProgress = true;
+  try { sessionStorage.setItem("redirectAfterLogin", currentPath); } catch (_) {}
+  setTimeout(() => {
+    window.location.href = "/SistemaCPE/web/login.html";
+  }, 100);
 }
 
 /**
