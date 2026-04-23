@@ -141,6 +141,24 @@ _CIM_CLASS = {
     "diskdrive":       "Win32_DiskDrive",
 }
 
+# Normaliza o case das propriedades (WMIC retorna PascalCase, PowerShell pode
+# retornar em minúsculas se o Select-Object foi passado em minúsculas).
+_WMI_PROP_CASE = {
+    "model":               "Model",
+    "size":                "Size",
+    "mediatype":           "MediaType",
+    "interfacetype":       "InterfaceType",
+    "manufacturer":        "Manufacturer",
+    "product":             "Product",
+    "name":                "Name",
+    "identifyingnumber":   "IdentifyingNumber",
+    "serialnumber":        "SerialNumber",
+    "totalphysicalmemory": "TotalPhysicalMemory",
+}
+
+def _norm_key(k: str) -> str:
+    return _WMI_PROP_CASE.get(k.lower(), k)
+
 
 def _powershell(script: str, timeout: int = 20) -> str:
     """Roda um script PowerShell e retorna stdout (ou '' em caso de erro)."""
@@ -241,7 +259,10 @@ def _wmic_multi(obj, field):
             continue
         try:
             obj_json = json.loads(line)
-            rows.append({k: ("" if v is None else str(v)) for k, v in obj_json.items()})
+            rows.append({
+                _norm_key(k): ("" if v is None else str(v))
+                for k, v in obj_json.items()
+            })
         except Exception:
             continue
     return rows
