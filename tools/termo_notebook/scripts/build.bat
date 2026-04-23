@@ -48,6 +48,7 @@ call .venv\Scripts\pyinstaller.exe ^
     --name "TermoNotebookCPE" ^
     --add-data "logo.png;." ^
     --add-data "VERSION;." ^
+    --add-data "config.ini;." ^
     --icon=logo.png ^
     --exclude-module matplotlib ^
     --exclude-module numpy ^

@@ -71,20 +71,38 @@ def _exe_dir():
 CONFIG_PATH = os.path.join(_exe_dir(), "config.ini")
 
 def _load_config():
-    """Lee config.ini ao lado do EXE (se existir). Fallback: env var, depois localhost."""
+    """Prioridade:
+    1) config.ini AO LADO do .exe  (override do usuário / TI)
+    2) variável de ambiente CPE_SERVER_URL
+    3) config.ini EMPACOTADO dentro do .exe (default de fábrica)
+    4) http://127.0.0.1:8000 (desenvolvimento local)
+    """
     import configparser
-    if os.path.exists(CONFIG_PATH):
+
+    def _read(path):
+        if not os.path.exists(path):
+            return None
         try:
             cp = configparser.ConfigParser()
-            cp.read(CONFIG_PATH, encoding="utf-8")
+            cp.read(path, encoding="utf-8")
             url = cp.get("server", "url", fallback=None)
-            if url:
-                return url.strip().rstrip("/")
+            return url.strip().rstrip("/") if url else None
         except Exception as e:
-            print(f"[CONFIG] erro lendo config.ini: {e}")
+            print(f"[CONFIG] erro lendo {path}: {e}")
+            return None
+
+    url = _read(CONFIG_PATH)
+    if url:
+        return url
+
     env = os.environ.get("CPE_SERVER_URL")
     if env:
         return env.strip().rstrip("/")
+
+    url = _read(_resource("config.ini"))
+    if url:
+        return url
+
     return "http://127.0.0.1:8000"
 
 def _save_config(url):
@@ -112,31 +130,71 @@ MESES_PT = {
 # =========================================================
 # COLETA DE HARDWARE (WMIC)
 # =========================================================
-def _wmic(obj, field):
-    """Executa wmic e retorna o valor do campo (primeiro)."""
+_NO_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+
+# Mapeamento wmic "obj" -> classe CIM do PowerShell (Win32_*)
+_CIM_CLASS = {
+    "baseboard":       "Win32_BaseBoard",
+    "csproduct":       "Win32_ComputerSystemProduct",
+    "computersystem":  "Win32_ComputerSystem",
+    "bios":            "Win32_BIOS",
+    "diskdrive":       "Win32_DiskDrive",
+}
+
+
+def _powershell(script: str, timeout: int = 20) -> str:
+    """Roda um script PowerShell e retorna stdout (ou '' em caso de erro)."""
+    try:
+        p = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, timeout=timeout,
+            creationflags=_NO_WINDOW,
+        )
+        return p.stdout or ""
+    except Exception as e:
+        print(f"[PS] erro: {e}")
+        return ""
+
+
+def _wmic_cli(obj, field) -> str:
+    """Tenta o wmic clássico; retorna '' se não existir (Win 11/Server 2025)."""
     try:
         p = subprocess.run(
             ["wmic", obj, "get", field, "/value"],
-            capture_output=True, text=True, timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            capture_output=True, text=True, timeout=10,
+            creationflags=_NO_WINDOW,
         )
         for line in p.stdout.splitlines():
             if "=" in line:
                 val = line.split("=", 1)[1].strip()
                 if val:
                     return val
+    except FileNotFoundError:
+        return ""
     except Exception as e:
         print(f"[WMIC] erro {obj} {field}: {e}")
     return ""
 
 
-def _wmic_multi(obj, field):
-    """Retorna lista de dicts de cada instancia."""
+def _wmic(obj, field):
+    """Obtém uma propriedade do hardware. Tenta wmic; se indisponivel, usa
+    PowerShell Get-CimInstance (padrão em Windows 11 / Server 2025)."""
+    val = _wmic_cli(obj, field)
+    if val:
+        return val
+    cim = _CIM_CLASS.get(obj)
+    if not cim:
+        return ""
+    script = f"(Get-CimInstance -ClassName {cim} | Select-Object -First 1 -ExpandProperty {field}) 2>$null"
+    return _powershell(script).strip()
+
+
+def _wmic_multi_cli(obj, field):
     try:
         p = subprocess.run(
             ["wmic", obj, "get", field, "/value"],
-            capture_output=True, text=True, timeout=15,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            capture_output=True, text=True, timeout=10,
+            creationflags=_NO_WINDOW,
         )
         rows, buf = [], {}
         for line in p.stdout.splitlines():
@@ -150,9 +208,43 @@ def _wmic_multi(obj, field):
         if buf:
             rows.append(buf)
         return rows
+    except FileNotFoundError:
+        return []
     except Exception as e:
         print(f"[WMIC-multi] erro: {e}")
         return []
+
+
+def _wmic_multi(obj, field):
+    """Obtém múltiplas propriedades por instância. Fallback para PowerShell."""
+    rows = _wmic_multi_cli(obj, field)
+    if rows:
+        return rows
+    cim = _CIM_CLASS.get(obj)
+    if not cim:
+        return []
+    fields = [f.strip() for f in field.split(",") if f.strip()]
+    props  = ", ".join(fields)
+    script = (
+        f"Get-CimInstance -ClassName {cim} | "
+        f"Select-Object {props} | "
+        f"ForEach-Object {{ $_ | ConvertTo-Json -Compress }}"
+    )
+    out = _powershell(script).strip()
+    if not out:
+        return []
+    import json
+    rows = []
+    for line in out.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj_json = json.loads(line)
+            rows.append({k: ("" if v is None else str(v)) for k, v in obj_json.items()})
+        except Exception:
+            continue
+    return rows
 
 
 def coletar_hardware():
