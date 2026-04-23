@@ -266,7 +266,7 @@
 
       setTimeout(() => {
         window.location.href = redirectUrl;
-      }, 1000);
+      }, 2000);
       // [FIM] Redirecionar
 
     } catch (err) {
