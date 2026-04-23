@@ -33,7 +33,28 @@ from reportlab.lib import colors
 # =========================================================
 # CONFIG
 # =========================================================
-APP_TITLE = "CPE — Termo de Responsabilidade"
+# Versão é lida do arquivo VERSION (ao lado do .py ou dentro do bundle do PyInstaller).
+# Atualizar SEMPRE o arquivo VERSION ao publicar uma nova build.
+def _read_app_version():
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    candidatos = [
+        os.path.join(base, "VERSION"),
+        os.path.join(os.path.dirname(base), "VERSION"),
+    ]
+    for p in candidatos:
+        try:
+            if os.path.exists(p):
+                with open(p, "r", encoding="utf-8") as f:
+                    for line in f:
+                        v = line.strip()
+                        if v and not v.startswith("#"):
+                            return v
+        except Exception:
+            pass
+    return "0.0.0"
+
+__version__ = _read_app_version()
+APP_TITLE = f"CPE — Termo de Responsabilidade  v{__version__}"
 PASTA_NOME_TARGET = "Termos Notebooks 2026"
 
 def _resource(rel):
@@ -312,14 +333,40 @@ class ApiClient:
         self.token = None
         self.session = requests.Session()
 
+    def _check_api_response(self, r, contexto):
+        """Detecta se o servidor respondeu como um servidor errado (Apache/HTML)
+        em vez do FastAPI esperado. Lança exceção com mensagem clara."""
+        ct = (r.headers.get("Content-Type") or "").lower()
+        if "text/html" in ct or r.text.lstrip().lower().startswith("<!doctype"):
+            raise Exception(
+                f"URL do servidor incorreta.\n\n"
+                f"O endereço {self.base} respondeu como um servidor Web comum "
+                f"(ex: Apache/IIS), não o FastAPI do CPE.\n\n"
+                f"Clique em \"Configurar servidor\" e informe a URL correta, "
+                f"por exemplo: http://172.16.0.10:8000"
+            )
+
     def login(self, credential, password):
-        r = self.session.post(
-            f"{self.base}/api/auth/login",
-            json={"credential": credential, "password": password},
-            timeout=15,
-        )
+        try:
+            r = self.session.post(
+                f"{self.base}/api/auth/login",
+                json={"credential": credential, "password": password},
+                timeout=15,
+            )
+        except requests.exceptions.ConnectionError:
+            raise Exception(
+                f"Não foi possível conectar ao servidor em {self.base}.\n\n"
+                f"Verifique se o FastAPI está rodando e se o IP/porta estão corretos "
+                f"em \"Configurar servidor\"."
+            )
+        except requests.exceptions.Timeout:
+            raise Exception(f"Tempo esgotado ao conectar em {self.base}.")
+
+        self._check_api_response(r, "login")
+        if r.status_code == 401:
+            raise Exception("Email/usuário ou senha incorretos.")
         if r.status_code != 200:
-            raise Exception(f"Credenciais invalidas ({r.status_code}): {r.text}")
+            raise Exception(f"Erro no login ({r.status_code}): {r.text[:200]}")
         data = r.json()
         self.token = data.get("access_token")
         if not self.token:
@@ -334,9 +381,44 @@ class ApiClient:
             f"{self.base}/api/contratos/pastas",
             headers=self._headers(), timeout=15,
         )
+        self._check_api_response(r, "listar pastas")
         if r.status_code != 200:
-            raise Exception(f"Erro ao listar pastas: {r.text}")
+            raise Exception(f"Erro ao listar pastas ({r.status_code}): {r.text[:200]}")
         return r.json().get("pastas", [])
+
+    def ensure_pasta(self, nome, user):
+        """Garante que exista uma subpasta com 'nome' no grupo do usuário.
+        Se não existir, cria dentro da pasta raiz do grupo."""
+        pastas = self.listar_pastas()
+        alvo = next((p for p in pastas if str(p.get("nome","")).strip().lower() == nome.lower()), None)
+        if alvo:
+            return alvo
+        # Acha a pasta raiz do grupo do usuário
+        gid = user.get("group_id") if isinstance(user, dict) else None
+        raiz = next(
+            (p for p in pastas if p.get("is_root") and (gid is None or p.get("group_id") == gid)),
+            None,
+        )
+        if not raiz:
+            raise Exception(
+                "Seu usuário não está vinculado a um grupo com pasta de contratos. "
+                "Peça ao administrador para configurar."
+            )
+        r = self.session.post(
+            f"{self.base}/api/contratos/pastas",
+            headers={**self._headers(), "Content-Type": "application/json"},
+            json={"parent_id": raiz["id"], "nome": nome},
+            timeout=15,
+        )
+        self._check_api_response(r, "criar pasta")
+        if r.status_code not in (200, 201):
+            raise Exception(f"Erro ao criar pasta '{nome}' ({r.status_code}): {r.text[:200]}")
+        # Relista para pegar o registro completo (com id definitivo)
+        pastas = self.listar_pastas()
+        alvo = next((p for p in pastas if str(p.get("nome","")).strip().lower() == nome.lower()), None)
+        if not alvo:
+            raise Exception(f"Pasta '{nome}' foi criada mas não está visível.")
+        return alvo
 
     def upload_contrato(self, pasta_id, nome, descricao, filename, content_bytes):
         files = {"file": (filename, content_bytes, "application/pdf")}
@@ -345,8 +427,22 @@ class ApiClient:
             f"{self.base}/api/contratos",
             headers=self._headers(), data=data, files=files, timeout=30,
         )
+        self._check_api_response(r, "upload")
         if r.status_code != 200:
-            raise Exception(f"Erro upload ({r.status_code}): {r.text}")
+            raise Exception(f"Erro upload ({r.status_code}): {r.text[:200]}")
+        return r.json()
+
+    def submit_termo(self, nome, descricao, filename, content_bytes):
+        """Envia termo direto para a pasta T.I. (qualquer usuário autenticado pode)."""
+        files = {"file": (filename, content_bytes, "application/pdf")}
+        data = {"nome": nome, "descricao": descricao or ""}
+        r = self.session.post(
+            f"{self.base}/api/agents/termo-notebook/submit",
+            headers=self._headers(), data=data, files=files, timeout=30,
+        )
+        self._check_api_response(r, "enviar termo")
+        if r.status_code != 200:
+            raise Exception(f"Erro ao enviar termo ({r.status_code}): {r.text[:200]}")
         return r.json()
 
 
@@ -473,24 +569,28 @@ class App(tk.Tk):
                                     font=("Segoe UI", 9), wraplength=500, justify="left")
         self.lbl_status.pack(fill="x", pady=(0, 8))
 
-        # Botões
+        # Botões — fluxo em 2 passos: (1) Gerar/visualizar, (2) Enviar
+        self._pdf_bytes = None
+        self._pdf_tmp_path = None
+
         btn_frame = tk.Frame(body, bg="#f3f4f6")
         btn_frame.pack(fill="x")
-        self.btn_confirmar = tk.Button(
-            btn_frame, text="✓  Confirmar e Enviar",
+
+        self.btn_primary = tk.Button(
+            btn_frame, text="📄  Gerar e Visualizar Termo",
             bg="#FFC107", fg="#1f2937", font=("Segoe UI", 11, "bold"),
             relief="flat", padx=18, pady=10, cursor="hand2",
-            command=self._confirmar
+            command=self._gerar_e_visualizar
         )
-        self.btn_confirmar.pack(side="right")
+        self.btn_primary.pack(side="right")
 
-        self.btn_cancelar = tk.Button(
+        self.btn_secondary = tk.Button(
             btn_frame, text="Cancelar",
             bg="#e5e7eb", fg="#6b7280", font=("Segoe UI", 10),
             relief="flat", padx=14, pady=10, cursor="hand2",
             command=self.destroy
         )
-        self.btn_cancelar.pack(side="right", padx=(0, 8))
+        self.btn_secondary.pack(side="right", padx=(0, 8))
 
     def _configurar_servidor(self):
         global SERVER_URL
@@ -530,52 +630,35 @@ class App(tk.Tk):
         self.lbl_status.config(text=msg, fg=color)
         self.update()
 
-    def _confirmar(self):
+    def _validar_dados(self):
+        """Valida nome/CPF/hardware. Retorna (nome, cpf) ou None."""
         nome = self.ent_nome.get().strip()
         cpf = self.ent_cpf.get().strip()
         if not nome or len(nome.split()) < 2:
             messagebox.showwarning("Atenção", "Informe o nome completo (nome + sobrenome).")
-            return
+            return None
         digits = "".join(c for c in cpf if c.isdigit())
         if len(digits) != 11:
             messagebox.showwarning("Atenção", "CPF inválido. Deve ter 11 dígitos.")
-            return
+            return None
         if self.hw.get("placa_mae") == "Detectando...":
-            messagebox.showinfo("Aguarde", "Ainda detectando o hardware do notebook. Aguarde alguns segundos.")
-            return
+            messagebox.showinfo("Aguarde", "Ainda detectando o hardware. Aguarde alguns segundos.")
+            return None
+        return nome, cpf
 
-        if not messagebox.askyesno("Confirmar envio",
-                                   f"Confirma o envio do termo?\n\nNome: {nome}\nCPF: {cpf}\n"
-                                   f"Modelo: {self.hw['modelo_nb']}"):
+    def _gerar_e_visualizar(self):
+        """Etapa 1: gera o PDF, salva em arquivo temporário e abre no visualizador.
+        Depois troca o botão para o modo 'Enviar Termo'."""
+        dados = self._validar_dados()
+        if not dados:
             return
-
-        self.btn_confirmar.config(state="disabled", text="Processando...")
+        nome, cpf = dados
 
         try:
-            # 1) LOGIN
-            self._set_status("Autenticando no servidor...")
-            login_win = LoginDialog(self)
-            self.wait_window(login_win)
-            creds = login_win.result
-            if not creds:
-                self.btn_confirmar.config(state="normal", text="✓  Confirmar e Enviar")
-                self._set_status("Envio cancelado.", "#DC2626")
-                return
-
-            user = self.api.login(creds["cred"], creds["pwd"])
-            self._set_status(f"Autenticado como {user.get('name','')}. Buscando pasta de destino...")
-
-            # 2) Buscar pasta "Termos Notebooks 2026"
-            pastas = self.api.listar_pastas()
-            alvo = next((p for p in pastas if str(p.get("nome", "")).strip().lower() == PASTA_NOME_TARGET.lower()), None)
-            if not alvo:
-                raise Exception(
-                    f"Pasta '{PASTA_NOME_TARGET}' não encontrada ou você não tem acesso. "
-                    "Peça para o administrador criar essa pasta dentro do seu grupo."
-                )
-
-            # 3) Gerar PDF
             self._set_status("Gerando PDF...")
+            self.btn_primary.config(state="disabled", text="Gerando...")
+            self.update_idletasks()
+
             pdf_bytes = gerar_pdf({
                 "nome": nome, "cpf": cpf,
                 "placa_mae": self.hw["placa_mae"],
@@ -585,78 +668,250 @@ class App(tk.Tk):
                 "hd":        self.hw["hd"],
             })
 
-            # Limite do servidor: 2 MB
             if len(pdf_bytes) > 2 * 1024 * 1024:
                 raise Exception(f"PDF gerado tem {len(pdf_bytes)//1024} KB (limite: 2048 KB).")
 
-            # 4) Upload
-            self._set_status(f"Enviando {len(pdf_bytes)//1024} KB para o servidor...")
+            # Salvar em arquivo temporário (%TEMP%)
+            import tempfile
+            primeiro = nome.split()[0]
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_nome = "".join(c if c.isalnum() else "_" for c in primeiro)
+            tmp_name = f"termo_{safe_nome}_{stamp}.pdf"
+            tmp_path = os.path.join(tempfile.gettempdir(), tmp_name)
+            with open(tmp_path, "wb") as f:
+                f.write(pdf_bytes)
+
+            self._pdf_bytes = pdf_bytes
+            self._pdf_tmp_path = tmp_path
+
+            # Abrir no visualizador padrão do sistema (Adobe / Edge / navegador)
+            try:
+                os.startfile(tmp_path)
+            except Exception as e:
+                # Fallback: mostrar caminho ao usuário
+                messagebox.showwarning(
+                    "Abra manualmente",
+                    f"Não consegui abrir o PDF automaticamente.\n\nAbra manualmente:\n{tmp_path}"
+                )
+
+            # Mudar botões para estado "enviar"
+            self._set_status("Pré-visualização gerada. Confira o termo e clique em ENVIAR quando estiver pronto.", "#2563eb")
+            self.btn_primary.config(
+                text="✉  Enviar Termo para T.I.",
+                bg="#16A34A", fg="#ffffff",
+                activebackground="#15803d",
+                state="normal",
+                command=self._enviar_termo,
+            )
+            self.btn_secondary.config(
+                text="↻  Gerar de novo",
+                bg="#e5e7eb", fg="#374151",
+                command=self._resetar_pdf,
+            )
+
+        except Exception as e:
+            self._set_status(f"Erro ao gerar PDF: {e}", "#DC2626")
+            messagebox.showerror("Erro", str(e))
+            self.btn_primary.config(state="normal", text="📄  Gerar e Visualizar Termo")
+
+    def _resetar_pdf(self):
+        """Permite editar os dados e gerar um PDF novo."""
+        self._pdf_bytes = None
+        try:
+            if self._pdf_tmp_path and os.path.exists(self._pdf_tmp_path):
+                os.remove(self._pdf_tmp_path)
+        except Exception:
+            pass
+        self._pdf_tmp_path = None
+        self._set_status("")
+        self.btn_primary.config(
+            text="📄  Gerar e Visualizar Termo",
+            bg="#FFC107", fg="#1f2937",
+            activebackground="#F59E0B",
+            command=self._gerar_e_visualizar,
+        )
+        self.btn_secondary.config(
+            text="Cancelar",
+            bg="#e5e7eb", fg="#6b7280",
+            command=self.destroy,
+        )
+
+    def _enviar_termo(self):
+        """Etapa 2: faz login e envia o PDF já gerado para a pasta T.I."""
+        if not self._pdf_bytes:
+            messagebox.showwarning("Atenção", "Gere o termo antes de enviar.")
+            return
+
+        nome, cpf = self._validar_dados() or (None, None)
+        if not nome:
+            return
+
+        self.btn_primary.config(state="disabled", text="Enviando...")
+
+        try:
+            # 1) LOGIN
+            self._set_status("Autenticando no servidor...")
+            login_win = LoginDialog(self)
+            self.wait_window(login_win)
+            creds = login_win.result
+            if not creds:
+                self._set_status("Envio cancelado.", "#DC2626")
+                self.btn_primary.config(state="normal", text="✉  Enviar Termo para T.I.")
+                return
+
+            user = self.api.login(creds["cred"], creds["pwd"])
+            self._set_status(f"Autenticado como {user.get('name','')}. Enviando termo para T.I...")
+
+            # 2) Upload via endpoint dedicado (pasta fixa T.I. — qualquer user pode)
             primeiro = nome.split()[0]
             ultimo = nome.split()[-1] if len(nome.split()) > 1 else ""
             stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"termo_{primeiro}_{ultimo}_{stamp}.pdf"
-
             nome_contrato = f"Termo de Responsabilidade - {nome}"
             descricao = (f"Notebook {self.hw['modelo_nb']} | SN: {self.hw['serial']} | "
                          f"Placa-mãe: {self.hw['placa_mae']} | "
                          f"RAM: {self.hw['memoria']} | Storage: {self.hw['hd']}")
 
-            res = self.api.upload_contrato(alvo["id"], nome_contrato, descricao, filename, pdf_bytes)
+            res = self.api.submit_termo(nome_contrato, descricao, filename, self._pdf_bytes)
 
             self._set_status("✓ Enviado com sucesso!", "#16A34A")
-            messagebox.showinfo("Sucesso",
-                                f"Termo enviado para a pasta '{PASTA_NOME_TARGET}'.\n\n"
-                                f"Arquivo: {filename}")
+            messagebox.showinfo(
+                "Sucesso",
+                f"Termo enviado para a T.I.\n\nPasta: {res.get('pasta','Termos Notebooks 2026')}\nArquivo: {filename}"
+            )
             self.destroy()
 
         except Exception as e:
             self._set_status(f"Erro: {e}", "#DC2626")
             messagebox.showerror("Erro", str(e))
-            self.btn_confirmar.config(state="normal", text="✓  Confirmar e Enviar")
+            self.btn_primary.config(state="normal", text="✉  Enviar Termo para T.I.")
 
 
 # =========================================================
 # LOGIN DIALOG
 # =========================================================
 class LoginDialog(tk.Toplevel):
+    """Modal de login com layout moderno — usa grid para garantir que o botão
+    Entrar sempre apareça, mesmo em Windows com DPI escalado."""
+
+    # Paleta
+    BG        = "#ffffff"
+    BG_HEADER = "#1f2937"
+    GOLD      = "#FFC107"
+    GOLD_HV   = "#F59E0B"
+    MUTED     = "#6b7280"
+    TEXT      = "#111827"
+    BORDER    = "#d1d5db"
+    BORDER_FOCUS = "#FFC107"
+
     def __init__(self, parent):
         super().__init__(parent)
         self.result = None
         self.title("Login CPE")
-        self.geometry("360x220")
+        self.configure(bg=self.BG)
         self.resizable(False, False)
-        self.configure(bg="#f3f4f6")
         self.transient(parent)
         self.grab_set()
 
-        tk.Label(self, text="Autenticação CPE", bg="#f3f4f6",
-                 font=("Segoe UI", 12, "bold"), fg="#111827").pack(pady=(16, 4))
-        tk.Label(self, text="Informe suas credenciais do sistema", bg="#f3f4f6",
-                 font=("Segoe UI", 9), fg="#6b7280").pack(pady=(0, 10))
+        # ----- Layout: grid com rows expansíveis -----
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(1, weight=1)       # corpo (cresce)
+        self.rowconfigure(2, weight=0)       # rodapé (fixo)
 
-        frm = tk.Frame(self, bg="#f3f4f6")
-        frm.pack(padx=20, fill="x")
+        # ---- HEADER (banner escuro) ----
+        header = tk.Frame(self, bg=self.BG_HEADER, height=90)
+        header.grid(row=0, column=0, sticky="nsew")
+        header.grid_propagate(False)
+        tk.Label(header, text="🔐", bg=self.BG_HEADER, fg=self.GOLD,
+                 font=("Segoe UI Emoji", 22)).pack(pady=(14, 0))
+        tk.Label(header, text="Autenticação CPE", bg=self.BG_HEADER, fg="#ffffff",
+                 font=("Segoe UI", 13, "bold")).pack()
+        tk.Label(header, text="Informe suas credenciais para enviar o termo",
+                 bg=self.BG_HEADER, fg="#9CA3AF",
+                 font=("Segoe UI", 9)).pack(pady=(2, 8))
 
-        tk.Label(frm, text="Email ou usuário:", bg="#f3f4f6", font=("Segoe UI", 9)).grid(row=0, column=0, sticky="w", pady=4)
-        self.ent_cred = tk.Entry(frm, font=("Segoe UI", 10), width=32, relief="solid", bd=1)
-        self.ent_cred.grid(row=1, column=0, sticky="ew", pady=(0, 8))
+        # ---- CORPO (campos) ----
+        body = tk.Frame(self, bg=self.BG, padx=28, pady=22)
+        body.grid(row=1, column=0, sticky="nsew")
+        body.columnconfigure(0, weight=1)
 
-        tk.Label(frm, text="Senha:", bg="#f3f4f6", font=("Segoe UI", 9)).grid(row=2, column=0, sticky="w", pady=4)
-        self.ent_pwd = tk.Entry(frm, font=("Segoe UI", 10), show="•", width=32, relief="solid", bd=1)
-        self.ent_pwd.grid(row=3, column=0, sticky="ew", pady=(0, 8))
+        # Usuário
+        tk.Label(body, text="Email ou usuário", bg=self.BG, fg=self.TEXT,
+                 font=("Segoe UI", 9, "bold")).grid(row=0, column=0, sticky="w")
+        self.ent_cred = tk.Entry(body, font=("Segoe UI", 11), bd=0,
+                                 highlightthickness=1,
+                                 highlightbackground=self.BORDER,
+                                 highlightcolor=self.BORDER_FOCUS)
+        self.ent_cred.grid(row=1, column=0, sticky="ew", ipady=8, pady=(4, 14))
 
-        btns = tk.Frame(self, bg="#f3f4f6")
-        btns.pack(fill="x", padx=20, pady=(8, 16))
-        tk.Button(btns, text="Cancelar", bg="#e5e7eb", fg="#374151",
-                  relief="flat", padx=14, pady=6, font=("Segoe UI", 10),
-                  command=self._cancel).pack(side="right", padx=(6, 0))
-        tk.Button(btns, text="Entrar", bg="#FFC107", fg="#1f2937",
-                  relief="flat", padx=18, pady=6, font=("Segoe UI", 10, "bold"),
-                  command=self._ok).pack(side="right")
+        # Senha
+        tk.Label(body, text="Senha", bg=self.BG, fg=self.TEXT,
+                 font=("Segoe UI", 9, "bold")).grid(row=2, column=0, sticky="w")
+        pwd_wrap = tk.Frame(body, bg=self.BG)
+        pwd_wrap.grid(row=3, column=0, sticky="ew", pady=(4, 4))
+        pwd_wrap.columnconfigure(0, weight=1)
 
+        self.ent_pwd = tk.Entry(pwd_wrap, font=("Segoe UI", 11), bd=0,
+                                show="•",
+                                highlightthickness=1,
+                                highlightbackground=self.BORDER,
+                                highlightcolor=self.BORDER_FOCUS)
+        self.ent_pwd.grid(row=0, column=0, sticky="ew", ipady=8)
+
+        self._show_pwd = False
+        self.btn_eye = tk.Button(pwd_wrap, text="👁", font=("Segoe UI Emoji", 11),
+                                 bg=self.BG, bd=0, cursor="hand2",
+                                 activebackground=self.BG,
+                                 command=self._toggle_pwd)
+        self.btn_eye.grid(row=0, column=1, padx=(6, 0))
+
+        # Mensagem de rodapé do corpo
+        tk.Label(body, text="Pressione Enter para entrar.", bg=self.BG, fg=self.MUTED,
+                 font=("Segoe UI", 8)).grid(row=4, column=0, sticky="w", pady=(10, 0))
+
+        # ---- RODAPÉ (botões — SEMPRE visível) ----
+        footer = tk.Frame(self, bg="#F9FAFB", height=72)
+        footer.grid(row=2, column=0, sticky="nsew")
+        footer.grid_propagate(False)
+        footer.columnconfigure(0, weight=1)
+
+        btns = tk.Frame(footer, bg="#F9FAFB")
+        btns.grid(row=0, column=0, sticky="e", padx=20, pady=16)
+
+        btn_cancel = tk.Button(btns, text="Cancelar",
+                               bg="#e5e7eb", fg="#374151",
+                               activebackground="#d1d5db",
+                               relief="flat", bd=0, cursor="hand2",
+                               font=("Segoe UI", 10),
+                               padx=18, pady=10,
+                               command=self._cancel)
+        btn_cancel.pack(side="left", padx=(0, 8))
+
+        btn_ok = tk.Button(btns, text="Entrar  ➔",
+                           bg=self.GOLD, fg=self.TEXT,
+                           activebackground=self.GOLD_HV,
+                           relief="flat", bd=0, cursor="hand2",
+                           font=("Segoe UI", 10, "bold"),
+                           padx=24, pady=10,
+                           command=self._ok)
+        btn_ok.pack(side="left")
+
+        # Bindings
         self.ent_cred.focus_set()
         self.bind("<Return>", lambda _: self._ok())
         self.bind("<Escape>", lambda _: self._cancel())
+
+        # Centralizar na tela depois que o widget calcular tamanho real
+        self.update_idletasks()
+        w, h = 480, 440
+        x = (self.winfo_screenwidth()  - w) // 2
+        y = (self.winfo_screenheight() - h) // 2
+        self.geometry(f"{w}x{h}+{x}+{y}")
+        self.minsize(480, 440)
+
+    def _toggle_pwd(self):
+        self._show_pwd = not self._show_pwd
+        self.ent_pwd.configure(show="" if self._show_pwd else "•")
 
     def _ok(self):
         c = self.ent_cred.get().strip()

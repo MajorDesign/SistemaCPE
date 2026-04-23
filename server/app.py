@@ -1100,6 +1100,16 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ REGISTRAR ROUTER DE AGENTES (DOWNLOAD DE UTILITÁRIOS)
+try:
+    from routes.agents import router as agents_router
+    app.include_router(agents_router)
+    logger.info("✅ Router de Agents registrado: /api/agents")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Agents: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ SERVIR UPLOADS ESTÁTICOS (fotos de veículos)
 try:
     _uploads_dir = os.path.normpath(

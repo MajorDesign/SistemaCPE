@@ -73,20 +73,38 @@ const globalMenu = [
 // FUNÇÃO: getFilteredMenu() - Filtrar menu por ROLE
 // Data: 01/04/2026
 // ==================================================
-function getFilteredMenu(userRole) {
+async function getFilteredMenu(userRole, userId) {
   console.log("[NAV/MENU] 🔍 Filtrando menu para role: " + userRole);
-  
-  // ✅ Filtrar itens que o usuário tem permissão
-  return globalMenu.filter(item => {
-    const hasPermission = !item.requiredRoles || item.requiredRoles.includes(userRole);
-    
-    if (hasPermission && item.submenu) {
-      // ✅ Filtrar também os subitens
-      item.submenu = item.submenu.filter(subitem => 
-        !subitem.requiredRoles || subitem.requiredRoles.includes(userRole)
-      );
+
+  function pageKeyFromPath(path) {
+    return (path || '').split('/').pop().replace('.html', '').replace(/-/g, '_').toUpperCase();
+  }
+
+  let exc = { allowPages: [], blockPages: [] };
+  if (userId && typeof fetchUserExceptions === 'function') {
+    try {
+      exc = await fetchUserExceptions(userId);
+    } catch (e) {
+      console.warn('[NAV/MENU] ⚠️ Não foi possível carregar exceções:', e.message);
     }
-    
+  }
+
+  return globalMenu.filter(item => {
+    const pageKey = pageKeyFromPath(item.path);
+    if (exc.blockPages.includes(pageKey)) return false;
+    if (exc.allowPages.includes(pageKey)) return true;
+
+    const hasPermission = !item.requiredRoles || item.requiredRoles.includes(userRole);
+
+    if (hasPermission && item.submenu) {
+      item.submenu = item.submenu.filter(subitem => {
+        const subKey = pageKeyFromPath(subitem.path);
+        if (exc.blockPages.includes(subKey)) return false;
+        if (exc.allowPages.includes(subKey)) return true;
+        return !subitem.requiredRoles || subitem.requiredRoles.includes(userRole);
+      });
+    }
+
     return hasPermission;
   });
 }
@@ -203,37 +221,39 @@ function renderNavbar() {
    RENDERIZAR SIDEBAR
    ========================================= */
 
-   function renderSidebar() {
+   async function renderSidebar() {
     console.log("[NAV/SIDEBAR] 🎯 Renderizando sidebar...");
-  
+
     const sidebarContainer = document.getElementById("sidebar-container");
-    
+
     if (!sidebarContainer) {
       console.error("[NAV/SIDEBAR] ❌ #sidebar-container não encontrado!");
       return false;
     }
-  
+
     // ✅ CORRIGIDO: Obter role do usuário
     const userStr = localStorage.getItem("cpe_user");
     let userRole = "USER";
-    
+    let userId = null;
+
     if (userStr) {
       try {
         const userData = JSON.parse(userStr);
         userRole = userData.role || "USER";
+        userId = userData.id || null;
         console.log("[NAV/SIDEBAR] 👤 Role do usuário: " + userRole);
       } catch (err) {
         console.warn("[NAV/SIDEBAR] ⚠️ Erro ao obter role:", err.message);
       }
     }
-  
-    // ================================================== 
-// RENDERIZAR SIDEBAR COM FILTRO POR ROLE
+
+    // ==================================================
+// RENDERIZAR SIDEBAR COM FILTRO POR ROLE + EXCEÇÕES
 // Data: 01/04/2026 16:45
 // ==================================================
 
-    // ✅ CORRIGIDO: Filtrar menu por role
-    const menuFiltered = getFilteredMenu(userRole);
+    // ✅ Filtrar menu por role e exceções individuais
+    const menuFiltered = await getFilteredMenu(userRole, userId);
     console.log("[NAV/SIDEBAR] ✅ Menu filtrado: " + menuFiltered.length + " itens visíveis");
   
     let menuHTML = `
@@ -508,12 +528,44 @@ async function loadNotifications() {
     localStorage.setItem("notifications_" + currentUserId, JSON.stringify(notifications));
     
     notificationsData = notifications;
+
+    // Merge convites de tarefas pendentes como notificações sintéticas
+    await _mergeConvitesTask();
+
     updateNotificationUI();
-    
+
   } catch (error) {
     console.error("[NAV/NOTIFICATIONS] ❌ Erro:", error);
     loadNotificationsFromStorage();
   }
+}
+
+// Busca convites pendentes e injeta no sino, garantindo que sempre apareçam
+async function _mergeConvitesTask() {
+  try {
+    if (!currentUserId) return;
+    const _api = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
+    const res = await fetch(`${_api}/api/tasks/convites?usuario_id=${currentUserId}`);
+    if (!res.ok) return;
+    const convites = await res.json();
+    if (!Array.isArray(convites) || !convites.length) return;
+
+    // Transforma convites em entradas de notificação (id negativo = sintético)
+    const sinteticos = convites.map(c => ({
+      id: -c.id,
+      ticket_id: null,
+      usuario_id: currentUserId,
+      mensagem: `Convite para o quadro "${c.espaco_nome}" — convidado por ${c.convidado_por_nome || 'um gestor'}.`,
+      tipo: 'convite_task',
+      lido: false,
+      created_at: c.created_at
+    }));
+
+    // Remove notificações convite_task do banco para evitar duplicatas
+    const semConvitesDb = notificationsData.filter(n => n.tipo !== 'convite_task');
+    notificationsData = [...sinteticos, ...semConvitesDb];
+    console.log(`[NAV/NOTIFICATIONS] 📩 ${sinteticos.length} convite(s) de tarefa injetado(s) no sino`);
+  } catch (_) {}
 }
 
 // Carregar do localStorage (fallback)
@@ -742,7 +794,7 @@ async function handleNotificationClick(notificationId, ticketId, tipo) {
 // Marcar uma notificação como lida
 async function markNotificationAsRead(notificationId) {
   try {
-    if (!currentUserId) return;
+    if (!currentUserId || notificationId < 0) return; // ignora sintéticas (convites)
 
     // ✅ CORRIGIDO: adicionado ?usuario_id= obrigatório exigido pelo notificacoes.py
     // Sem esse parâmetro a API retornava erro 422 (Unprocessable Entity)
@@ -773,8 +825,8 @@ async function markAllAsRead() {
   try {
     if (!currentUserId) return;
 
-    const unreadNotifs = notificationsData.filter(n => !n.lido);
-    
+    const unreadNotifs = notificationsData.filter(n => !n.lido && n.id > 0); // ignora sintéticas
+
     if (unreadNotifs.length === 0) return;
     
     console.log("[NAV/NOTIFICATIONS] 📋 Marcando " + unreadNotifs.length + " como lida(s)...");
@@ -884,14 +936,14 @@ function formatNotificationDate(dateString) {
    INICIALIZAR NAVEGAÇÃO
    ========================================= */
 
-function initializeNavigation() {
+async function initializeNavigation() {
   console.log("\n" + "=".repeat(80));
   console.log("[NAV/INIT] 🚀 Inicializando navegação");
   console.log("=".repeat(80));
 
   try {
     const navbarOk = renderNavbar();
-    const sidebarOk = renderSidebar();
+    const sidebarOk = await renderSidebar();
 
     if (navbarOk && sidebarOk) {
       console.log("[NAV/INIT] ✅ Navegação inicializada com sucesso!");

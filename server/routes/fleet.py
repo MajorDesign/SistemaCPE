@@ -9,6 +9,7 @@ import os
 import uuid
 import shutil
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,16 @@ def _get_user_role(request: Request) -> dict:
     return user
 
 
+# ID do grupo "Frotas" em cpe_grupo — responsáveis podem gerenciar status de veículos
+FLEET_GROUP_ID = 13
+
+def _can_manage_fleet(user: dict) -> bool:
+    role = user.get("role")
+    if role in ("ADMIN", "TI"):
+        return True
+    return role == "RESPONSAVEL_GRUPO" and user.get("group_id") == FLEET_GROUP_ID
+
+
 # ============================================================
 # VEÍCULOS
 # ============================================================
@@ -97,7 +108,17 @@ def list_vehicles(request: Request):
                       AND r.data_reserva = CURDATE()
                       AND r.horario_fim >= CURTIME()
                     ORDER BY r.horario_inicio LIMIT 1
-                   ) AS reserva_ativa
+                   ) AS reserva_ativa,
+                   (SELECT ck.id FROM fleet_checklists ck
+                    WHERE ck.vehicle_id = v.id
+                      AND ck.status NOT IN ('retornado','retornado_com_avaria','cancelado')
+                    ORDER BY ck.id DESC LIMIT 1
+                   ) AS checklist_pendente_id,
+                   (SELECT ck.status FROM fleet_checklists ck
+                    WHERE ck.vehicle_id = v.id
+                      AND ck.status NOT IN ('retornado','retornado_com_avaria','cancelado')
+                    ORDER BY ck.id DESC LIMIT 1
+                   ) AS checklist_pendente_status
             FROM fleet_vehicles v
             LEFT JOIN fleet_vehicle_photos p
                    ON p.vehicle_id = v.id AND p.is_current = 1 AND p.angulo = 'frente'
@@ -406,7 +427,12 @@ def save_scratch_data(checklist_id: int, request: Request, data: dict):
 
 @router.post("/checklists")
 def create_checklist(request: Request, data: dict):
-    user_id = _get_user_id(request)
+    user = _get_user_role(request)
+    user_id = user["id"]
+    # Usuário comum só pode se cadastrar como condutor do próprio checklist.
+    # Só o responsável do grupo Frotas (ou ADMIN/TI) pode indicar outro condutor.
+    if not _can_manage_fleet(user):
+        data["condutor_id"] = user_id
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -508,8 +534,13 @@ def create_checklist(request: Request, data: dict):
 
 @router.post("/checklists/{checklist_id}/vistoriar-saida")
 def vistoriar_saida(checklist_id: int, request: Request, data: dict):
-    """Vistoriador assina a saída — deve ser usuário diferente do condutor."""
+    """Vistoriador assina a saída — responsável do grupo Frotas, ADMIN ou TI."""
     user = _get_user_role(request)
+    if not _can_manage_fleet(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Somente o responsável do grupo Frotas (ou ADMIN/TI) pode vistoriar."
+        )
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -522,11 +553,11 @@ def vistoriar_saida(checklist_id: int, request: Request, data: dict):
             raise HTTPException(status_code=404, detail="Checklist não encontrado")
         if row["status"] != "aguardando_vistoria":
             raise HTTPException(status_code=400, detail="Checklist não está aguardando vistoria")
-        # Vistoriador não pode ser o próprio condutor (exceto ADMIN/TI)
-        if user["id"] == row["condutor_id"] and user.get("role") not in ("ADMIN", "TI"):
+        if user["id"] == row["condutor_id"]:
             raise HTTPException(status_code=403, detail="O condutor não pode vistoriar sua própria saída")
 
-        liberador_id = data.get("liberador_id") or user["id"]
+        # Ignora liberador_id do body — sempre o próprio user autenticado
+        liberador_id = user["id"]
         assinatura   = data.get("assinatura_liberador")
 
         cursor.execute("""
@@ -614,9 +645,44 @@ def devolver_veiculo(checklist_id: int, request: Request, data: dict):
                     (checklist_id, nome, p.get("descricao_adicional", "")),
                 )
 
+        # Criar registro de viagem automaticamente se o condutor informou custos
+        custos = data.get("custos") or {}
+        c_comb = float(custos.get("combustivel") or 0)
+        c_lav  = float(custos.get("lavagem") or 0)
+        c_ped  = float(custos.get("pedagio") or 0)
+        c_est  = float(custos.get("estacionamento") or 0)
+        trip_id = None
+        if any(v > 0 for v in (c_comb, c_lav, c_ped, c_est)):
+            cursor.execute("""
+                SELECT condutor_id, destino, data_saida, km_saida
+                FROM fleet_checklists WHERE id=%s
+            """, (checklist_id,))
+            ck = cursor.fetchone()
+            cursor.execute("""
+                INSERT INTO fleet_trips
+                    (vehicle_id, checklist_id, condutor_id, descricao,
+                     data_saida, data_retorno, km_inicial, km_final,
+                     custo_aluguel, custo_telemetria, custo_estacionamento,
+                     custo_pedagio, custo_manutencao, custo_combustivel,
+                     custo_lavagem, custo_outros)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s,
+                        0, 0, %s, %s, 0, %s, %s, 0)
+            """, (
+                row["vehicle_id"], checklist_id, ck["condutor_id"], ck.get("destino") or "",
+                ck["data_saida"], data.get("data_retorno"),
+                ck.get("km_saida") or 0, km_retorno or 0,
+                c_est, c_ped, c_comb, c_lav,
+            ))
+            trip_id = cursor.lastrowid
+            logger.info(f"[FLEET] Trip {trip_id} criada automaticamente (checklist {checklist_id})")
+
         conn.commit()
         logger.info(f"[FLEET] Checklist {checklist_id} devolvido, aguardando vistoria retorno")
-        return {"success": True, "message": "Devolucao registrada! Aguardando vistoria de retorno."}
+        return {
+            "success": True,
+            "message": "Devolucao registrada! Aguardando vistoria de retorno.",
+            "trip_id": trip_id,
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -789,6 +855,59 @@ def recusar_retorno(checklist_id: int, request: Request, data: dict):
         conn.close()
 
 
+def _try_create_maintenance_trip(cursor, maintenance_id: int):
+    """Cria registro em fleet_trips a partir de uma manutenção concluída com comprovante.
+    Idempotente: se já existe trip_id vinculado ou faltam pré-condições, não faz nada.
+    """
+    cursor.execute(
+        """SELECT id, vehicle_id, tipo, fornecedor, data_entrada, data_conclusao,
+                  km_atual, custo, status, trip_id
+           FROM fleet_maintenance WHERE id=%s""",
+        (maintenance_id,)
+    )
+    m = cursor.fetchone()
+    if not m:
+        return None
+    if m.get("trip_id"):
+        return None
+    if m["status"] != "concluido":
+        return None
+    if not m["custo"] or float(m["custo"]) <= 0:
+        return None
+    # Precisa ter comprovante anexado
+    cursor.execute(
+        "SELECT COUNT(*) AS n FROM fleet_maintenance_files WHERE maintenance_id=%s",
+        (maintenance_id,)
+    )
+    if cursor.fetchone()["n"] == 0:
+        return None
+
+    descricao = f"Manutencao #{maintenance_id}: {m['tipo'] or ''}".strip()
+    if m.get("fornecedor"):
+        descricao = f"{descricao} ({m['fornecedor']})"
+    data_saida   = m.get("data_entrada") or m.get("data_conclusao")
+    data_retorno = m.get("data_conclusao") or m.get("data_entrada")
+    km           = m.get("km_atual") or 0
+
+    cursor.execute("""
+        INSERT INTO fleet_trips
+            (vehicle_id, descricao,
+             data_saida, data_retorno, km_inicial, km_final,
+             custo_aluguel, custo_telemetria, custo_estacionamento,
+             custo_pedagio, custo_manutencao, custo_combustivel,
+             custo_lavagem, custo_outros)
+        VALUES (%s, %s, %s, %s, %s, %s,
+                0, 0, 0, 0, %s, 0, 0, 0)
+    """, (
+        m["vehicle_id"], descricao,
+        data_saida, data_retorno, km, km,
+        float(m["custo"]),
+    ))
+    trip_id = cursor.lastrowid
+    cursor.execute("UPDATE fleet_maintenance SET trip_id=%s WHERE id=%s", (trip_id, maintenance_id))
+    return trip_id
+
+
 def _auto_block_vehicle(cursor, vehicle_id, data_entrada, maint_status, user_id):
     """Bloqueia veículo automaticamente se manutenção com data_entrada <= hoje."""
     from datetime import date
@@ -868,10 +987,10 @@ def _log_vehicle_history(cursor, vehicle_id, evento, descricao, status_anterior,
 
 @router.post("/vehicles/{vehicle_id}/liberar")
 def liberar_veiculo(vehicle_id: int, request: Request):
-    """RESPONSAVEL_GRUPO/ADMIN/TI libera veículo em manutenção ou revisão."""
+    """Somente responsável do grupo Frotas (ou ADMIN/TI) libera veículo em manutenção ou revisão."""
     user = _get_user_role(request)
-    if user.get("role") not in ("ADMIN", "TI", "RESPONSAVEL_GRUPO"):
-        raise HTTPException(status_code=403, detail="Sem permissao")
+    if not _can_manage_fleet(user):
+        raise HTTPException(status_code=403, detail="Apenas o responsável do grupo Frotas pode liberar veículos.")
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -902,6 +1021,8 @@ def liberar_veiculo(vehicle_id: int, request: Request):
 def corrigir_avaria(vehicle_id: int, request: Request, data: dict):
     """Marca avaria como corrigida e libera veículo para uso."""
     user = _get_user_role(request)
+    if not _can_manage_fleet(user):
+        raise HTTPException(status_code=403, detail="Apenas o responsável do grupo Frotas pode corrigir avarias.")
     obs = (data.get("observacao") or "").strip()
     if not obs:
         raise HTTPException(status_code=400, detail="Descreva o que foi feito para corrigir a avaria")
@@ -940,6 +1061,8 @@ def corrigir_avaria(vehicle_id: int, request: Request, data: dict):
 def change_vehicle_status(vehicle_id: int, request: Request, data: dict):
     """Altera status do veículo (manutenção, revisão, inativo) e registra no histórico."""
     user = _get_user_role(request)
+    if not _can_manage_fleet(user):
+        raise HTTPException(status_code=403, detail="Apenas o responsável do grupo Frotas pode alterar o status do veículo.")
     novo_status = data.get("status")
     motivo = data.get("motivo", "")
     if novo_status not in ("manutencao", "revisao", "inativo", "ativo"):
@@ -1125,8 +1248,13 @@ def update_maintenance(maintenance_id: int, request: Request, data: dict):
         else:
             _auto_block_vehicle(cursor, vehicle_id, data.get("data_entrada"), maint_status, user_id)
 
+        # Se concluído com comprovante anexado, criar trip automaticamente
+        trip_id = None
+        if maint_status == "concluido":
+            trip_id = _try_create_maintenance_trip(cursor, maintenance_id)
+
         conn.commit()
-        return {"success": True, "message": "Manutencao atualizada!"}
+        return {"success": True, "message": "Manutencao atualizada!", "trip_id": trip_id}
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1564,6 +1692,18 @@ def create_reservation(request: Request, data: dict):
     if not all([vehicle_id, data_reserva, horario_inicio, horario_fim, destino]):
         raise HTTPException(status_code=400, detail="Preencha todos os campos")
 
+    # Não permitir agendamento retroativo
+    try:
+        hi = horario_inicio if len(horario_inicio) > 5 else f"{horario_inicio}:00"
+        inicio_dt = datetime.fromisoformat(f"{data_reserva}T{hi}")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Data/horário inválidos.")
+    if inicio_dt < datetime.now():
+        raise HTTPException(
+            status_code=400,
+            detail="O horário do agendamento não pode ser menor do que a hora do dia atual."
+        )
+
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -1841,8 +1981,10 @@ async def upload_maintenance_file(
             "INSERT INTO fleet_maintenance_files (maintenance_id, file_path, nome_arquivo) VALUES (%s,%s,%s)",
             (maintenance_id, file_url, file.filename),
         )
+        # Se a manutenção já estava concluída, o upload pode disparar a criação da trip
+        trip_id = _try_create_maintenance_trip(cursor, maintenance_id)
         conn.commit()
-        return {"success": True, "file_path": file_url, "nome_arquivo": file.filename}
+        return {"success": True, "file_path": file_url, "nome_arquivo": file.filename, "trip_id": trip_id}
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -1888,7 +2030,8 @@ def get_notifications(request: Request):
     2) Alertas de KM atingido
     3) Reservas pendentes / aprovadas / rejeitadas
     """
-    uid = _get_user_id(request)
+    user = _get_user_role(request)
+    uid = user["id"]
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -2006,6 +2149,7 @@ def get_notifications(request: Request):
         # 6) Reservas aprovadas HOJE — lembrar de fazer o checklist de saída
         cursor.execute("""
             SELECT r.id, r.horario_inicio, r.horario_fim, r.vehicle_id,
+                   r.destino, r.solicitante_id, r.data_reserva,
                    v.placa, v.modelo
             FROM fleet_reservations r
             JOIN fleet_vehicles v ON v.id = r.vehicle_id
@@ -2022,14 +2166,103 @@ def get_notifications(request: Request):
                 LIMIT 1
             """, (r["vehicle_id"], uid))
             if not cursor.fetchone():
+                # Normalizar tipos de horário/data para JSON
+                hi = r["horario_inicio"]
+                hf = r["horario_fim"]
+                if hasattr(hi, "total_seconds"):
+                    t = int(hi.total_seconds())
+                    hi = f"{t//3600:02d}:{(t%3600)//60:02d}"
+                if hasattr(hf, "total_seconds"):
+                    t = int(hf.total_seconds())
+                    hf = f"{t//3600:02d}:{(t%3600)//60:02d}"
+                dt = r["data_reserva"]
+                if hasattr(dt, "isoformat"):
+                    dt = dt.isoformat()
                 alerts.append({
                     "type": "reservation_checklist",
                     "icon": "bi-clipboard2-check-fill",
                     "color": "#D97706",
                     "title": f"Fazer checklist — {r['placa']}",
-                    "message": f"Sua reserva e das {r['horario_inicio']} as {r['horario_fim']}. Faca o checklist de saida!",
+                    "message": f"Sua reserva e das {hi} as {hf}. Faca o checklist de saida!",
                     "vehicle_id": r["vehicle_id"],
                     "reservation_id": r["id"],
+                    "destino": r["destino"],
+                    "solicitante_id": r["solicitante_id"],
+                    "horario_inicio": hi,
+                    "horario_fim": hf,
+                    "data_reserva": dt,
+                })
+
+        # 6b) Vistoria aprovada — condutor pode iniciar viagem
+        cursor.execute("""
+            SELECT ck.id, ck.data_saida, ck.horario_saida, ck.aprovado_em,
+                   v.placa, v.modelo, apv.name AS aprovador_nome
+            FROM fleet_checklists ck
+            JOIN fleet_vehicles v ON v.id = ck.vehicle_id
+            LEFT JOIN users apv ON apv.id = ck.aprovado_por
+            WHERE ck.status = 'aprovado'
+              AND ck.condutor_id = %s
+            ORDER BY ck.aprovado_em DESC
+        """, (uid,))
+        for r in cursor.fetchall():
+            alerts.append({
+                "type": "checklist_aprovado",
+                "icon": "bi-check-circle-fill",
+                "color": "#16A34A",
+                "title": f"Vistoria aprovada — {r['placa']}",
+                "message": f"{r['aprovador_nome'] or 'Vistoriador'} autorizou a saída. Voce ja pode iniciar a viagem.",
+                "checklist_id": r["id"],
+            })
+
+        # 6c) Devolução recusada — condutor precisa corrigir
+        cursor.execute("""
+            SELECT ck.id, v.placa, ck.recusa_justificativa, ck.recusa_em,
+                   ru.name AS recusa_por_nome
+            FROM fleet_checklists ck
+            JOIN fleet_vehicles v ON v.id = ck.vehicle_id
+            LEFT JOIN users ru ON ru.id = ck.recusa_por
+            WHERE ck.status = 'em_viagem'
+              AND ck.condutor_id = %s
+              AND ck.recusa_justificativa IS NOT NULL
+            ORDER BY ck.recusa_em DESC
+        """, (uid,))
+        for r in cursor.fetchall():
+            alerts.append({
+                "type": "checklist_recusado",
+                "icon": "bi-exclamation-triangle-fill",
+                "color": "#DC2626",
+                "title": f"Devolução recusada — {r['placa']}",
+                "message": f"{r['recusa_por_nome'] or 'Vistoriador'} recusou: {r['recusa_justificativa'][:100]}",
+                "checklist_id": r["id"],
+            })
+
+        # 7) Checklists aguardando vistoria (para quem pode vistoriar)
+        if _can_manage_fleet(user):
+            cursor.execute("""
+                SELECT ck.id, ck.data_saida, ck.horario_saida, ck.destino,
+                       v.placa, v.modelo, cond.name AS condutor_nome
+                FROM fleet_checklists ck
+                JOIN fleet_vehicles v ON v.id = ck.vehicle_id
+                JOIN users cond ON cond.id = ck.condutor_id
+                WHERE ck.status = 'aguardando_vistoria'
+                  AND ck.condutor_id <> %s
+                ORDER BY ck.data_saida, ck.horario_saida
+            """, (uid,))
+            for r in cursor.fetchall():
+                dt = r["data_saida"]
+                if hasattr(dt, "isoformat"):
+                    dt = dt.isoformat()
+                hs = r["horario_saida"]
+                if hasattr(hs, "total_seconds"):
+                    t = int(hs.total_seconds())
+                    hs = f"{t//3600:02d}:{(t%3600)//60:02d}"
+                alerts.append({
+                    "type": "checklist_vistoria_pendente",
+                    "icon": "bi-shield-check",
+                    "color": "#F59E0B",
+                    "title": f"Vistoria pendente — {r['placa']}",
+                    "message": f"{r['condutor_nome']} aguardando vistoria de saída para {dt} {hs or ''}".strip(),
+                    "checklist_id": r["id"],
                 })
 
         # Auto-cancelar reservas aprovadas sem checklist após 40 min do horário de início

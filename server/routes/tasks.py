@@ -172,6 +172,39 @@ def _enrich_tarefa(cursor, t: dict) -> dict:
     t["membros"] = [{"id": u["id"], "nome": u["name"], "role": u["role"]}
                     for u in cursor.fetchall()]
 
+    # Encaminhamentos entre grupos
+    try:
+        cursor.execute(
+            """SELECT e.id, e.de_grupo_id, e.para_grupo_id, e.encaminhado_por,
+                      e.encaminhado_em, e.status_id_origem, e.status_id_retorno,
+                      e.devolvido_em, e.devolvido_por, e.motivo_devolucao,
+                      dg.name AS de_grupo_nome, pg.name AS para_grupo_nome,
+                      u1.name AS encaminhado_por_nome, u2.name AS devolvido_por_nome
+               FROM tarefa_encaminhamentos_TASK e
+               JOIN cpe_grupo dg ON dg.id = e.de_grupo_id
+               JOIN cpe_grupo pg ON pg.id = e.para_grupo_id
+               LEFT JOIN users u1 ON u1.id = e.encaminhado_por
+               LEFT JOIN users u2 ON u2.id = e.devolvido_por
+               WHERE e.tarefa_id = %s
+               ORDER BY e.encaminhado_em ASC""",
+            (t["id"],)
+        )
+        encs = cursor.fetchall()
+        t["encaminhamentos"] = [{
+            "id":                   enc["id"],
+            "de_grupo_id":          enc["de_grupo_id"],
+            "de_grupo_nome":        enc["de_grupo_nome"],
+            "para_grupo_id":        enc["para_grupo_id"],
+            "para_grupo_nome":      enc["para_grupo_nome"],
+            "encaminhado_por_nome": enc["encaminhado_por_nome"],
+            "encaminhado_em":       _fmt(enc["encaminhado_em"]),
+            "devolvido_em":         _fmt(enc["devolvido_em"]),
+            "devolvido_por_nome":   enc["devolvido_por_nome"],
+            "motivo_devolucao":     enc["motivo_devolucao"],
+        } for enc in encs]
+    except Exception:
+        t["encaminhamentos"] = []
+
     for campo in ("prazo", "concluida_em", "created_at", "updated_at", "start_date"):
         if campo in t:
             t[campo] = _fmt(t[campo])
@@ -260,6 +293,17 @@ class EspacoGrupoAdd(BaseModel):
 class SlaUpdate(BaseModel):
     usuario_id: int = Field(..., gt=0)
     slas: list   # [{status_id, sla_minutos}]
+
+
+class EncaminharBody(BaseModel):
+    usuario_id:    int           = Field(..., gt=0)
+    para_grupo_id: int           = Field(..., gt=0)
+    motivo:        Optional[str] = None
+
+
+class DevolverBody(BaseModel):
+    usuario_id: int           = Field(..., gt=0)
+    motivo:     Optional[str] = None
 
 
 class EtapaCreate(BaseModel):
@@ -357,8 +401,13 @@ def atualizar_status(status_id: int, body: StatusUpdate):
             raise HTTPException(404, "Status não encontrado.")
         if u["role"] not in ROLES_ELEVATED:
             raise HTTPException(403, "Apenas gestores podem editar status.")
-        if u["role"] == "RESPONSAVEL_GRUPO" and u["group_id"] != s["group_id"]:
-            raise HTTPException(403, "Acesso negado a este grupo.")
+        if u["role"] == "RESPONSAVEL_GRUPO":
+            cursor.execute(
+                "SELECT 1 FROM espaco_grupos_TASK WHERE espaco_id=%s AND group_id=%s",
+                (s["espaco_id"], u["group_id"])
+            )
+            if not cursor.fetchone():
+                raise HTTPException(403, "Seu grupo não faz parte deste espaço.")
 
         sets, vals = [], []
         if body.nome     is not None: sets.append("nome=%s");     vals.append(body.nome)
@@ -562,6 +611,9 @@ def criar_espaco(body: EspacoCreate):
 
         # Adicionar membros opcionais
         if body.membros:
+            cursor.execute("SELECT nome FROM espacos_TASK WHERE id=%s", (espaco_id,))
+            _esp = cursor.fetchone()
+            _esp_nome = _esp["nome"] if _esp else body.nome
             for m in body.membros:
                 uid = m.get('usuario_id')
                 funcao = m.get('funcao', 'membro')
@@ -569,6 +621,11 @@ def criar_espaco(body: EspacoCreate):
                     cursor.execute(
                         "INSERT IGNORE INTO espaco_membros_TASK (espaco_id, usuario_id, funcao) VALUES (%s,%s,%s)",
                         (espaco_id, uid, funcao)
+                    )
+                    cursor.execute(
+                        """INSERT INTO notificacoes (ticket_id, usuario_id, mensagem, tipo, lido, created_at)
+                           VALUES (NULL, %s, %s, 'convite_task', 0, NOW())""",
+                        (uid, f'Você foi adicionado ao quadro "{_esp_nome}". Acesse Tarefas para ver.')
                     )
 
         conn.commit()
@@ -797,7 +854,7 @@ def convidar_grupo_espaco(espaco_id: int, body: EspacoGrupoAdd):
 
         # Notificar todos os membros ativos do grupo convidado
         cursor.execute(
-            "SELECT id, name FROM users WHERE group_id=%s AND is_active=1",
+            "SELECT id, name FROM users WHERE group_id=%s AND (is_active IS NULL OR is_active=1)",
             (body.group_id,)
         )
         membros_grupo = cursor.fetchall()
@@ -816,6 +873,62 @@ def convidar_grupo_espaco(espaco_id: int, body: EspacoGrupoAdd):
         if notificados == 0:
             msg = "Convite enviado, porém o grupo não possui membros ativos para notificar."
         return {"ok": True, "convite_id": convite_id, "message": msg}
+    finally:
+        if cursor: cursor.close()
+        conn.close()
+
+
+@tasks_router.get("/espacos/{espaco_id}/convites-pendentes")
+def listar_convites_espaco(espaco_id: int, usuario_id: int = Query(..., gt=0)):
+    """Lista convites pendentes enviados para um espaço (visão do gestor)."""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        u = _usuario(cursor, usuario_id)
+        if u["role"] not in ROLES_ELEVATED:
+            raise HTTPException(403, "Sem permissão.")
+        cursor.execute(
+            """SELECT c.id, c.group_id, c.status, c.created_at,
+                      g.name AS group_name,
+                      u.name AS convidado_por_nome
+               FROM convites_espaco_TASK c
+               LEFT JOIN cpe_grupo g ON g.id = c.group_id
+               LEFT JOIN users u ON u.id = c.convidado_por
+               WHERE c.espaco_id = %s AND c.status = 'pendente'
+               ORDER BY c.created_at DESC""",
+            (espaco_id,)
+        )
+        rows = cursor.fetchall()
+        return [{"id": r["id"], "group_id": r["group_id"], "group_name": r["group_name"],
+                 "convidado_por_nome": r["convidado_por_nome"], "created_at": _fmt(r["created_at"])}
+                for r in rows]
+    finally:
+        if cursor: cursor.close()
+        conn.close()
+
+
+@tasks_router.delete("/convites/{convite_id}")
+def cancelar_convite(convite_id: int, usuario_id: int = Query(..., gt=0)):
+    """Cancela (remove) um convite pendente."""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        u = _usuario(cursor, usuario_id)
+        if u["role"] not in ROLES_ELEVATED:
+            raise HTTPException(403, "Sem permissão para cancelar convites.")
+        cursor.execute(
+            "SELECT id FROM convites_espaco_TASK WHERE id=%s AND status='pendente'",
+            (convite_id,)
+        )
+        if not cursor.fetchone():
+            raise HTTPException(404, "Convite não encontrado ou já respondido.")
+        # DELETE em vez de UPDATE status='cancelado': o ENUM da tabela não inclui
+        # 'cancelado', então um UPDATE causaria string vazia e violação de UNIQUE KEY.
+        cursor.execute("DELETE FROM convites_espaco_TASK WHERE id=%s", (convite_id,))
+        conn.commit()
+        return {"ok": True, "message": "Convite cancelado."}
     finally:
         if cursor: cursor.close()
         conn.close()
@@ -903,7 +1016,7 @@ def aceitar_convite(convite_id: int, usuario_id: int = Query(..., gt=0)):
         )
 
         conn.commit()
-        return {"ok": True, "message": "Convite aceito! O grupo agora participa do quadro."}
+        return {"ok": True, "espaco_id": convite["espaco_id"], "message": "Convite aceito! O grupo agora participa do quadro."}
     finally:
         if cursor: cursor.close()
         conn.close()
@@ -1475,14 +1588,44 @@ def atualizar_tarefa(tarefa_id: int, body: TarefaUpdate):
         t = cursor.fetchone()
         if not t:
             raise HTTPException(404, "Tarefa não encontrada.")
-        if u["role"] not in ROLES_ELEVATED and u["group_id"] != t["group_id"]:
-            raise HTTPException(403, "Sem permissão.")
+
+        # Task livre = sem responsável. Qualquer usuário pode se auto-atribuir
+        # (desde que não esteja editando outros campos ao mesmo tempo).
+        task_livre = t["responsavel_id"] is None
+        outros_campos_alterados = any(getattr(body, f) is not None for f in (
+            "titulo","descricao","prioridade","status_id","tempo_estimado",
+            "prazo","start_date","cor_card",
+        ))
+        so_auto_claim = (
+            task_livre
+            and body.responsavel_id is not None
+            and body.responsavel_id == u["id"]
+            and not outros_campos_alterados
+        )
+
+        if not so_auto_claim:
+            if u["role"] not in ROLES_ELEVATED and u["group_id"] != t["group_id"]:
+                raise HTTPException(403, "Sem permissão.")
+
+        # Proteção contra "roubo" de task já atribuída
+        if (body.responsavel_id is not None
+                and body.responsavel_id != (t["responsavel_id"] or 0)
+                and not task_livre):
+            is_admin     = u["role"] in ("ADMIN", "TI", "MANAGER")
+            is_resp_grp  = u["role"] == "RESPONSAVEL_GRUPO" and u["group_id"] == t["group_id"]
+            is_current   = t["responsavel_id"] == u["id"]
+            if not (is_admin or is_resp_grp or is_current):
+                raise HTTPException(403, "Esta tarefa já está atribuída a outra pessoa.")
 
         sets, vals, changes = [], [], []
         if body.titulo         is not None: sets.append("titulo=%s");         vals.append(body.titulo);         changes.append(f"título: {body.titulo}")
         if body.descricao      is not None: sets.append("descricao=%s");      vals.append(body.descricao)
         if body.prioridade     is not None: sets.append("prioridade=%s");     vals.append(body.prioridade);     changes.append(f"prioridade: {body.prioridade}")
-        if body.status_id      is not None: sets.append("status_id=%s");      vals.append(body.status_id);      changes.append(f"status: {body.status_id}")
+        if body.status_id      is not None:
+            sets.append("status_id=%s"); vals.append(body.status_id)
+            cursor.execute("SELECT nome FROM status_TASK WHERE id=%s", (body.status_id,))
+            _st = cursor.fetchone()
+            changes.append(f"status: {_st['nome'] if _st else body.status_id}")
         if body.responsavel_id is not None: sets.append("responsavel_id=%s"); vals.append(body.responsavel_id)
         if body.tempo_estimado is not None: sets.append("tempo_estimado=%s"); vals.append(body.tempo_estimado)
         if body.prazo is not None:
@@ -1498,6 +1641,8 @@ def atualizar_tarefa(tarefa_id: int, body: TarefaUpdate):
                 raise HTTPException(400, "Formato de start_date inválido.")
             sets.append("start_date=%s"); vals.append(sd)
         if body.cor_card is not None:
+            if u["role"] not in ROLES_ELEVATED:
+                raise HTTPException(403, "Sem permissão para alterar a cor do card.")
             sets.append("cor_card=%s"); vals.append(body.cor_card if body.cor_card else None)
 
         if sets:
@@ -1505,9 +1650,9 @@ def atualizar_tarefa(tarefa_id: int, body: TarefaUpdate):
             cursor.execute(f"UPDATE tarefas_TASK SET {', '.join(sets)} WHERE id = %s", vals)
             _log(cursor, tarefa_id, body.usuario_id, "atualizou", "; ".join(changes) if changes else "editou")
 
+            now = datetime.now(timezone.utc)
             # Se mudou de status, registrar histórico de tempo por coluna
             if body.status_id is not None and body.status_id != t["status_id"]:
-                now = datetime.now(timezone.utc)
                 # Fechar registro anterior
                 cursor.execute(
                     "UPDATE tarefa_historico_status_TASK SET saiu_em=%s WHERE tarefa_id=%s AND saiu_em IS NULL",
@@ -1516,7 +1661,7 @@ def atualizar_tarefa(tarefa_id: int, body: TarefaUpdate):
                 # Buscar info do novo status
                 cursor.execute("SELECT nome, cor FROM status_TASK WHERE id=%s", (body.status_id,))
                 ns = cursor.fetchone()
-                # Determinar group_id do responsável atual
+                # Determinar responsável (novo ou atual)
                 resp_id = body.responsavel_id if body.responsavel_id is not None else t["responsavel_id"]
                 resp_gid = None
                 if resp_id:
@@ -1530,6 +1675,27 @@ def atualizar_tarefa(tarefa_id: int, body: TarefaUpdate):
                        VALUES (%s,%s,%s,%s,%s,%s,%s)""",
                     (tarefa_id, body.status_id, ns["nome"] if ns else None, ns["cor"] if ns else None,
                      resp_id, resp_gid, now)
+                )
+            elif (body.responsavel_id is not None and body.responsavel_id != t.get("responsavel_id")):
+                # Só o responsável mudou — fechar registro atual e abrir novo com novo responsável
+                cursor.execute(
+                    "UPDATE tarefa_historico_status_TASK SET saiu_em=%s WHERE tarefa_id=%s AND saiu_em IS NULL",
+                    (now, tarefa_id)
+                )
+                cursor.execute("SELECT nome, cor FROM status_TASK WHERE id=%s", (t["status_id"],))
+                curr_st = cursor.fetchone()
+                cursor.execute("SELECT group_id FROM users WHERE id=%s", (body.responsavel_id,))
+                new_ru = cursor.fetchone()
+                cursor.execute(
+                    """INSERT INTO tarefa_historico_status_TASK
+                       (tarefa_id, status_id, status_nome, status_cor, responsavel_id, responsavel_group_id, entrou_em)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                    (tarefa_id, t["status_id"],
+                     curr_st["nome"] if curr_st else None,
+                     curr_st["cor"] if curr_st else None,
+                     body.responsavel_id,
+                     new_ru["group_id"] if new_ru else t["group_id"],
+                     now)
                 )
 
             conn.commit()
@@ -1594,15 +1760,17 @@ def finalizar_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
             raise HTTPException(400, f"Existem {pendentes} etapa(s) não concluída(s).")
 
         cursor.execute(
-            "SELECT id FROM status_TASK WHERE group_id = %s AND is_final = 1 ORDER BY id LIMIT 1",
-            (t["group_id"],)
+            "SELECT id FROM status_TASK WHERE espaco_id = %s AND is_final = 1 ORDER BY id LIMIT 1",
+            (t["espaco_id"],)
         )
         final_status = cursor.fetchone()
+        if not final_status:
+            raise HTTPException(400, "Este espaço não possui uma coluna de conclusão configurada.")
 
         now = datetime.now(timezone.utc)
         cursor.execute(
             "UPDATE tarefas_TASK SET concluida_em=%s, concluida_por=%s, status_id=%s WHERE id=%s",
-            (now, usuario_id, final_status["id"] if final_status else t["status_id"], tarefa_id)
+            (now, usuario_id, final_status["id"], tarefa_id)
         )
         _log(cursor, tarefa_id, usuario_id, "finalizou", "Tarefa finalizada")
         conn.commit()
@@ -1693,6 +1861,202 @@ def reabrir_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
         conn.commit()
 
         cursor.execute("SELECT * FROM tarefas_TASK WHERE id = %s", (tarefa_id,))
+        return _enrich_tarefa(cursor, dict(cursor.fetchone()))
+    finally:
+        if cursor: cursor.close()
+        conn.close()
+
+
+# ─── ENCAMINHAMENTO ENTRE GRUPOS ──────────────────────────────────────────────
+
+@tasks_router.post("/{tarefa_id}/encaminhar")
+def encaminhar_tarefa(tarefa_id: int, body: EncaminharBody):
+    """Encaminha a tarefa para outro grupo. A tarefa deve estar em coluna final."""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        u = _usuario(cursor, body.usuario_id)
+
+        cursor.execute("SELECT * FROM tarefas_TASK WHERE id=%s", (tarefa_id,))
+        t = cursor.fetchone()
+        if not t:
+            raise HTTPException(404, "Tarefa não encontrada.")
+        if u["role"] not in ROLES_ELEVATED:
+            raise HTTPException(403, "Sem permissão para encaminhar tarefas.")
+        if u["role"] == "RESPONSAVEL_GRUPO" and u["group_id"] != t["group_id"]:
+            raise HTTPException(403, "Seu grupo não é o dono atual da tarefa.")
+        if t["group_id"] == body.para_grupo_id:
+            raise HTTPException(400, "A tarefa já pertence a este grupo.")
+
+        # Verificar se o status atual é final
+        cursor.execute("SELECT is_final FROM status_TASK WHERE id=%s", (t["status_id"],))
+        st = cursor.fetchone()
+        if not st or not st["is_final"]:
+            raise HTTPException(400, "A tarefa deve estar em uma coluna final para ser encaminhada.")
+
+        # Primeiro status não-final do espaço (statuses são compartilhados por todos os grupos do espaço)
+        cursor.execute(
+            """SELECT id FROM status_TASK
+               WHERE espaco_id=%s AND is_final=0
+               ORDER BY ordem ASC, id ASC LIMIT 1""",
+            (t["espaco_id"],)
+        )
+        first_st = cursor.fetchone()
+        if not first_st:
+            raise HTTPException(
+                400,
+                "Este espaço não possui colunas disponíveis para encaminhar."
+            )
+
+        now = datetime.now(timezone.utc)
+
+        # Fechar registro atual de histórico de status
+        cursor.execute(
+            "UPDATE tarefa_historico_status_TASK SET saiu_em=%s WHERE tarefa_id=%s AND saiu_em IS NULL",
+            (now, tarefa_id)
+        )
+
+        # Abrir novo registro de histórico para o grupo destino
+        cursor.execute("SELECT nome, cor FROM status_TASK WHERE id=%s", (first_st["id"],))
+        ns = cursor.fetchone()
+        cursor.execute(
+            """INSERT INTO tarefa_historico_status_TASK
+               (tarefa_id, status_id, status_nome, status_cor, responsavel_id, responsavel_group_id, entrou_em)
+               VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+            (tarefa_id, first_st["id"],
+             ns["nome"] if ns else None, ns["cor"] if ns else None,
+             None, body.para_grupo_id, now)
+        )
+
+        # Registrar encaminhamento
+        cursor.execute(
+            """INSERT INTO tarefa_encaminhamentos_TASK
+               (tarefa_id, de_grupo_id, para_grupo_id, encaminhado_por,
+                encaminhado_em, status_id_origem, status_id_retorno)
+               VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+            (tarefa_id, t["group_id"], body.para_grupo_id,
+             body.usuario_id, now, t["status_id"], t["status_id"])
+        )
+
+        # Transferir posse
+        cursor.execute(
+            "UPDATE tarefas_TASK SET group_id=%s, status_id=%s WHERE id=%s",
+            (body.para_grupo_id, first_st["id"], tarefa_id)
+        )
+
+        # Notificar membros do grupo destino
+        cursor.execute("SELECT titulo FROM tarefas_TASK WHERE id=%s", (tarefa_id,))
+        titulo_row = cursor.fetchone()
+        titulo = titulo_row["titulo"] if titulo_row else "Tarefa"
+        cursor.execute(
+            """INSERT INTO notificacoes (ticket_id, usuario_id, mensagem, tipo, lido, created_at)
+               SELECT %s, u.id, %s, 'encaminhamento_task', 0, NOW()
+               FROM users u WHERE u.group_id=%s AND (u.is_active IS NULL OR u.is_active=1)""",
+            (tarefa_id,
+             f'Tarefa "{titulo}" foi encaminhada para seu grupo.',
+             body.para_grupo_id)
+        )
+
+        cursor.execute("SELECT name FROM cpe_grupo WHERE id=%s", (body.para_grupo_id,))
+        _g = cursor.fetchone()
+        _log(cursor, tarefa_id, body.usuario_id, "encaminhou",
+             f"Encaminhada para {_g['name'] if _g else f'grupo {body.para_grupo_id}'}")
+        conn.commit()
+
+        cursor.execute("SELECT * FROM tarefas_TASK WHERE id=%s", (tarefa_id,))
+        return _enrich_tarefa(cursor, dict(cursor.fetchone()))
+    finally:
+        if cursor: cursor.close()
+        conn.close()
+
+
+@tasks_router.post("/{tarefa_id}/devolver")
+def devolver_tarefa(tarefa_id: int, body: DevolverBody):
+    """Devolve a tarefa ao grupo que a encaminhou, reiniciando o SLA daquele grupo."""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        u = _usuario(cursor, body.usuario_id)
+
+        cursor.execute("SELECT * FROM tarefas_TASK WHERE id=%s", (tarefa_id,))
+        t = cursor.fetchone()
+        if not t:
+            raise HTTPException(404, "Tarefa não encontrada.")
+        if u["role"] not in ROLES_ELEVATED:
+            raise HTTPException(403, "Sem permissão para devolver tarefas.")
+        if u["role"] == "RESPONSAVEL_GRUPO" and u["group_id"] != t["group_id"]:
+            raise HTTPException(403, "Seu grupo não é o dono atual da tarefa.")
+
+        # Encaminhamento ativo mais recente
+        cursor.execute(
+            """SELECT * FROM tarefa_encaminhamentos_TASK
+               WHERE tarefa_id=%s AND devolvido_em IS NULL
+               ORDER BY encaminhado_em DESC LIMIT 1""",
+            (tarefa_id,)
+        )
+        enc = cursor.fetchone()
+        if not enc:
+            raise HTTPException(400, "Esta tarefa não possui encaminhamento ativo.")
+
+        now = datetime.now(timezone.utc)
+
+        # Fechar registro atual de histórico de status
+        cursor.execute(
+            "UPDATE tarefa_historico_status_TASK SET saiu_em=%s WHERE tarefa_id=%s AND saiu_em IS NULL",
+            (now, tarefa_id)
+        )
+
+        # Abrir novo registro para o grupo de origem (SLA continua do ponto onde parou)
+        retorno_id = enc["status_id_retorno"] or enc["status_id_origem"]
+        cursor.execute("SELECT nome, cor FROM status_TASK WHERE id=%s", (retorno_id,))
+        ns = cursor.fetchone()
+        cursor.execute(
+            """INSERT INTO tarefa_historico_status_TASK
+               (tarefa_id, status_id, status_nome, status_cor, responsavel_id, responsavel_group_id, entrou_em)
+               VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+            (tarefa_id, retorno_id,
+             ns["nome"] if ns else None, ns["cor"] if ns else None,
+             None, enc["de_grupo_id"], now)
+        )
+
+        # Registrar devolução
+        cursor.execute(
+            """UPDATE tarefa_encaminhamentos_TASK
+               SET devolvido_em=%s, devolvido_por=%s, motivo_devolucao=%s
+               WHERE id=%s""",
+            (now, body.usuario_id, body.motivo, enc["id"])
+        )
+
+        # Devolver posse ao grupo de origem
+        cursor.execute(
+            "UPDATE tarefas_TASK SET group_id=%s, status_id=%s WHERE id=%s",
+            (enc["de_grupo_id"], retorno_id, tarefa_id)
+        )
+
+        # Notificar membros do grupo de origem
+        cursor.execute("SELECT titulo FROM tarefas_TASK WHERE id=%s", (tarefa_id,))
+        titulo_row = cursor.fetchone()
+        titulo = titulo_row["titulo"] if titulo_row else "Tarefa"
+        motivo_txt = f" Motivo: {body.motivo}" if body.motivo else ""
+        cursor.execute(
+            """INSERT INTO notificacoes (ticket_id, usuario_id, mensagem, tipo, lido, created_at)
+               SELECT %s, u.id, %s, 'encaminhamento_task', 0, NOW()
+               FROM users u WHERE u.group_id=%s AND (u.is_active IS NULL OR u.is_active=1)""",
+            (tarefa_id,
+             f'Tarefa "{titulo}" foi devolvida para seu grupo.{motivo_txt}',
+             enc["de_grupo_id"])
+        )
+
+        cursor.execute("SELECT name FROM cpe_grupo WHERE id=%s", (enc["de_grupo_id"],))
+        _g2 = cursor.fetchone()
+        _g2_nome = _g2["name"] if _g2 else f"grupo {enc['de_grupo_id']}"
+        _log(cursor, tarefa_id, body.usuario_id, "devolveu",
+             f"Devolvida para {_g2_nome}" + (f": {body.motivo}" if body.motivo else ""))
+        conn.commit()
+
+        cursor.execute("SELECT * FROM tarefas_TASK WHERE id=%s", (tarefa_id,))
         return _enrich_tarefa(cursor, dict(cursor.fetchone()))
     finally:
         if cursor: cursor.close()
@@ -1790,7 +2154,28 @@ def tempo_usuarios_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
             })
             usuarios[uid]["total_minutos_geral"] += mins
 
-        return sorted(usuarios.values(), key=lambda x: -x["total_minutos_geral"])
+        result = sorted(usuarios.values(), key=lambda x: -x["total_minutos_geral"])
+
+        # Tempo ocioso: períodos sem responsável atribuído
+        cursor.execute(
+            """SELECT SUM(TIMESTAMPDIFF(MINUTE, h.entrou_em, COALESCE(h.saiu_em, UTC_TIMESTAMP()))) AS idle_minutos
+               FROM tarefa_historico_status_TASK h
+               WHERE h.tarefa_id = %s AND h.responsavel_id IS NULL""",
+            (tarefa_id,)
+        )
+        idle_row = cursor.fetchone()
+        idle_mins = int(idle_row["idle_minutos"] or 0) if idle_row else 0
+        if idle_mins > 0:
+            result.append({
+                "user_id":   None,
+                "user_name": "Sem responsável",
+                "group_name": None,
+                "statuses":   [],
+                "total_minutos_geral": idle_mins,
+                "is_idle": True,
+            })
+
+        return result
     finally:
         if cursor: cursor.close()
         conn.close()
@@ -1868,7 +2253,11 @@ def atualizar_etapa(tarefa_id: int, etapa_id: int, body: EtapaUpdate):
         sets, vals, changes = [], [], []
         if body.titulo         is not None: sets.append("titulo=%s");         vals.append(body.titulo)
         if body.descricao      is not None: sets.append("descricao=%s");      vals.append(body.descricao)
-        if body.status_id      is not None: sets.append("status_id=%s");      vals.append(body.status_id);      changes.append(f"status: {body.status_id}")
+        if body.status_id      is not None:
+            sets.append("status_id=%s"); vals.append(body.status_id)
+            cursor.execute("SELECT nome FROM status_TASK WHERE id=%s", (body.status_id,))
+            _st = cursor.fetchone()
+            changes.append(f"status: {_st['nome'] if _st else body.status_id}")
         if body.responsavel_id is not None: sets.append("responsavel_id=%s"); vals.append(body.responsavel_id)
         if body.tempo_estimado is not None: sets.append("tempo_estimado=%s"); vals.append(body.tempo_estimado)
         if body.prazo          is not None:
@@ -2157,10 +2546,16 @@ def criar_subtarefa(tarefa_id: int, body: SubtarefaCreate):
     cursor = None
     try:
         cursor = conn.cursor(dictionary=True)
-        _usuario(cursor, body.criador_id)
-        cursor.execute("SELECT id FROM tarefas_TASK WHERE id=%s", (tarefa_id,))
-        if not cursor.fetchone():
+        u = _usuario(cursor, body.criador_id)
+        cursor.execute("SELECT id, group_id FROM tarefas_TASK WHERE id=%s", (tarefa_id,))
+        t = cursor.fetchone()
+        if not t:
             raise HTTPException(404, "Tarefa não encontrada.")
+        is_admin = u["role"] in ("ADMIN", "TI", "MANAGER")
+        is_grupo_task = t["group_id"] and u["group_id"] == t["group_id"]
+        task_sem_grupo = not t["group_id"]
+        if not (is_admin or is_grupo_task or task_sem_grupo):
+            raise HTTPException(403, "Você só pode criar subtarefas em tarefas do seu grupo.")
         cursor.execute(
             "INSERT INTO subtarefas_TASK (tarefa_id, titulo, criador_id) VALUES (%s,%s,%s)",
             (tarefa_id, body.titulo, body.criador_id)
