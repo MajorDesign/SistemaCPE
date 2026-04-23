@@ -244,52 +244,38 @@ class RouteProtection {
   // ====================================
 
   /**
-   * Valida se o usuário tem acesso à página atual
+   * Valida se o usuário tem acesso à página atual.
+   * REGRA: toda página que NÃO está em publicPages é protegida por padrão.
+   * Sem token/usuário -> redireciona para login.
    * @private
    */
   validatePageAccess() {
     const currentPage = window.location.pathname;
-
-    this.log("[ROUTE-PROTECTION] 📄 Página atual: " + currentPage);
-
-    const isProtectedPage = this._isProtectedPage(currentPage);
     const isPublicPage = this._isPublicPage(currentPage);
 
-    this.log(
-      "[ROUTE-PROTECTION] 🏷️ Tipo: " +
-        (isProtectedPage ? "PROTEGIDA" : isPublicPage ? "PÚBLICA" : "DESCONHECIDA")
-    );
+    this.log("[ROUTE-PROTECTION] 📄 Página atual: " + currentPage);
+    this.log("[ROUTE-PROTECTION] 🏷️ Tipo: " + (isPublicPage ? "PÚBLICA" : "PROTEGIDA"));
 
-    // Página protegida SEM autenticação
-    if (isProtectedPage && !this.isLoggedIn) {
-      this.log("[ROUTE-PROTECTION] ❌ Acesso negado! Redirecionando para login...");
-      this.redirectToLogin(currentPage);
-      return;
-    }
-
-    // Página de login COM autenticação
-    if (isPublicPage && this.isLoggedIn && this.user) {
-      this.log("[ROUTE-PROTECTION] 📋 Já autenticado. Redirecionando para dashboard...");
-      this.redirectToDashboard();
-      return;
-    }
-
-    // Página protegida COM autenticação
-    if (isProtectedPage && this.isLoggedIn && this.user) {
-      this.log("[ROUTE-PROTECTION] ✅ Acesso permitido");
-      this.markPageAsLoaded();
-      return;
-    }
-
-    // Página pública SEM autenticação
-    if (isPublicPage && !this.isLoggedIn) {
+    // Página pública (ex: login)
+    if (isPublicPage) {
+      if (this.isLoggedIn && this.user) {
+        this.log("[ROUTE-PROTECTION] 📋 Já autenticado. Redirecionando para dashboard...");
+        this.redirectToDashboard();
+        return;
+      }
       this.log("[ROUTE-PROTECTION] ✅ Página pública acessível");
       this.markPageAsLoaded();
       return;
     }
 
-    // Página desconhecida
-    this.log("[ROUTE-PROTECTION] ⚠️ Página desconhecida - permitindo acesso");
+    // Página protegida (todo o resto)
+    if (!this.isLoggedIn || !this.user) {
+      this.log("[ROUTE-PROTECTION] ❌ Sem autenticação. Redirecionando para login...");
+      this.redirectToLogin(currentPage);
+      return;
+    }
+
+    this.log("[ROUTE-PROTECTION] ✅ Acesso permitido");
     this.markPageAsLoaded();
   }
 
