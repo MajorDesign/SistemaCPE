@@ -254,6 +254,10 @@
       console.log("[LOGIN] 🔄 Redirecionando para dashboard...");
       console.log("=".repeat(80) + "\n");
 
+      // Exibir mensagem verde de "Login realizado com sucesso" só agora
+      const successAlert = document.getElementById("successAlert");
+      if (successAlert) successAlert.style.display = "flex";
+
       // [INICIO] Redirecionar
       const redirectUrl = sessionStorage.getItem("redirectAfterLogin") || "/SistemaCPE/index.html";
       sessionStorage.removeItem("redirectAfterLogin");
