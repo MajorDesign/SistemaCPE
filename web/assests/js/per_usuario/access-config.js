@@ -72,8 +72,8 @@ const PAGE_ACCESS_CONFIG = {
     },
     
     'PASSWORD_VAULT': {
-      allowedRoles: ['ADMIN', 'TI'],
-      description: 'Cofre de Senhas - Acesso restrito',
+      allowedRoles: ['USER', 'RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'],
+      description: 'Cofre de Senhas - Privadas por usuário e compartilhadas por grupo',
       requiresApproval: false
     },
     

@@ -187,12 +187,21 @@ def get_user_by_id(user_id: int) -> Optional[Dict[str, Any]]:
 
 def get_current_user(request: Request) -> Dict[str, Any]:
     """
-    Extrai o usuário autenticado da sessão
-    Usado como Depends() em endpoints protegidos
+    Extrai o usuário autenticado da sessão.
+    Aceita o token via (em ordem):
+      1. Cookie de sessão
+      2. Header X-Auth-Token
+      3. Header Authorization: Bearer <token>
     """
     print("[AUTH/DEPENDENCY] Verificando autenticacao...")
 
     token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        token = request.headers.get("X-Auth-Token") or request.headers.get("x-auth-token")
+    if not token:
+        auth_header = request.headers.get("Authorization") or request.headers.get("authorization") or ""
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header[7:].strip()
 
     if not token:
         print("[AUTH/DEPENDENCY] FALHA: token nao encontrado")
