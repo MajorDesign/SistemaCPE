@@ -558,6 +558,48 @@ class ApiClient:
             raise Exception(f"Erro ao enviar termo ({r.status_code}): {r.text[:200]}")
         return r.json()
 
+    def enviar_clicksign(self, nome, cpf, email, filename, content_bytes):
+        """Envia o PDF para o servidor, que repassa para a Clicksign.
+
+        O token Clicksign vive APENAS no servidor — nunca passa pelo cliente.
+
+        Retorna o JSON do servidor em caso de sucesso.
+        Lança Exception com mensagem amigável em caso de erro (incluindo erros
+        retornados pela própria Clicksign — vêm com status 502).
+        """
+        files = {"file": (filename, content_bytes, "application/pdf")}
+        data  = {"nome": nome, "cpf": cpf, "email": email}
+        try:
+            r = self.session.post(
+                f"{self.base}/api/clicksign/termo-notebook",
+                headers=self._headers(), data=data, files=files, timeout=60,
+            )
+        except requests.exceptions.ConnectionError:
+            raise Exception(f"Sem conexão com o servidor CPE em {self.base}.")
+        except requests.exceptions.Timeout:
+            raise Exception("Tempo esgotado ao enviar para a Clicksign (servidor lento).")
+
+        self._check_api_response(r, "clicksign")
+
+        if r.status_code == 200:
+            return r.json()
+
+        # Tenta extrair a mensagem detalhada (vem do FastAPI ou do service Clicksign)
+        try:
+            payload = r.json()
+            detail  = payload.get("detail") if isinstance(payload, dict) else None
+        except Exception:
+            detail = None
+
+        if r.status_code == 400:
+            raise Exception(detail or "Dados inválidos para envio à Clicksign.")
+        if r.status_code == 401:
+            raise Exception("Sessão expirou no servidor. Faça login novamente.")
+        if r.status_code == 502:
+            # Erro da Clicksign (já vem com mensagem amigável do service)
+            raise Exception(detail or "Falha na integração com a Clicksign.")
+        raise Exception(detail or f"Erro inesperado ({r.status_code}) ao enviar para Clicksign.")
+
 
 # =========================================================
 # GUI
@@ -566,7 +608,7 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("560x560")
+        self.geometry("560x640")
         self.resizable(False, False)
         self.configure(bg="#f3f4f6")
 
@@ -672,10 +714,17 @@ class App(tk.Tk):
         self.ent_cpf.grid(row=1, column=1, padx=(14, 0), pady=4, sticky="w")
         self.ent_cpf.bind("<KeyRelease>", self._mask_cpf)
 
-        tk.Label(lf2, text="Data:", bg="#fff", font=("Segoe UI", 9)).grid(row=2, column=0, sticky="w", pady=4)
+        tk.Label(lf2, text="E-mail:", bg="#fff", font=("Segoe UI", 9)).grid(row=2, column=0, sticky="w", pady=4)
+        self.ent_email = tk.Entry(lf2, font=("Segoe UI", 10), width=44, relief="solid", bd=1)
+        self.ent_email.grid(row=2, column=1, padx=(14, 0), pady=4, sticky="ew")
+        tk.Label(lf2, text="Será usado para enviar o termo para assinatura digital.",
+                 bg="#fff", fg="#6b7280", font=("Segoe UI", 8, "italic")
+                 ).grid(row=3, column=1, padx=(14, 0), sticky="w")
+
+        tk.Label(lf2, text="Data:", bg="#fff", font=("Segoe UI", 9)).grid(row=4, column=0, sticky="w", pady=4)
         hoje = datetime.now().strftime("%d/%m/%Y")
         tk.Label(lf2, text=hoje, bg="#fff", fg="#111827",
-                 font=("Consolas", 10, "bold")).grid(row=2, column=1, sticky="w", padx=(14, 0), pady=4)
+                 font=("Consolas", 10, "bold")).grid(row=4, column=1, sticky="w", padx=(14, 0), pady=4)
 
         # Status
         self.lbl_status = tk.Label(body, text="", bg="#f3f4f6", fg="#6b7280",
@@ -744,9 +793,10 @@ class App(tk.Tk):
         self.update()
 
     def _validar_dados(self):
-        """Valida nome/CPF/hardware. Retorna (nome, cpf) ou None."""
+        """Valida nome/CPF/email/hardware. Retorna (nome, cpf, email) ou None."""
         nome = self.ent_nome.get().strip()
         cpf = self.ent_cpf.get().strip()
+        email = self.ent_email.get().strip().lower()
         if not nome or len(nome.split()) < 2:
             messagebox.showwarning("Atenção", "Informe o nome completo (nome + sobrenome).")
             return None
@@ -754,10 +804,13 @@ class App(tk.Tk):
         if len(digits) != 11:
             messagebox.showwarning("Atenção", "CPF inválido. Deve ter 11 dígitos.")
             return None
+        if "@" not in email or "." not in email.split("@")[-1] or len(email) < 5:
+            messagebox.showwarning("Atenção", "Informe um e-mail válido (ex: nome@empresa.com).")
+            return None
         if self.hw.get("placa_mae") == "Detectando...":
             messagebox.showinfo("Aguarde", "Ainda detectando o hardware. Aguarde alguns segundos.")
             return None
-        return nome, cpf
+        return nome, cpf, email
 
     def _gerar_e_visualizar(self):
         """Etapa 1: gera o PDF, salva em arquivo temporário e abre no visualizador.
@@ -765,7 +818,8 @@ class App(tk.Tk):
         dados = self._validar_dados()
         if not dados:
             return
-        nome, cpf = dados
+        nome, cpf, email = dados
+        self._signatario_email = email
 
         try:
             self._set_status("Gerando PDF...")
@@ -827,6 +881,22 @@ class App(tk.Tk):
             messagebox.showerror("Erro", str(e))
             self.btn_primary.config(state="normal", text="📄  Gerar e Visualizar Termo")
 
+    def _enviar_clicksign(self, nome, cpf, email, filename):
+        """Chama o servidor CPE, que repassa o termo para a Clicksign.
+
+        Retorna {"ok": True} em sucesso, ou
+                {"ok": False, "erro": "<mensagem amigável>"} em falha.
+
+        IMPORTANTE: erros aqui não devem propagar — quem chama precisa decidir
+        o que fazer (no nosso caso, mostrar aviso mas manter o termo arquivado
+        na pasta T.I.).
+        """
+        try:
+            self.api.enviar_clicksign(nome, cpf, email, filename, self._pdf_bytes)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "erro": str(e)}
+
     def _resetar_pdf(self):
         """Permite editar os dados e gerar um PDF novo."""
         self._pdf_bytes = None
@@ -855,9 +925,10 @@ class App(tk.Tk):
             messagebox.showwarning("Atenção", "Gere o termo antes de enviar.")
             return
 
-        nome, cpf = self._validar_dados() or (None, None)
-        if not nome:
+        validacao = self._validar_dados()
+        if not validacao:
             return
+        nome, cpf, email = validacao
 
         self.btn_primary.config(state="disabled", text="Enviando...")
 
@@ -887,11 +958,36 @@ class App(tk.Tk):
 
             res = self.api.submit_termo(nome_contrato, descricao, filename, self._pdf_bytes)
 
-            self._set_status("✓ Enviado com sucesso!", "#16A34A")
-            messagebox.showinfo(
-                "Sucesso",
-                f"Termo enviado para a T.I.\n\nPasta: {res.get('pasta','Termos Notebooks 2026')}\nArquivo: {filename}"
-            )
+            # 3) ENVIO PARA ASSINATURA NA CLICKSIGN
+            # Importante: erro aqui NÃO bloqueia — o termo já foi salvo na pasta T.I.
+            self._set_status("Enviando para assinatura digital (Clicksign)...", "#2563eb")
+            self.update_idletasks()
+
+            clicksign_status = self._enviar_clicksign(nome, cpf, email, filename)
+
+            # 4) MENSAGEM FINAL
+            if clicksign_status["ok"]:
+                self._set_status("✓ Enviado com sucesso!", "#16A34A")
+                messagebox.showinfo(
+                    "Sucesso",
+                    f"Termo enviado para a T.I. e para assinatura digital.\n\n"
+                    f"📁 Pasta T.I.: {res.get('pasta','Termos Notebooks 2026')}\n"
+                    f"📄 Arquivo: {filename}\n\n"
+                    f"✉ O colaborador receberá o e-mail de assinatura em:\n"
+                    f"   {email}\n\n"
+                    f"Você pode acompanhar o status no painel da Clicksign."
+                )
+            else:
+                self._set_status("⚠ Termo arquivado, mas falhou envio à Clicksign.", "#F59E0B")
+                messagebox.showwarning(
+                    "Termo salvo, mas Clicksign falhou",
+                    f"✓ O termo foi arquivado com sucesso na pasta T.I. do SistemaCPE:\n"
+                    f"   📁 {res.get('pasta','Termos Notebooks 2026')}\n"
+                    f"   📄 {filename}\n\n"
+                    f"❌ Porém o envio para assinatura digital (Clicksign) falhou:\n\n"
+                    f"   {clicksign_status['erro']}\n\n"
+                    f"Você pode reenviar manualmente pela Clicksign ou pedir para a T.I. tentar novamente."
+                )
             self.destroy()
 
         except Exception as e:
