@@ -205,6 +205,7 @@
         username: data.user.username,
         role: data.user.role,
         group_id: data.user.group_id,
+        group_name: data.user.group_name ?? null,
         is_active: data.user.is_active,
         created_at: data.user.created_at
       };
@@ -266,7 +267,7 @@
 
       setTimeout(() => {
         window.location.href = redirectUrl;
-      }, 2000);
+      }, 1000);
       // [FIM] Redirecionar
 
     } catch (err) {

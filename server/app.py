@@ -1110,6 +1110,26 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ REGISTRAR ROUTER DE COFRE DE SENHAS
+try:
+    from routes.passwords_new import router as passwords_router
+    app.include_router(passwords_router)
+    logger.info("✅ Router de Passwords registrado: /api/passwords")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Passwords: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+# ✅ REGISTRAR ROUTER CLICKSIGN (assinatura eletrônica)
+try:
+    from routes.clicksign import router as clicksign_router
+    app.include_router(clicksign_router)
+    logger.info("✅ Router de Clicksign registrado: /api/clicksign")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Clicksign: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ SERVIR UPLOADS ESTÁTICOS (fotos de veículos)
 try:
     _uploads_dir = os.path.normpath(
