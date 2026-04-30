@@ -74,6 +74,10 @@
               style="background:#ffc107;color:#333;border:none;border-radius:6px;font-size:.82rem;font-weight:500;padding:6px 14px;">
               <i class="bi bi-building me-1"></i>Departamentos
             </button>
+            <button class="btn btn-sm" onclick="toggleUnitPanel()" title="Gerenciar unidades"
+              style="background:#0dcaf0;color:#fff;border:none;border-radius:6px;font-size:.82rem;font-weight:500;padding:6px 14px;">
+              <i class="bi bi-geo-alt me-1"></i>Unidades
+            </button>
             <button class="btn-new-group" id="btnNewGroup" data-bs-toggle="modal" data-bs-target="#groupModal">
               <i class="bi bi-plus-lg"></i> Novo Grupo
             </button>
@@ -108,6 +112,45 @@
             </div>
             <!-- Lista departamentos -->
             <div id="deptLista" style="color:#5e6c84;font-size:.82rem;">Carregando...</div>
+          </div>
+        </div>
+
+        <!-- ===== UNITS PANEL ===== -->
+        <div id="unitPanel" style="display:none;margin-bottom:20px;">
+          <div style="background:#f8f9fa;border:1px solid #e2e6ea;border-radius:10px;padding:16px 20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+              <h6 style="margin:0;color:#172b4d;font-weight:600;"><i class="bi bi-geo-alt me-2"></i>Unidades CPE</h6>
+              <button class="btn btn-sm btn-info text-white" onclick="unitAbrirForm(null)"><i class="bi bi-plus-lg me-1"></i>Nova Unidade</button>
+            </div>
+            <!-- Form inline criar/editar -->
+            <div id="unitForm" style="display:none;margin-bottom:14px;padding:12px;background:#fff;border-radius:8px;border:1px solid #dfe1e6;">
+              <input type="hidden" id="unitEditId" value="">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+                <div style="flex:2;min-width:180px;">
+                  <label style="font-size:.72rem;color:#5e6c84;margin-bottom:2px;display:block;">Nome *</label>
+                  <input type="text" id="unitNome" class="form-control form-control-sm" placeholder="Ex: CPE Belo Horizonte" maxlength="120">
+                </div>
+                <div style="flex:1;min-width:80px;">
+                  <label style="font-size:.72rem;color:#5e6c84;margin-bottom:2px;display:block;">Sigla</label>
+                  <input type="text" id="unitSigla" class="form-control form-control-sm" placeholder="BH" maxlength="20">
+                </div>
+                <div style="flex:1;min-width:120px;">
+                  <label style="font-size:.72rem;color:#5e6c84;margin-bottom:2px;display:block;">Cidade</label>
+                  <input type="text" id="unitCidade" class="form-control form-control-sm" placeholder="Belo Horizonte" maxlength="120">
+                </div>
+                <div style="width:60px;">
+                  <label style="font-size:.72rem;color:#5e6c84;margin-bottom:2px;display:block;">UF</label>
+                  <input type="text" id="unitUf" class="form-control form-control-sm text-uppercase" placeholder="MG" maxlength="2">
+                </div>
+                <div style="display:flex;gap:6px;">
+                  <button class="btn btn-sm btn-success" onclick="unitSalvar()"><i class="bi bi-check-lg"></i> Salvar</button>
+                  <button class="btn btn-sm btn-outline-secondary" onclick="unitFecharForm()"><i class="bi bi-x-lg"></i></button>
+                </div>
+              </div>
+              <div id="unitFormErro" class="text-danger mt-1" style="font-size:.78rem;display:none;"></div>
+            </div>
+            <!-- Lista unidades -->
+            <div id="unitLista" style="color:#5e6c84;font-size:.82rem;">Carregando...</div>
           </div>
         </div>
 
@@ -795,6 +838,141 @@
         if(!s) return '';
         return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       };
+    }
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- 🏬 UNIDADES CPE CRUD -->
+  <!-- ============================================================ -->
+  <script>
+    let unitPanelOpen = false;
+    const _UNIDADES_URL = _API_HOST + '/api/unidades';
+
+    function toggleUnitPanel() {
+      unitPanelOpen = !unitPanelOpen;
+      document.getElementById('unitPanel').style.display = unitPanelOpen ? 'block' : 'none';
+      if (unitPanelOpen) unitCarregar();
+    }
+
+    async function unitCarregar() {
+      const el = document.getElementById('unitLista');
+      el.innerHTML = '<span style="color:#8993a4;">Carregando...</span>';
+      try {
+        const r = await fetch(_UNIDADES_URL + '/');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const units = await r.json();
+        if (!units.length) {
+          el.innerHTML = '<div style="text-align:center;padding:16px;color:#5e6c84;">Nenhuma unidade cadastrada.</div>';
+          return;
+        }
+        el.innerHTML = `
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="border-bottom:2px solid #dfe1e6;">
+                <th style="padding:6px 8px;text-align:left;font-size:.72rem;text-transform:uppercase;color:#5e6c84;">Nome</th>
+                <th style="padding:6px 8px;text-align:left;font-size:.72rem;text-transform:uppercase;color:#5e6c84;">Sigla</th>
+                <th style="padding:6px 8px;text-align:left;font-size:.72rem;text-transform:uppercase;color:#5e6c84;">Cidade</th>
+                <th style="padding:6px 8px;text-align:center;font-size:.72rem;text-transform:uppercase;color:#5e6c84;">UF</th>
+                <th style="padding:6px 8px;text-align:center;font-size:.72rem;text-transform:uppercase;color:#5e6c84;">Status</th>
+                <th style="padding:6px 8px;text-align:right;font-size:.72rem;text-transform:uppercase;color:#5e6c84;">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${units.map(u => `
+                <tr style="border-bottom:1px solid #e9ecef;">
+                  <td style="padding:8px;color:#172b4d;font-weight:500;">${escHtml(u.nome)}</td>
+                  <td style="padding:8px;color:#5e6c84;">${escHtml(u.sigla || '—')}</td>
+                  <td style="padding:8px;color:#5e6c84;">${escHtml(u.cidade || '—')}</td>
+                  <td style="padding:8px;text-align:center;color:#5e6c84;">${escHtml(u.uf || '—')}</td>
+                  <td style="padding:8px;text-align:center;">
+                    ${u.ativo
+                      ? '<span class="badge bg-success">Ativa</span>'
+                      : '<span class="badge bg-secondary">Inativa</span>'}
+                  </td>
+                  <td style="padding:8px;text-align:right;">
+                    <button onclick='unitAbrirForm(${u.id}, ${JSON.stringify(u).replace(/"/g,"&quot;")})'
+                      style="background:none;border:none;color:#0052cc;cursor:pointer;font-size:.85rem;padding:2px 6px;"
+                      title="Editar"><i class="bi bi-pencil"></i></button>
+                    <button onclick="unitExcluir(${u.id}, '${escAttr(u.nome)}')"
+                      style="background:none;border:none;color:#bf2600;cursor:pointer;font-size:.85rem;padding:2px 6px;"
+                      title="Excluir"><i class="bi bi-trash"></i></button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>`;
+      } catch(e) {
+        el.innerHTML = `<span style="color:#bf2600;">Erro: ${e.message}</span>`;
+      }
+    }
+
+    function unitAbrirForm(id, dados) {
+      document.getElementById('unitEditId').value = id || '';
+      document.getElementById('unitNome').value    = dados?.nome    || '';
+      document.getElementById('unitSigla').value   = dados?.sigla   || '';
+      document.getElementById('unitCidade').value  = dados?.cidade  || '';
+      document.getElementById('unitUf').value      = dados?.uf      || '';
+      document.getElementById('unitFormErro').style.display = 'none';
+      document.getElementById('unitForm').style.display = 'block';
+      document.getElementById('unitNome').focus();
+    }
+
+    function unitFecharForm() {
+      document.getElementById('unitForm').style.display = 'none';
+    }
+
+    async function unitSalvar() {
+      const id     = document.getElementById('unitEditId').value;
+      const nome   = document.getElementById('unitNome').value.trim();
+      const sigla  = document.getElementById('unitSigla').value.trim() || null;
+      const cidade = document.getElementById('unitCidade').value.trim() || null;
+      const uf     = document.getElementById('unitUf').value.trim().toUpperCase() || null;
+      const erroEl = document.getElementById('unitFormErro');
+
+      if (!nome || nome.length < 2) {
+        erroEl.textContent = 'Nome obrigatório (mínimo 2 caracteres)';
+        erroEl.style.display = 'block';
+        return;
+      }
+      if (uf && uf.length !== 2) {
+        erroEl.textContent = 'UF deve ter 2 letras';
+        erroEl.style.display = 'block';
+        return;
+      }
+      erroEl.style.display = 'none';
+
+      try {
+        const url    = id ? `${_UNIDADES_URL}/${id}` : `${_UNIDADES_URL}/`;
+        const method = id ? 'PUT' : 'POST';
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome, sigla, cidade, uf })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Erro ${res.status}`);
+        }
+        unitFecharForm();
+        await unitCarregar();
+      } catch(e) {
+        erroEl.textContent = e.message;
+        erroEl.style.display = 'block';
+      }
+    }
+
+    async function unitExcluir(id, nome) {
+      if (!confirm(`Excluir a unidade "${nome}"? Esta ação só funciona se não houver usuários nem salas vinculados.`)) return;
+      try {
+        const res = await fetch(`${_UNIDADES_URL}/${id}`, { method: 'DELETE' });
+        if (!res.ok && res.status !== 204) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `Erro ${res.status}`);
+        }
+        await unitCarregar();
+      } catch(e) {
+        alert(e.message);
+      }
     }
   </script>
 

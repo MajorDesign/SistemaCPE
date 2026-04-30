@@ -1,0 +1,339 @@
+/* ============================================================
+   MÓDULO DE RECEPÇÃO — recepcao.css
+   CPE Tecnologia
+   ============================================================ */
+
+:root {
+  --recep-primary:   #3B82F6;  /* azul: sala em uso */
+  --recep-pending:   #F59E0B;  /* amarelo: pendente */
+  --recep-success:   #10B981;
+  --recep-danger:    #EF4444;
+  --recep-muted:     #9CA3AF;
+  --recep-dark:      #1F2937;
+  --recep-bg:        #F4F6F9;
+  --recep-card-bg:   #FFFFFF;
+  --recep-border:    #E5E7EB;
+  --recep-text:      #1F2937;
+  --recep-sidebar-w: 240px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body.recep-body {
+  font-family: 'Inter', sans-serif;
+  background: var(--recep-bg);
+  color: var(--recep-text);
+  margin: 0; padding: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ============================================================
+   LOADING / TOAST
+   ============================================================ */
+#recepLoading {
+  position: fixed; inset: 0;
+  background: #fff;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; z-index: 9999;
+}
+#recepLoading img { width: 140px; }
+.recep-spinner {
+  width: 36px; height: 36px;
+  border: 3px solid #f3f3f3;
+  border-top-color: var(--recep-primary);
+  border-radius: 50%;
+  animation: recep-spin .8s linear infinite;
+}
+@keyframes recep-spin { to { transform: rotate(360deg); } }
+
+#recepToast {
+  position: fixed;
+  top: 20px; right: 20px;
+  z-index: 10000;
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+.recep-toast-item {
+  background: #fff;
+  border-left: 4px solid var(--recep-primary);
+  padding: 12px 16px;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.10);
+  font-size: 14px;
+  min-width: 280px;
+  max-width: 380px;
+  animation: toastIn .25s ease;
+}
+.recep-toast-item.success { border-color: var(--recep-success); }
+.recep-toast-item.error   { border-color: var(--recep-danger); }
+.recep-toast-item.warn    { border-color: var(--recep-pending); }
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.recep-wrapper { display: flex; min-height: 100vh; }
+
+.recep-sidebar {
+  width: var(--recep-sidebar-w);
+  background: var(--recep-dark);
+  color: #fff;
+  display: flex; flex-direction: column;
+  position: fixed; top: 0; left: 0; bottom: 0;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.recep-sidebar-logo {
+  padding: 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  display: flex; align-items: center; gap: 10px;
+  min-height: 72px;
+}
+.recep-sidebar-logo img { width: 40px; }
+.recep-sidebar-logo-text {
+  font-family: 'Poppins', sans-serif;
+  font-weight: 700; font-size: 15px;
+  color: var(--recep-primary);
+}
+
+.recep-back-btn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px;
+  margin: 12px 10px 4px;
+  border-radius: 8px;
+  color: rgba(255,255,255,.6);
+  text-decoration: none; font-size: 13px;
+  border: 1px solid rgba(255,255,255,.1);
+  transition: all .2s;
+}
+.recep-back-btn:hover { background: rgba(255,255,255,.08); color: #fff; }
+
+.recep-nav { flex: 1; padding: 8px 0; overflow-y: auto; }
+.recep-nav ul { list-style: none; padding: 0; margin: 0; }
+.recep-nav-item { margin: 2px 8px; }
+.recep-nav-link {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: rgba(255,255,255,.7);
+  font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: all .2s;
+}
+.recep-nav-link i { font-size: 18px; min-width: 20px; text-align: center; }
+.recep-nav-link:hover,
+.recep-nav-item.active .recep-nav-link {
+  background: rgba(59,130,246,.18);
+  color: var(--recep-primary);
+}
+.recep-nav-item.active .recep-nav-link {
+  border-left: 3px solid var(--recep-primary);
+}
+
+/* ============================================================
+   CONTEÚDO PRINCIPAL
+   ============================================================ */
+.recep-content {
+  flex: 1;
+  margin-left: var(--recep-sidebar-w);
+  padding: 0;
+}
+
+.recep-topbar {
+  background: #fff;
+  border-bottom: 1px solid var(--recep-border);
+  padding: 14px 26px;
+  display: flex; align-items: center; gap: 14px;
+  position: sticky; top: 0; z-index: 50;
+}
+.recep-topbar-title {
+  font-weight: 600; font-size: 16px; color: var(--recep-dark);
+}
+.recep-topbar-badge {
+  background: rgba(59,130,246,.12);
+  color: var(--recep-primary);
+  font-weight: 600; font-size: 11px;
+  padding: 4px 10px; border-radius: 12px;
+  letter-spacing: .5px;
+}
+
+.recep-page { display: none; padding: 22px 26px; }
+.recep-page.active { display: block; }
+
+.recep-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 18px; gap: 12px; flex-wrap: wrap;
+}
+.recep-section-header h2 {
+  margin: 0; font-size: 22px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+.recep-section-header .actions {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+}
+
+.recep-card {
+  background: var(--recep-card-bg);
+  border: 1px solid var(--recep-border);
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+
+/* ============================================================
+   FORMS
+   ============================================================ */
+.recep-input, .recep-select {
+  font-family: inherit; font-size: 14px;
+  padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--recep-border);
+  background: #fff;
+  color: var(--recep-text);
+  outline: none; transition: border-color .15s;
+}
+.recep-input:focus, .recep-select:focus {
+  border-color: var(--recep-primary);
+}
+.recep-filters {
+  display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+}
+
+/* ============================================================
+   BOTÕES
+   ============================================================ */
+.btn-recep {
+  border: none; border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: all .2s;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-recep-primary {
+  background: var(--recep-primary);
+  color: #fff;
+}
+.btn-recep-primary:hover { filter: brightness(.95); }
+.btn-recep-secondary {
+  background: #fff; color: var(--recep-text);
+  border: 1px solid var(--recep-border);
+}
+
+/* ============================================================
+   LEGENDA DO CALENDÁRIO
+   ============================================================ */
+.recep-legend {
+  display: flex; flex-wrap: wrap; gap: 16px;
+  background: #fff;
+  border: 1px solid var(--recep-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  font-size: 13px; color: var(--recep-text);
+}
+.recep-legend .legend-dot {
+  display: inline-block; width: 10px; height: 10px;
+  border-radius: 50%; margin-right: 4px; vertical-align: middle;
+}
+
+/* ============================================================
+   GRID DE SALAS
+   ============================================================ */
+.recep-rooms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.recep-room-card {
+  background: #fff;
+  border: 1px solid var(--recep-border);
+  border-radius: 12px;
+  padding: 18px;
+  position: relative;
+  transition: transform .15s, box-shadow .15s;
+}
+.recep-room-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0,0,0,.08);
+}
+.recep-room-card .room-color-bar {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 4px;
+  border-radius: 12px 12px 0 0;
+}
+.recep-room-card .room-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 16px; font-weight: 700;
+  margin-bottom: 8px; color: var(--recep-dark);
+}
+.recep-room-card .room-meta {
+  font-size: 13px; color: var(--recep-muted);
+  display: flex; flex-wrap: wrap; gap: 12px;
+  margin-bottom: 14px;
+}
+.recep-room-card .room-actions {
+  display: flex; gap: 8px;
+}
+.recep-room-card .room-status-badge {
+  position: absolute; top: 16px; right: 16px;
+  font-size: 10px; font-weight: 700;
+  padding: 3px 8px; border-radius: 10px;
+  text-transform: uppercase;
+}
+.recep-room-card .room-status-badge.ativa {
+  background: #d1fae5; color: #065f46;
+}
+.recep-room-card .room-status-badge.inativa {
+  background: #fee2e2; color: #991b1b;
+}
+
+/* ============================================================
+   TABELA DE ENVIOS
+   ============================================================ */
+.recep-table-wrapper { overflow-x: auto; }
+.recep-table {
+  width: 100%; border-collapse: collapse;
+  font-size: 14px;
+}
+.recep-table th, .recep-table td {
+  padding: 10px 12px; text-align: left;
+  border-bottom: 1px solid var(--recep-border);
+}
+.recep-table th {
+  font-size: 12px; font-weight: 600;
+  color: var(--recep-muted);
+  text-transform: uppercase;
+  background: #F9FAFB;
+}
+.recep-table tbody tr:hover { background: #F9FAFB; }
+.recep-table .badge-status {
+  font-size: 11px; padding: 4px 10px;
+  border-radius: 12px; font-weight: 600;
+  display: inline-block;
+}
+
+/* ============================================================
+   RESPONSIVO
+   ============================================================ */
+@media (max-width: 768px) {
+  .recep-sidebar { transform: translateX(-100%); transition: transform .25s; }
+  .recep-sidebar.show { transform: translateX(0); }
+  .recep-content { margin-left: 0; }
+  .recep-section-header { flex-direction: column; align-items: flex-start; }
+}
+
+/* ============================================================
+   FULLCALENDAR overrides
+   ============================================================ */
+.fc-event {
+  cursor: pointer;
+  border: none !important;
+}
+.fc-event-title {
+  font-weight: 600;
+}
+.fc-toolbar-title { font-size: 18px !important; }
