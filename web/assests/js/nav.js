@@ -64,6 +64,31 @@ const globalMenu = [
     external: true
   },
   // ==================================================
+  // ✨ MENU: Módulo de Recepção
+  // Data: 30/04/2026
+  // Aberto a todos os perfis — qualquer usuário pode agendar sala
+  // e cadastrar envios; só ADMIN/RESPONSAVEL_GRUPO cria sala.
+  // ==================================================
+  {
+    path: "/SistemaCPE/web/pages/recepcao.html",
+    label: "Recepção",
+    icon: "bi-building-check",
+    requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"],
+    external: true
+  },
+  // ==================================================
+  // ✨ MENU: Módulo Agenda (integração Carbonio)
+  // Data: 04/05/2026
+  // Cada usuário conecta sua própria conta Carbonio (webmail).
+  // ==================================================
+  {
+    path: "/SistemaCPE/web/pages/agenda.html",
+    label: "Agenda",
+    icon: "bi-calendar2-event",
+    requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"],
+    external: true
+  },
+  // ==================================================
   // ✨ MENU: Permissões do Sistema
   // Data: 06/04/2026 21:30
   // ==================================================
@@ -778,9 +803,23 @@ async function handleNotificationClick(notificationId, ticketId, tipo) {
     closeNotificationPanel();
 
     // Redirecionar baseado no tipo
+    // OBS: para tipos de Recepção, o campo `ticket_id` da tabela notificacoes
+    // está sendo reaproveitado para guardar o id da reserva.
+    const tiposReuniao = new Set([
+      'convite_reuniao',
+      'convite_aceito_reuniao',
+      'convite_recusado_reuniao',
+    ]);
+
     if (tipo && tipo.includes('convite') && tipo.includes('task')) {
       // Convites de quadro → ir para Tarefas
       window.location.href = '/SistemaCPE/web/pages/tasks.html';
+    } else if (tipo === 'lembrete_agenda') {
+      // Lembrete de compromisso → abre a Agenda
+      window.location.href = '/SistemaCPE/web/pages/agenda.html';
+    } else if (tiposReuniao.has(tipo) && ticketId) {
+      // Convite/resposta de reunião → ir para Recepção e abrir a reserva
+      window.location.href = `/SistemaCPE/web/pages/recepcao.html?reserva_id=${ticketId}`;
     } else if (ticketId) {
       // Notificação de ticket → ir para ticket
       window.location.href = `/SistemaCPE/web/pages/tickets.html?ticket_id=${ticketId}`;
@@ -860,57 +899,69 @@ async function markAllAsRead() {
 //  "nova_resposta","status_alterado","atribuido","comentario_interno")
 function getNotificationIcon(tipo) {
   const icons = {
-    "ticket_criado":        "🎫",
-    "nova_resposta":        "💬",
-    "status_alterado":      "🔄",
-    "atribuido":            "👤",
-    "comentario_interno":   "🔒",
-    "avaliacao_pendente":   "⭐",
-    "convite_task":         "📩",
-    "convite_aceito_task":  "✅",
-    "convite_recusado_task":"❌",
-    "info":                 "ℹ️",
-    "aviso":                "⚠️",
-    "erro":                 "❌",
-    "sucesso":              "✅"
+    "ticket_criado":            "🎫",
+    "nova_resposta":            "💬",
+    "status_alterado":          "🔄",
+    "atribuido":                "👤",
+    "comentario_interno":       "🔒",
+    "avaliacao_pendente":       "⭐",
+    "convite_task":             "📩",
+    "convite_aceito_task":      "✅",
+    "convite_recusado_task":    "❌",
+    "convite_reuniao":          "📅",
+    "convite_aceito_reuniao":   "✅",
+    "convite_recusado_reuniao": "❌",
+    "lembrete_agenda":          "🔔",
+    "info":                     "ℹ️",
+    "aviso":                    "⚠️",
+    "erro":                     "❌",
+    "sucesso":                  "✅"
   };
   return icons[tipo] || "📬";
 }
 
 function getTipoLabel(tipo) {
   const labels = {
-    "ticket_criado":        "Ticket Criado",
-    "nova_resposta":        "Nova Resposta",
-    "status_alterado":      "Status Alterado",
-    "atribuido":            "Ticket Atribuído",
-    "comentario_interno":   "Comentário Interno",
-    "avaliacao_pendente":   "Avaliação Pendente",
-    "convite_task":         "Convite de Quadro",
-    "convite_aceito_task":  "Convite Aceito",
-    "convite_recusado_task":"Convite Recusado",
-    "info":                 "Informação",
-    "aviso":                "Aviso",
-    "erro":                 "Erro",
-    "sucesso":              "Sucesso"
+    "ticket_criado":            "Ticket Criado",
+    "nova_resposta":            "Nova Resposta",
+    "status_alterado":          "Status Alterado",
+    "atribuido":                "Ticket Atribuído",
+    "comentario_interno":       "Comentário Interno",
+    "avaliacao_pendente":       "Avaliação Pendente",
+    "convite_task":             "Convite de Quadro",
+    "convite_aceito_task":      "Convite Aceito",
+    "convite_recusado_task":    "Convite Recusado",
+    "convite_reuniao":          "Convite de Reunião",
+    "convite_aceito_reuniao":   "Reunião Confirmada",
+    "convite_recusado_reuniao": "Reunião Recusada",
+    "lembrete_agenda":          "Lembrete da Agenda",
+    "info":                     "Informação",
+    "aviso":                    "Aviso",
+    "erro":                     "Erro",
+    "sucesso":                  "Sucesso"
   };
   return labels[tipo] || "Notificação";
 }
 
 function getTipoBadgeText(tipo) {
   const texts = {
-    "ticket_criado":        "Criado",
-    "nova_resposta":        "Resposta",
-    "status_alterado":      "Status",
-    "atribuido":            "Atribuído",
-    "comentario_interno":   "Interno",
-    "avaliacao_pendente":   "Avaliação",
-    "convite_task":         "Convite",
-    "convite_aceito_task":  "Aceito",
-    "convite_recusado_task":"Recusado",
-    "info":                 "Info",
-    "aviso":                "Aviso",
-    "erro":                 "Erro",
-    "sucesso":              "Sucesso"
+    "ticket_criado":            "Criado",
+    "nova_resposta":            "Resposta",
+    "status_alterado":          "Status",
+    "atribuido":                "Atribuído",
+    "comentario_interno":       "Interno",
+    "avaliacao_pendente":       "Avaliação",
+    "convite_task":             "Convite",
+    "convite_aceito_task":      "Aceito",
+    "convite_recusado_task":    "Recusado",
+    "convite_reuniao":          "Reunião",
+    "convite_aceito_reuniao":   "Aceito",
+    "convite_recusado_reuniao": "Recusado",
+    "lembrete_agenda":          "Agenda",
+    "info":                     "Info",
+    "aviso":                    "Aviso",
+    "erro":                     "Erro",
+    "sucesso":                  "Sucesso"
   };
   return texts[tipo] || tipo;
 }

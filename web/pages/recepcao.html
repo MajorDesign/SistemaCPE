@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recepção — CPE Tecnologia</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <!-- FullCalendar (gratuito) -->
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/recepcao.css">
+
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/route-protection.js"></script>
+</head>
+<body class="recep-body">
+
+<!-- ===================== LOADING ===================== -->
+<div id="recepLoading">
+  <img src="/SistemaCPE/web/assests/images/logocpe.png" alt="CPE">
+  <div class="recep-spinner"></div>
+  <p style="font-size:13px;color:#888">Carregando módulo de Recepção...</p>
+</div>
+
+<!-- ===================== TOAST ===================== -->
+<div id="recepToast"></div>
+
+<!-- ===================== WRAPPER ===================== -->
+<div class="recep-wrapper" id="recepApp" style="display:none">
+
+  <!-- SIDEBAR -->
+  <aside class="recep-sidebar" id="recepSidebar">
+    <div class="recep-sidebar-logo">
+      <span class="recep-logo-cpe">CPE</span>
+      <span class="recep-logo-modulo">Recepção</span>
+    </div>
+
+    <a href="/SistemaCPE/index.html" class="recep-back-btn">
+      <i class="bi bi-arrow-left-circle"></i>
+      <span>Voltar ao Sistema</span>
+    </a>
+
+    <nav class="recep-nav">
+      <ul>
+        <li class="recep-nav-item active" data-section="calendario">
+          <a class="recep-nav-link" onclick="showSection('calendario')">
+            <i class="bi bi-calendar2-week-fill"></i><span>Calendário</span>
+          </a>
+        </li>
+        <li class="recep-nav-item" data-section="salas">
+          <a class="recep-nav-link" onclick="showSection('salas')">
+            <i class="bi bi-door-open-fill"></i><span>Salas de Reunião</span>
+          </a>
+        </li>
+        <li class="recep-nav-item" data-section="envios">
+          <a class="recep-nav-link" onclick="showSection('envios')">
+            <i class="bi bi-truck-flatbed"></i><span>Envios de Mercadoria</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+
+    <div class="recep-sidebar-toggle">
+      <button onclick="toggleSidebar()" title="Recolher menu">
+        <i class="bi bi-layout-sidebar-reverse" id="sidebarToggleIcon"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="recep-content" id="recepContent">
+
+    <!-- TOP BAR -->
+    <div class="recep-topbar">
+      <span class="recep-topbar-title" id="topbarTitle">Calendário de Reservas</span>
+      <span class="recep-topbar-badge"><i class="bi bi-door-open-fill"></i> RECEPÇÃO</span>
+      <span style="margin-left:auto;display:flex;align-items:center;gap:16px">
+        <span id="topbarUser" style="font-size:13px;color:#6B7280"></span>
+      </span>
+    </div>
+
+    <!-- ==================== CALENDARIO ==================== -->
+    <section class="recep-page active" id="page-calendario">
+      <div class="recep-section-header">
+        <h2><i class="bi bi-calendar2-week-fill" style="color:var(--recep-primary)"></i> Reservas de Salas</h2>
+        <div class="actions">
+          <select class="recep-select" id="filterUnitCal" onchange="onFilterCalendar()" style="max-width:220px">
+            <option value="">Todas as unidades</option>
+          </select>
+          <select class="recep-select" id="filterEscritorioCal" onchange="onFilterCalendar()" style="max-width:220px;display:none">
+            <option value="">Todos os escritórios</option>
+          </select>
+          <select class="recep-select" id="filterSalaCal" onchange="onFilterCalendar()" style="max-width:220px">
+            <option value="">Todas as salas</option>
+          </select>
+          <button class="btn-recep btn-recep-primary" onclick="openReservaModal()">
+            <i class="bi bi-plus-lg"></i> Nova Reserva
+          </button>
+        </div>
+      </div>
+
+      <div class="recep-legend">
+        <span><span class="legend-dot" style="background:#3b82f6"></span> Em uso / Confirmada</span>
+        <span><span class="legend-dot" style="background:#f59e0b"></span> Pendente (aguarda confirmação)</span>
+        <span><span class="legend-dot" style="background:#9ca3af"></span> Concluída</span>
+        <span><span class="legend-dot" style="background:#ef4444"></span> Cancelada / Expirada</span>
+      </div>
+
+      <div class="recep-card">
+        <div id="calendar"></div>
+      </div>
+    </section>
+
+    <!-- ==================== SALAS ==================== -->
+    <section class="recep-page" id="page-salas">
+      <div class="recep-section-header">
+        <h2><i class="bi bi-door-open-fill" style="color:var(--recep-primary)"></i> Salas de Reunião</h2>
+        <div class="actions">
+          <select class="recep-select" id="filterUnitSala" onchange="onFilterSalaUnitChange()" style="max-width:220px">
+            <option value="">Todas as unidades</option>
+          </select>
+          <select class="recep-select" id="filterEscritorioSala" onchange="loadSalas()" style="max-width:220px;display:none">
+            <option value="">Todos os escritórios</option>
+          </select>
+          <button class="btn-recep btn-recep-primary" id="btnNovaSala" onclick="openSalaModal()">
+            <i class="bi bi-plus-lg"></i> Nova Sala
+          </button>
+        </div>
+      </div>
+
+      <div id="salasGrid" class="recep-rooms-grid"></div>
+    </section>
+
+    <!-- ==================== ENVIOS ==================== -->
+    <section class="recep-page" id="page-envios">
+      <div class="recep-section-header">
+        <h2><i class="bi bi-truck-flatbed" style="color:var(--recep-primary)"></i> Envios de Mercadoria</h2>
+        <div class="actions">
+          <button class="btn-recep btn-recep-primary" onclick="openEnvioModal()">
+            <i class="bi bi-plus-lg"></i> Novo Envio
+          </button>
+        </div>
+      </div>
+
+      <div class="recep-filters">
+        <input class="recep-input" id="envioSearch" placeholder="Buscar destino, destinatário ou código..." oninput="renderEnvios()" style="max-width:280px">
+      </div>
+
+      <div class="recep-card">
+        <div class="recep-table-wrapper">
+          <table class="recep-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Remetente</th>
+                <th>Destino</th>
+                <th>Destinatário</th>
+                <th>Valor</th>
+                <th>Código Correios</th>
+                <th>Status</th>
+                <th>Última atualização</th>
+                <th style="text-align:center">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="enviosTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Nova/Editar Reserva -->
+<!-- ============================================================ -->
+<div class="modal fade" id="reservaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-calendar-plus"></i> <span id="reservaModalTitle">Nova Reserva</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger d-none" id="reservaErr"></div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Unidade</label>
+            <select class="form-select" id="resvUnit" onchange="onResvUnitChange()">
+              <option value="">— Selecione a unidade —</option>
+            </select>
+          </div>
+          <div class="col-md-6" id="resvEscritorioWrap" style="display:none">
+            <label class="form-label">Escritório <span class="text-danger">*</span></label>
+            <select class="form-select" id="resvEscritorio" onchange="onResvEscritorioChange()">
+              <option value="">— Selecione o escritório —</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Sala / Auditório <span class="text-danger">*</span></label>
+            <select class="form-select" id="resvSala" required>
+              <option value="">— Selecione a sala —</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Título da reunião <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="resvTitulo" maxlength="200" placeholder="Ex: Reunião de planejamento Q2">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Início <span class="text-danger">*</span></label>
+            <input type="datetime-local" class="form-control" id="resvInicio">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Fim <span class="text-danger">*</span></label>
+            <input type="datetime-local" class="form-control" id="resvFim">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Descrição (opcional)</label>
+            <textarea class="form-control" id="resvDescricao" rows="2" maxlength="500"></textarea>
+          </div>
+          <div class="col-12">
+            <label class="form-label">
+              <i class="bi bi-people-fill"></i> Convidar usuários
+            </label>
+            <input type="text" class="form-control mb-2" id="resvConvidadosBusca"
+                   placeholder="Buscar por nome, e-mail ou username..." oninput="filtrarConvidados()">
+            <select multiple class="form-select" id="resvConvidados" size="6"></select>
+            <small class="form-text text-muted">
+              Segure <kbd>Ctrl</kbd> (ou <kbd>Cmd</kbd> no Mac) para selecionar vários. Os convidados receberão notificação no sino para aceitar ou recusar.
+            </small>
+          </div>
+        </div>
+        <div class="alert alert-warning mt-3" style="font-size:.85rem">
+          <i class="bi bi-bell-fill"></i>
+          <strong>Importante — confirmação obrigatória:</strong>
+          <ul class="mb-0 mt-1" style="padding-left:1.2rem">
+            <li><strong>40 minutos antes</strong> do início da reunião, você receberá uma notificação no sino 🔔 para confirmar a reserva.</li>
+            <li>Se você <strong>não confirmar até o horário de início</strong>, a sala será liberada automaticamente para outras pessoas.</li>
+            <li>Lembre-se: confirme assim que receber o lembrete!</li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary" onclick="submitReserva()" id="btnSubmitReserva">
+          <i class="bi bi-check-lg"></i> Criar Reserva
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Detalhes da reserva (clique no evento) -->
+<!-- ============================================================ -->
+<div class="modal fade" id="reservaDetalhe" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-info-circle"></i> Detalhes da Reserva</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="resvDetCorpo"></div>
+      <div class="modal-footer" id="resvDetActions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Nova/Editar Sala -->
+<!-- ============================================================ -->
+<div class="modal fade" id="salaModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-door-open"></i> <span id="salaModalTitle">Nova Sala</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger d-none" id="salaErr"></div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Unidade <span class="text-danger">*</span></label>
+            <select class="form-select" id="salaUnit" onchange="onSalaUnitChange()"></select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Tipo</label>
+            <select class="form-select" id="salaTipo">
+              <option value="sala">Sala de Reunião</option>
+              <option value="auditorio">Auditório</option>
+            </select>
+          </div>
+          <div class="col-md-6" id="salaEscritorioWrap" style="display:none">
+            <label class="form-label">Escritório</label>
+            <select class="form-select" id="salaEscritorio">
+              <option value="">— Sem escritório —</option>
+            </select>
+            <small class="form-text text-muted">Aplicável a unidades com mais de um escritório (ex.: BH).</small>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Nome <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="salaNome" maxlength="120" placeholder="Ex: Sala Pequena - 1º andar">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Capacidade</label>
+            <input type="number" class="form-control" id="salaCapacidade" min="1" max="10000" placeholder="10">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label">Cor</label>
+            <input type="color" class="form-control form-control-color" id="salaCor" value="#3b82f6">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Descrição</label>
+            <textarea class="form-control" id="salaDescricao" rows="2" maxlength="500" placeholder="Equipamentos, observações..."></textarea>
+          </div>
+          <div class="col-12">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input" id="salaAtiva" checked>
+              <label class="form-check-label" for="salaAtiva">Sala ativa (disponível para reservas)</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary" onclick="submitSala()" id="btnSubmitSala">
+          <i class="bi bi-check-lg"></i> Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Novo/Editar Envio -->
+<!-- ============================================================ -->
+<div class="modal fade" id="envioModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-box-seam"></i> <span id="envioModalTitle">Novo Envio</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger d-none" id="envioErr"></div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Remetente</label>
+            <input type="text" class="form-control" id="envioRemetente" disabled>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Valor da mercadoria (R$)</label>
+            <input type="number" class="form-control" id="envioValor" step="0.01" min="0" value="0">
+          </div>
+          <div class="col-12">
+            <label class="form-label">Destino <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="envioDestino" maxlength="255" placeholder="Cidade, endereço ou empresa de destino">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Destinatário <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="envioDestinatario" maxlength="150" placeholder="Quem recebe">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Código dos Correios</label>
+            <input type="text" class="form-control text-uppercase" id="envioCodigo" maxlength="13" placeholder="AA123456789BR">
+            <small class="form-text text-muted">Formato: 2 letras + 9 dígitos + 2 letras (ex: BR123456789BR)</small>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Observações</label>
+            <textarea class="form-control" id="envioObs" rows="2" maxlength="500"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary" onclick="submitEnvio()" id="btnSubmitEnvio">
+          <i class="bi bi-check-lg"></i> Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ============================================================ -->
+<!-- MODAL: Rastreio via API (seurastreio.com.br) -->
+<!-- ============================================================ -->
+<div class="modal fade" id="rastreioApiModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-geo-alt-fill"></i> Rastreamento — <code id="rastApiCodigo" style="font-size:.95rem"></code>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="rastApiCorpo">
+        <div class="text-center" style="padding:32px">
+          <div class="recep-spinner" style="margin:0 auto 12px"></div>
+          <p class="text-muted">Consultando API...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a id="rastApiLinkDetalhes" href="#" target="_blank" rel="noopener"
+           class="btn btn-sm btn-outline-secondary me-auto" style="display:none">
+          <i class="bi bi-box-arrow-up-right"></i> Ver no seurastreio
+        </a>
+        <button class="btn btn-sm btn-outline-primary" id="rastApiBtnRecarregar"
+                onclick="rastrearEnvioRecarregar()">
+          <i class="bi bi-arrow-clockwise"></i> Atualizar
+        </button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Status manual do envio (timeline) -->
+<!-- ============================================================ -->
+<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-clock-history"></i> Status do envio
+          <span id="statusEnvioRef" class="text-muted" style="font-size:.9rem"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Timeline -->
+        <div id="statusTimeline" class="status-timeline"></div>
+
+        <!-- Form de novo evento -->
+        <div id="statusForm" class="status-form mt-3" style="display:none">
+          <h6 class="mb-3" id="statusFormTitle"><i class="bi bi-plus-circle"></i> Novo evento</h6>
+          <div class="alert alert-danger d-none" id="statusFormErr"></div>
+          <input type="hidden" id="statusFormId">
+          <div class="row g-2">
+            <div class="col-md-5">
+              <label class="form-label">Tipo</label>
+              <select class="form-select form-select-sm" id="statusFormTipo">
+                <option value="etiqueta_emitida">📋 Etiqueta emitida</option>
+                <option value="postado">📮 Postado nos Correios</option>
+                <option value="em_transito" selected>🚚 Em trânsito</option>
+                <option value="saiu_entrega">🚛 Saiu para entrega</option>
+                <option value="entregue">📦 Entregue ao destinatário</option>
+                <option value="aguardando_retirada">🏪 Aguardando retirada</option>
+                <option value="tentativa_entrega">⏰ Tentativa de entrega</option>
+                <option value="devolvido">↩️ Devolvido ao remetente</option>
+                <option value="extraviado">⚠️ Extraviado</option>
+                <option value="outros">ℹ️ Outro</option>
+              </select>
+            </div>
+            <div class="col-md-7">
+              <label class="form-label">Data e hora</label>
+              <input type="datetime-local" class="form-control form-control-sm" id="statusFormData">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Descrição</label>
+              <input type="text" class="form-control form-control-sm" id="statusFormDescricao"
+                     maxlength="255" placeholder="Ex: Objeto entregue ao destinatário">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Local <small class="text-muted">(opcional)</small></label>
+              <input type="text" class="form-control form-control-sm" id="statusFormLocal"
+                     maxlength="180" placeholder="Ex: APARECIDA DE GOIANIA - GO">
+            </div>
+          </div>
+          <div class="mt-3 d-flex gap-2 justify-content-end">
+            <button class="btn btn-sm btn-secondary" onclick="cancelarFormEvento()">
+              <i class="bi bi-x"></i> Cancelar
+            </button>
+            <button class="btn btn-sm btn-primary" onclick="salvarEvento()">
+              <i class="bi bi-check-lg"></i> Salvar evento
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="btnAdicionarEvento" onclick="abrirFormEvento()">
+          <i class="bi bi-plus-lg"></i> Adicionar evento
+        </button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SCRIPTS -->
+<!-- ============================================================ -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales/pt-br.global.min.js"></script>
+<script src="/SistemaCPE/web/assests/js/recepcao.js"></script>
+
+</body>
+</html>

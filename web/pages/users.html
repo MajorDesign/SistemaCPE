@@ -272,6 +272,18 @@
             </div>
             <!-- [FIM] Campo Grupo -->
 
+            <!-- [INICIO] Campo Unidade -->
+            <div class="mb-3">
+              <label for="inputUnit" class="form-label">
+                <i class="bi bi-geo-alt"></i> Unidade
+              </label>
+              <select class="form-select" id="inputUnit">
+                <option value="">-- Sem Unidade --</option>
+              </select>
+              <div class="help-text">Filial física a que este usuário pertence</div>
+            </div>
+            <!-- [FIM] Campo Unidade -->
+
             <!-- [INICIO] Campos Permissão e Status -->
            <!-- [INICIO] Campos Permissão e Status -->
 <div class="row">
@@ -336,11 +348,13 @@
   <script>
     let users = [];
     let groups = [];
+    let units = [];
     let selectedUserId = null;
-    
+
     const _API_HOST = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
-    const API_USERS_URL = _API_HOST + '/api/users';
+    const API_USERS_URL  = _API_HOST + '/api/users';
     const API_GROUPS_URL = _API_HOST + '/api/groups';
+    const API_UNITS_URL  = _API_HOST + '/api/unidades';
 
     console.log("\n" + "=".repeat(80));
     console.log("[USERS] Pagina de Gerenciamento de Usuarios");
@@ -377,6 +391,7 @@
       console.log("[USERS] Inicializando...");
       try {
         loadGroups();
+        loadUnits();
         loadUsers();
         setupEventListeners();
         setupPasswordToggle();
@@ -385,6 +400,36 @@
         console.error("[USERS] Erro ao inicializar:", err.message);
         showError("Erro ao inicializar pagina: " + err.message);
       }
+    }
+
+    async function loadUnits() {
+      try {
+        const r = await fetch(API_UNITS_URL + '/');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        units = await r.json();
+        console.log("[USERS/UNITS] " + units.length + " unidade(s) carregada(s)");
+        const sel = document.getElementById("inputUnit");
+        if (sel) {
+          const cur = sel.value;
+          sel.innerHTML = '<option value="">-- Sem Unidade --</option>';
+          (units || []).forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u.id;
+            opt.textContent = u.nome + (u.sigla ? ' (' + u.sigla + ')' : '');
+            sel.appendChild(opt);
+          });
+          if (cur) sel.value = cur;
+        }
+      } catch (err) {
+        console.error("[USERS/UNITS] Erro:", err.message);
+        units = [];
+      }
+    }
+
+    function getUnitName(unitId) {
+      if (!unitId) return null;
+      const u = units.find(x => x.id === parseInt(unitId));
+      return u ? (u.sigla || u.nome) : null;
     }
 
     document.addEventListener("authenticationSuccess", initializeUsers);
@@ -521,6 +566,8 @@
           username: user.username || '',
           role: user.role || 'USER',
           group_id: user.group_id || null,
+          unit_id: user.unit_id || null,
+          unit_nome: user.unit_nome || null,
           is_active: user.is_active === true || user.is_active === 1,
           created_at: user.created_at || ''
         }));
@@ -666,10 +713,16 @@ function renderUsers(list = users) {
             <td>${email}</td>
             <td><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px;">${username}</code></td>
             <td>
-              ${user.group_id 
-                ? `<span style="background: #e0e7ff; color: #3730a3; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;"><i class="bi bi-folder"></i> ${groupName}</span>`
-                : `<span style="color: #9ca3af; font-size: 0.85rem;"><i class="bi bi-dash-circle"></i> Sem Grupo</span>`
-              }
+              <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
+                ${user.group_id
+                  ? `<span style="background: #e0e7ff; color: #3730a3; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;"><i class="bi bi-folder"></i> ${groupName}</span>`
+                  : `<span style="color: #9ca3af; font-size: 0.85rem;"><i class="bi bi-dash-circle"></i> Sem Grupo</span>`
+                }
+                ${user.unit_id
+                  ? `<span style="background:#cffafe;color:#0e7490;padding:2px 6px;border-radius:4px;font-size:.72rem;"><i class="bi bi-geo-alt"></i> ${escapeHtml(user.unit_nome || getUnitName(user.unit_id) || ('Unidade #' + user.unit_id))}</span>`
+                  : ''
+                }
+              </div>
             </td>
             <td>
               ${getRoleBadge(user.role)}
@@ -748,6 +801,7 @@ function renderUsers(list = users) {
       document.getElementById("inputEmail").value = user.email || '';
       document.getElementById("inputUsername").value = user.username || '';
       document.getElementById("inputGroup").value = user.group_id || '';
+      document.getElementById("inputUnit").value = user.unit_id || '';
       document.getElementById("inputRole").value = user.role || 'USER';
       document.getElementById("inputStatus").value = user.is_active ? "true" : "false";
 
@@ -901,6 +955,7 @@ function renderUsers(list = users) {
       const role = document.getElementById("inputRole")?.value;
       const status = document.getElementById("inputStatus")?.value;
       const groupIdValue = document.getElementById("inputGroup")?.value;
+      const unitIdValue  = document.getElementById("inputUnit")?.value;
 
       if (!name || !email || !username || !role) {
         showModalError("Preencha todos os campos obrigatorios!");
@@ -933,16 +988,20 @@ function renderUsers(list = users) {
         let groupId = null;
         if (groupIdValue && groupIdValue.trim() !== '') {
           const parsed = parseInt(groupIdValue);
-          if (!isNaN(parsed)) {
-            groupId = parsed;
-          }
+          if (!isNaN(parsed)) groupId = parsed;
+        }
+
+        let unitId = null;
+        if (unitIdValue && unitIdValue.trim() !== '') {
+          const parsed = parseInt(unitIdValue);
+          if (!isNaN(parsed)) unitId = parsed;
         }
 
         let url, method, body;
 
         if (selectedUserId) {
           console.log("[USERS/FORM] Atualizando usuario: " + selectedUserId);
-          
+
           url = API_USERS_URL + "/" + selectedUserId;
           method = 'PUT';
           body = {
@@ -951,12 +1010,14 @@ function renderUsers(list = users) {
             username,
             role,
             is_active: status === "true",
-            group_id: groupId
+            group_id: groupId,
+            // 0 = sentinela para "remover unidade" (PUT trata 0 como NULL)
+            unit_id: unitId !== null ? unitId : 0
           };
 
         } else {
           console.log("[USERS/FORM] Criando novo usuario");
-          
+
           url = API_USERS_URL;
           method = 'POST';
           body = {
@@ -966,7 +1027,8 @@ function renderUsers(list = users) {
             password,
             role,
             is_active: status === "true",
-            group_id: groupId
+            group_id: groupId,
+            unit_id: unitId
           };
         }
 

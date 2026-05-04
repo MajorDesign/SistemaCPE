@@ -24,44 +24,54 @@
     /* ══ Galeria ════════════════════════════════════════════════════ */
     #galleryScreen {
       position:fixed; inset:0; z-index:2000;
-      background:#1b1c2e; overflow-y:auto; padding:0;
+      background:#f4f5f7; overflow-y:auto; padding:0;
     }
     .gal-header {
-      background:#1b1c2e;
-      border-bottom:1px solid #2c2e47;
+      background:#fff;
+      border-bottom:1px solid #e2e6ea;
       padding:12px 28px;
       display:flex; align-items:center; gap:12px;
-      font-size:.8rem; color:#8993a4;
+      font-size:.8rem; color:#5e6c84;
     }
-    .gal-header span { color:#579dff; font-weight:600; }
+    .gal-header span { color:#0052cc; font-weight:600; }
+    .gal-back-btn {
+      margin-left:auto;
+      display:flex; align-items:center; gap:6px;
+      background:#f4f5f7; border:1.5px solid #dfe1e6;
+      color:#42526e; font-size:.78rem; font-weight:600;
+      padding:6px 14px; border-radius:6px; cursor:pointer;
+      transition:background .15s, border-color .15s;
+      text-decoration:none;
+    }
+    .gal-back-btn:hover { background:#ebecf0; border-color:#b3bac5; color:#172b4d; }
     .gal-body { max-width:900px; margin:0 auto; padding:40px 24px 60px; }
-    .gal-title { font-size:1.5rem; font-weight:700; color:#fff; margin-bottom:6px; }
-    .gal-sub   { font-size:.85rem; color:#8993a4; margin-bottom:32px; }
+    .gal-title { font-size:1.5rem; font-weight:700; color:#172b4d; margin-bottom:6px; }
+    .gal-sub   { font-size:.85rem; color:#5e6c84; margin-bottom:32px; }
     .gal-grid  { display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:16px; }
 
     .tpl-card {
-      background:#22253a;
-      border:1.5px solid #2c2e47;
+      background:#fff;
+      border:1.5px solid #dfe1e6;
       border-radius:10px;
       overflow:hidden;
       cursor:pointer;
-      transition:border-color .18s, transform .18s;
+      transition:border-color .18s, transform .18s, box-shadow .18s;
       position:relative;
     }
-    .tpl-card:hover { border-color:#579dff; transform:translateY(-2px); }
-    .tpl-card.selected { border-color:#579dff; box-shadow:0 0 0 2px #579dff44; }
+    .tpl-card:hover { border-color:#0052cc; transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,82,204,.1); }
+    .tpl-card.selected { border-color:#0052cc; box-shadow:0 0 0 2px #0052cc44; }
     .tpl-card-illo {
       height:130px;
       display:flex; align-items:center; justify-content:center;
       font-size:3rem; position:relative; overflow:hidden;
     }
     .tpl-card-body { padding:12px 14px 14px; }
-    .tpl-card-title { font-size:.88rem; font-weight:700; color:#fff; margin-bottom:3px; }
-    .tpl-card-desc  { font-size:.75rem; color:#8993a4; line-height:1.4; }
-    .tpl-card-logo  { margin-top:8px; font-size:.7rem; color:#579dff; font-weight:600; display:flex; align-items:center; gap:4px; }
+    .tpl-card-title { font-size:.88rem; font-weight:700; color:#172b4d; margin-bottom:3px; }
+    .tpl-card-desc  { font-size:.75rem; color:#5e6c84; line-height:1.4; }
+    .tpl-card-logo  { margin-top:8px; font-size:.7rem; color:#0052cc; font-weight:600; display:flex; align-items:center; gap:4px; }
     .tpl-badge {
       position:absolute; top:8px; left:8px;
-      background:#e2b203; color:#1b1c2e;
+      background:#e2b203; color:#172b4d;
       font-size:.6rem; font-weight:700; padding:2px 6px; border-radius:3px;
       text-transform:uppercase;
     }
@@ -71,6 +81,31 @@
     .illo-kanban  { background:linear-gradient(135deg,#001f5b 0%,#0043a8 100%); }
     .illo-scrum   { background:linear-gradient(135deg,#003320 0%,#006644 100%); }
     .illo-tarefa  { background:linear-gradient(135deg,#3a1700 0%,#974f0c 100%); }
+
+    /* Cards em construção */
+    .tpl-card-wip {
+      cursor:not-allowed !important;
+      pointer-events:none;
+      opacity:.72;
+    }
+    .tpl-card-wip .tpl-card-illo {
+      filter:grayscale(1) brightness(.7);
+    }
+    .tpl-card-wip .tpl-card-title { color:#5e6c84; }
+    .tpl-card-wip:hover { border-color:#dfe1e6 !important; transform:none !important; box-shadow:none !important; }
+    .tpl-wip-badge {
+      position:absolute; top:8px; left:8px;
+      background:#f4f5f7; border:1px solid #b3bac5;
+      color:#5e6c84;
+      font-size:.6rem; font-weight:700; padding:2px 7px; border-radius:3px;
+      display:flex; align-items:center; gap:4px;
+    }
+    .tpl-wip-overlay {
+      position:absolute; inset:0;
+      background:rgba(244,245,247,.18);
+      display:flex; align-items:center; justify-content:center;
+    }
+    .tpl-card-wip .tpl-card-logo { color:#8993a4; }
 
     /* ══ Wizard ═════════════════════════════════════════════════════ */
     #wizardScreen {
@@ -833,11 +868,14 @@
 <!-- ══════════════════════════════════════════
      TELA 1: GALERIA DE TEMPLATES
 ══════════════════════════════════════════ -->
-<div id="galleryScreen" class="tk-dark" style="display:none;">
+<div id="galleryScreen" style="display:none;">
   <div class="gal-header">
     <span><i class="bi bi-grid-3x3-gap-fill me-1"></i>CPE Control</span>
-    <span style="color:#3d4060;">›</span>
+    <span style="color:#b3bac5;">›</span>
     Templates de espaço
+    <a class="gal-back-btn" href="/SistemaCPE/web/pages/tickets.html">
+      <i class="bi bi-arrow-left"></i> Voltar ao sistema
+    </a>
   </div>
 
   <div class="gal-body">
@@ -849,10 +887,11 @@
 
     <div class="gal-grid" id="templateGrid">
 
-      <!-- Gestão de Projetos -->
-      <div class="tpl-card" onclick="selecionarTemplate('gestao')">
+      <!-- Gestão de Projetos — Em construção -->
+      <div class="tpl-card tpl-card-wip">
         <div class="tpl-card-illo illo-gestao">
-          <div class="tpl-badge">CRIADO POR ÚLTIMO</div>
+          <div class="tpl-wip-badge"><i class="bi bi-exclamation-triangle-fill"></i> Em construção</div>
+          <div class="tpl-wip-overlay"></div>
           <svg width="100" height="80" viewBox="0 0 100 80" fill="none">
             <rect x="8" y="12" width="84" height="56" rx="4" fill="#451a03" stroke="#ffc107" stroke-width="1.5"/>
             <rect x="14" y="20" width="22" height="6" rx="2" fill="#ffc107" opacity=".8"/>
@@ -871,9 +910,11 @@
         </div>
       </div>
 
-      <!-- Kanban -->
-      <div class="tpl-card" onclick="selecionarTemplate('kanban')">
+      <!-- Kanban — Em construção -->
+      <div class="tpl-card tpl-card-wip">
         <div class="tpl-card-illo illo-kanban">
+          <div class="tpl-wip-badge"><i class="bi bi-exclamation-triangle-fill"></i> Em construção</div>
+          <div class="tpl-wip-overlay"></div>
           <svg width="100" height="80" viewBox="0 0 100 80" fill="none">
             <rect x="8" y="14" width="24" height="52" rx="3" fill="#0d2a5e" stroke="#0052cc" stroke-width="1.2"/>
             <rect x="38" y="14" width="24" height="52" rx="3" fill="#0d2a5e" stroke="#0052cc" stroke-width="1.2"/>
@@ -892,9 +933,11 @@
         </div>
       </div>
 
-      <!-- Scrum -->
-      <div class="tpl-card" onclick="selecionarTemplate('scrum')">
+      <!-- Scrum — Em construção -->
+      <div class="tpl-card tpl-card-wip">
         <div class="tpl-card-illo illo-scrum">
+          <div class="tpl-wip-badge"><i class="bi bi-exclamation-triangle-fill"></i> Em construção</div>
+          <div class="tpl-wip-overlay"></div>
           <svg width="100" height="80" viewBox="0 0 100 80" fill="none">
             <ellipse cx="50" cy="40" rx="28" ry="28" fill="#0d2e1a" stroke="#10b981" stroke-width="1.5"/>
             <path d="M50 18 L50 40 L65 40" stroke="#10b981" stroke-width="2" stroke-linecap="round"/>
@@ -4606,8 +4649,8 @@ async function _carregarGruposModal() {
       const convidadoIds  = new Set(convitesPend.map(c => c.group_id));
       sel.innerHTML = '<option value="">— Selecionar grupo —</option>' +
         grpAllGrupos
-          .filter(g => !participandoIds.has(g.id) && !convidadoIds.has(g.id) && g.total_membros > 0)
-          .map(g => `<option value="${g.id}">${escHtml(g.name)} (${g.total_membros} membro${g.total_membros!==1?'s':''})</option>`)
+          .filter(g => !participandoIds.has(g.id) && !convidadoIds.has(g.id))
+          .map(g => `<option value="${g.id}">${escHtml(g.name)}${g.total_membros > 0 ? ` (${g.total_membros} membro${g.total_membros!==1?'s':''})` : ''}</option>`)
           .join('');
 
       _renderConvitesPendentes(convitesPend);

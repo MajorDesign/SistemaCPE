@@ -72,6 +72,7 @@ class UserBase(BaseModel):
     username: str = Field(..., min_length=3, max_length=100)
     role: str = Field(default="USER", pattern="^(USER|ADMIN|TI|RESPONSAVEL_GRUPO)$")
     group_id: Optional[int] = None
+    unit_id: Optional[int] = None
     is_active: bool = True
 
 class UserCreate(UserBase):
@@ -83,9 +84,11 @@ class UserUpdate(BaseModel):
     username: Optional[str] = Field(None, min_length=3, max_length=100)
     role: Optional[str] = Field(None, pattern="^(USER|ADMIN|TI|RESPONSAVEL_GRUPO)$")
     group_id: Optional[int] = None
+    unit_id: Optional[int] = None
     is_active: Optional[bool] = None
 
 # ✅ CORRIGIDO: adicionado group_name para o frontend preencher o modal de ticket
+# ✅ NOVO (2026-04-30): unit_id e unit_nome para vincular usuário a uma unidade CPE
 class UserResponse(BaseModel):
     id: int
     name: str
@@ -93,7 +96,9 @@ class UserResponse(BaseModel):
     username: Optional[str] = None
     role: str
     group_id: Optional[int] = None
-    group_name: Optional[str] = None   # ← NOVO: nome do grupo/setor do usuário
+    group_name: Optional[str] = None   # nome do grupo/setor do usuário
+    unit_id: Optional[int] = None
+    unit_nome: Optional[str] = None    # nome da unidade física (ex.: CPE Belo Horizonte)
     is_active: bool
     created_at: Optional[str] = None
 
@@ -292,20 +297,24 @@ def login(login_data: LoginRequest, response: Response):
             query = """
                  SELECT
                     u.id, u.name, u.email, u.username, u.role,
-                    u.group_id, u.is_active, u.created_at, u.password_hash,
-                    `cpe_grupo`.`name` AS group_name
+                    u.group_id, u.unit_id, u.is_active, u.created_at, u.password_hash,
+                    `cpe_grupo`.`name` AS group_name,
+                    unidades_cpe.nome AS unit_nome
                 FROM users u
-                LEFT JOIN `cpe_grupo` ON u.group_id = `cpe_grupo`.`id`
+                LEFT JOIN `cpe_grupo`   ON u.group_id = `cpe_grupo`.`id`
+                LEFT JOIN unidades_cpe  ON u.unit_id  = unidades_cpe.id
                 WHERE u.email = %s
             """
         else:
             query = """
                 SELECT
                     u.id, u.name, u.email, u.username, u.role,
-                    u.group_id, u.is_active, u.created_at, u.password_hash,
-                    `cpe_grupo`.`name` AS group_name
+                    u.group_id, u.unit_id, u.is_active, u.created_at, u.password_hash,
+                    `cpe_grupo`.`name` AS group_name,
+                    unidades_cpe.nome AS unit_nome
                 FROM users u
-                LEFT JOIN `cpe_grupo` ON u.group_id = `cpe_grupo`.`id`
+                LEFT JOIN `cpe_grupo`   ON u.group_id = `cpe_grupo`.`id`
+                LEFT JOIN unidades_cpe  ON u.unit_id  = unidades_cpe.id
                 WHERE u.username = %s
             """
         
@@ -751,10 +760,15 @@ async def get_users():
     
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, email, username, role, group_id, is_active, created_at FROM users ORDER BY created_at DESC")
+        cursor.execute(
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, "
+            "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
+            "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
+            "ORDER BY u.created_at DESC"
+        )
         users = cursor.fetchall()
         users = convert_datetime_list(users)
-        
+
         logger.info(f"[USERS] ✅ {len(users)} usuario(s) encontrado(s)\n")
         return users or []
         
@@ -777,12 +791,18 @@ async def get_user(user_id: int):
     
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, name, email, username, role, group_id, is_active, created_at FROM users WHERE id = %s", (user_id,))
+        cursor.execute(
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, "
+            "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
+            "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
+            "WHERE u.id = %s",
+            (user_id,),
+        )
         user = cursor.fetchone()
-        
+
         if not user:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
-        
+
         user = convert_datetime_to_string(user)
         logger.info(f"[USERS] ✅ Usuario encontrado: {user['name']}\n")
         return user
@@ -821,24 +841,37 @@ async def create_user(user: UserCreate):
             cursor.execute("SELECT id FROM `cpe_grupo` WHERE id = %s", (user.group_id,))
             if not cursor.fetchone():
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grupo nao encontrado")
-        
+
+        if user.unit_id:
+            cursor.execute("SELECT id FROM unidades_cpe WHERE id = %s", (user.unit_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unidade nao encontrada")
+
         logger.info("[USERS] 🔐 Gerando hash da senha com bcrypt...")
         try:
             password_hash = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             logger.info("[USERS]   ✅ Hash gerado com sucesso")
         except Exception as hash_err:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao processar senha")
-        
+
         cursor.execute(
-            "INSERT INTO users (name, email, username, password_hash, role, group_id, is_active) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-            (user.name, user.email, user.username, password_hash, user.role, user.group_id, user.is_active)
+            "INSERT INTO users (name, email, username, password_hash, role, group_id, unit_id, is_active) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            (user.name, user.email, user.username, password_hash, user.role,
+             user.group_id, user.unit_id, user.is_active)
         )
-        
+
         conn.commit()
         new_user_id = cursor.lastrowid
         logger.info(f"[USERS]   ✅ Usuario criado com ID: {new_user_id}")
-        
-        cursor.execute("SELECT id, name, email, username, role, group_id, is_active, created_at FROM users WHERE id = %s", (new_user_id,))
+
+        cursor.execute(
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, "
+            "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
+            "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
+            "WHERE u.id = %s",
+            (new_user_id,),
+        )
         new_user = cursor.fetchone()
         new_user = convert_datetime_to_string(new_user)
         
@@ -899,19 +932,33 @@ async def update_user(user_id: int, user: UserUpdate):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grupo nao encontrado")
             updates.append("group_id = %s")
             params.append(user.group_id)
-        
+
+        if user.unit_id is not None:
+            if user.unit_id != 0:
+                cursor.execute("SELECT id FROM unidades_cpe WHERE id = %s", (user.unit_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unidade nao encontrada")
+            updates.append("unit_id = %s")
+            params.append(user.unit_id if user.unit_id != 0 else None)
+
         if user.is_active is not None:
             updates.append("is_active = %s")
             params.append(user.is_active)
-        
+
         if not updates:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
-        
+
         params.append(user_id)
         cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = %s", params)
         conn.commit()
-        
-        cursor.execute("SELECT id, name, email, username, role, group_id, is_active, created_at FROM users WHERE id = %s", (user_id,))
+
+        cursor.execute(
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, "
+            "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
+            "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
+            "WHERE u.id = %s",
+            (user_id,),
+        )
         updated_user = cursor.fetchone()
         updated_user = convert_datetime_to_string(updated_user)
         
@@ -1127,6 +1174,46 @@ try:
     logger.info("✅ Router de Clicksign registrado: /api/clicksign")
 except Exception as err:
     logger.error(f"❌ Erro ao registrar router de Clicksign: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+# ✅ REGISTRAR ROUTER DE UNIDADES CPE
+try:
+    from routes.unidades import router as unidades_router
+    app.include_router(unidades_router)
+    logger.info("✅ Router de Unidades registrado: /api/unidades")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Unidades: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+# ✅ REGISTRAR ROUTER DE RECEPÇÃO (salas, reservas, envios)
+try:
+    from routes.recepcao import router as recepcao_router
+    app.include_router(recepcao_router)
+    logger.info("✅ Router de Recepção registrado: /api/recepcao")
+
+    # Inicia o job em background que cancela reservas pendentes após 40min
+    from services.recepcao_scheduler import iniciar as iniciar_scheduler_recepcao
+    iniciar_scheduler_recepcao()
+    logger.info("✅ Scheduler de Recepção iniciado (auto-cancel 40min)")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar Recepção: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+# ✅ REGISTRAR ROUTER DE AGENDA (integração Carbonio)
+try:
+    from routes.agenda import router as agenda_router
+    app.include_router(agenda_router)
+    logger.info("✅ Router de Agenda registrado: /api/agenda")
+
+    # Inicia scheduler de lembretes de agenda (sino quando começar a reunião)
+    from services.agenda_scheduler import iniciar as iniciar_agenda_scheduler
+    iniciar_agenda_scheduler()
+    logger.info("✅ Scheduler de Agenda iniciado (lembretes via sino)")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar Agenda: {str(err)}")
     import traceback
     logger.error(traceback.format_exc())
 
