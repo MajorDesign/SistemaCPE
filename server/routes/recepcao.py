@@ -34,6 +34,7 @@ from database import (
     convert_datetime_to_string,
     convert_datetime_list,
 )
+from services.seurastreio_service import rastrear as rastrear_seurastreio
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +136,20 @@ class EnvioUpdate(BaseModel):
     # estiver inacessível (firewall, sem internet, etc).
     status_correios: Optional[str] = Field(None, max_length=120)
     status_local: Optional[str]    = Field(None, max_length=180)
+
+
+class EventoCreate(BaseModel):
+    tipo: str = Field(..., min_length=1, max_length=40)
+    descricao: str = Field(..., min_length=2, max_length=255)
+    local: Optional[str] = Field(None, max_length=180)
+    data_evento: str  # ISO datetime "YYYY-MM-DDTHH:MM"
+
+
+class EventoUpdate(BaseModel):
+    tipo: Optional[str] = Field(None, min_length=1, max_length=40)
+    descricao: Optional[str] = Field(None, min_length=2, max_length=255)
+    local: Optional[str] = Field(None, max_length=180)
+    data_evento: Optional[str] = None
 
 
 # ============================================================
@@ -426,7 +441,8 @@ async def list_salas(unit_id: Optional[int] = None,
         if unit_id is not None:
             sql += " AND s.unit_id = %s"; params.append(unit_id)
         if escritorio_id is not None:
-            sql += " AND s.escritorio_id = %s"; params.append(escritorio_id)
+            # Sala sem escritorio_id = "comum" à unidade (aparece em qualquer escritório)
+            sql += " AND (s.escritorio_id = %s OR s.escritorio_id IS NULL)"; params.append(escritorio_id)
         if ativa is not None:
             sql += " AND s.ativa = %s"; params.append(1 if ativa else 0)
         sql += " ORDER BY u.nome, e.nome, s.nome"
@@ -659,7 +675,10 @@ async def create_reserva(data: ReservaCreate):
         if _conflito_de_horario(cursor, data.sala_id, data.inicio, data.fim):
             raise HTTPException(status_code=409, detail="Já existe uma reserva nesse horário")
 
-        prazo = datetime.now() + timedelta(minutes=CONFIRMACAO_MINUTOS)
+        # Nova regra: deadline de confirmação é o próprio horário de início.
+        # 40min antes do início o usuário receberá uma notificação automática
+        # do scheduler para lembrar de confirmar.
+        prazo = data.inicio
         cursor.execute(
             "INSERT INTO recepcao_reservas "
             "(sala_id, usuario_id, titulo, descricao, inicio, fim, status, confirmacao_prazo) "
@@ -671,8 +690,9 @@ async def create_reserva(data: ReservaCreate):
 
         _criar_notificacao(
             cursor, data.usuario_id,
-            f"Reserva criada para a sala. Confirme em até {CONFIRMACAO_MINUTOS} min "
-            f"(reserva #{new_id}).",
+            f"Reserva criada (#{new_id}). Você receberá um lembrete "
+            f"{CONFIRMACAO_MINUTOS} min antes do início para confirmar — "
+            f"sem confirmação até o horário de início, a sala é liberada.",
             tipo="sucesso",
         )
 
@@ -734,11 +754,14 @@ async def confirmar_reserva(reserva_id: int, usuario_id: int = Query(..., gt=0))
         if reserva["confirmacao_prazo"] and reserva["confirmacao_prazo"] < datetime.now():
             cursor.execute(
                 "UPDATE recepcao_reservas SET status='expirada', cancelada_em=NOW(), "
-                "motivo_cancel='Confirmação não recebida em 40min' WHERE id=%s",
+                "motivo_cancel='Confirmação não recebida até o início da reunião' WHERE id=%s",
                 (reserva_id,),
             )
             conn.commit()
-            raise HTTPException(status_code=400, detail="Prazo de confirmação expirou")
+            raise HTTPException(
+                status_code=400,
+                detail="Prazo de confirmação expirou (a reunião já passou do horário de início)",
+            )
 
         cursor.execute(
             "UPDATE recepcao_reservas SET status='confirmada', confirmada_em=NOW() WHERE id=%s",
@@ -1093,4 +1116,271 @@ async def delete_envio(envio_id: int):
         if cursor: cursor.close()
         if conn: conn.close()
 
+
+# ============================================================
+# EVENTOS DE ENVIO (timeline manual estilo Correios)
+# ============================================================
+
+def _sincronizar_status_envio(cursor, envio_id: int) -> None:
+    """Após inserir/editar/excluir evento, atualiza o registro do envio
+    com os dados do evento mais recente (visível na listagem da tabela)."""
+    cursor.execute(
+        "SELECT descricao, local, data_evento FROM recepcao_envio_eventos "
+        "WHERE envio_id = %s ORDER BY data_evento DESC, id DESC LIMIT 1",
+        (envio_id,),
+    )
+    ultimo = cursor.fetchone()
+    if ultimo:
+        cursor.execute(
+            "UPDATE recepcao_envios SET status_correios=%s, status_local=%s, "
+            "       status_data=%s, ultima_atualizacao=NOW() WHERE id=%s",
+            (
+                (ultimo["descricao"] or "")[:120],
+                (ultimo["local"] or "")[:180] if ultimo["local"] else None,
+                ultimo["data_evento"],
+                envio_id,
+            ),
+        )
+    else:
+        cursor.execute(
+            "UPDATE recepcao_envios SET status_correios=NULL, status_local=NULL, "
+            "       status_data=NULL, ultima_atualizacao=NOW() WHERE id=%s",
+            (envio_id,),
+        )
+
+
+@router.get("/envios/{envio_id}/eventos")
+async def listar_eventos(envio_id: int):
+    """Lista eventos do envio em ordem cronológica decrescente (mais recente primeiro)."""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, envio_id, tipo, descricao, local, data_evento, created_at "
+            "FROM recepcao_envio_eventos WHERE envio_id = %s "
+            "ORDER BY data_evento DESC, id DESC",
+            (envio_id,),
+        )
+        eventos = cursor.fetchall()
+        return [convert_datetime_to_string(e) for e in eventos]
+    except Exception as err:
+        logger.error(f"[RECEPCAO/EVENTOS/LIST] {err}")
+        raise HTTPException(status_code=500, detail=f"Erro ao listar eventos: {err}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@router.post("/envios/{envio_id}/eventos", status_code=status.HTTP_201_CREATED)
+async def criar_evento(envio_id: int, payload: EventoCreate):
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id FROM recepcao_envios WHERE id = %s", (envio_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Envio não encontrado")
+
+        cursor.execute(
+            "INSERT INTO recepcao_envio_eventos (envio_id, tipo, descricao, local, data_evento) "
+            "VALUES (%s, %s, %s, %s, %s)",
+            (envio_id, payload.tipo, payload.descricao,
+             payload.local or None, payload.data_evento.replace("T", " ")),
+        )
+        novo_id = cursor.lastrowid
+        _sincronizar_status_envio(cursor, envio_id)
+        conn.commit()
+
+        cursor.execute("SELECT * FROM recepcao_envio_eventos WHERE id = %s", (novo_id,))
+        return convert_datetime_to_string(cursor.fetchone())
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[RECEPCAO/EVENTOS/CREATE] {err}")
+        raise HTTPException(status_code=500, detail=f"Erro ao criar evento: {err}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@router.put("/eventos/{evento_id}")
+async def atualizar_evento(evento_id: int, payload: EventoUpdate):
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT envio_id FROM recepcao_envio_eventos WHERE id = %s", (evento_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Evento não encontrado")
+        envio_id = row["envio_id"]
+
+        campos, valores = [], []
+        for campo in ("tipo", "descricao", "local"):
+            v = getattr(payload, campo)
+            if v is not None:
+                campos.append(f"{campo} = %s"); valores.append(v)
+        if payload.data_evento is not None:
+            campos.append("data_evento = %s")
+            valores.append(payload.data_evento.replace("T", " "))
+
+        if campos:
+            valores.append(evento_id)
+            cursor.execute(
+                f"UPDATE recepcao_envio_eventos SET {', '.join(campos)} WHERE id = %s",
+                valores,
+            )
+        _sincronizar_status_envio(cursor, envio_id)
+        conn.commit()
+
+        cursor.execute("SELECT * FROM recepcao_envio_eventos WHERE id = %s", (evento_id,))
+        return convert_datetime_to_string(cursor.fetchone())
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[RECEPCAO/EVENTOS/UPDATE] {err}")
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar evento: {err}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@router.delete("/eventos/{evento_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def deletar_evento(evento_id: int):
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT envio_id FROM recepcao_envio_eventos WHERE id = %s", (evento_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Evento não encontrado")
+        envio_id = row["envio_id"]
+
+        cursor.execute("DELETE FROM recepcao_envio_eventos WHERE id = %s", (evento_id,))
+        _sincronizar_status_envio(cursor, envio_id)
+        conn.commit()
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[RECEPCAO/EVENTOS/DELETE] {err}")
+        raise HTTPException(status_code=500, detail=f"Erro ao deletar evento: {err}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+# ============================================================
+# RASTREAMENTO via API seurastreio.com.br (com cache de 4h)
+# ============================================================
+
+# Janela mínima entre consultas do mesmo envio (em horas).
+# Plano gratuito = 50 consultas/mês; com 4h por envio, a mesma
+# encomenda só consome 2 consultas/dia no máximo, mesmo que vários
+# usuários tentem rastrear simultaneamente.
+RASTREIO_CACHE_HORAS = 4
+
+
+def _envio_para_resultado_cache(envio: dict) -> dict:
+    """Monta o payload do cache a partir das colunas já gravadas no envio."""
+    proxima = None
+    if envio.get("ultima_consulta_api"):
+        proxima = envio["ultima_consulta_api"] + timedelta(hours=RASTREIO_CACHE_HORAS)
+
+    eventos = []
+    if envio.get("status_correios"):
+        eventos.append({
+            "codigo":    "",
+            "descricao": envio["status_correios"],
+            "detalhe":   "",
+            "data":      envio["status_data"].isoformat(sep=" ") if envio.get("status_data") else "",
+            "local":     envio.get("status_local") or "",
+        })
+
+    return {
+        "ok": True,
+        "cached": True,
+        "codigo":          envio["codigo_correios"],
+        "status":          "found" if envio.get("status_correios") else "pending",
+        "descricao":       envio.get("status_correios") or "",
+        "data":            envio["status_data"].isoformat(sep=" ") if envio.get("status_data") else None,
+        "local":           envio.get("status_local"),
+        "eventos":         eventos,
+        "previsaoEntrega": None,
+        "linkDetalhes":    f"https://seurastreio.com.br/objetos/{envio['codigo_correios']}" if envio.get("codigo_correios") else None,
+        "ultima_consulta_api": envio["ultima_consulta_api"].isoformat(sep=" ") if envio.get("ultima_consulta_api") else None,
+        "proxima_consulta_em": proxima.isoformat(sep=" ") if proxima else None,
+        "cache_horas": RASTREIO_CACHE_HORAS,
+        "message": (
+            f"Dados do cache (atualizado nas últimas {RASTREIO_CACHE_HORAS}h). "
+            f"Próxima consulta liberada em {proxima.strftime('%d/%m %H:%M')}." if proxima else ""
+        ),
+    }
+
+
+@router.get("/envios/{envio_id}/rastrear")
+async def rastrear_via_api(envio_id: int):
+    """
+    Consulta rastreamento via API seurastreio.com.br com cache de 4h.
+
+    Se o envio foi consultado há menos de 4h, retorna os dados do banco
+    (sem consumir consulta da API). Caso contrário, faz a chamada real
+    e atualiza o cache.
+    """
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, codigo_correios, status_correios, status_local, status_data, "
+            "       ultima_atualizacao, ultima_consulta_api "
+            "FROM recepcao_envios WHERE id = %s",
+            (envio_id,),
+        )
+        envio = cursor.fetchone()
+        if not envio:
+            raise HTTPException(status_code=404, detail="Envio não encontrado")
+        if not envio["codigo_correios"]:
+            raise HTTPException(status_code=400, detail="Este envio não tem código de rastreio")
+
+        # ---- CACHE: se consulta foi feita há menos de RASTREIO_CACHE_HORAS, devolve do banco
+        if envio.get("ultima_consulta_api"):
+            agora = datetime.now()
+            delta = agora - envio["ultima_consulta_api"]
+            if delta < timedelta(hours=RASTREIO_CACHE_HORAS):
+                logger.info(
+                    f"[RECEPCAO/ENVIOS/RASTREAR] cache HIT envio={envio_id} "
+                    f"(consultado há {int(delta.total_seconds()/60)}min)"
+                )
+                return _envio_para_resultado_cache(envio)
+
+        # ---- Sem cache válido — consulta a API
+        resultado = rastrear_seurastreio(envio["codigo_correios"])
+
+        # Sucesso: grava no banco + marca timestamp de consulta
+        if resultado.get("ok"):
+            cursor.execute(
+                "UPDATE recepcao_envios SET status_correios=%s, status_local=%s, "
+                "       status_data=%s, ultima_atualizacao=NOW(), ultima_consulta_api=NOW() "
+                "WHERE id=%s",
+                (
+                    (resultado.get("descricao") or "")[:120] or None,
+                    (resultado.get("local") or "")[:180] if resultado.get("local") else None,
+                    resultado.get("data"),
+                    envio_id,
+                ),
+            )
+            conn.commit()
+            resultado["cached"] = False
+
+        return resultado
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[RECEPCAO/ENVIOS/RASTREAR] {err}")
+        raise HTTPException(status_code=500, detail=f"Erro ao rastrear: {err}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 

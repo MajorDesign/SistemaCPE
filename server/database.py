@@ -31,7 +31,9 @@ DB_CONFIG = {
     "user":     os.getenv("MYSQL_USER",     "root"),
     "password": os.getenv("MYSQL_PASSWORD", ""),
     "database": os.getenv("MYSQL_DB",       "cpe_plus"),
-    "use_pure": True,  # evita segfault do C extension no mysql-connector 9.x
+    "use_pure": True,    # evita segfault do C extension no mysql-connector 9.x
+    "charset":  "utf8mb4",   # corrige acentuação (XAMPP retorna cp850 por padrão)
+    "collation": "utf8mb4_unicode_ci",
 }
 
 logger.info("=" * 90)

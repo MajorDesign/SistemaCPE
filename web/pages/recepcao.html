@@ -37,8 +37,8 @@
   <!-- SIDEBAR -->
   <aside class="recep-sidebar" id="recepSidebar">
     <div class="recep-sidebar-logo">
-      <img src="/SistemaCPE/web/assests/images/logocpe.png" alt="CPE">
-      <span class="recep-sidebar-logo-text">Recepção</span>
+      <span class="recep-logo-cpe">CPE</span>
+      <span class="recep-logo-modulo">Recepção</span>
     </div>
 
     <a href="/SistemaCPE/index.html" class="recep-back-btn">
@@ -65,6 +65,12 @@
         </li>
       </ul>
     </nav>
+
+    <div class="recep-sidebar-toggle">
+      <button onclick="toggleSidebar()" title="Recolher menu">
+        <i class="bi bi-layout-sidebar-reverse" id="sidebarToggleIcon"></i>
+      </button>
+    </div>
   </aside>
 
   <!-- MAIN CONTENT -->
@@ -73,7 +79,7 @@
     <!-- TOP BAR -->
     <div class="recep-topbar">
       <span class="recep-topbar-title" id="topbarTitle">Calendário de Reservas</span>
-      <span class="recep-topbar-badge"><i class="bi bi-building-check"></i> RECEPÇÃO</span>
+      <span class="recep-topbar-badge"><i class="bi bi-door-open-fill"></i> RECEPÇÃO</span>
       <span style="margin-left:auto;display:flex;align-items:center;gap:16px">
         <span id="topbarUser" style="font-size:13px;color:#6B7280"></span>
       </span>
@@ -230,8 +236,14 @@
             </small>
           </div>
         </div>
-        <div class="alert alert-info mt-3" style="font-size:.85rem">
-          <i class="bi bi-info-circle"></i> Após criar, você terá <strong>40 minutos</strong> para confirmar a reserva. Se não confirmar, a sala volta a ficar disponível automaticamente.
+        <div class="alert alert-warning mt-3" style="font-size:.85rem">
+          <i class="bi bi-bell-fill"></i>
+          <strong>Importante — confirmação obrigatória:</strong>
+          <ul class="mb-0 mt-1" style="padding-left:1.2rem">
+            <li><strong>40 minutos antes</strong> do início da reunião, você receberá uma notificação no sino 🔔 para confirmar a reserva.</li>
+            <li>Se você <strong>não confirmar até o horário de início</strong>, a sala será liberada automaticamente para outras pessoas.</li>
+            <li>Lembre-se: confirme assim que receber o lembrete!</li>
+          </ul>
         </div>
       </div>
       <div class="modal-footer">
@@ -359,23 +371,6 @@
             <input type="text" class="form-control text-uppercase" id="envioCodigo" maxlength="13" placeholder="AA123456789BR">
             <small class="form-text text-muted">Formato: 2 letras + 9 dígitos + 2 letras (ex: BR123456789BR)</small>
           </div>
-          <div class="col-md-12" id="envioStatusManualWrap">
-            <hr>
-            <small class="text-muted">
-              <i class="bi bi-pencil-square"></i> Atualização manual do status
-              (use quando a API dos Correios estiver indisponível):
-            </small>
-            <div class="row g-2 mt-1">
-              <div class="col-md-7">
-                <input type="text" class="form-control form-control-sm" id="envioStatusManual"
-                       maxlength="120" placeholder="Ex: Objeto entregue ao destinatário">
-              </div>
-              <div class="col-md-5">
-                <input type="text" class="form-control form-control-sm" id="envioStatusLocalManual"
-                       maxlength="180" placeholder="Local (ex: BELO HORIZONTE/MG)">
-              </div>
-            </div>
-          </div>
           <div class="col-12">
             <label class="form-label">Observações</label>
             <textarea class="form-control" id="envioObs" rows="2" maxlength="500"></textarea>
@@ -392,6 +387,112 @@
   </div>
 </div>
 
+
+<!-- ============================================================ -->
+<!-- MODAL: Rastreio via API (seurastreio.com.br) -->
+<!-- ============================================================ -->
+<div class="modal fade" id="rastreioApiModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-geo-alt-fill"></i> Rastreamento — <code id="rastApiCodigo" style="font-size:.95rem"></code>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="rastApiCorpo">
+        <div class="text-center" style="padding:32px">
+          <div class="recep-spinner" style="margin:0 auto 12px"></div>
+          <p class="text-muted">Consultando API...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a id="rastApiLinkDetalhes" href="#" target="_blank" rel="noopener"
+           class="btn btn-sm btn-outline-secondary me-auto" style="display:none">
+          <i class="bi bi-box-arrow-up-right"></i> Ver no seurastreio
+        </a>
+        <button class="btn btn-sm btn-outline-primary" id="rastApiBtnRecarregar"
+                onclick="rastrearEnvioRecarregar()">
+          <i class="bi bi-arrow-clockwise"></i> Atualizar
+        </button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- MODAL: Status manual do envio (timeline) -->
+<!-- ============================================================ -->
+<div class="modal fade" id="statusModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-clock-history"></i> Status do envio
+          <span id="statusEnvioRef" class="text-muted" style="font-size:.9rem"></span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Timeline -->
+        <div id="statusTimeline" class="status-timeline"></div>
+
+        <!-- Form de novo evento -->
+        <div id="statusForm" class="status-form mt-3" style="display:none">
+          <h6 class="mb-3" id="statusFormTitle"><i class="bi bi-plus-circle"></i> Novo evento</h6>
+          <div class="alert alert-danger d-none" id="statusFormErr"></div>
+          <input type="hidden" id="statusFormId">
+          <div class="row g-2">
+            <div class="col-md-5">
+              <label class="form-label">Tipo</label>
+              <select class="form-select form-select-sm" id="statusFormTipo">
+                <option value="etiqueta_emitida">📋 Etiqueta emitida</option>
+                <option value="postado">📮 Postado nos Correios</option>
+                <option value="em_transito" selected>🚚 Em trânsito</option>
+                <option value="saiu_entrega">🚛 Saiu para entrega</option>
+                <option value="entregue">📦 Entregue ao destinatário</option>
+                <option value="aguardando_retirada">🏪 Aguardando retirada</option>
+                <option value="tentativa_entrega">⏰ Tentativa de entrega</option>
+                <option value="devolvido">↩️ Devolvido ao remetente</option>
+                <option value="extraviado">⚠️ Extraviado</option>
+                <option value="outros">ℹ️ Outro</option>
+              </select>
+            </div>
+            <div class="col-md-7">
+              <label class="form-label">Data e hora</label>
+              <input type="datetime-local" class="form-control form-control-sm" id="statusFormData">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Descrição</label>
+              <input type="text" class="form-control form-control-sm" id="statusFormDescricao"
+                     maxlength="255" placeholder="Ex: Objeto entregue ao destinatário">
+            </div>
+            <div class="col-12">
+              <label class="form-label">Local <small class="text-muted">(opcional)</small></label>
+              <input type="text" class="form-control form-control-sm" id="statusFormLocal"
+                     maxlength="180" placeholder="Ex: APARECIDA DE GOIANIA - GO">
+            </div>
+          </div>
+          <div class="mt-3 d-flex gap-2 justify-content-end">
+            <button class="btn btn-sm btn-secondary" onclick="cancelarFormEvento()">
+              <i class="bi bi-x"></i> Cancelar
+            </button>
+            <button class="btn btn-sm btn-primary" onclick="salvarEvento()">
+              <i class="bi bi-check-lg"></i> Salvar evento
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="btnAdicionarEvento" onclick="abrirFormEvento()">
+          <i class="bi bi-plus-lg"></i> Adicionar evento
+        </button>
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ============================================================ -->
 <!-- SCRIPTS -->

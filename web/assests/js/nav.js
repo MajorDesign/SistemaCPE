@@ -77,6 +77,18 @@ const globalMenu = [
     external: true
   },
   // ==================================================
+  // ✨ MENU: Módulo Agenda (integração Carbonio)
+  // Data: 04/05/2026
+  // Cada usuário conecta sua própria conta Carbonio (webmail).
+  // ==================================================
+  {
+    path: "/SistemaCPE/web/pages/agenda.html",
+    label: "Agenda",
+    icon: "bi-calendar2-event",
+    requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"],
+    external: true
+  },
+  // ==================================================
   // ✨ MENU: Permissões do Sistema
   // Data: 06/04/2026 21:30
   // ==================================================
@@ -802,6 +814,9 @@ async function handleNotificationClick(notificationId, ticketId, tipo) {
     if (tipo && tipo.includes('convite') && tipo.includes('task')) {
       // Convites de quadro → ir para Tarefas
       window.location.href = '/SistemaCPE/web/pages/tasks.html';
+    } else if (tipo === 'lembrete_agenda') {
+      // Lembrete de compromisso → abre a Agenda
+      window.location.href = '/SistemaCPE/web/pages/agenda.html';
     } else if (tiposReuniao.has(tipo) && ticketId) {
       // Convite/resposta de reunião → ir para Recepção e abrir a reserva
       window.location.href = `/SistemaCPE/web/pages/recepcao.html?reserva_id=${ticketId}`;
@@ -896,6 +911,7 @@ function getNotificationIcon(tipo) {
     "convite_reuniao":          "📅",
     "convite_aceito_reuniao":   "✅",
     "convite_recusado_reuniao": "❌",
+    "lembrete_agenda":          "🔔",
     "info":                     "ℹ️",
     "aviso":                    "⚠️",
     "erro":                     "❌",
@@ -918,6 +934,7 @@ function getTipoLabel(tipo) {
     "convite_reuniao":          "Convite de Reunião",
     "convite_aceito_reuniao":   "Reunião Confirmada",
     "convite_recusado_reuniao": "Reunião Recusada",
+    "lembrete_agenda":          "Lembrete da Agenda",
     "info":                     "Informação",
     "aviso":                    "Aviso",
     "erro":                     "Erro",
@@ -940,6 +957,7 @@ function getTipoBadgeText(tipo) {
     "convite_reuniao":          "Reunião",
     "convite_aceito_reuniao":   "Aceito",
     "convite_recusado_reuniao": "Recusado",
+    "lembrete_agenda":          "Agenda",
     "info":                     "Info",
     "aviso":                    "Aviso",
     "erro":                     "Erro",

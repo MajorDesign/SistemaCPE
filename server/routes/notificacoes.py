@@ -57,6 +57,11 @@ class NotificacaoCriar(BaseModel):
             "convite_task",
             "convite_aceito_task",
             "convite_recusado_task",
+            "convite_reuniao",
+            "convite_aceito_reuniao",
+            "convite_recusado_reuniao",
+            "confirmar_reserva",
+            "lembrete_agenda",
         ]
         if v not in tipos_validos:
             raise ValueError(f"Tipo inválido. Válidos: {tipos_validos}")
@@ -293,7 +298,7 @@ async def listar_notificacoes(
             params.append(1 if lido else 0)
 
         if tipo is not None:
-            tipos_validos = ["info", "aviso", "erro", "sucesso", "ticket_criado", "nova_resposta", "status_alterado", "atribuido", "comentario_interno"]
+            tipos_validos = ["info", "aviso", "erro", "sucesso", "ticket_criado", "nova_resposta", "status_alterado", "atribuido", "comentario_interno", "convite_task", "convite_aceito_task", "convite_recusado_task", "convite_reuniao", "convite_aceito_reuniao", "convite_recusado_reuniao", "confirmar_reserva", "lembrete_agenda"]
             if tipo not in tipos_validos:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Tipo inválido. Válidos: {tipos_validos}")
             filtros.append("tipo = %s")

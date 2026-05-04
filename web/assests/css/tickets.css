@@ -1570,60 +1570,7 @@
    ======================================== */
 /* INÍCIO: Adicionar estilos */
 
-.btn-limpar-notificacoes {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  padding: 10px 15px;
-  background-color: #f8f9fa;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  color: #6c757d;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  justify-content: center;
-}
-
-.btn-limpar-notificacoes:hover {
-  background-color: #fee;
-  border-color: #dc3545;
-  color: #dc3545;
-}
-
-.btn-limpar-notificacoes:active {
-  background-color: #fdd;
-  transform: scale(0.98);
-}
-
-.btn-limpar-notificacoes i {
-  font-size: 14px;
-}
-
-.link-todos-tickets {
-  text-decoration: none;
-  color: #0d6efd;
-  font-weight: 500;
-  transition: color 0.3s ease;
-  padding-left: 10px;
-}
-
-.link-todos-tickets:hover {
-  color: #0b5ed7;
-  text-decoration: underline;
-}
-
-/* Ajustar rodapé para acomodar o botão */
-.notification-panel-footer {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 15px;
-  border-top: 1px solid #e9ecef;
-  background-color: #f8f9fa;
-}
+/* Estilos de notificação movidos para layout.css */
 
 /* ========================================
    DASHBOARD SLA

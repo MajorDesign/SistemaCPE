@@ -10,10 +10,12 @@ const API_HOST = (typeof API_BASE_URL !== 'undefined'
   : `http://${window.location.hostname || '127.0.0.1'}:8000`);
 
 const API = {
+  base:        API_HOST + '/api',
   unidades:    API_HOST + '/api/unidades',
   salas:       API_HOST + '/api/recepcao/salas',
   reservas:    API_HOST + '/api/recepcao/reservas',
   envios:      API_HOST + '/api/recepcao/envios',
+  eventos:     API_HOST + '/api/recepcao/eventos',
   users:       API_HOST + '/api/users',
   convites:    API_HOST + '/api/recepcao/convites',
   escritorios: API_HOST + '/api/recepcao/escritorios',
@@ -333,9 +335,10 @@ function onResvEscritorioChange() {
     if (!s.ativa) return false;
     if (unitId && String(s.unit_id) !== String(unitId)) return false;
     if (exigeEscritorio) {
-      // se a unidade tem escritórios e o usuário ainda não selecionou um, esconde tudo
       if (!escId) return false;
-      if (String(s.escritorio_id || '') !== String(escId)) return false;
+      // Sala sem escritorio_id = "comum" à unidade (aparece em qualquer escritório).
+      // Sala com escritorio_id = só aparece no escritório específico.
+      if (s.escritorio_id && String(s.escritorio_id) !== String(escId)) return false;
     }
     return true;
   });
@@ -598,6 +601,7 @@ async function fetchEventos(fetchInfo, success, failure) {
       backgroundColor: statusToColor(rv.status),
       borderColor: statusToColor(rv.status),
       textColor: '#fff',
+      classNames: ['recep-event-' + rv.status],
       extendedProps: { reserva: rv },
     }));
     success(events);
@@ -627,7 +631,8 @@ function onFilterCalendar() {
 
   const filtradas = salas.filter(s => {
     if (unitId && String(s.unit_id) !== String(unitId)) return false;
-    if (escId  && String(s.escritorio_id || '') !== String(escId)) return false;
+    // Sala sem escritorio_id = "comum" à unidade (aparece em qualquer escritório)
+    if (escId && s.escritorio_id && String(s.escritorio_id) !== String(escId)) return false;
     return true;
   });
   const cur = $('filterSalaCal').value;
@@ -770,15 +775,33 @@ async function openReservaDetalhe(rv) {
     confirmada: 'Confirmada — sala em uso',
     concluida:  'Concluída',
     cancelada:  'Cancelada',
-    expirada:   'Expirada (não confirmada em 40 min)',
+    expirada:   'Expirada — confirmação não recebida até o início',
   }[rv.status] || rv.status;
 
+  // Mensagem de prazo: agora baseada no horário de início (não no created_at).
+  // Mostra contagem regressiva até o início e avisa quando entrou na janela
+  // dos 40 min finais.
   let prazoMsg = '';
-  if (rv.status === 'pendente' && rv.confirmacao_prazo) {
-    const restante = (new Date(rv.confirmacao_prazo) - new Date()) / 60000;
-    if (restante > 0) prazoMsg = `<div class="alert alert-warning" style="font-size:.85rem;margin-top:10px">
-      <i class="bi bi-clock"></i> Restam <strong>${Math.ceil(restante)} min</strong> para confirmar.
-    </div>`;
+  if (rv.status === 'pendente') {
+    const minAteInicio = (new Date(rv.inicio) - new Date()) / 60000;
+    if (minAteInicio <= 0) {
+      prazoMsg = `<div class="alert alert-danger" style="font-size:.85rem;margin-top:10px">
+        <i class="bi bi-x-octagon"></i> A reunião já passou do horário de início — esta reserva será expirada em breve.
+      </div>`;
+    } else if (minAteInicio <= 40) {
+      prazoMsg = `<div class="alert alert-danger" style="font-size:.85rem;margin-top:10px">
+        <i class="bi bi-bell-fill"></i> <strong>Confirme agora!</strong>
+        Faltam <strong>${Math.ceil(minAteInicio)} min</strong> para o início — sem confirmação, a sala será liberada.
+      </div>`;
+    } else {
+      const horas = Math.floor(minAteInicio / 60);
+      const mins  = Math.ceil(minAteInicio % 60);
+      const tempo = horas > 0 ? `${horas}h ${mins}min` : `${mins}min`;
+      prazoMsg = `<div class="alert alert-info" style="font-size:.85rem;margin-top:10px">
+        <i class="bi bi-clock"></i> Reunião começa em <strong>${tempo}</strong>.
+        Você receberá uma notificação no sino 40 min antes para confirmar.
+      </div>`;
+    }
   }
 
   // busca lista de convidados
@@ -969,12 +992,9 @@ function renderEnvios() {
   }
 
   tbody.innerHTML = lista.map(e => {
-    const linkCorreios = e.codigo_correios
-      ? `https://rastreamento.correios.com.br/app/index.php?objetos=${encodeURIComponent(e.codigo_correios)}`
-      : null;
     const codigoCell = e.codigo_correios
-      ? `<a href="${linkCorreios}" target="_blank" rel="noopener" title="Abrir no site dos Correios">
-           <code>${escHtml(e.codigo_correios)}</code> <i class="bi bi-box-arrow-up-right" style="font-size:.7rem"></i>
+      ? `<a href="#" onclick="abrirRastreio(${e.id});return false" title="Rastrear via API">
+           <code>${escHtml(e.codigo_correios)}</code> <i class="bi bi-geo-alt" style="font-size:.7rem"></i>
          </a>`
       : '<span style="color:#9ca3af">—</span>';
     return `
@@ -991,9 +1011,9 @@ function renderEnvios() {
       <td style="font-size:.85rem;color:#6b7280">${e.ultima_atualizacao ? dtPt(e.ultima_atualizacao) : '—'}</td>
       <td style="white-space:nowrap;text-align:center">
         ${e.codigo_correios ? `
-          <a class="btn btn-sm btn-outline-primary" href="${linkCorreios}" target="_blank" rel="noopener" title="Rastrear no site dos Correios">
-            <i class="bi bi-box-arrow-up-right"></i> Rastrear
-          </a>
+          <button class="btn btn-sm btn-outline-primary" onclick="abrirRastreio(${e.id})" title="Rastrear via API">
+            <i class="bi bi-geo-alt"></i> Rastrear
+          </button>
           <button class="btn btn-sm btn-outline-secondary" onclick="atualizarStatusManual(${e.id})" title="Atualizar status manualmente">
             <i class="bi bi-pencil-square"></i>
           </button>` : `
@@ -1011,39 +1031,342 @@ function renderEnvios() {
   }).join('');
 }
 
+/* ========================================================
+   RASTREIO via API seurastreio.com.br
+   ========================================================
+   Mantido como FALLBACK abaixo (comentado): abrir o site dos
+   Correios numa janela popup, caso a API falhe.
+   ======================================================== */
+
+let _rastApiEnvioAtual = null;
+
+function abrirRastreio(codigoOuEnvioId) {
+  // Aceita ID do envio (numérico) ou código de rastreio (string)
+  let envio = null;
+  if (typeof codigoOuEnvioId === 'number') {
+    envio = envios.find(e => e.id === codigoOuEnvioId);
+  } else {
+    envio = envios.find(e => e.codigo_correios === codigoOuEnvioId);
+  }
+  if (!envio || !envio.codigo_correios) {
+    toast('Envio sem código de rastreio.', 'warn');
+    return;
+  }
+  _rastApiEnvioAtual = envio.id;
+  $('rastApiCodigo').textContent = envio.codigo_correios;
+  $('rastApiLinkDetalhes').style.display = 'none';
+  $('rastApiCorpo').innerHTML = `
+    <div class="text-center" style="padding:32px">
+      <div class="recep-spinner" style="margin:0 auto 12px"></div>
+      <p class="text-muted">Consultando API...</p>
+    </div>`;
+  new bootstrap.Modal($('rastreioApiModal')).show();
+  carregarRastreioApi(envio.id);
+}
+
+async function rastrearEnvioRecarregar() {
+  if (_rastApiEnvioAtual) await carregarRastreioApi(_rastApiEnvioAtual);
+}
+
+async function carregarRastreioApi(envioId) {
+  const corpo = $('rastApiCorpo');
+  try {
+    const r = await fetch(`${API.envios}/${envioId}/rastrear`);
+    const data = await r.json();
+
+    if (!r.ok) {
+      throw new Error(data.detail || 'HTTP ' + r.status);
+    }
+
+    if (!data.ok) {
+      corpo.innerHTML = `
+        <div class="alert alert-warning">
+          <i class="bi bi-exclamation-triangle"></i>
+          <strong>Não foi possível consultar a API.</strong><br>
+          ${escHtml(data.erro || 'Erro desconhecido')}
+        </div>
+        <p class="text-muted small">
+          Você pode usar o rastreio manual (botão de lápis na tabela) ou abrir o site dos
+          Correios em nova aba clicando
+          <a href="https://rastreamento.correios.com.br/app/index.php?objetos=${encodeURIComponent($('rastApiCodigo').textContent)}"
+             target="_blank" rel="noopener">aqui</a>.
+        </p>`;
+      return;
+    }
+
+    if (data.linkDetalhes) {
+      const link = $('rastApiLinkDetalhes');
+      link.href = data.linkDetalhes;
+      link.style.display = '';
+    }
+
+    // Banner de cache + controle do botão "Atualizar"
+    const btnAtualizar = $('rastApiBtnRecarregar');
+    let bannerCache = '';
+    if (data.cached) {
+      const ult     = data.ultima_consulta_api ? dtPt(data.ultima_consulta_api) : '—';
+      const proxima = data.proxima_consulta_em ? dtPt(data.proxima_consulta_em) : '—';
+      bannerCache = `
+        <div class="alert alert-secondary py-2 mb-3" style="font-size:.82rem">
+          <i class="bi bi-clock-history"></i>
+          <strong>Dados em cache.</strong>
+          Última consulta: ${escHtml(ult)}.
+          Próxima atualização disponível em <strong>${escHtml(proxima)}</strong>
+          (cache de ${data.cache_horas || 4}h por envio para economizar consultas da API).
+        </div>`;
+      btnAtualizar.disabled = true;
+      btnAtualizar.title    = `Liberada em ${proxima}`;
+      btnAtualizar.classList.add('disabled');
+    } else {
+      btnAtualizar.disabled = false;
+      btnAtualizar.title    = 'Forçar nova consulta na API';
+      btnAtualizar.classList.remove('disabled');
+    }
+
+    const eventos = data.eventos || [];
+    const previsao = data.previsaoEntrega
+      ? `<div class="alert alert-info py-2 mb-3" style="font-size:.85rem">
+           <i class="bi bi-calendar-event"></i>
+           <strong>Previsão de entrega:</strong> ${dtPt(data.previsaoEntrega)}
+         </div>` : '';
+
+    const eventoMaisRecente = data.descricao
+      ? `<div class="rast-card-status">
+           <div class="rast-status-icon"><i class="bi bi-geo-alt-fill"></i></div>
+           <div>
+             <div class="rast-status-titulo">${escHtml(data.descricao)}</div>
+             ${data.local ? `<div class="rast-status-local">${escHtml(data.local)}</div>` : ''}
+             ${data.data  ? `<div class="rast-status-data">${dtPt(data.data)}</div>` : ''}
+           </div>
+         </div>` : '';
+
+    let timeline = '';
+    if (eventos.length > 1) {
+      timeline = `
+        <h6 class="mt-4 mb-3"><i class="bi bi-clock-history"></i> Histórico</h6>
+        <div class="status-timeline">
+          ${eventos.map(ev => `
+            <div class="status-event">
+              <div class="status-event-icon em_transito">
+                <i class="bi bi-geo-alt"></i>
+              </div>
+              <div class="status-event-body">
+                <p class="status-event-title">${escHtml(ev.descricao || '—')}</p>
+                ${ev.local ? `<p class="status-event-local">${escHtml(ev.local)}</p>` : ''}
+                ${ev.data  ? `<div class="status-event-data">${dtPt(ev.data)}</div>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>`;
+    } else if (eventos.length === 1 && data.message) {
+      timeline = `<p class="text-muted small mt-3"><i class="bi bi-info-circle"></i> ${escHtml(data.message)}</p>`;
+    }
+
+    if (!eventoMaisRecente && !timeline) {
+      corpo.innerHTML = bannerCache + `
+        <div class="status-empty">
+          <i class="bi bi-inbox" style="font-size:32px;display:block;margin-bottom:8px"></i>
+          ${escHtml(data.message || 'Sem eventos registrados ainda.')}
+        </div>`;
+      return;
+    }
+
+    corpo.innerHTML = bannerCache + previsao + eventoMaisRecente + timeline;
+
+    // Atualiza status na tabela em segundo plano
+    await loadEnvios();
+
+  } catch (err) {
+    corpo.innerHTML = `
+      <div class="alert alert-danger">
+        <i class="bi bi-x-circle"></i> Erro: ${escHtml(err.message)}
+      </div>`;
+  }
+}
+
+/* ============================================================
+   FALLBACK — popup com site dos Correios
+   ============================================================
+   Caso a API seurastreio.com.br fique indisponível, descomentar
+   a função abaixo e usá-la em substituição a `abrirRastreio()`.
+
+   function abrirRastreio_PopupCorreios(codigo) {
+     const codigoLimpo = String(codigo || '').trim().toUpperCase();
+     if (!codigoLimpo) return;
+     const url = `https://rastreamento.correios.com.br/app/index.php?objetos=${encodeURIComponent(codigoLimpo)}`;
+     const w = 1100, h = 750;
+     const left = Math.max(0, (window.screen.width  - w) / 2);
+     const top  = Math.max(0, (window.screen.height - h) / 2);
+     const features = `width=${w},height=${h},left=${left},top=${top},`
+                    + 'resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no,status=no';
+     const popup = window.open(url, 'rastreioCorreios', features);
+     if (!popup || popup.closed) {
+       toast('Permita popups deste site no navegador para abrir o rastreamento.', 'warn');
+       window.open(url, '_blank', 'noopener');
+       return;
+     }
+     popup.focus();
+   }
+*/
+
+/* ========================================================
+   STATUS MANUAL — modal com timeline (estilo Correios)
+   ======================================================== */
+const TIPOS_EVENTO = {
+  etiqueta_emitida:    { icone: 'bi-upc-scan',          label: 'Etiqueta emitida' },
+  postado:             { icone: 'bi-mailbox',           label: 'Postado nos Correios' },
+  em_transito:         { icone: 'bi-truck',             label: 'Em trânsito' },
+  saiu_entrega:        { icone: 'bi-truck-flatbed',     label: 'Saiu para entrega' },
+  entregue:            { icone: 'bi-box-seam-fill',     label: 'Entregue' },
+  aguardando_retirada: { icone: 'bi-shop',              label: 'Aguardando retirada' },
+  tentativa_entrega:   { icone: 'bi-clock-history',     label: 'Tentativa de entrega' },
+  devolvido:           { icone: 'bi-arrow-counterclockwise', label: 'Devolvido' },
+  extraviado:          { icone: 'bi-exclamation-triangle', label: 'Extraviado' },
+  outros:              { icone: 'bi-info-circle',       label: 'Outro' },
+};
+
+let _statusEnvioId = null;
+let _statusEventos = [];
+
 async function atualizarStatusManual(envioId) {
   const e = envios.find(x => x.id === envioId);
   if (!e) return;
+  _statusEnvioId = envioId;
+  $('statusEnvioRef').textContent =
+    `— #${envioId} • ${e.destinatario || ''} ${e.codigo_correios ? '• ' + e.codigo_correios : ''}`;
+  $('statusForm').style.display = 'none';
+  $('statusFormErr').classList.add('d-none');
+  await carregarEventos();
+  new bootstrap.Modal($('statusModal')).show();
+}
 
-  const statusAtual = e.status_correios || '';
-  const novo = prompt(
-    'Status atual da encomenda\n' +
-    '(copie do site dos Correios — ex: "Objeto entregue ao destinatário")',
-    statusAtual,
-  );
-  if (novo === null) return;
-
-  const localAtual = e.status_local || '';
-  const localNovo = prompt(
-    'Local (opcional — ex: "BELO HORIZONTE/MG")',
-    localAtual,
-  );
-  if (localNovo === null) return;
-
+async function carregarEventos() {
+  const tl = $('statusTimeline');
+  tl.innerHTML = '<div class="status-empty"><i class="bi bi-hourglass-split"></i> Carregando...</div>';
   try {
-    const r = await fetch(`${API.envios}/${envioId}`, {
-      method: 'PUT',
+    const r = await fetch(`${API.envios}/${_statusEnvioId}/eventos`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    _statusEventos = await r.json();
+    renderTimeline();
+  } catch (err) {
+    tl.innerHTML = `<div class="status-empty text-danger">Erro: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderTimeline() {
+  const tl = $('statusTimeline');
+  if (!_statusEventos.length) {
+    tl.innerHTML = `
+      <div class="status-empty">
+        <i class="bi bi-clock-history" style="font-size:32px;display:block;margin-bottom:8px"></i>
+        Nenhum evento registrado ainda.<br>
+        <small>Clique em "Adicionar evento" para registrar um status.</small>
+      </div>`;
+    return;
+  }
+  tl.innerHTML = _statusEventos.map(ev => {
+    const t = TIPOS_EVENTO[ev.tipo] || TIPOS_EVENTO.outros;
+    return `
+      <div class="status-event">
+        <div class="status-event-icon ${ev.tipo}">
+          <i class="bi ${t.icone}"></i>
+        </div>
+        <div class="status-event-body">
+          <p class="status-event-title">${escHtml(ev.descricao)}</p>
+          ${ev.local ? `<p class="status-event-local">${escHtml(ev.local)}</p>` : ''}
+          <div class="status-event-data">${dtPt(ev.data_evento)}</div>
+        </div>
+        <div class="status-event-actions">
+          <button onclick="abrirFormEvento(${ev.id})" title="Editar"><i class="bi bi-pencil"></i></button>
+          <button class="danger" onclick="excluirEvento(${ev.id})" title="Excluir"><i class="bi bi-trash"></i></button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function abrirFormEvento(eventoId = null) {
+  $('statusForm').style.display = '';
+  $('statusFormErr').classList.add('d-none');
+  $('btnAdicionarEvento').disabled = true;
+
+  if (eventoId) {
+    const ev = _statusEventos.find(x => x.id === eventoId);
+    if (!ev) return;
+    $('statusFormTitle').innerHTML = '<i class="bi bi-pencil"></i> Editar evento';
+    $('statusFormId').value        = ev.id;
+    $('statusFormTipo').value      = ev.tipo;
+    $('statusFormDescricao').value = ev.descricao || '';
+    $('statusFormLocal').value     = ev.local || '';
+    $('statusFormData').value      = (ev.data_evento || '').replace(' ', 'T').slice(0, 16);
+  } else {
+    $('statusFormTitle').innerHTML = '<i class="bi bi-plus-circle"></i> Novo evento';
+    $('statusFormId').value        = '';
+    $('statusFormTipo').value      = 'em_transito';
+    $('statusFormDescricao').value = '';
+    $('statusFormLocal').value     = '';
+    const agora = new Date();
+    agora.setMinutes(agora.getMinutes() - agora.getTimezoneOffset());
+    $('statusFormData').value      = agora.toISOString().slice(0, 16);
+  }
+}
+
+function cancelarFormEvento() {
+  $('statusForm').style.display = 'none';
+  $('btnAdicionarEvento').disabled = false;
+}
+
+async function salvarEvento() {
+  const id        = $('statusFormId').value;
+  const tipo      = $('statusFormTipo').value;
+  const descricao = $('statusFormDescricao').value.trim();
+  const local     = $('statusFormLocal').value.trim();
+  const dataEv    = $('statusFormData').value;
+  const errBox    = $('statusFormErr');
+
+  if (!descricao || descricao.length < 2) {
+    errBox.textContent = 'Informe a descrição do evento.';
+    errBox.classList.remove('d-none');
+    return;
+  }
+  if (!dataEv) {
+    errBox.textContent = 'Informe a data e hora do evento.';
+    errBox.classList.remove('d-none');
+    return;
+  }
+  errBox.classList.add('d-none');
+
+  const payload = { tipo, descricao, local: local || null, data_evento: dataEv };
+  try {
+    const url    = id ? `${API.base}/recepcao/eventos/${id}` : `${API.envios}/${_statusEnvioId}/eventos`;
+    const method = id ? 'PUT' : 'POST';
+    const r = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        status_correios: novo.trim() || null,
-        status_local:    localNovo.trim() || null,
-      }),
+      body: JSON.stringify(payload),
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
       throw new Error(j.detail || 'HTTP ' + r.status);
     }
-    toast('Status atualizado.', 'success');
+    toast(id ? 'Evento atualizado.' : 'Evento adicionado.', 'success');
+    cancelarFormEvento();
+    await carregarEventos();
+    await loadEnvios();
+  } catch (err) {
+    errBox.textContent = err.message;
+    errBox.classList.remove('d-none');
+  }
+}
+
+async function excluirEvento(eventoId) {
+  if (!confirm('Excluir este evento da timeline?')) return;
+  try {
+    const r = await fetch(`${API.base}/recepcao/eventos/${eventoId}`, { method: 'DELETE' });
+    if (!r.ok && r.status !== 204) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.detail || 'HTTP ' + r.status);
+    }
+    toast('Evento excluído.', 'success');
+    await carregarEventos();
     await loadEnvios();
   } catch (err) {
     toast('Erro: ' + err.message, 'error');
@@ -1063,10 +1386,7 @@ function openEnvioModal(envioId = null) {
     $('envioDestinatario').value      = e.destinatario || '';
     $('envioValor').value             = e.valor_mercadoria || 0;
     $('envioCodigo').value            = e.codigo_correios || '';
-    $('envioStatusManual').value      = e.status_correios || '';
-    $('envioStatusLocalManual').value = e.status_local || '';
     $('envioObs').value               = e.observacoes || '';
-    $('envioStatusManualWrap').style.display = '';
   } else {
     $('envioModalTitle').textContent = 'Novo Envio';
     $('envioRemetente').value         = currentUser.name;
@@ -1074,11 +1394,7 @@ function openEnvioModal(envioId = null) {
     $('envioDestinatario').value      = '';
     $('envioValor').value             = 0;
     $('envioCodigo').value            = '';
-    $('envioStatusManual').value      = '';
-    $('envioStatusLocalManual').value = '';
     $('envioObs').value               = '';
-    // só faz sentido editar status manual depois que existe — esconde no Novo
-    $('envioStatusManualWrap').style.display = 'none';
   }
 
   new bootstrap.Modal($('envioModal')).show();
@@ -1119,11 +1435,6 @@ async function submitEnvio() {
   if (editandoEnvio) {
     url    = API.envios + '/' + editandoEnvio;
     method = 'PUT';
-    // Edição manual de status (apenas no modo edição)
-    const statusManual = $('envioStatusManual').value.trim();
-    const localManual  = $('envioStatusLocalManual').value.trim();
-    if (statusManual) payload.status_correios = statusManual;
-    if (localManual)  payload.status_local    = localManual;
   } else {
     payload.remetente_id = currentUser.id;
   }
@@ -1164,6 +1475,17 @@ async function deletarEnvio(id) {
 
 /* expõe funções para os onclicks inline */
 window.showSection         = showSection;
+window.toggleSidebar       = function() {
+  const sb = document.getElementById('recepSidebar');
+  const ct = document.getElementById('recepContent');
+  const ic = document.getElementById('sidebarToggleIcon');
+  sb.classList.toggle('collapsed');
+  ct.classList.toggle('sidebar-collapsed');
+  if (ic) {
+    const collapsed = sb.classList.contains('collapsed');
+    ic.className = collapsed ? 'bi bi-layout-sidebar' : 'bi bi-layout-sidebar-reverse';
+  }
+};
 window.openReservaModal    = openReservaModal;
 window.submitReserva       = submitReserva;
 window.confirmarReserva    = confirmarReserva;
@@ -1175,7 +1497,13 @@ window.agendarPara         = agendarPara;
 window.openEnvioModal      = openEnvioModal;
 window.submitEnvio         = submitEnvio;
 window.deletarEnvio        = deletarEnvio;
+window.abrirRastreio       = abrirRastreio;
+window.rastrearEnvioRecarregar = rastrearEnvioRecarregar;
 window.atualizarStatusManual = atualizarStatusManual;
+window.abrirFormEvento     = abrirFormEvento;
+window.cancelarFormEvento  = cancelarFormEvento;
+window.salvarEvento        = salvarEvento;
+window.excluirEvento       = excluirEvento;
 window.onResvUnitChange         = onResvUnitChange;
 window.onResvEscritorioChange   = onResvEscritorioChange;
 window.onSalaUnitChange         = onSalaUnitChange;

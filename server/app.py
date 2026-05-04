@@ -1202,6 +1202,21 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ REGISTRAR ROUTER DE AGENDA (integração Carbonio)
+try:
+    from routes.agenda import router as agenda_router
+    app.include_router(agenda_router)
+    logger.info("✅ Router de Agenda registrado: /api/agenda")
+
+    # Inicia scheduler de lembretes de agenda (sino quando começar a reunião)
+    from services.agenda_scheduler import iniciar as iniciar_agenda_scheduler
+    iniciar_agenda_scheduler()
+    logger.info("✅ Scheduler de Agenda iniciado (lembretes via sino)")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar Agenda: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ SERVIR UPLOADS ESTÁTICOS (fotos de veículos)
 try:
     _uploads_dir = os.path.normpath(
