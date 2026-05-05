@@ -1,0 +1,228 @@
+/**
+ * page-guard.js — Guard único de página (refatoração 2026-05-05).
+ *
+ * Substitui em um arquivo só:
+ *   - route-protection.js (autenticação)
+ *   - access-config.js + page-access-control.js + role-permissions.js (autorização)
+ *
+ * USO:
+ *   <script src="/SistemaCPE/web/assests/js/config.js"></script>
+ *   <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
+ *   <script>pageGuard('AGENDA');</script>
+ *
+ * O guard:
+ *   1) Verifica que existe token + dados do usuário no storage
+ *      Se não, redireciona pra login.
+ *   2) Chama GET /api/permissions/check?page=X&user_id=Y (lógica canônica
+ *      no backend: ADMIN sempre passa → exceções vencem → role OU grupo libera)
+ *   3) Se permitido: dispara `authenticationSuccess` (compat com código
+ *      existente) e libera a página.
+ *   4) Se negado: mostra mensagem e redireciona pro dashboard.
+ *
+ * API EXPORTADA (window.pageGuard):
+ *   pageGuard(pageKey)        - inicia o guard pra uma página
+ *   pageGuard.getUser()       - retorna o usuário logado (ou null)
+ *   pageGuard.authHeaders()   - { 'Content-Type', 'Authorization': Bearer ... }
+ *   pageGuard.logout()        - limpa storage e vai pro login
+ */
+
+(function (global) {
+  'use strict';
+
+  // ────────────────────────────────────────────────────────────────────
+  // CONFIG
+  // ────────────────────────────────────────────────────────────────────
+  const CFG = {
+    loginUrl:     '/SistemaCPE/web/login.html',
+    dashboardUrl: '/SistemaCPE/index.html',
+    apiBaseFallback: () => `http://${location.hostname || '127.0.0.1'}:8000`,
+    storageKeys: {
+      // Chaves novas (preferenciais)
+      user:  'cpe_user',
+      token: 'cpe_token',
+      // Chaves legadas (compatibilidade durante a migração)
+      userLegacy:  'user',
+      tokenLegacy: 'token',
+    },
+    log: true,
+  };
+
+  function log(...args) { if (CFG.log) console.log('[PAGE-GUARD]', ...args); }
+  function err(...args) { console.error('[PAGE-GUARD]', ...args); }
+
+  // ────────────────────────────────────────────────────────────────────
+  // STORAGE — busca em localStorage E sessionStorage, novo E legado
+  // ────────────────────────────────────────────────────────────────────
+  function readStorage(key) {
+    return localStorage.getItem(key) || sessionStorage.getItem(key);
+  }
+
+  function getToken() {
+    return readStorage(CFG.storageKeys.token)
+        || readStorage(CFG.storageKeys.tokenLegacy)
+        || '';
+  }
+
+  function getUser() {
+    const raw = readStorage(CFG.storageKeys.user) || readStorage(CFG.storageKeys.userLegacy);
+    if (!raw) return null;
+    try {
+      const u = JSON.parse(raw);
+      if (u && u.id && u.email && u.role) return u;
+    } catch (_) { /* corrupto */ }
+    return null;
+  }
+
+  function clearStorage() {
+    Object.values(CFG.storageKeys).forEach(k => {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
+    });
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('logged_in');
+    localStorage.removeItem('login_time');
+  }
+
+  function getApiBase() {
+    return (typeof global.API_BASE_URL !== 'undefined')
+      ? global.API_BASE_URL
+      : CFG.apiBaseFallback();
+  }
+
+  function authHeaders() {
+    const t = getToken();
+    return t
+      ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${t}` }
+      : { 'Content-Type': 'application/json' };
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // UI — overlay de loading e mensagem de bloqueio
+  // ────────────────────────────────────────────────────────────────────
+  function ensureOverlay() {
+    if (document.getElementById('__pgGuardOverlay')) return;
+    const div = document.createElement('div');
+    div.id = '__pgGuardOverlay';
+    div.style.cssText = `
+      position: fixed; inset: 0;
+      background: rgba(255,255,255,.96);
+      backdrop-filter: blur(2px);
+      z-index: 999999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-family: 'Inter', -apple-system, sans-serif;
+    `;
+    div.innerHTML = `
+      <div style="width:48px;height:48px;border:4px solid #FFC107;border-top-color:transparent;border-radius:50%;animation:__pgSpin .9s linear infinite;"></div>
+      <div id="__pgGuardMsg" style="margin-top:18px;color:#374151;font-size:14px;font-weight:500;">Validando acesso...</div>
+      <style>@keyframes __pgSpin { to { transform: rotate(360deg); } }</style>
+    `;
+    document.documentElement.appendChild(div);
+  }
+
+  function setOverlayMessage(text, isError) {
+    const msg = document.getElementById('__pgGuardMsg');
+    if (msg) {
+      msg.textContent = text;
+      msg.style.color = isError ? '#DC2626' : '#374151';
+    }
+  }
+
+  function removeOverlay() {
+    const o = document.getElementById('__pgGuardOverlay');
+    if (o) o.remove();
+  }
+
+  function redirectToLogin(reason) {
+    log('Redirecionando para login:', reason || '(sem motivo)');
+    sessionStorage.setItem('redirectAfterLogin', location.pathname + location.search);
+    location.replace(CFG.loginUrl);
+  }
+
+  function redirectToDashboard(reason) {
+    log('Redirecionando para dashboard:', reason || '(sem motivo)');
+    setOverlayMessage(reason || 'Acesso negado', true);
+    setTimeout(() => location.replace(CFG.dashboardUrl), 1800);
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // EVENTO de compat — algumas páginas escutam `authenticationSuccess`
+  // ────────────────────────────────────────────────────────────────────
+  let dispatched = false;
+  function dispatchAuthSuccess(user) {
+    if (dispatched) return;
+    dispatched = true;
+    document.dispatchEvent(new CustomEvent('authenticationSuccess', { detail: { user } }));
+    log('Evento authenticationSuccess despachado');
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // GUARD PRINCIPAL
+  // ────────────────────────────────────────────────────────────────────
+  async function pageGuard(pageKey) {
+    if (!pageKey) {
+      err('pageGuard: page key obrigatória, ex: pageGuard("AGENDA")');
+      return;
+    }
+
+    ensureOverlay();
+
+    // 1) Autenticação
+    const user  = getUser();
+    const token = getToken();
+    if (!user || !token) {
+      redirectToLogin('Sem token ou usuário');
+      return;
+    }
+
+    log(`Verificando acesso de ${user.name} (${user.role}) à página ${pageKey}`);
+
+    // 2) Autorização via API canônica
+    try {
+      const url = `${getApiBase()}/api/permissions/check?page=${encodeURIComponent(pageKey)}&user_id=${user.id}`;
+      const resp = await fetch(url, { headers: authHeaders() });
+
+      if (!resp.ok) {
+        // API com problema — fallback conservador: assume permitido p/ não travar
+        // o sistema todo se a API estiver lenta/indisponível. Logamos pra investigar.
+        err('API de permissões falhou (HTTP ' + resp.status + ') — liberando por fallback.');
+        liberar(user);
+        return;
+      }
+
+      const data = await resp.json();
+      if (data && data.allowed) {
+        log('✅ Permitido —', data.reason);
+        liberar(user);
+      } else {
+        log('❌ Negado —', data && data.reason);
+        redirectToDashboard(`Acesso negado: ${(data && data.reason) || 'sem permissão'}`);
+      }
+
+    } catch (e) {
+      err('Erro de rede ao validar permissão:', e);
+      // Mesmo fallback: libera com warning. Garante que usuário consegue
+      // operar mesmo se o serviço de permissões estiver fora do ar.
+      liberar(user);
+    }
+  }
+
+  function liberar(user) {
+    removeOverlay();
+    dispatchAuthSuccess(user);
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // API PÚBLICA
+  // ────────────────────────────────────────────────────────────────────
+  pageGuard.getUser      = getUser;
+  pageGuard.getToken     = getToken;
+  pageGuard.authHeaders  = authHeaders;
+  pageGuard.logout = function () {
+    clearStorage();
+    location.replace(CFG.loginUrl);
+  };
+
+  global.pageGuard = pageGuard;
+
+})(typeof window !== 'undefined' ? window : this);

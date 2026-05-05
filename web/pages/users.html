@@ -19,16 +19,78 @@
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/components.css">
 
-  <script src="/SistemaCPE/web/assests/js/per_usuario/access-config.js"></script>
-  <script src="/SistemaCPE/web/assests/js/per_usuario/page-access-control.js"></script>
-  
-  <script>
-    // ✅ Validar acesso à página USERS
-    const userData = checkPageAccess('USERS');
-    
-    // Se chegou aqui, usuário tem acesso garantido!
-    console.log("✅ Usuário pode acessar página USERS:", userData);
-  </script>
+  <!-- ================================================== -->
+  <!-- ESTILOS DO PRÉ-CADASTRO                              -->
+  <!-- ================================================== -->
+  <style>
+    .pc-card {
+      background: #fff; border: 1px solid #E5E7EB;
+      border-radius: 10px; padding: 16px;
+      margin-bottom: 12px;
+      display: grid; grid-template-columns: 1fr auto;
+      gap: 16px; align-items: center;
+    }
+    .pc-card .info .name { font-weight: 600; font-size: 15px; color: #1F2937; }
+    .pc-card .info .email { color: #6B7280; font-size: 13px; }
+    .pc-card .info .meta { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+    .pc-card .meta span {
+      background: #F3F4F6; padding: 3px 8px; border-radius: 4px;
+      font-size: 11px; color: #4B5563;
+    }
+    .pc-card .meta span.grupo { background: #E0E7FF; color: #3730A3; }
+    .pc-card .meta span.dept  { background: #DCFCE7; color: #15803D; }
+    .pc-card .actions { display: flex; gap: 8px; }
+    .pc-section {
+      background: #FFFBEB; border: 1px solid #FDE68A;
+      border-radius: 10px; padding: 16px; margin-bottom: 16px;
+    }
+    .pc-section h3 {
+      margin: 0 0 12px; font-size: 16px; color: #92400E;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .pc-section .badge-count {
+      background: #DC2626; color: #fff;
+      padding: 2px 8px; border-radius: 10px; font-size: 12px;
+    }
+    .pc-empty { color: #92400E; font-size: 13px; }
+
+    .pc-import-zone {
+      border: 2px dashed #FCD34D; border-radius: 10px;
+      padding: 30px; text-align: center; cursor: pointer;
+      background: #FFFBEB; transition: all .15s;
+    }
+    .pc-import-zone:hover { background: #FEF3C7; border-color: #F59E0B; }
+    .pc-import-zone.has-file { border-color: #16A34A; background: #F0FDF4; }
+    .pc-import-zone i { font-size: 40px; color: #F59E0B; }
+    .pc-import-zone.has-file i { color: #16A34A; }
+    .pc-import-result {
+      margin-top: 16px; padding: 12px; border-radius: 8px;
+      background: #F0FDF4; border: 1px solid #BBF7D0; color: #166534;
+      font-size: 13px;
+    }
+    .pc-email-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-bottom: 1px solid #F3F4F6; font-size: 13px;
+    }
+    .pc-email-row:last-child { border-bottom: none; }
+    .pc-email-row .email { flex: 1; color: #374151; }
+    .pc-email-row .nome  { color: #9CA3AF; font-size: 12px; }
+    .pc-email-row .status-badge {
+      padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;
+    }
+    .pc-email-row .status-badge.disponivel { background: #DBEAFE; color: #1E40AF; }
+    .pc-email-row .status-badge.usado      { background: #DCFCE7; color: #166534; }
+    .pc-email-row button {
+      background: none; border: none; color: #DC2626;
+      cursor: pointer; padding: 4px 8px; border-radius: 4px;
+    }
+    .pc-email-row button:hover { background: #FEE2E2; }
+    .pc-email-row button:disabled { color: #D1D5DB; cursor: not-allowed; }
+  </style>
+
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
+  <script>pageGuard('USERS');</script>
 
 </head>
 
@@ -73,12 +135,51 @@
           <h2 class="page-title">
             <i class="bi bi-people-fill"></i> Gerenciamento de Usuários
           </h2>
-          <button class="btn-add-user" id="btnAddUser" onclick="openNewUserModal()" data-bs-toggle="modal"
-            data-bs-target="#userModal">
-            <i class="bi bi-plus-lg"></i> Novo Usuário
-          </button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-add-user" id="btnImportCsv"
+              data-bs-toggle="modal" data-bs-target="#csvImportModal"
+              style="background:#FFC107;color:#1A1A1A;">
+              <i class="bi bi-file-earmark-arrow-up"></i> Importar Lista (CSV)
+            </button>
+            <button class="btn-add-user" id="btnAddUser" onclick="openNewUserModal()" data-bs-toggle="modal"
+              data-bs-target="#userModal">
+              <i class="bi bi-plus-lg"></i> Novo Usuário
+            </button>
+          </div>
         </div>
         <!-- [FIM] Page Header -->
+
+        <!-- [INICIO] Pré-cadastros pendentes -->
+        <div class="pc-section" id="pcPendentesSection" style="display:none;">
+          <h3>
+            <i class="bi bi-hourglass-split"></i>
+            Solicitações Pendentes de Aprovação
+            <span class="badge-count" id="pcPendentesCount">0</span>
+          </h3>
+          <div id="pcPendentesList"></div>
+        </div>
+        <!-- [FIM] Pré-cadastros pendentes -->
+
+        <!-- [INICIO] Lista de e-mails autorizados (importados) -->
+        <div class="pc-section" id="pcEmailsSection"
+             style="display:none;background:#EFF6FF;border-color:#BFDBFE;">
+          <h3 style="color:#1E40AF;cursor:pointer;justify-content:space-between;width:100%;"
+              onclick="togglePcEmails()">
+            <span>
+              <i class="bi bi-envelope-check"></i>
+              E-mails Autorizados (Aguardando 1º Acesso)
+              <span class="badge-count" id="pcEmailsCount" style="background:#3B82F6;">0</span>
+            </span>
+            <i class="bi bi-chevron-down" id="pcEmailsChevron"></i>
+          </h3>
+          <div id="pcEmailsListWrap" style="display:none;">
+            <input type="text" id="pcEmailsSearch" class="form-control mb-2"
+                   placeholder="Buscar e-mail..." style="font-size:13px;">
+            <div id="pcEmailsList"
+                 style="max-height:280px;overflow-y:auto;background:#fff;border-radius:8px;padding:6px;"></div>
+          </div>
+        </div>
+        <!-- [FIM] Lista de e-mails autorizados -->
 
         <!-- [INICIO] Statistics -->
         <div class="stats-grid">
@@ -333,6 +434,75 @@
     </div>
   </div>
   <!-- [FIM] User Modal -->
+
+  <!-- ================================================== -->
+  <!-- MODAL: Importar CSV de Pré-cadastros                -->
+  <!-- ================================================== -->
+  <div class="modal fade" id="csvImportModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-file-earmark-arrow-up"></i> Importar Lista de E-mails
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-2">
+            Faça upload de um arquivo <strong>.csv</strong> contendo a lista de e-mails autorizados
+            ao auto-cadastro. Formato aceito: <code>email,nome</code> (uma linha por usuário).
+            Cabeçalho é detectado automaticamente.
+          </p>
+
+          <label class="pc-import-zone" id="csvDropZone" for="csvFileInput">
+            <input type="file" id="csvFileInput" accept=".csv,.txt" hidden>
+            <i class="bi bi-cloud-arrow-up-fill"></i>
+            <div id="csvDropText" style="margin-top:8px;font-weight:500;">
+              Clique aqui ou arraste o arquivo CSV
+            </div>
+            <div id="csvFileName" style="margin-top:6px;font-size:13px;color:#6B7280;"></div>
+          </label>
+
+          <div id="csvImportResult"></div>
+          <div id="csvImportError" class="alert alert-danger d-none mt-3 mb-0"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="csvImportSubmit" disabled>
+            <i class="bi bi-upload"></i> Importar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================== -->
+  <!-- MODAL: Recusar Pré-cadastro                          -->
+  <!-- ================================================== -->
+  <div class="modal fade" id="recusaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-x-circle"></i> Recusar Solicitação</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small">
+            Informe o motivo da recusa. O usuário poderá visualizar e refazer o cadastro.
+          </p>
+          <p id="recusaInfo" class="mb-3"></p>
+          <textarea id="recusaMotivo" class="form-control" rows="4"
+            placeholder="Ex: Você selecionou o grupo errado. Por favor, refaça selecionando o grupo X." maxlength="500"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-danger" id="recusaConfirm">
+            <i class="bi bi-x-lg"></i> Confirmar Recusa
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ================================================== -->
   <!-- SCRIPTS -->
@@ -1256,6 +1426,300 @@ function renderUsers(list = users) {
     console.log("[USERS]\n" + "=".repeat(80) + "\n");
   </script>
   <!-- [FIM] Log Final -->
+
+  <!-- ================================================== -->
+  <!-- PRÉ-CADASTRO: Importar CSV + Aprovar/Recusar         -->
+  <!-- ================================================== -->
+  <script>
+  (function () {
+    'use strict';
+    const PRECAD = _API_HOST + '/api/pre-cadastro';
+    let arquivoCsv = null;
+    let pendentes  = [];
+    let recusaAlvo = null;
+
+    // ------ IMPORTAR CSV ---------------------------------------------------
+    const dropZone   = document.getElementById('csvDropZone');
+    const fileInput  = document.getElementById('csvFileInput');
+    const fileName   = document.getElementById('csvFileName');
+    const dropText   = document.getElementById('csvDropText');
+    const submitBtn  = document.getElementById('csvImportSubmit');
+    const resultBox  = document.getElementById('csvImportResult');
+    const errorBox   = document.getElementById('csvImportError');
+
+    function setArquivo(f) {
+      arquivoCsv = f;
+      if (f) {
+        fileName.textContent = f.name + ' (' + (f.size / 1024).toFixed(1) + ' KB)';
+        dropZone.classList.add('has-file');
+        dropText.textContent = 'Arquivo pronto para importar';
+        submitBtn.disabled = false;
+      } else {
+        fileName.textContent = '';
+        dropZone.classList.remove('has-file');
+        dropText.textContent = 'Clique aqui ou arraste o arquivo CSV';
+        submitBtn.disabled = true;
+      }
+      resultBox.innerHTML = '';
+      errorBox.classList.add('d-none');
+    }
+
+    fileInput.addEventListener('change', e => setArquivo(e.target.files[0] || null));
+    dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('has-file'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('has-file'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      const f = e.dataTransfer.files[0];
+      if (f) { fileInput.files = e.dataTransfer.files; setArquivo(f); }
+    });
+
+    submitBtn.addEventListener('click', async () => {
+      if (!arquivoCsv) return;
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Importando...';
+      errorBox.classList.add('d-none');
+      resultBox.innerHTML = '';
+
+      try {
+        const fd = new FormData();
+        fd.append('arquivo', arquivoCsv);
+        const adminId = JSON.parse(localStorage.getItem('user') || '{}').id;
+        const url = PRECAD + '/upload-csv' + (adminId ? '?importado_por=' + adminId : '');
+
+        const r = await fetch(url, { method: 'POST', body: fd });
+        const data = await r.json();
+
+        if (!r.ok) {
+          errorBox.textContent = data.detail || 'Erro ao importar';
+          errorBox.classList.remove('d-none');
+        } else {
+          resultBox.innerHTML = `<div class="pc-import-result">
+            <strong>Importação concluída!</strong><br>
+            Total de linhas processadas: <strong>${data.total_linhas}</strong><br>
+            Novos e-mails importados: <strong>${data.importados}</strong><br>
+            Já existentes (ignorados): <strong>${data.duplicados}</strong>
+          </div>`;
+          showSuccess('Lista de e-mails importada com sucesso!');
+          setArquivo(null);
+        }
+      } catch (err) {
+        errorBox.textContent = 'Erro de conexão: ' + err.message;
+        errorBox.classList.remove('d-none');
+      } finally {
+        submitBtn.disabled = !arquivoCsv;
+        submitBtn.innerHTML = '<i class="bi bi-upload"></i> Importar';
+      }
+    });
+
+    document.getElementById('csvImportModal').addEventListener('hidden.bs.modal', () => setArquivo(null));
+
+    // ------ PENDENTES: LISTAR ---------------------------------------------
+    async function loadPendentes() {
+      try {
+        const r = await fetch(PRECAD + '/pendentes');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        pendentes = await r.json();
+        renderPendentes();
+      } catch (err) {
+        console.error('[PRECAD] Erro ao carregar pendentes:', err.message);
+      }
+    }
+
+    function renderPendentes() {
+      const sec  = document.getElementById('pcPendentesSection');
+      const list = document.getElementById('pcPendentesList');
+      const cnt  = document.getElementById('pcPendentesCount');
+
+      if (!pendentes || !pendentes.length) {
+        sec.style.display = 'none';
+        return;
+      }
+
+      sec.style.display = 'block';
+      cnt.textContent = pendentes.length;
+
+      list.innerHTML = pendentes.map(p => `
+        <div class="pc-card">
+          <div class="info">
+            <div class="name">${escapeHtml(p.name)}</div>
+            <div class="email"><i class="bi bi-envelope"></i> ${escapeHtml(p.email)}</div>
+            <div class="meta">
+              <span><i class="bi bi-at"></i> ${escapeHtml(p.username)}</span>
+              <span class="grupo"><i class="bi bi-folder"></i> ${escapeHtml(p.group_name || 'Grupo #' + p.group_id)}</span>
+              ${p.department_name ? `<span class="dept"><i class="bi bi-building"></i> ${escapeHtml(p.department_name)}</span>` : ''}
+              <span><i class="bi bi-clock"></i> ${formatarData(p.solicitado_em)}</span>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-sm btn-success" onclick="aprovarPreCadastro(${p.id})">
+              <i class="bi bi-check-lg"></i> Aprovar
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="abrirRecusa(${p.id}, '${escapeHtml(p.name)}', '${escapeHtml(p.email)}')">
+              <i class="bi bi-x-lg"></i> Recusar
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function formatarData(s) {
+      if (!s) return '—';
+      const d = new Date(s.replace(' ', 'T'));
+      return isNaN(d) ? s : d.toLocaleString('pt-BR');
+    }
+
+    // ------ APROVAR --------------------------------------------------------
+    window.aprovarPreCadastro = async function (id) {
+      if (!confirm('Confirma a aprovação desta solicitação? O usuário poderá fazer login imediatamente.')) return;
+      try {
+        const adminId = JSON.parse(localStorage.getItem('user') || '{}').id;
+        const url = PRECAD + '/' + id + '/aprovar' + (adminId ? '?aprovado_por=' + adminId : '');
+        const r = await fetch(url, { method: 'POST' });
+        const data = await r.json();
+        if (!r.ok) {
+          showError(data.detail || 'Erro ao aprovar');
+          return;
+        }
+        showSuccess('Cadastro aprovado! Username: ' + (data.username || '—'));
+        loadPendentes();
+        loadUsers();
+      } catch (err) {
+        showError('Erro de conexão: ' + err.message);
+      }
+    };
+
+    // ------ RECUSAR --------------------------------------------------------
+    window.abrirRecusa = function (id, nome, email) {
+      recusaAlvo = id;
+      document.getElementById('recusaInfo').innerHTML =
+        '<strong>' + nome + '</strong> &middot; <span class="text-muted">' + email + '</span>';
+      document.getElementById('recusaMotivo').value = '';
+      const m = new bootstrap.Modal(document.getElementById('recusaModal'));
+      m.show();
+    };
+
+    document.getElementById('recusaConfirm').addEventListener('click', async () => {
+      const motivo = document.getElementById('recusaMotivo').value.trim();
+      if (motivo.length < 3) {
+        alert('Informe o motivo da recusa (mínimo 3 caracteres).');
+        return;
+      }
+      try {
+        const adminId = JSON.parse(localStorage.getItem('user') || '{}').id;
+        const url = PRECAD + '/' + recusaAlvo + '/recusar' + (adminId ? '?recusado_por=' + adminId : '');
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ motivo: motivo }),
+        });
+        const data = await r.json();
+        if (!r.ok) {
+          showError(data.detail || 'Erro ao recusar');
+          return;
+        }
+        bootstrap.Modal.getInstance(document.getElementById('recusaModal')).hide();
+        showSuccess('Solicitação recusada. O usuário poderá refazer o cadastro vendo o motivo.');
+        loadPendentes();
+      } catch (err) {
+        showError('Erro de conexão: ' + err.message);
+      }
+    });
+
+    // ------ EMAILS AUTORIZADOS --------------------------------------------
+    let emailsAutorizados = [];
+
+    async function loadEmailsAutorizados() {
+      try {
+        const r = await fetch(PRECAD + '/emails');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        emailsAutorizados = await r.json();
+        renderEmailsAutorizados();
+      } catch (err) {
+        console.error('[PRECAD] Erro ao carregar e-mails autorizados:', err.message);
+      }
+    }
+
+    function renderEmailsAutorizados() {
+      const sec  = document.getElementById('pcEmailsSection');
+      const list = document.getElementById('pcEmailsList');
+      const cnt  = document.getElementById('pcEmailsCount');
+
+      if (!emailsAutorizados.length) {
+        sec.style.display = 'none';
+        return;
+      }
+      sec.style.display = 'block';
+      cnt.textContent = emailsAutorizados.length;
+
+      const filtro = (document.getElementById('pcEmailsSearch').value || '').toLowerCase();
+      const filtrados = filtro
+        ? emailsAutorizados.filter(e =>
+            (e.email || '').toLowerCase().includes(filtro) ||
+            (e.nome_sugerido || '').toLowerCase().includes(filtro))
+        : emailsAutorizados;
+
+      if (!filtrados.length) {
+        list.innerHTML = '<div style="text-align:center;padding:16px;color:#9CA3AF;font-size:13px;">Nenhum e-mail encontrado.</div>';
+        return;
+      }
+
+      list.innerHTML = filtrados.map(e => `
+        <div class="pc-email-row">
+          <div class="email">
+            ${escapeHtml(e.email)}
+            ${e.nome_sugerido ? `<div class="nome">${escapeHtml(e.nome_sugerido)}</div>` : ''}
+          </div>
+          <span class="status-badge ${e.status}">${e.status === 'usado' ? 'Já cadastrado' : 'Aguardando'}</span>
+          <button onclick="removerEmailAutorizado(${e.id}, '${escapeHtml(e.email)}')"
+                  ${e.status === 'usado' ? 'disabled title="E-mail já utilizado em cadastro"' : 'title="Remover da lista"'}>
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    window.togglePcEmails = function () {
+      const wrap = document.getElementById('pcEmailsListWrap');
+      const ch   = document.getElementById('pcEmailsChevron');
+      const open = wrap.style.display !== 'none';
+      wrap.style.display = open ? 'none' : 'block';
+      ch.className = open ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+    };
+
+    window.removerEmailAutorizado = async function (id, email) {
+      if (!confirm('Remover ' + email + ' da lista de e-mails autorizados?')) return;
+      try {
+        const r = await fetch(PRECAD + '/emails/' + id, { method: 'DELETE' });
+        if (r.status !== 204 && !r.ok) {
+          const d = await r.json();
+          showError(d.detail || 'Erro ao remover');
+          return;
+        }
+        showSuccess('E-mail removido da lista.');
+        loadEmailsAutorizados();
+      } catch (err) {
+        showError('Erro de conexão: ' + err.message);
+      }
+    };
+
+    document.getElementById('pcEmailsSearch')
+      .addEventListener('input', renderEmailsAutorizados);
+
+    // Após upload bem-sucedido do CSV, refresca a lista
+    const _origSubmitClick = submitBtn.onclick;
+    submitBtn.addEventListener('click', () => setTimeout(loadEmailsAutorizados, 800));
+
+    // ------ INIT -----------------------------------------------------------
+    function init() { loadPendentes(); loadEmailsAutorizados(); }
+    document.addEventListener('authenticationSuccess', init);
+    if (document.readyState !== 'loading') setTimeout(init, 200);
+    else document.addEventListener('DOMContentLoaded', () => setTimeout(init, 200));
+
+    // expõe pra outras partes do código se quiserem refrescar
+    window.loadPendentes = loadPendentes;
+    window.loadEmailsAutorizados = loadEmailsAutorizados;
+  })();
+  </script>
 
 </body>
 
