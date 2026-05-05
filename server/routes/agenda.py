@@ -363,7 +363,11 @@ async def buscar_usuarios(q: str = Query(..., min_length=2), usuario_id: int = Q
             "ORDER BY name LIMIT 10",
             (usuario_id, termo, termo, termo),
         )
-        return {"usuarios": cursor.fetchall()}
+        rows = cursor.fetchall()
+        # Garante que email_exibir sempre tem um valor para o front usar
+        for r in rows:
+            r["email_exibir"] = r["carbonio_email"] or r["email"]
+        return {"usuarios": rows}
     except Exception as err:
         logger.error(f"[AGENDA/USUARIOS/BUSCAR] {err}")
         raise HTTPException(status_code=500, detail=str(err))

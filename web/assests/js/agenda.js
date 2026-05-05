@@ -1077,7 +1077,10 @@ async function buscarUsuarios() {
         <div class="compart-avatar compart-avatar-sm">${escHtml((u.name || u.email || '?')[0].toUpperCase())}</div>
         <div class="compart-info">
           <div class="compart-nome">${escHtml(u.name)}</div>
-          <div class="compart-email">${escHtml(u.carbonio_email || u.email)}</div>
+          <div class="compart-email">
+            ${escHtml(u.email_exibir || u.email)}
+            ${!u.carbonio_email ? '<span class="compart-sem-carbonio" title="Usuário ainda não conectou a agenda Carbonio"><i class="bi bi-exclamation-circle"></i></span>' : ''}
+          </div>
         </div>
         <button class="btn-agenda btn-agenda-primary btn-sm" onclick="enviarSolicitacao(${u.id},'${escHtml(u.name)}')">
           <i class="bi bi-send"></i> Solicitar

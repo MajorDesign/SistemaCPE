@@ -680,3 +680,9 @@ body.agenda-body {
   color: var(--agenda-muted);
   flex-shrink: 0;
 }
+
+.compart-sem-carbonio {
+  color: #F59E0B;
+  font-size: 11px;
+  margin-left: 4px;
+}
