@@ -976,6 +976,46 @@ async def update_user(user_id: int, user: UserUpdate):
         if conn:
             conn.close()
 
+class PasswordChangeRequest(BaseModel):
+    senha_atual: str = Field(..., min_length=1)
+    senha_nova:  str = Field(..., min_length=8)
+
+@users_router.post("/{user_id}/senha")
+async def change_password(user_id: int, payload: PasswordChangeRequest):
+    """Troca a senha do próprio usuário verificando a senha atual."""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id, password_hash FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Usuário não encontrado")
+
+        if not row.get("password_hash"):
+            raise HTTPException(status_code=400, detail="Usuário sem senha definida")
+
+        senha_valida = bcrypt.checkpw(
+            payload.senha_atual.encode("utf-8"),
+            row["password_hash"].encode("utf-8"),
+        )
+        if not senha_valida:
+            raise HTTPException(status_code=401, detail="Senha atual incorreta")
+
+        novo_hash = bcrypt.hashpw(payload.senha_nova.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        cursor.execute("UPDATE users SET password_hash = %s WHERE id = %s", (novo_hash, user_id))
+        conn.commit()
+        return {"ok": True, "mensagem": "Senha alterada com sucesso"}
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[USERS] ❌ ERRO ao trocar senha: {err}")
+        raise HTTPException(status_code=500, detail=f"Erro ao trocar senha: {err}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @users_router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(user_id: int):
     """Deleta um usuario"""

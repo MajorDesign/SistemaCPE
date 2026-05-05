@@ -1,1502 +1,608 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Configurações - CPE Control</title>
+  <title>Configurações — CPE Tecnologia</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
-    rel="stylesheet">
-
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/style.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/settings.css">
 
-  <style>
-    .page-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 2rem;
-      padding-bottom: 1.5rem;
-      border-bottom: 2px solid #e5e7eb;
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
-
-    .page-title {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #1f2937;
-      margin: 0;
-    }
-
-    .settings-container {
-      display: grid;
-      grid-template-columns: 280px 1fr;
-      gap: 24px;
-    }
-
-    .settings-sidebar {
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-      height: fit-content;
-      position: sticky;
-      top: 20px;
-    }
-
-    .settings-menu {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    .settings-menu-item {
-      border-bottom: 1px solid #e5e7eb;
-    }
-
-    .settings-menu-item:last-child {
-      border-bottom: none;
-    }
-
-    .settings-menu-link {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 16px;
-      color: #6b7280;
-      text-decoration: none;
-      transition: all 0.2s ease;
-      font-weight: 500;
-      font-size: 14px;
-      cursor: pointer;
-    }
-
-    .settings-menu-link:hover {
-      background-color: #f9fafb;
-      color: #667eea;
-      padding-left: 20px;
-    }
-
-    .settings-menu-link.active {
-      background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-      color: #667eea;
-      border-left: 4px solid #667eea;
-      padding-left: 12px;
-    }
-
-    .settings-menu-icon {
-      font-size: 18px;
-      width: 24px;
-      text-align: center;
-    }
-
-    .settings-content {
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 32px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-    }
-
-    .settings-section {
-      display: none;
-    }
-
-    .settings-section.active {
-      display: block;
-      animation: fadeIn 0.3s ease-in;
-    }
-
-    @keyframes fadeIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .section-title {
-      font-size: 20px;
-      font-weight: 700;
-      color: #1f2937;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .section-subtitle {
-      font-size: 13px;
-      color: #6b7280;
-      margin-bottom: 24px;
-    }
-
-    .settings-group {
-      margin-bottom: 32px;
-      padding-bottom: 32px;
-      border-bottom: 1px solid #e5e7eb;
-    }
-
-    .settings-group:last-child {
-      border-bottom: none;
-      margin-bottom: 0;
-      padding-bottom: 0;
-    }
-
-    .group-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: #1f2937;
-      margin-bottom: 16px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .setting-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 0;
-      border-bottom: 1px solid #f3f4f6;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .setting-item:last-child {
-      border-bottom: none;
-    }
-
-    .setting-label {
-      flex: 1;
-      min-width: 250px;
-    }
-
-    .setting-name {
-      font-weight: 600;
-      color: #1f2937;
-      margin-bottom: 4px;
-    }
-
-    .setting-description {
-      font-size: 13px;
-      color: #6b7280;
-    }
-
-    .toggle-switch {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 50px;
-      height: 28px;
-    }
-
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-    }
-
-    .slider {
-      position: absolute;
-      cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background-color: #ccc;
-      transition: 0.3s;
-      border-radius: 28px;
-    }
-
-    .slider:before {
-      position: absolute;
-      content: "";
-      height: 22px;
-      width: 22px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      transition: 0.3s;
-      border-radius: 50%;
-    }
-
-    input:checked + .slider {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-
-    input:checked + .slider:before {
-      transform: translateX(22px);
-    }
-
-    .form-group-custom {
-      margin-bottom: 20px;
-    }
-
-    .form-label-custom {
-      display: block;
-      font-weight: 600;
-      color: #1f2937;
-      margin-bottom: 8px;
-      font-size: 14px;
-    }
-
-    .form-control-custom {
-      width: 100%;
-      padding: 0.75rem 1rem;
-      border: 2px solid #e5e7eb;
-      border-radius: 8px;
-      font-size: 14px;
-      font-family: inherit;
-      transition: all 0.2s ease;
-    }
-
-    .form-control-custom:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-      outline: none;
-    }
-
-    .btn-primary-custom {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
-      font-weight: 600;
-      white-space: nowrap;
-      transition: all 0.3s ease;
-      cursor: pointer;
-      font-size: 14px;
-    }
-
-    .btn-primary-custom:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
-      color: white;
-      text-decoration: none;
-    }
-
-    .btn-primary-custom:active {
-      transform: translateY(0);
-    }
-
-    .btn-primary-custom:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .btn-secondary-custom {
-      background: white;
-      color: #1f2937;
-      border: 2px solid #e5e7eb;
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
-      font-weight: 600;
-      white-space: nowrap;
-      transition: all 0.2s ease;
-      cursor: pointer;
-      font-size: 14px;
-    }
-
-    .btn-secondary-custom:hover {
-      background-color: #f3f4f6;
-      border-color: #667eea;
-      color: #667eea;
-    }
-
-    .btn-secondary-custom.danger {
-      border-color: #ef4444;
-      color: #ef4444;
-    }
-
-    .btn-secondary-custom.danger:hover {
-      background-color: rgba(239, 68, 68, 0.1);
-      border-color: #ef4444;
-    }
-
-    .profile-section {
-      display: flex;
-      gap: 24px;
-      align-items: flex-start;
-      margin-bottom: 32px;
-    }
-
-    .profile-avatar {
-      width: 120px;
-      height: 120px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 48px;
-      flex-shrink: 0;
-      font-weight: 700;
-    }
-
-    .profile-info {
-      flex: 1;
-    }
-
-    .profile-name {
-      font-size: 18px;
-      font-weight: 700;
-      color: #1f2937;
-      margin-bottom: 4px;
-    }
-
-    .profile-email {
-      font-size: 14px;
-      color: #6b7280;
-      margin-bottom: 12px;
-    }
-
-    .profile-role {
-      display: inline-block;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      background-color: rgba(102, 126, 234, 0.1);
-      color: #667eea;
-    }
-
-    .alert {
-      border: none;
-      border-radius: 8px;
-      margin-bottom: 1.5rem;
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .alert i {
-      font-size: 18px;
-      flex-shrink: 0;
-    }
-
-    .alert-danger {
-      background-color: rgba(220, 38, 38, 0.1);
-      color: #991b1b;
-    }
-
-    .alert-success {
-      background-color: rgba(16, 185, 129, 0.1);
-      color: #065f46;
-    }
-
-    .alert-warning {
-      background-color: rgba(245, 158, 11, 0.1);
-      color: #92400e;
-    }
-
-    .alert-info {
-      background-color: rgba(59, 130, 246, 0.1);
-      color: #1e40af;
-    }
-
-    .connected-service {
-      padding: 16px;
-      background: #f9fafb;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
-
-    .service-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex: 1;
-    }
-
-    .service-icon {
-      width: 40px;
-      height: 40px;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 20px;
-      flex-shrink: 0;
-    }
-
-    .service-details {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .service-name {
-      font-weight: 600;
-      color: #1f2937;
-      font-size: 14px;
-    }
-
-    .service-status {
-      font-size: 12px;
-      color: #10b981;
-    }
-
-    .d-none {
-      display: none !important;
-    }
-
-    @media (max-width: 768px) {
-      .settings-container {
-        grid-template-columns: 1fr;
-      }
-
-      .settings-sidebar {
-        position: static;
-      }
-
-      .settings-menu {
-        display: flex;
-        gap: 4px;
-        overflow-x: auto;
-        padding: 8px;
-        border-bottom: 1px solid #e5e7eb;
-      }
-
-      .settings-menu-item {
-        border: none;
-        flex-shrink: 0;
-      }
-
-      .settings-menu-link {
-        padding: 8px 12px;
-        white-space: nowrap;
-        font-size: 12px;
-        border-bottom: 2px solid transparent;
-      }
-
-      .settings-menu-link.active {
-        border-left: none;
-        border-bottom: 2px solid #667eea;
-        background: transparent;
-      }
-
-      .profile-section {
-        flex-direction: column;
-        align-items: center;
-        text-align: center;
-      }
-
-      .setting-item {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-
-      .settings-content {
-        padding: 20px;
-      }
-
-      .connected-service {
-        flex-direction: column;
-        align-items: flex-start;
-      }
-    }
-  </style>
-  <script src="/SistemaCPE/web/assests/js/per_usuario/access-config.js"></script>
-  <script src="/SistemaCPE/web/assests/js/per_usuario/page-access-control.js"></script>
-  <script>checkPageAccess('SETTINGS');</script>
-</head>
-
-<body>
-  <!-- ============================================================ -->
-  <!-- 🔒 LOADING PAGE -->
-  <!-- ============================================================ -->
-  <div id="loadingPage"
-    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
-    <div style="text-align: center; color: white;">
-      <div class="spinner-border" role="status"
-        style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
-        <span class="visually-hidden">Carregando...</span>
-      </div>
-      <p style="margin-top: 1rem;">Inicializando página...</p>
-    </div>
-  </div>
-  <!-- ============================================================ -->
-
-  <div class="container-main" style="display: none;">
-    <!-- SIDEBAR -->
-    <div class="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">CPE</div>
-        <div class="sidebar-title">CONTROL</div>
-      </div>
-
-      <div class="search-box">
-        <input type="text" placeholder="Buscar">
-      </div>
-
-      <ul class="sidebar-menu"></ul>
-    </div>
-
-    <!-- MAIN CONTENT -->
-    <div class="main-content">
-      <div class="top-bar">
-        <button class="menu-toggle">☰</button>
-        <h1><i class="bi bi-gear"></i> Configurações</h1>
-      </div>
-
-      <div class="content">
-        <!-- ALERTS -->
-        <div class="alert alert-danger d-none" id="alertBox" role="alert">
-          <i class="bi bi-exclamation-circle"></i>
-          <span id="alertMessage"></span>
-        </div>
-
-        <div class="alert alert-success d-none" id="successBox" role="alert">
-          <i class="bi bi-check-circle"></i>
-          <span id="successMessage">Operação realizada com sucesso!</span>
-        </div>
-
-        <!-- PAGE HEADER -->
-        <div class="page-header">
-          <h2 class="page-title">
-            <i class="bi bi-sliders"></i> Configurações do Sistema
-          </h2>
-        </div>
-
-        <!-- SETTINGS CONTAINER -->
-        <div class="settings-container">
-          <!-- SETTINGS SIDEBAR -->
-          <div class="settings-sidebar">
-            <ul class="settings-menu">
-              <li class="settings-menu-item">
-                <a class="settings-menu-link active" onclick="switchSettingsTab('profile', event)">
-                  <span class="settings-menu-icon"><i class="bi bi-person"></i></span>
-                  <span>Perfil</span>
-                </a>
-              </li>
-              <li class="settings-menu-item">
-                <a class="settings-menu-link" onclick="switchSettingsTab('notifications', event)">
-                  <span class="settings-menu-icon"><i class="bi bi-bell"></i></span>
-                  <span>Notificações</span>
-                </a>
-              </li>
-              <li class="settings-menu-item">
-                <a class="settings-menu-link" onclick="switchSettingsTab('security', event)">
-                  <span class="settings-menu-icon"><i class="bi bi-shield-lock"></i></span>
-                  <span>Segurança</span>
-                </a>
-              </li>
-              <li class="settings-menu-item">
-                <a class="settings-menu-link" onclick="switchSettingsTab('appearance', event)">
-                  <span class="settings-menu-icon"><i class="bi bi-palette"></i></span>
-                  <span>Aparência</span>
-                </a>
-              </li>
-              <li class="settings-menu-item">
-                <a class="settings-menu-link" onclick="switchSettingsTab('integrations', event)">
-                  <span class="settings-menu-icon"><i class="bi bi-diagram-3"></i></span>
-                  <span>Integrações</span>
-                </a>
-              </li>
-              <li class="settings-menu-item">
-                <a class="settings-menu-link" onclick="switchSettingsTab('billing', event)">
-                  <span class="settings-menu-icon"><i class="bi bi-credit-card"></i></span>
-                  <span>Faturamento</span>
-                </a>
-              </li>
-              <li class="settings-menu-item">
-                <a class="settings-menu-link" onclick="switchSettingsTab('advanced', event)">
-                  <span class="settings-menu-icon"><i class="bi bi-terminal"></i></span>
-                  <span>Avançado</span>
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <!-- SETTINGS CONTENT -->
-          <div class="settings-content">
-            <!-- PROFILE SECTION -->
-            <div class="settings-section active" id="profile-section">
-              <div class="section-title">
-                <i class="bi bi-person-circle"></i> Meu Perfil
-              </div>
-              <p class="section-subtitle">Gerenciar informações pessoais e dados de perfil</p>
-
-              <div class="settings-group">
-                <div class="group-title">Informações Pessoais</div>
-
-                <div class="profile-section">
-                  <div class="profile-avatar" id="profileAvatar">JD</div>
-                  <div class="profile-info">
-                    <div class="profile-name" id="profileName">João Daniel</div>
-                    <div class="profile-email" id="profileEmail">joao.daniel@empresa.com</div>
-                    <span class="profile-role" id="profileRole">Administrador</span>
-                    <button class="btn-secondary-custom" style="margin-top: 12px;" onclick="changeAvatar()">
-                      <i class="bi bi-pencil"></i> Alterar Avatar
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="settings-group">
-                <div class="group-title">Dados de Perfil</div>
-
-                <div class="form-group-custom">
-                  <label class="form-label-custom">Nome Completo</label>
-                  <input type="text" class="form-control-custom" id="fullName" value="João Daniel" />
-                </div>
-
-                <div class="form-group-custom">
-                  <label class="form-label-custom">E-mail</label>
-                  <input type="email" class="form-control-custom" id="email" value="joao.daniel@empresa.com" />
-                </div>
-
-                <div class="form-group-custom">
-                  <label class="form-label-custom">Telefone</label>
-                  <input type="tel" class="form-control-custom" id="phone" placeholder="(11) 9 9999-9999" />
-                </div>
-
-                <div class="form-group-custom">
-                  <label class="form-label-custom">Departamento</label>
-                  <select class="form-control-custom" id="department">
-                    <option>Tecnologia</option>
-                    <option>Recursos Humanos</option>
-                    <option>Vendas</option>
-                    <option>Suporte</option>
-                  </select>
-                </div>
-
-                <button class="btn-primary-custom" onclick="saveProfile()">
-                  <i class="bi bi-check-lg"></i> Salvar Alterações
-                </button>
-              </div>
-            </div>
-
-            <!-- NOTIFICATIONS SECTION -->
-            <div class="settings-section" id="notifications-section">
-              <div class="section-title">
-                <i class="bi bi-bell"></i> Notificações
-              </div>
-              <p class="section-subtitle">Controle como você recebe notificações</p>
-
-              <div class="settings-group">
-                <div class="group-title">Notificações por E-mail</div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Novos Tickets</div>
-                    <div class="setting-description">Receber e-mail quando novos tickets são criados</div>
-                  </div>
-                  <div class="toggle-switch">
-                    <label class="switch">
-                      <input type="checkbox" checked data-setting="emailTickets">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                </div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Atualizações de Projetos</div>
-                    <div class="setting-description">Receber e-mail sobre atualizações de projetos</div>
-                  </div>
-                  <div class="toggle-switch">
-                    <label class="switch">
-                      <input type="checkbox" checked data-setting="emailProjects">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                </div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Tarefas Atribuídas</div>
-                    <div class="setting-description">Notificar quando novas tarefas são atribuídas</div>
-                  </div>
-                  <div class="toggle-switch">
-                    <label class="switch">
-                      <input type="checkbox" checked data-setting="emailTasks">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div class="settings-group">
-                <div class="group-title">Notificações no Navegador</div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Ativar Notificações</div>
-                    <div class="setting-description">Exibir notificações no navegador em tempo real</div>
-                  </div>
-                  <div class="toggle-switch">
-                    <label class="switch">
-                      <input type="checkbox" checked data-setting="browserNotifications">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                </div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Som de Notificação</div>
-                    <div class="setting-description">Reproduzir som ao receber notificações</div>
-                  </div>
-                  <div class="toggle-switch">
-                    <label class="switch">
-                      <input type="checkbox" data-setting="notificationSound">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <button class="btn-primary-custom" onclick="saveNotifications()">
-                <i class="bi bi-check-lg"></i> Salvar Preferências
-              </button>
-            </div>
-
-            <!-- SECURITY SECTION -->
-            <div class="settings-section" id="security-section">
-              <div class="section-title">
-                <i class="bi bi-shield-lock"></i> Segurança
-              </div>
-              <p class="section-subtitle">Proteja sua conta e dados sensíveis</p>
-
-              <div class="settings-group">
-                <div class="group-title">Senha</div>
-
-                <div class="form-group-custom">
-                  <label class="form-label-custom">Senha Atual</label>
-                  <input type="password" class="form-control-custom" id="currentPassword" placeholder="Digite sua senha atual" />
-                </div>
-
-                <div class="form-group-custom">
-                  <label class="form-label-custom">Nova Senha</label>
-                  <input type="password" class="form-control-custom" id="newPassword" placeholder="Digite uma nova senha" />
-                </div>
-
-                <div class="form-group-custom">
-                  <label class="form-label-custom">Confirmar Nova Senha</label>
-                  <input type="password" class="form-control-custom" id="confirmPassword" placeholder="Confirme a nova senha" />
-                </div>
-
-                <button class="btn-primary-custom" onclick="changePassword()">
-                  <i class="bi bi-shield-check"></i> Alterar Senha
-                </button>
-              </div>
-
-              <div class="settings-group">
-                <div class="group-title">Autenticação em Duas Etapas</div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">2FA Habilitado</div>
-                    <div class="setting-description">Adicionar uma camada extra de segurança à sua conta</div>
-                  </div>
-                  <div class="toggle-switch">
-                    <label class="switch">
-                      <input type="checkbox" id="twoFactorToggle">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div class="settings-group">
-                <div class="group-title">Sessões Ativas</div>
-                <p style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">
-                  Você está conectado em <strong>1 dispositivo</strong>
-                </p>
-                <button class="btn-secondary-custom" onclick="logoutAllSessions()">
-                  <i class="bi bi-box-arrow-right"></i> Encerrar Outras Sessões
-                </button>
-              </div>
-            </div>
-
-            <!-- APPEARANCE SECTION -->
-            <div class="settings-section" id="appearance-section">
-              <div class="section-title">
-                <i class="bi bi-palette"></i> Aparência
-              </div>
-              <p class="section-subtitle">Personalize a aparência da interface</p>
-
-              <div class="settings-group">
-                <div class="group-title">Tema</div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Modo Escuro</div>
-                    <div class="setting-description">Usar tema escuro na interface</div>
-                  </div>
-                  <div class="toggle-switch">
-                    <label class="switch">
-                      <input type="checkbox" id="darkModeToggle" data-setting="darkMode">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                </div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Modo Compacto</div>
-                    <div class="setting-description">Exibir interface em modo mais compacto</div>
-                  </div>
-                  <div class="toggle-switch">
-                    <label class="switch">
-                      <input type="checkbox" id="compactModeToggle" data-setting="compactMode">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div class="settings-group">
-                <div class="group-title">Idioma</div>
-
-                <div class="form-group-custom">
-                  <label class="form-label-custom">Selecionar Idioma</label>
-                  <select class="form-control-custom" id="languageSelect">
-                    <option selected>Português (Brasil)</option>
-                    <option>English (USA)</option>
-                    <option>Español</option>
-                    <option>Français</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="settings-group">
-                <div class="group-title">Data e Hora</div>
-
-                <div class="form-group-custom">
-                  <label class="form-label-custom">Fuso Horário</label>
-                  <select class="form-control-custom" id="timezoneSelect">
-                    <option selected>(UTC-3) Brasília</option>
-                    <option>(UTC-5) Nova York</option>
-                    <option>(UTC) Londres</option>
-                    <option>(UTC+1) Berlim</option>
-                  </select>
-                </div>
-
-                <div class="form-group-custom">
-                  <label class="form-label-custom">Formato de Data</label>
-                  <select class="form-control-custom" id="dateFormatSelect">
-                    <option selected>DD/MM/AAAA</option>
-                    <option>MM/DD/AAAA</option>
-                    <option>AAAA-MM-DD</option>
-                  </select>
-                </div>
-              </div>
-
-              <button class="btn-primary-custom" onclick="saveAppearance()">
-                <i class="bi bi-check-lg"></i> Salvar Preferências
-              </button>
-            </div>
-
-            <!-- INTEGRATIONS SECTION -->
-            <div class="settings-section" id="integrations-section">
-              <div class="section-title">
-                <i class="bi bi-diagram-3"></i> Integrações
-              </div>
-              <p class="section-subtitle">Conecte ferramentas externas ao CPE Control</p>
-
-              <div class="settings-group">
-                <div class="group-title">Serviços Conectados</div>
-
-                <div id="connectedServices" style="margin-bottom: 24px;">
-                  <div class="connected-service">
-                    <div class="service-info">
-                      <div class="service-icon"><i class="bi bi-check-circle"></i></div>
-                      <div class="service-details">
-                        <div class="service-name">Google Calendar</div>
-                        <div class="service-status">✓ Conectado</div>
-                      </div>
-                    </div>
-                    <button class="btn-secondary-custom" onclick="disconnectService('google')">
-                      <i class="bi bi-x-lg"></i> Desconectar
-                    </button>
-                  </div>
-                </div>
-
-                <div class="group-title" style="margin-top: 24px;">Serviços Disponíveis</div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Slack</div>
-                    <div class="setting-description">Receber notificações no Slack</div>
-                  </div>
-                  <button class="btn-secondary-custom" onclick="connectService('slack')">
-                    <i class="bi bi-link"></i> Conectar
-                  </button>
-                </div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Microsoft Teams</div>
-                    <div class="setting-description">Integrar com Microsoft Teams</div>
-                  </div>
-                  <button class="btn-secondary-custom" onclick="connectService('teams')">
-                    <i class="bi bi-link"></i> Conectar
-                  </button>
-                </div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Zapier</div>
-                    <div class="setting-description">Automações com Zapier</div>
-                  </div>
-                  <button class="btn-secondary-custom" onclick="connectService('zapier')">
-                    <i class="bi bi-link"></i> Conectar
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- BILLING SECTION -->
-            <div class="settings-section" id="billing-section">
-              <div class="section-title">
-                <i class="bi bi-credit-card"></i> Faturamento
-              </div>
-              <p class="section-subtitle">Gerencie planos e pagamentos</p>
-
-              <div class="settings-group">
-                <div class="group-title">Plano Atual</div>
-
-                <div style="padding: 16px; background: #f9fafb; border-radius: 8px; margin-bottom: 16px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                    <div>
-                      <div style="font-weight: 600; color: #1f2937; margin-bottom: 4px;">Plano Profissional</div>
-                      <div style="font-size: 13px; color: #6b7280;">R$ 299,00/mês</div>
-                    </div>
-                    <button class="btn-secondary-custom" onclick="changePlan()">
-                      <i class="bi bi-pencil"></i> Alterar
-                    </button>
-                  </div>
-                </div>
-
-                <p style="font-size: 13px; color: #6b7280; margin-bottom: 16px;">
-                  <strong>Próximo ciclo de faturamento:</strong> 15 de Abril de 2026
-                </p>
-              </div>
-
-              <div class="settings-group">
-                <div class="group-title">Método de Pagamento</div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Cartão de Crédito</div>
-                    <div class="setting-description">Visa terminado em 4242</div>
-                  </div>
-                  <button class="btn-secondary-custom" onclick="editPaymentMethod()">
-                    <i class="bi bi-pencil"></i> Editar
-                  </button>
-                </div>
-              </div>
-
-              <div class="settings-group">
-                <div class="group-title">Ações</div>
-
-                <button class="btn-secondary-custom" style="margin-right: 8px;" onclick="downloadReceipts()">
-                  <i class="bi bi-download"></i> Baixar Recibos
-                </button>
-                <button class="btn-secondary-custom" onclick="downloadInvoice()">
-                  <i class="bi bi-file-earmark-pdf"></i> Fatura
-                </button>
-              </div>
-            </div>
-
-            <!-- ADVANCED SECTION -->
-            <div class="settings-section" id="advanced-section">
-              <div class="section-title">
-                <i class="bi bi-terminal"></i> Avançado
-              </div>
-              <p class="section-subtitle">Configurações avançadas para usuários experientes</p>
-
-              <div class="settings-group">
-                <div class="group-title">API</div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Chave de API</div>
-                    <div class="setting-description">Use sua chave de API para integração programática</div>
-                  </div>
-                  <button class="btn-secondary-custom" onclick="generateApiKey()">
-                    <i class="bi bi-key"></i> Gerar
-                  </button>
-                </div>
-              </div>
-
-              <div class="settings-group">
-                <div class="group-title">Dados</div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Exportar Dados</div>
-                    <div class="setting-description">Baixe todos os seus dados em formato ZIP</div>
-                  </div>
-                  <button class="btn-secondary-custom" onclick="exportData()">
-                    <i class="bi bi-download"></i> Exportar
-                  </button>
-                </div>
-
-                <div class="setting-item">
-                  <div class="setting-label">
-                    <div class="setting-name">Deletar Conta</div>
-                    <div class="setting-description" style="color: #ef4444;">
-                      Esta ação é permanente e não pode ser desfeita
-                    </div>
-                  </div>
-                  <button class="btn-secondary-custom danger" onclick="deleteAccount()">
-                    <i class="bi bi-trash"></i> Deletar
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================================ -->
-  <!-- 📦 SCRIPTS -->
-  <!-- ============================================================ -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/api.js"></script>
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/route-protection.js"></script>
+</head>
+<body class="cfg-body">
 
-  <!-- ============================================================ -->
-  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
-  <!-- ============================================================ -->
-  <script>
-    console.log("\n" + "=".repeat(80));
-    console.log("[SETTINGS/PAGE] 📄 Inicializando página de Configurações");
-    console.log("[SETTINGS/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
-    console.log("=".repeat(80) + "\n");
+<!-- ===================== LOADING ===================== -->
+<div id="cfgLoading">
+  <img src="/SistemaCPE/web/assests/images/logocpe.png" alt="CPE">
+  <div class="cfg-spinner"></div>
+  <p style="font-size:13px;color:#888">Carregando configurações...</p>
+</div>
 
-    document.addEventListener("DOMContentLoaded", async () => {
-      console.log("[SETTINGS/INIT] 📋 DOM Carregado");
+<!-- ===================== TOAST ===================== -->
+<div id="cfgToast"></div>
 
-      try {
-        const loadingPage = document.getElementById("loadingPage");
-        const containerMain = document.querySelector(".container-main");
+<!-- ===================== WRAPPER ===================== -->
+<div class="cfg-wrapper" id="cfgApp" style="display:none">
 
-        loadingPage.style.display = "none";
-        containerMain.style.display = "flex";
+  <!-- SIDEBAR -->
+  <aside class="cfg-sidebar" id="cfgSidebar">
+    <div class="cfg-sidebar-logo">
+      <img src="/SistemaCPE/web/assests/images/logocpe.png" alt="CPE">
+      <span class="cfg-sidebar-logo-text">Configurações</span>
+    </div>
 
-        console.log("[SETTINGS/INIT] ✅ Página inicializada com sucesso");
-        console.log("=".repeat(80) + "\n");
+    <a href="/SistemaCPE/index.html" class="cfg-back-btn">
+      <i class="bi bi-arrow-left-circle"></i>
+      <span>Voltar ao Sistema</span>
+    </a>
 
-        await loadSettings();
+    <nav class="cfg-nav">
+      <ul>
+        <li class="cfg-nav-item active" data-section="perfil">
+          <a class="cfg-nav-link" onclick="showSection('perfil')">
+            <i class="bi bi-person-circle"></i><span>Perfil</span>
+          </a>
+        </li>
+        <li class="cfg-nav-item" data-section="seguranca">
+          <a class="cfg-nav-link" onclick="showSection('seguranca')">
+            <i class="bi bi-shield-lock"></i><span>Segurança</span>
+          </a>
+        </li>
+        <li class="cfg-nav-item" data-section="notificacoes">
+          <a class="cfg-nav-link" onclick="showSection('notificacoes')">
+            <i class="bi bi-bell"></i><span>Notificações</span>
+          </a>
+        </li>
+        <li class="cfg-nav-item" data-section="aparencia">
+          <a class="cfg-nav-link" onclick="showSection('aparencia')">
+            <i class="bi bi-palette"></i><span>Aparência</span>
+          </a>
+        </li>
+        <li class="cfg-nav-item" data-section="integracoes">
+          <a class="cfg-nav-link" onclick="showSection('integracoes')">
+            <i class="bi bi-diagram-3"></i><span>Integrações</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
 
-      } catch (err) {
-        console.error("[SETTINGS/INIT] ❌ ERRO NA INICIALIZAÇÃO");
-        console.error("[SETTINGS/INIT] 📍 Mensagem:", err.message);
-        console.error("[SETTINGS/INIT] 🔗 Stack:", err.stack);
-        console.error("=".repeat(80) + "\n");
+    <div class="cfg-sidebar-toggle">
+      <button onclick="toggleSidebar()" title="Recolher menu">
+        <i class="bi bi-layout-sidebar-reverse" id="cfgToggleIcon"></i>
+      </button>
+    </div>
+  </aside>
 
-        showAlert("Erro ao inicializar página: " + err.message, "danger");
-      }
+  <!-- CONTENT -->
+  <main class="cfg-content" id="cfgContent">
+
+    <!-- TOPBAR -->
+    <div class="cfg-topbar">
+      <span class="cfg-topbar-title" id="cfgTopbarTitle">Perfil</span>
+      <span class="cfg-topbar-badge">Configurações</span>
+    </div>
+
+    <!-- MAIN AREA -->
+    <div class="cfg-main">
+
+      <!-- ===== SEÇÃO: PERFIL ===== -->
+      <div class="cfg-section active" id="section-perfil">
+
+        <div class="cfg-card">
+          <div class="cfg-card-title"><i class="bi bi-person-circle"></i> Meu Perfil</div>
+          <p class="cfg-card-subtitle">Informações da sua conta no sistema</p>
+
+          <div id="perfilAlert"></div>
+
+          <div class="cfg-profile-header">
+            <div class="cfg-avatar" id="profileAvatar">?</div>
+            <div>
+              <div class="cfg-profile-name" id="profileName">—</div>
+              <div class="cfg-profile-email" id="profileEmail">—</div>
+              <span class="cfg-role-badge" id="profileRole">—</span>
+            </div>
+          </div>
+
+          <p class="cfg-group-label">Dados do perfil</p>
+
+          <div class="cfg-form-group">
+            <label class="cfg-form-label">Nome completo <span style="color:#ef4444">*</span></label>
+            <input type="text" class="cfg-form-control" id="perfNome" placeholder="Seu nome completo">
+          </div>
+          <div class="cfg-form-group">
+            <label class="cfg-form-label">E-mail <span style="color:#ef4444">*</span></label>
+            <input type="email" class="cfg-form-control" id="perfEmail" placeholder="seu@email.com">
+          </div>
+          <div class="cfg-form-group">
+            <label class="cfg-form-label">Username</label>
+            <input type="text" class="cfg-form-control" id="perfUsername" placeholder="username" disabled>
+            <p class="cfg-form-hint">Username só pode ser alterado por administradores</p>
+          </div>
+
+          <button class="cfg-btn cfg-btn-primary" onclick="salvarPerfil()" id="btnSalvarPerfil">
+            <i class="bi bi-check-lg"></i> Salvar alterações
+          </button>
+        </div>
+
+      </div>
+
+      <!-- ===== SEÇÃO: SEGURANÇA ===== -->
+      <div class="cfg-section" id="section-seguranca">
+
+        <div class="cfg-card">
+          <div class="cfg-card-title"><i class="bi bi-shield-lock"></i> Segurança</div>
+          <p class="cfg-card-subtitle">Altere sua senha de acesso ao sistema</p>
+
+          <div id="segAlert"></div>
+
+          <p class="cfg-group-label">Alterar senha</p>
+
+          <div class="cfg-form-group">
+            <label class="cfg-form-label">Senha atual <span style="color:#ef4444">*</span></label>
+            <input type="password" class="cfg-form-control" id="senhaAtual" placeholder="Digite sua senha atual" autocomplete="current-password">
+          </div>
+          <div class="cfg-form-group">
+            <label class="cfg-form-label">Nova senha <span style="color:#ef4444">*</span></label>
+            <input type="password" class="cfg-form-control" id="senhaNova" placeholder="Mínimo 8 caracteres" autocomplete="new-password" oninput="avaliarSenha()">
+            <div class="cfg-pwd-bar" id="pwdStrength" style="display:none"></div>
+            <p class="cfg-form-hint" id="pwdLabel"></p>
+          </div>
+          <div class="cfg-form-group">
+            <label class="cfg-form-label">Confirmar nova senha <span style="color:#ef4444">*</span></label>
+            <input type="password" class="cfg-form-control" id="senhaConfirm" placeholder="Repita a nova senha" autocomplete="new-password">
+          </div>
+
+          <button class="cfg-btn cfg-btn-primary" onclick="alterarSenha()" id="btnAlterarSenha">
+            <i class="bi bi-shield-check"></i> Alterar senha
+          </button>
+        </div>
+
+      </div>
+
+      <!-- ===== SEÇÃO: NOTIFICAÇÕES ===== -->
+      <div class="cfg-section" id="section-notificacoes">
+
+        <div class="cfg-card">
+          <div class="cfg-card-title"><i class="bi bi-bell"></i> Notificações</div>
+          <p class="cfg-card-subtitle">Controle quais notificações aparecem no sino</p>
+
+          <div id="notifAlert"></div>
+
+          <p class="cfg-group-label">Tipos de notificação</p>
+
+          <div class="cfg-setting-item">
+            <div>
+              <div class="cfg-setting-name">Tickets</div>
+              <div class="cfg-setting-desc">Novos tickets, respostas e mudanças de status</div>
+            </div>
+            <label class="cfg-switch"><input type="checkbox" id="notifTickets" checked><span class="cfg-slider"></span></label>
+          </div>
+          <div class="cfg-setting-item">
+            <div>
+              <div class="cfg-setting-name">Reuniões e reservas</div>
+              <div class="cfg-setting-desc">Confirmação e lembretes de reuniões</div>
+            </div>
+            <label class="cfg-switch"><input type="checkbox" id="notifReunioes" checked><span class="cfg-slider"></span></label>
+          </div>
+          <div class="cfg-setting-item">
+            <div>
+              <div class="cfg-setting-name">Agenda</div>
+              <div class="cfg-setting-desc">Lembretes de compromissos do Carbonio</div>
+            </div>
+            <label class="cfg-switch"><input type="checkbox" id="notifAgenda" checked><span class="cfg-slider"></span></label>
+          </div>
+          <div class="cfg-setting-item">
+            <div>
+              <div class="cfg-setting-name">Compartilhamento de agenda</div>
+              <div class="cfg-setting-desc">Solicitações de acesso e respostas</div>
+            </div>
+            <label class="cfg-switch"><input type="checkbox" id="notifCompart" checked><span class="cfg-slider"></span></label>
+          </div>
+          <div class="cfg-setting-item">
+            <div>
+              <div class="cfg-setting-name">Tarefas</div>
+              <div class="cfg-setting-desc">Atribuições e atualizações de tarefas</div>
+            </div>
+            <label class="cfg-switch"><input type="checkbox" id="notifTarefas" checked><span class="cfg-slider"></span></label>
+          </div>
+
+          <div style="margin-top:20px">
+            <button class="cfg-btn cfg-btn-primary" onclick="salvarNotificacoes()">
+              <i class="bi bi-check-lg"></i> Salvar preferências
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ===== SEÇÃO: APARÊNCIA ===== -->
+      <div class="cfg-section" id="section-aparencia">
+
+        <div class="cfg-card">
+          <div class="cfg-card-title"><i class="bi bi-palette"></i> Aparência</div>
+          <p class="cfg-card-subtitle">Personalize a interface do sistema</p>
+
+          <div id="aparenciaAlert"></div>
+
+          <p class="cfg-group-label">Interface</p>
+
+          <div class="cfg-setting-item">
+            <div>
+              <div class="cfg-setting-name">Sidebar recolhida por padrão</div>
+              <div class="cfg-setting-desc">Inicia com o menu lateral minimizado</div>
+            </div>
+            <label class="cfg-switch"><input type="checkbox" id="sidebarCompacta"><span class="cfg-slider"></span></label>
+          </div>
+          <div class="cfg-setting-item">
+            <div>
+              <div class="cfg-setting-name">Animações reduzidas</div>
+              <div class="cfg-setting-desc">Desativa transições e animações da interface</div>
+            </div>
+            <label class="cfg-switch"><input type="checkbox" id="animacoesReduzidas"><span class="cfg-slider"></span></label>
+          </div>
+        </div>
+
+        <div class="cfg-card">
+          <p class="cfg-group-label">Idioma e formato</p>
+
+          <div class="cfg-form-group">
+            <label class="cfg-form-label">Fuso horário</label>
+            <select class="cfg-form-control" id="fusoHorario">
+              <option value="-3" selected>(UTC-3) Brasília</option>
+              <option value="-5">(UTC-5) Nova York</option>
+              <option value="0">(UTC) Londres</option>
+              <option value="1">(UTC+1) Berlim</option>
+            </select>
+          </div>
+
+          <button class="cfg-btn cfg-btn-primary" onclick="salvarAparencia()">
+            <i class="bi bi-check-lg"></i> Salvar preferências
+          </button>
+        </div>
+
+      </div>
+
+      <!-- ===== SEÇÃO: INTEGRAÇÕES ===== -->
+      <div class="cfg-section" id="section-integracoes">
+
+        <div class="cfg-card">
+          <div class="cfg-card-title"><i class="bi bi-diagram-3"></i> Integrações</div>
+          <p class="cfg-card-subtitle">Serviços externos conectados à sua conta</p>
+
+          <p class="cfg-group-label">Carbonio Webmail</p>
+
+          <div class="cfg-integ-card">
+            <div class="cfg-integ-icon"><i class="bi bi-calendar2-event-fill"></i></div>
+            <div style="flex:1">
+              <div class="cfg-integ-name">Carbonio — Agenda</div>
+              <div class="cfg-integ-status" id="carbonioStatus">Verificando...</div>
+            </div>
+            <div id="carbonioAcao"></div>
+          </div>
+
+          <p class="cfg-form-hint" style="margin-top:8px">
+            <i class="bi bi-info-circle"></i>
+            A conexão com o Carbonio é feita diretamente na página de Agenda com seu e-mail e senha do webmail.
+          </p>
+        </div>
+
+        <div class="cfg-card">
+          <p class="cfg-group-label">Módulos ativos</p>
+          <div id="modulosAtivos"></div>
+        </div>
+
+      </div>
+
+    </div><!-- /cfg-main -->
+  </main>
+
+</div><!-- /cfg-wrapper -->
+
+<script src="/SistemaCPE/web/assests/js/api.js"></script>
+
+<script>
+  // ============================================================
+  // ESTADO
+  // ============================================================
+  let currentUser = null;
+
+  // ============================================================
+  // BOOT
+  // ============================================================
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      currentUser = JSON.parse(localStorage.getItem('cpe_user') || 'null');
+      if (!currentUser?.id) { window.location.href = '/SistemaCPE/web/login.html'; return; }
+
+      document.getElementById('cfgLoading').style.display = 'none';
+      document.getElementById('cfgApp').style.display     = 'flex';
+
+      await carregarPerfil();
+      carregarPreferencias();
+      verificarCarbonio();
+      carregarModulos();
+    } catch (err) {
+      console.error('[SETTINGS] boot error:', err);
+    }
+  });
+
+  // ============================================================
+  // SIDEBAR TOGGLE
+  // ============================================================
+  function toggleSidebar() {
+    const sidebar = document.getElementById('cfgSidebar');
+    const content = document.getElementById('cfgContent');
+    const icon    = document.getElementById('cfgToggleIcon');
+    sidebar.classList.toggle('collapsed');
+    content.classList.toggle('sidebar-collapsed');
+    icon.className = sidebar.classList.contains('collapsed')
+      ? 'bi bi-layout-sidebar'
+      : 'bi bi-layout-sidebar-reverse';
+  }
+
+  // ============================================================
+  // NAVEGAÇÃO
+  // ============================================================
+  const SECTION_TITLES = {
+    perfil:       'Perfil',
+    seguranca:    'Segurança',
+    notificacoes: 'Notificações',
+    aparencia:    'Aparência',
+    integracoes:  'Integrações',
+  };
+
+  function showSection(name) {
+    document.querySelectorAll('.cfg-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.cfg-nav-item').forEach(i => i.classList.remove('active'));
+
+    document.getElementById('section-' + name).classList.add('active');
+    document.querySelector(`.cfg-nav-item[data-section="${name}"]`).classList.add('active');
+    document.getElementById('cfgTopbarTitle').textContent = SECTION_TITLES[name] || name;
+  }
+
+  // ============================================================
+  // TOAST
+  // ============================================================
+  function cfgToast(msg, tipo = 'success') {
+    const wrap = document.getElementById('cfgToast');
+    const el   = document.createElement('div');
+    el.className = `cfg-toast-item ${tipo}`;
+    el.textContent = msg;
+    wrap.appendChild(el);
+    setTimeout(() => el.remove(), 3500);
+  }
+
+  // ============================================================
+  // ALERT INLINE
+  // ============================================================
+  function showAlert(containerId, msg, tipo = 'danger') {
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    const icon = tipo === 'success' ? 'check-circle' : 'exclamation-circle';
+    el.innerHTML = `<div class="cfg-alert ${tipo}"><i class="bi bi-${icon}"></i>${msg}</div>`;
+    setTimeout(() => { el.innerHTML = ''; }, 4500);
+  }
+
+  // ============================================================
+  // PERFIL
+  // ============================================================
+  async function carregarPerfil() {
+    try {
+      const r = await fetch(`${API_BASE_URL}/api/users/${currentUser.id}`);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const u = await r.json();
+
+      currentUser = { ...currentUser, ...u };
+      localStorage.setItem('cpe_user', JSON.stringify(currentUser));
+
+      const iniciais = (u.name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+      document.getElementById('profileAvatar').textContent = iniciais;
+      document.getElementById('profileName').textContent   = u.name  || '—';
+      document.getElementById('profileEmail').textContent  = u.email || '—';
+      document.getElementById('profileRole').textContent   = traduzirRole(u.role);
+
+      document.getElementById('perfNome').value     = u.name     || '';
+      document.getElementById('perfEmail').value    = u.email    || '';
+      document.getElementById('perfUsername').value = u.username || '';
+    } catch (err) {
+      showAlert('perfilAlert', 'Erro ao carregar perfil: ' + err.message);
+    }
+  }
+
+  function traduzirRole(role) {
+    const mapa = { ADMIN: 'Administrador', TI: 'TI', USER: 'Usuário', RESPONSAVEL_GRUPO: 'Responsável de Grupo' };
+    return mapa[role] || role || '—';
+  }
+
+  async function salvarPerfil() {
+    const nome  = document.getElementById('perfNome').value.trim();
+    const email = document.getElementById('perfEmail').value.trim();
+
+    if (!nome || !email) { showAlert('perfilAlert', 'Nome e e-mail são obrigatórios.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showAlert('perfilAlert', 'E-mail inválido.'); return; }
+
+    const btn = document.getElementById('btnSalvarPerfil');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+
+    try {
+      const r = await fetch(`${API_BASE_URL}/api/users/${currentUser.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: nome, email }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || 'HTTP ' + r.status);
+
+      currentUser.name  = data.name;
+      currentUser.email = data.email;
+      localStorage.setItem('cpe_user', JSON.stringify(currentUser));
+
+      await carregarPerfil();
+      cfgToast('Perfil atualizado com sucesso!');
+    } catch (err) {
+      showAlert('perfilAlert', 'Erro ao salvar: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check-lg"></i> Salvar alterações';
+    }
+  }
+
+  // ============================================================
+  // SEGURANÇA — SENHA
+  // ============================================================
+  function avaliarSenha() {
+    const val = document.getElementById('senhaNova').value;
+    const bar = document.getElementById('pwdStrength');
+    const lbl = document.getElementById('pwdLabel');
+    if (!val) { bar.style.display = 'none'; lbl.textContent = ''; return; }
+    bar.style.display = 'block';
+    let forca = 0;
+    if (val.length >= 8)        forca++;
+    if (/[A-Z]/.test(val))      forca++;
+    if (/[0-9]/.test(val))      forca++;
+    if (/[^A-Za-z0-9]/.test(val)) forca++;
+    const niveis = [
+      { cls: 'fraca', txt: 'Senha fraca',  cor: '#ef4444' },
+      { cls: 'fraca', txt: 'Senha fraca',  cor: '#ef4444' },
+      { cls: 'media', txt: 'Senha média',  cor: '#f59e0b' },
+      { cls: 'forte', txt: 'Senha forte',  cor: '#22c55e' },
+      { cls: 'forte', txt: 'Senha forte',  cor: '#22c55e' },
+    ];
+    bar.className   = 'cfg-pwd-bar ' + niveis[forca].cls;
+    lbl.textContent = niveis[forca].txt;
+    lbl.style.color = niveis[forca].cor;
+  }
+
+  async function alterarSenha() {
+    const atual    = document.getElementById('senhaAtual').value;
+    const nova     = document.getElementById('senhaNova').value;
+    const confirma = document.getElementById('senhaConfirm').value;
+
+    if (!atual || !nova || !confirma) { showAlert('segAlert', 'Preencha todos os campos.'); return; }
+    if (nova.length < 8)              { showAlert('segAlert', 'A nova senha deve ter no mínimo 8 caracteres.'); return; }
+    if (nova !== confirma)            { showAlert('segAlert', 'As senhas não coincidem.'); return; }
+
+    const btn = document.getElementById('btnAlterarSenha');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Alterando...';
+
+    try {
+      const r = await fetch(`${API_BASE_URL}/api/users/${currentUser.id}/senha`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senha_atual: atual, senha_nova: nova }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.detail || 'HTTP ' + r.status);
+
+      ['senhaAtual','senhaNova','senhaConfirm'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('pwdStrength').style.display = 'none';
+      document.getElementById('pwdLabel').textContent = '';
+
+      cfgToast('Senha alterada com sucesso!');
+    } catch (err) {
+      showAlert('segAlert', 'Erro: ' + err.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-shield-check"></i> Alterar senha';
+    }
+  }
+
+  // ============================================================
+  // NOTIFICAÇÕES (localStorage)
+  // ============================================================
+  const NOTIF_KEY = 'cpe_notif_prefs';
+
+  function carregarPreferencias() {
+    const prefs = JSON.parse(localStorage.getItem(NOTIF_KEY) || '{}');
+    ['notifTickets','notifReunioes','notifAgenda','notifCompart','notifTarefas'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.checked = prefs[id] !== false;
     });
-  </script>
 
-  <!-- ============================================================ -->
-  <!-- 🔧 FUNÇÕES DA PÁGINA -->
-  <!-- ============================================================ -->
-  <script>
-    // ===== DADOS DO USUÁRIO =====
-    let currentUser = {
-      name: "João Daniel",
-      email: "joao.daniel@empresa.com",
-      role: "Administrador",
-      phone: "",
-      department: "Tecnologia"
+    const aparencia = JSON.parse(localStorage.getItem('cpe_aparencia') || '{}');
+    const sidebarEl = document.getElementById('sidebarCompacta');
+    const animEl    = document.getElementById('animacoesReduzidas');
+    const fusoEl    = document.getElementById('fusoHorario');
+    if (sidebarEl) sidebarEl.checked = !!aparencia.sidebarCompacta;
+    if (animEl)    animEl.checked    = !!aparencia.animacoesReduzidas;
+    if (fusoEl && aparencia.fusoHorario) fusoEl.value = aparencia.fusoHorario;
+  }
+
+  function salvarNotificacoes() {
+    const prefs = {};
+    ['notifTickets','notifReunioes','notifAgenda','notifCompart','notifTarefas'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) prefs[id] = el.checked;
+    });
+    localStorage.setItem(NOTIF_KEY, JSON.stringify(prefs));
+    cfgToast('Preferências de notificações salvas!');
+  }
+
+  // ============================================================
+  // APARÊNCIA (localStorage)
+  // ============================================================
+  function salvarAparencia() {
+    const aparencia = {
+      sidebarCompacta:    document.getElementById('sidebarCompacta').checked,
+      animacoesReduzidas: document.getElementById('animacoesReduzidas').checked,
+      fusoHorario:        document.getElementById('fusoHorario').value,
     };
+    localStorage.setItem('cpe_aparencia', JSON.stringify(aparencia));
+    cfgToast('Preferências de aparência salvas!');
+  }
 
-    /**
-     * ✅ Carrega as configurações
-     */
-    async function loadSettings() {
-      console.log("\n[SETTINGS/LOAD] ⚙️ Carregando configurações do usuário...");
-
-      try {
-        const initials = currentUser.name
-          ?.split(' ')
-          .map(n => n.charAt(0))
-          .join('')
-          .toUpperCase() || 'JD';
-
-        document.getElementById("profileName").textContent = currentUser.name;
-        document.getElementById("profileEmail").textContent = currentUser.email;
-        document.getElementById("profileRole").textContent = currentUser.role;
-        document.getElementById("profileAvatar").textContent = initials;
-
-        document.getElementById("fullName").value = currentUser.name;
-        document.getElementById("email").value = currentUser.email;
-        document.getElementById("phone").value = currentUser.phone || "";
-        document.getElementById("department").value = currentUser.department;
-
-        console.log("[SETTINGS/LOAD] ✓ Configurações carregadas");
-        console.log("[SETTINGS/LOAD] ├─ Usuário:", currentUser.name);
-        console.log("[SETTINGS/LOAD] ├─ E-mail:", currentUser.email);
-        console.log("[SETTINGS/LOAD] └─ Função:", currentUser.role);
-        console.log("[SETTINGS/LOAD] ✅ Tudo pronto\n");
-
-      } catch (err) {
-        console.error("[SETTINGS/LOAD] ✗ Erro:", err.message);
-        showAlert("Erro ao carregar configurações: " + err.message, "danger");
-      }
-    }
-
-    /**
-     * ✅ Alterna entre as abas de configurações
-     */
-    function switchSettingsTab(tab, event) {
-      event.preventDefault();
-      console.log("[SETTINGS/TAB] 📑 Alternando para aba:", tab);
-
-      document.querySelectorAll(".settings-section").forEach(section => {
-        section.classList.remove("active");
-      });
-
-      document.querySelectorAll(".settings-menu-link").forEach(link => {
-        link.classList.remove("active");
-      });
-
-      document.getElementById(tab + "-section").classList.add("active");
-      event.target.closest(".settings-menu-link").classList.add("active");
-
-      console.log("[SETTINGS/TAB] ✓ Aba alterada para:", tab);
-    }
-
-    /**
-     * ✅ Mostra mensagem de alerta
-     */
-    function showAlert(message, type = "danger") {
-      console.log(`[SETTINGS/ALERT] ${type === 'success' ? '✅' : '❌'} ${message}`);
-
-      if (type === "success") {
-        const successBox = document.getElementById("successBox");
-        const successMessage = document.getElementById("successMessage");
-        if (successBox && successMessage) {
-          successMessage.textContent = message;
-          successBox.classList.remove("d-none");
-          setTimeout(() => {
-            successBox.classList.add("d-none");
-          }, 4000);
-        }
+  // ============================================================
+  // INTEGRAÇÕES — CARBONIO
+  // ============================================================
+  async function verificarCarbonio() {
+    const statusEl = document.getElementById('carbonioStatus');
+    const acaoEl   = document.getElementById('carbonioAcao');
+    if (!statusEl) return;
+    try {
+      const r = await fetch(`${API_BASE_URL}/api/agenda/status?usuario_id=${currentUser.id}`);
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+      if (data.conectado) {
+        statusEl.className = 'cfg-integ-status connected';
+        statusEl.innerHTML = `<i class="bi bi-check-circle-fill"></i> Conectado como ${data.email}`;
+        acaoEl.innerHTML   = `<a href="/SistemaCPE/web/pages/agenda.html" class="cfg-btn cfg-btn-secondary" style="font-size:12px;padding:6px 12px"><i class="bi bi-box-arrow-up-right"></i> Abrir agenda</a>`;
       } else {
-        const alertBox = document.getElementById("alertBox");
-        const alertMessage = document.getElementById("alertMessage");
-        if (alertBox && alertMessage) {
-          alertMessage.textContent = message;
-          alertBox.classList.remove("d-none");
-
-          if (type === "warning") {
-            alertBox.classList.remove("alert-danger", "alert-info");
-            alertBox.classList.add("alert-warning");
-          } else if (type === "info") {
-            alertBox.classList.remove("alert-danger", "alert-warning");
-            alertBox.classList.add("alert-info");
-          } else {
-            alertBox.classList.remove("alert-warning", "alert-info");
-            alertBox.classList.add("alert-danger");
-          }
-
-          setTimeout(() => {
-            alertBox.classList.add("d-none");
-          }, 4000);
-        }
+        statusEl.className = 'cfg-integ-status offline';
+        statusEl.innerHTML = '<i class="bi bi-exclamation-circle"></i> Não conectado';
+        acaoEl.innerHTML   = `<a href="/SistemaCPE/web/pages/agenda.html" class="cfg-btn cfg-btn-primary" style="font-size:12px;padding:6px 12px"><i class="bi bi-link"></i> Conectar</a>`;
       }
+    } catch {
+      statusEl.textContent = 'Não foi possível verificar';
     }
+  }
 
-    /**
-     * ✅ Salva alterações de perfil
-     */
-    function saveProfile() {
-      console.log("[SETTINGS/SAVE] 💾 Salvando perfil...");
-
-      const fullName = document.getElementById("fullName").value?.trim();
-      const email = document.getElementById("email").value?.trim();
-      const phone = document.getElementById("phone").value?.trim();
-      const department = document.getElementById("department").value;
-
-      if (!fullName || !email) {
-        console.warn("[SETTINGS/SAVE] ⚠️ Campos obrigatórios não preenchidos");
-        showAlert("Preencha todos os campos obrigatórios (Nome e E-mail)", "danger");
-        return;
-      }
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        console.warn("[SETTINGS/SAVE] ⚠️ E-mail inválido");
-        showAlert("E-mail inválido! Digite um e-mail válido.", "danger");
-        return;
-      }
-
-      try {
-        currentUser.name = fullName;
-        currentUser.email = email;
-        currentUser.phone = phone;
-        currentUser.department = department;
-
-        console.log("[SETTINGS/SAVE] ✓ Perfil atualizado");
-        console.log("[SETTINGS/SAVE] ├─ Nome:", fullName);
-        console.log("[SETTINGS/SAVE] ├─ E-mail:", email);
-        console.log("[SETTINGS/SAVE] └─ Departamento:", department);
-
-        showAlert("Perfil atualizado com sucesso!", "success");
-        loadSettings();
-
-      } catch (err) {
-        console.error("[SETTINGS/SAVE] ✗ Erro:", err.message);
-        showAlert("Erro ao salvar perfil: " + err.message, "danger");
-      }
-    }
-
-    /**
-     * ✅ Altera avatar
-     */
-    function changeAvatar() {
-      console.log("[SETTINGS/PROFILE] 🖼️ Alterando avatar...");
-      showAlert("Funcionalidade de alteração de avatar em desenvolvimento", "info");
-    }
-
-    /**
-     * ✅ Salva preferências de notificações
-     */
-    function saveNotifications() {
-      console.log("[SETTINGS/SAVE] 📬 Salvando preferências de notificações...");
-
-      try {
-        const emailTickets = document.querySelector('[data-setting="emailTickets"]')?.checked || false;
-        const emailProjects = document.querySelector('[data-setting="emailProjects"]')?.checked || false;
-        const emailTasks = document.querySelector('[data-setting="emailTasks"]')?.checked || false;
-        const browserNotif = document.querySelector('[data-setting="browserNotifications"]')?.checked || false;
-        const sound = document.querySelector('[data-setting="notificationSound"]')?.checked || false;
-
-        console.log("[SETTINGS/SAVE] ✓ Notificações salvas:");
-        console.log("[SETTINGS/SAVE] ├─ E-mail Tickets:", emailTickets);
-        console.log("[SETTINGS/SAVE] ├─ E-mail Projetos:", emailProjects);
-        console.log("[SETTINGS/SAVE] ├─ E-mail Tarefas:", emailTasks);
-        console.log("[SETTINGS/SAVE] ├─ Notificador Navegador:", browserNotif);
-        console.log("[SETTINGS/SAVE] └─ Som:", sound);
-
-        showAlert("Preferências de notificações atualizadas com sucesso!", "success");
-
-      } catch (err) {
-        console.error("[SETTINGS/SAVE] ✗ Erro:", err.message);
-        showAlert("Erro ao salvar notificações: " + err.message, "danger");
-      }
-    }
-
-    /**
-     * ✅ Altera a senha
-     */
-    function changePassword() {
-      console.log("[SETTINGS/SECURITY] 🔐 Alterando senha...");
-
-      const currentPassword = document.getElementById("currentPassword").value?.trim();
-      const newPassword = document.getElementById("newPassword").value?.trim();
-      const confirmPassword = document.getElementById("confirmPassword").value?.trim();
-
-      if (!currentPassword || !newPassword || !confirmPassword) {
-        console.warn("[SETTINGS/SECURITY] ⚠️ Todos os campos de senha são obrigatórios");
-        showAlert("Preencha todos os campos de senha", "danger");
-        return;
-      }
-
-      if (newPassword !== confirmPassword) {
-        console.warn("[SETTINGS/SECURITY] ⚠️ Senhas não conferem");
-        showAlert("As senhas não conferem. Tente novamente.", "danger");
-        return;
-      }
-
-      if (newPassword.length < 8) {
-        console.warn("[SETTINGS/SECURITY] ⚠️ Senha muito curta");
-        showAlert("A nova senha deve ter no mínimo 8 caracteres", "danger");
-        return;
-      }
-
-      try {
-        console.log("[SETTINGS/SECURITY] ✓ Senha alterada com sucesso");
-        document.getElementById("currentPassword").value = "";
-        document.getElementById("newPassword").value = "";
-        document.getElementById("confirmPassword").value = "";
-        showAlert("Senha alterada com sucesso!", "success");
-
-      } catch (err) {
-        console.error("[SETTINGS/SECURITY] ✗ Erro:", err.message);
-        showAlert("Erro ao alterar senha: " + err.message, "danger");
-      }
-    }
-
-    /**
-     * ✅ Salva preferências de aparência
-     */
-    function saveAppearance() {
-      console.log("[SETTINGS/SAVE] 🎨 Salvando preferências de aparência...");
-
-      try {
-        const darkMode = document.getElementById("darkModeToggle").checked;
-        const compactMode = document.getElementById("compactModeToggle").checked;
-        const language = document.getElementById("languageSelect").value;
-        const timezone = document.getElementById("timezoneSelect").value;
-        const dateFormat = document.getElementById("dateFormatSelect").value;
-
-        console.log("[SETTINGS/SAVE] ✓ Aparência salva:");
-        console.log("[SETTINGS/SAVE] ├─ Modo Escuro:", darkMode);
-        console.log("[SETTINGS/SAVE] ├─ Modo Compacto:", compactMode);
-        console.log("[SETTINGS/SAVE] ├─ Idioma:", language);
-        console.log("[SETTINGS/SAVE] ├─ Fuso Horário:", timezone);
-        console.log("[SETTINGS/SAVE] └─ Formato Data:", dateFormat);
-
-        showAlert("Preferências de aparência atualizadas com sucesso!", "success");
-
-      } catch (err) {
-        console.error("[SETTINGS/SAVE] ✗ Erro:", err.message);
-        showAlert("Erro ao salvar aparência: " + err.message, "danger");
-      }
-    }
-
-    /**
-     * ✅ Encerra outras sessões
-     */
-    function logoutAllSessions() {
-      console.log("[SETTINGS/SECURITY] 🚪 Encerrando outras sessões...");
-      if (!confirm("Isso encerrará sua conta em todos os outros dispositivos. Continuar?")) {
-        console.log("[SETTINGS/SECURITY] ⏭️ Operação cancelada pelo usuário");
-        return;
-      }
-      showAlert("Todas as outras sessões foram encerradas com sucesso!", "success");
-    }
-
-    /**
-     * ✅ Conecta serviço de integração
-     */
-    function connectService(service) {
-      console.log("[SETTINGS/INTEGRATIONS] 🔗 Conectando serviço:", service);
-      showAlert(`Integração com ${service} em desenvolvimento`, "info");
-    }
-
-    /**
-     * ✅ Desconecta serviço de integração
-     */
-    function disconnectService(service) {
-      console.log("[SETTINGS/INTEGRATIONS] 🔌 Desconectando serviço:", service);
-      if (!confirm("Desconectar este serviço?")) {
-        console.log("[SETTINGS/INTEGRATIONS] ⏭️ Operação cancelada");
-        return;
-      }
-      showAlert(`Serviço ${service} desconectado com sucesso!`, "success");
-    }
-
-    /**
-     * ✅ Altera plano de faturamento
-     */
-    function changePlan() {
-      console.log("[SETTINGS/BILLING] 💳 Alterando plano...");
-      showAlert("Redirecionando para página de planos...", "info");
-    }
-
-    /**
-     * ✅ Edita método de pagamento
-     */
-    function editPaymentMethod() {
-      console.log("[SETTINGS/BILLING] 💳 Editando método de pagamento...");
-      showAlert("Redirecionando para atualizar cartão...", "info");
-    }
-
-    /**
-     * ✅ Baixa recibos
-     */
-    function downloadReceipts() {
-      console.log("[SETTINGS/BILLING] 📥 Baixando recibos...");
-      showAlert("Recibos foram baixados com sucesso!", "success");
-    }
-
-    /**
-     * ✅ Baixa fatura
-     */
-    function downloadInvoice() {
-      console.log("[SETTINGS/BILLING] 📄 Baixando fatura...");
-      showAlert("Fatura foi baixada com sucesso!", "success");
-    }
-
-    /**
-     * ✅ Gera chave de API
-     */
-    function generateApiKey() {
-      console.log("[SETTINGS/ADVANCED] 🔑 Gerando chave de API...");
-      const apiKey = "sk_live_" + Math.random().toString(36).substr(2, 24).toUpperCase();
-      showAlert(`Chave de API gerada: ${apiKey}`, "success");
-      console.log("[SETTINGS/ADVANCED] ✓ Chave:", apiKey);
-    }
-
-    /**
-     * ✅ Exporta dados do usuário
-     */
-    function exportData() {
-      console.log("[SETTINGS/ADVANCED] 📦 Exportando dados...");
-      showAlert("Seus dados estão sendo preparados para download. Você receberá um e-mail em breve!", "success");
-    }
-
-    /**
-     * ✅ Deleta conta do usuário
-     */
-    function deleteAccount() {
-      console.log("[SETTINGS/ADVANCED] 🗑️ Deletando conta...");
-      if (!confirm("Tem certeza? Esta ação é PERMANENTE e não pode ser desfeita!")) {
-        console.log("[SETTINGS/ADVANCED] ⏭️ Deleção cancelada");
-        return;
-      }
-      showAlert("Funcionalidade desativada para proteção de dados", "danger");
-      console.log("[SETTINGS/ADVANCED] ⛔ Deleção bloqueada por segurança");
-    }
-
-    /**
-     * ✅ Event Listeners - 2FA Toggle
-     */
-    document.addEventListener("DOMContentLoaded", () => {
-      console.log("[SETTINGS/EVENTS] 🎯 Inicializando event listeners...");
-
-      const twoFactorToggle = document.getElementById("twoFactorToggle");
-      if (twoFactorToggle) {
-        twoFactorToggle.addEventListener("change", (e) => {
-          console.log("[SETTINGS/SECURITY] 🔑 2FA toggled:", e.target.checked);
-          const status = e.target.checked ? "habilitada" : "desabilitada";
-          showAlert(`Autenticação de duas etapas ${status}`, "success");
-        });
-      }
-
-      console.log("[SETTINGS/EVENTS] ✓ Event listeners configurados");
-    });
-
-    console.log("[SETTINGS] ✅ Script carregado sem autenticação");
-  </script>
-
+  function carregarModulos() {
+    const modulos = [
+      { nome: 'Tickets & Suporte', icone: 'ticket-detailed', href: '/SistemaCPE/web/pages/tickets.html' },
+      { nome: 'Recepção',          icone: 'building',        href: '/SistemaCPE/web/pages/recepcao.html' },
+      { nome: 'Agenda',            icone: 'calendar2-week',  href: '/SistemaCPE/web/pages/agenda.html' },
+      { nome: 'Frotas',            icone: 'truck',           href: '/SistemaCPE/web/pages/fleet.html' },
+      { nome: 'Cofre de Senhas',   icone: 'shield-lock',     href: '/SistemaCPE/web/pages/cofre.html' },
+    ];
+    document.getElementById('modulosAtivos').innerHTML = modulos.map(m => `
+      <div class="cfg-integ-card">
+        <div class="cfg-integ-icon"><i class="bi bi-${m.icone}"></i></div>
+        <div style="flex:1">
+          <div class="cfg-integ-name">${m.nome}</div>
+          <div class="cfg-integ-status connected"><i class="bi bi-check-circle-fill"></i> Ativo</div>
+        </div>
+        <a href="${m.href}" class="cfg-btn cfg-btn-secondary" style="font-size:12px;padding:6px 12px">
+          <i class="bi bi-box-arrow-up-right"></i> Acessar
+        </a>
+      </div>`).join('');
+  }
+</script>
 </body>
-
 </html>
