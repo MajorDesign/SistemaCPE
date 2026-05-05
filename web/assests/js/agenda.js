@@ -12,10 +12,19 @@ const API = {
   status:        API_HOST + '/api/agenda/status',
   login:         API_HOST + '/api/agenda/login',
   logout:        API_HOST + '/api/agenda/logout',
-  eventos:       API_HOST + '/api/agenda/eventos',          // GET lista | POST cria
+  eventos:       API_HOST + '/api/agenda/eventos',
   detalhes:      (id) => `${API_HOST}/api/agenda/eventos/${encodeURIComponent(id)}/detalhes`,
   reenviar:      (id) => `${API_HOST}/api/agenda/eventos/${encodeURIComponent(id)}/reenviar`,
   notificacoes:  API_HOST + '/api/notificacoes',
+  // Compartilhamento
+  usuariosBuscar:        API_HOST + '/api/agenda/usuarios/buscar',
+  compartSolicitar:      API_HOST + '/api/agenda/compartilhar/solicitar',
+  compartPendentes:      API_HOST + '/api/agenda/compartilhar/pendentes',
+  compartResponder:      (id) => `${API_HOST}/api/agenda/compartilhar/${id}/responder`,
+  compartMeus:           API_HOST + '/api/agenda/compartilhar/meus',
+  compartGerenciar:      API_HOST + '/api/agenda/compartilhar/gerenciar',
+  compartRevogar:        (id) => `${API_HOST}/api/agenda/compartilhar/${id}`,
+  compartEventos:        (donoId) => `${API_HOST}/api/agenda/compartilhar/eventos/${donoId}`,
 };
 
 let currentUser = null;
@@ -80,6 +89,10 @@ function showSection(sec) {
 
   if (sec === 'proximos') renderProximos();
   if (sec === 'calendario' && calendar) calendar.render();
+  if (sec === 'compartilhadas') carregarCompartilhadas();
+
+  const titulos = { calendario: 'Calendário', proximos: 'Próximos 7 dias', compartilhadas: 'Agendas Compartilhadas' };
+  $('topbarTitle').textContent = titulos[sec] || sec;
 }
 
 /* =============================================================
@@ -105,6 +118,7 @@ async function bootAgenda() {
 
   // Sino de notificações começa a polar imediatamente
   iniciarSino();
+  verificarPendentesCompart();
 
   // Verifica se já está conectado. Só inicializa o calendário se sim;
   // caso contrário, abre o modal de login e espera o usuário se conectar.
@@ -789,6 +803,399 @@ function iniciarSino() {
       panel.classList.remove('show');
     }
   });
+}
+
+/* =============================================================
+   COMPARTILHAMENTO DE AGENDA
+   ============================================================= */
+let _compartTab = 'vejo';
+let _compartDonoAtual = null;  // { id, nome } do dono sendo visualizado
+let _compartSemanaOffset = 0;  // semanas a partir de hoje
+let _buscarDebounce = null;
+
+function switchCompartTab(tab) {
+  _compartTab = tab;
+  $('tab-vejo').classList.toggle('active', tab === 'vejo');
+  $('tab-minha').classList.toggle('active', tab === 'minha');
+  $('painel-vejo').style.display  = tab === 'vejo'  ? '' : 'none';
+  $('painel-minha').style.display = tab === 'minha' ? '' : 'none';
+  if (tab === 'minha') carregarMinhaAgenda();
+  else carregarVejo();
+}
+
+async function carregarCompartilhadas() {
+  switchCompartTab(_compartTab);
+}
+
+async function verificarPendentesCompart() {
+  if (!currentUser?.id) return;
+  try {
+    const r = await fetch(`${API.compartPendentes}?usuario_id=${currentUser.id}`);
+    if (!r.ok) return;
+    const data = await r.json();
+    const n = (data.pendentes || []).length;
+    const badge = $('badgePendentes');
+    const badgeMinha = $('badgeMinha');
+    if (n > 0) {
+      badge.textContent = n; badge.classList.remove('d-none');
+      badgeMinha.textContent = n; badgeMinha.classList.remove('d-none');
+    } else {
+      badge.classList.add('d-none');
+      badgeMinha.classList.add('d-none');
+    }
+  } catch (_) {}
+}
+
+async function carregarVejo() {
+  const wrap = $('compartListaVejo');
+  wrap.innerHTML = '<div class="agenda-empty"><i class="bi bi-hourglass-split"></i><p>Carregando...</p></div>';
+  try {
+    const r = await fetch(`${API.compartMeus}?usuario_id=${currentUser.id}`);
+    const data = await r.json();
+    const lista = data.compartilhamentos || [];
+
+    const aceitos   = lista.filter(c => c.status === 'aceito');
+    const pendentes = lista.filter(c => c.status === 'pendente');
+    const recusados = lista.filter(c => c.status === 'recusado');
+
+    if (!lista.length) {
+      wrap.innerHTML = `
+        <div class="agenda-empty">
+          <i class="bi bi-people" style="font-size:40px;color:#ccc"></i>
+          <p>Você ainda não tem acesso a nenhuma agenda compartilhada.</p>
+          <button class="btn-agenda btn-agenda-primary mt-2" onclick="abrirSolicitarAcesso()">
+            <i class="bi bi-person-plus-fill"></i> Solicitar acesso
+          </button>
+        </div>`;
+      return;
+    }
+
+    let html = '';
+
+    if (aceitos.length) {
+      html += `<div class="compart-grupo-titulo"><i class="bi bi-check-circle-fill" style="color:#22C55E"></i> Com acesso</div>`;
+      html += aceitos.map(c => `
+        <div class="compart-card">
+          <div class="compart-avatar">${escHtml((c.dono_nome || '?')[0].toUpperCase())}</div>
+          <div class="compart-info">
+            <div class="compart-nome">${escHtml(c.dono_nome)}</div>
+            <div class="compart-email">${escHtml(c.dono_carbonio_email || c.dono_email)}</div>
+          </div>
+          <div class="compart-acoes">
+            <button class="btn-agenda btn-agenda-secondary btn-sm" onclick="abrirAgendaCompart(${c.dono_id},'${escHtml(c.dono_nome)}')">
+              <i class="bi bi-eye"></i> Ver agenda
+            </button>
+            <button class="btn-compart-revogar" onclick="revogarCompart(${c.id},'${escHtml(c.dono_nome)}')" title="Cancelar acesso">
+              <i class="bi bi-x-circle"></i>
+            </button>
+          </div>
+        </div>`).join('');
+    }
+
+    if (pendentes.length) {
+      html += `<div class="compart-grupo-titulo" style="margin-top:20px"><i class="bi bi-hourglass-split" style="color:#F59E0B"></i> Aguardando resposta</div>`;
+      html += pendentes.map(c => `
+        <div class="compart-card compart-card-pendente">
+          <div class="compart-avatar" style="background:#F59E0B">${escHtml((c.dono_nome || '?')[0].toUpperCase())}</div>
+          <div class="compart-info">
+            <div class="compart-nome">${escHtml(c.dono_nome)}</div>
+            <div class="compart-email">${escHtml(c.dono_carbonio_email || c.dono_email)}</div>
+            <div class="compart-status-tag pendente">Solicitação enviada</div>
+          </div>
+          <button class="btn-compart-revogar" onclick="revogarCompart(${c.id},'${escHtml(c.dono_nome)}')" title="Cancelar solicitação">
+            <i class="bi bi-x-circle"></i>
+          </button>
+        </div>`).join('');
+    }
+
+    if (recusados.length) {
+      html += `<div class="compart-grupo-titulo" style="margin-top:20px"><i class="bi bi-x-circle-fill" style="color:#EF4444"></i> Recusadas</div>`;
+      html += recusados.map(c => `
+        <div class="compart-card compart-card-recusado">
+          <div class="compart-avatar" style="background:#9CA3AF">${escHtml((c.dono_nome || '?')[0].toUpperCase())}</div>
+          <div class="compart-info">
+            <div class="compart-nome">${escHtml(c.dono_nome)}</div>
+            <div class="compart-email">${escHtml(c.dono_email)}</div>
+            <div class="compart-status-tag recusado">Acesso recusado</div>
+          </div>
+          <button class="btn-compart-revogar" onclick="revogarCompart(${c.id},'${escHtml(c.dono_nome)}')" title="Remover">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>`).join('');
+    }
+
+    wrap.innerHTML = html;
+  } catch (err) {
+    wrap.innerHTML = `<div class="agenda-empty"><i class="bi bi-exclamation-triangle"></i><p>${escHtml(err.message)}</p></div>`;
+  }
+}
+
+async function carregarMinhaAgenda() {
+  const wrap = $('compartListaMinha');
+  wrap.innerHTML = '<div class="agenda-empty"><i class="bi bi-hourglass-split"></i><p>Carregando...</p></div>';
+  try {
+    const r = await fetch(`${API.compartGerenciar}?usuario_id=${currentUser.id}`);
+    const data = await r.json();
+    const lista = data.acessos || [];
+
+    if (!lista.length) {
+      wrap.innerHTML = `
+        <div class="agenda-empty">
+          <i class="bi bi-shield-lock" style="font-size:40px;color:#ccc"></i>
+          <p>Nenhum usuário solicitou acesso à sua agenda ainda.</p>
+        </div>`;
+      return;
+    }
+
+    const pendentes = lista.filter(c => c.status === 'pendente');
+    const aceitos   = lista.filter(c => c.status === 'aceito');
+    const recusados = lista.filter(c => c.status === 'recusado');
+
+    let html = '';
+
+    if (pendentes.length) {
+      html += `<div class="compart-grupo-titulo"><i class="bi bi-bell-fill" style="color:#FFC107"></i> Solicitações pendentes</div>`;
+      html += pendentes.map(c => `
+        <div class="compart-card compart-card-pendente">
+          <div class="compart-avatar" style="background:#FFC107;color:#1A1A1A">${escHtml((c.solicitante_nome || '?')[0].toUpperCase())}</div>
+          <div class="compart-info">
+            <div class="compart-nome">${escHtml(c.solicitante_nome)}</div>
+            <div class="compart-email">${escHtml(c.solicitante_email)}</div>
+          </div>
+          <div class="compart-acoes">
+            <button class="btn-agenda btn-agenda-primary btn-sm" onclick="responderCompart(${c.id}, true)">
+              <i class="bi bi-check-lg"></i> Aceitar
+            </button>
+            <button class="btn-agenda btn-sm" style="background:#EF4444;color:#fff" onclick="responderCompart(${c.id}, false)">
+              <i class="bi bi-x-lg"></i> Recusar
+            </button>
+          </div>
+        </div>`).join('');
+    }
+
+    if (aceitos.length) {
+      html += `<div class="compart-grupo-titulo" style="margin-top:20px"><i class="bi bi-check-circle-fill" style="color:#22C55E"></i> Com acesso à sua agenda</div>`;
+      html += aceitos.map(c => `
+        <div class="compart-card">
+          <div class="compart-avatar">${escHtml((c.solicitante_nome || '?')[0].toUpperCase())}</div>
+          <div class="compart-info">
+            <div class="compart-nome">${escHtml(c.solicitante_nome)}</div>
+            <div class="compart-email">${escHtml(c.solicitante_email)}</div>
+            <div class="compart-status-tag aceito">Acesso liberado</div>
+          </div>
+          <button class="btn-compart-revogar" onclick="revogarCompart(${c.id},'${escHtml(c.solicitante_nome)}')" title="Revogar acesso">
+            <i class="bi bi-shield-x"></i> Revogar
+          </button>
+        </div>`).join('');
+    }
+
+    if (recusados.length) {
+      html += `<div class="compart-grupo-titulo" style="margin-top:20px"><i class="bi bi-x-circle" style="color:#9CA3AF"></i> Recusados</div>`;
+      html += recusados.map(c => `
+        <div class="compart-card compart-card-recusado">
+          <div class="compart-avatar" style="background:#9CA3AF">${escHtml((c.solicitante_nome || '?')[0].toUpperCase())}</div>
+          <div class="compart-info">
+            <div class="compart-nome">${escHtml(c.solicitante_nome)}</div>
+            <div class="compart-email">${escHtml(c.solicitante_email)}</div>
+          </div>
+          <button class="btn-compart-revogar" onclick="revogarCompart(${c.id},'${escHtml(c.solicitante_nome)}')" title="Remover">
+            <i class="bi bi-trash"></i>
+          </button>
+        </div>`).join('');
+    }
+
+    wrap.innerHTML = html;
+    verificarPendentesCompart();
+  } catch (err) {
+    wrap.innerHTML = `<div class="agenda-empty"><i class="bi bi-exclamation-triangle"></i><p>${escHtml(err.message)}</p></div>`;
+  }
+}
+
+async function responderCompart(compId, aceitar) {
+  const acao = aceitar ? 'aceitar' : 'recusar';
+  if (!confirm(`Deseja ${acao} este acesso?`)) return;
+  try {
+    const r = await fetch(API.compartResponder(compId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario_id: currentUser.id, aceitar }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || 'HTTP ' + r.status);
+    toast(aceitar ? 'Acesso concedido.' : 'Solicitação recusada.', aceitar ? 'success' : 'info');
+    carregarMinhaAgenda();
+  } catch (err) {
+    toast('Erro: ' + err.message, 'error');
+  }
+}
+
+async function revogarCompart(compId, nome) {
+  if (!confirm(`Remover acesso de/para "${nome}"?`)) return;
+  try {
+    const r = await fetch(`${API.compartRevogar(compId)}?usuario_id=${currentUser.id}`, { method: 'DELETE' });
+    if (!r.ok && r.status !== 204) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.detail || 'HTTP ' + r.status);
+    }
+    toast('Acesso removido.', 'success');
+    carregarCompartilhadas();
+  } catch (err) {
+    toast('Erro: ' + err.message, 'error');
+  }
+}
+
+// ---- Solicitar acesso ----
+function abrirSolicitarAcesso() {
+  $('solicitarErr').classList.add('d-none');
+  $('solicitarBusca').value = '';
+  $('solicitarResultados').innerHTML = '';
+  bootstrap.Modal.getOrCreateInstance($('solicitarAcessoModal')).show();
+  setTimeout(() => $('solicitarBusca').focus(), 300);
+}
+
+function buscarUsuariosDebounce() {
+  clearTimeout(_buscarDebounce);
+  _buscarDebounce = setTimeout(buscarUsuarios, 400);
+}
+
+async function buscarUsuarios() {
+  const q = $('solicitarBusca').value.trim();
+  const res = $('solicitarResultados');
+  if (q.length < 2) { res.innerHTML = ''; return; }
+  res.innerHTML = '<div class="compart-busca-loading"><i class="bi bi-hourglass-split"></i> Buscando...</div>';
+  try {
+    const r = await fetch(`${API.usuariosBuscar}?q=${encodeURIComponent(q)}&usuario_id=${currentUser.id}`);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || 'HTTP ' + r.status);
+    const usuarios = data.usuarios || [];
+    if (!usuarios.length) {
+      res.innerHTML = '<div class="compart-busca-vazio">Nenhum usuário encontrado.</div>';
+      return;
+    }
+    res.innerHTML = usuarios.map(u => `
+      <div class="compart-busca-item">
+        <div class="compart-avatar compart-avatar-sm">${escHtml((u.name || u.email || '?')[0].toUpperCase())}</div>
+        <div class="compart-info">
+          <div class="compart-nome">${escHtml(u.name)}</div>
+          <div class="compart-email">${escHtml(u.carbonio_email || u.email)}</div>
+        </div>
+        <button class="btn-agenda btn-agenda-primary btn-sm" onclick="enviarSolicitacao(${u.id},'${escHtml(u.name)}')">
+          <i class="bi bi-send"></i> Solicitar
+        </button>
+      </div>`).join('');
+  } catch (err) {
+    res.innerHTML = `<div class="compart-busca-vazio text-danger">${escHtml(err.message)}</div>`;
+  }
+}
+
+async function enviarSolicitacao(donoId, nomeUsuario) {
+  const err = $('solicitarErr');
+  err.classList.add('d-none');
+  try {
+    const r = await fetch(API.compartSolicitar, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ solicitante_id: currentUser.id, dono_id: donoId }),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || 'HTTP ' + r.status);
+    bootstrap.Modal.getInstance($('solicitarAcessoModal'))?.hide();
+    limparBackdropsModal();
+    toast(`Solicitação enviada para ${nomeUsuario}. Aguarde a resposta.`, 'success');
+    carregarVejo();
+  } catch (e) {
+    err.textContent = e.message;
+    err.classList.remove('d-none');
+  }
+}
+
+// ---- Ver eventos de agenda compartilhada ----
+function abrirAgendaCompart(donoId, nomeUsuario) {
+  _compartDonoAtual = { id: donoId, nome: nomeUsuario };
+  _compartSemanaOffset = 0;
+  $('agendaCompartTitulo').innerHTML = `<i class="bi bi-calendar2-week"></i> Agenda de ${escHtml(nomeUsuario)}`;
+  bootstrap.Modal.getOrCreateInstance($('agendaCompartModal')).show();
+  carregarEventosCompart();
+}
+
+function navegarSemanaCompart(dir) {
+  if (dir === 0) _compartSemanaOffset = 0;
+  else _compartSemanaOffset += dir;
+  carregarEventosCompart();
+}
+
+async function carregarEventosCompart() {
+  if (!_compartDonoAtual) return;
+  const lista = $('compartEventosLista');
+  lista.innerHTML = '<div class="agenda-empty"><i class="bi bi-hourglass-split"></i><p>Carregando...</p></div>';
+
+  // Calcula início/fim da semana atual + offset
+  const hoje = new Date();
+  const diaSemana = hoje.getDay(); // 0=dom
+  const inicioSemana = new Date(hoje);
+  inicioSemana.setDate(hoje.getDate() - diaSemana + (_compartSemanaOffset * 7));
+  inicioSemana.setHours(0, 0, 0, 0);
+  const fimSemana = new Date(inicioSemana);
+  fimSemana.setDate(inicioSemana.getDate() + 6);
+  fimSemana.setHours(23, 59, 59, 999);
+
+  // Label da semana
+  const fmt = d => `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+  $('compartSemanaLabel').textContent = `${fmt(inicioSemana)} — ${fmt(fimSemana)}/${fimSemana.getFullYear()}`;
+
+  try {
+    const params = new URLSearchParams({
+      usuario_id: currentUser.id,
+      inicio: inicioSemana.toISOString(),
+      fim: fimSemana.toISOString(),
+    });
+    const r = await fetch(`${API.compartEventos(_compartDonoAtual.id)}?${params}`);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.detail || 'HTTP ' + r.status);
+
+    const eventos = (data.eventos || []).sort((a, b) => a.inicio_ms - b.inicio_ms);
+
+    if (!eventos.length) {
+      lista.innerHTML = `<div class="agenda-empty"><i class="bi bi-calendar2-x"></i><p>Sem compromissos nesta semana.</p></div>`;
+      return;
+    }
+
+    // Agrupa por dia
+    const grupos = {};
+    eventos.forEach(ev => {
+      const d = new Date(ev.inicio_ms);
+      const chave = diaIso(d);
+      if (!grupos[chave]) grupos[chave] = { data: d, items: [] };
+      grupos[chave].items.push(ev);
+    });
+
+    const agora = new Date();
+    lista.innerHTML = Object.values(grupos).map(g => {
+      const isHoje = diaIso(g.data) === diaIso(agora);
+      const label = isHoje ? 'Hoje' : nomeDia(g.data);
+      const dataPt = `${String(g.data.getDate()).padStart(2,'0')}/${String(g.data.getMonth()+1).padStart(2,'0')}`;
+      return `
+        <div class="agenda-list-day">${label} — ${dataPt}</div>
+        ${g.items.map(ev => `
+          <div class="agenda-list-item compart-evento-item">
+            <div class="agenda-list-time">
+              <div class="hora">${ev.all_day ? 'Dia todo' : fmtHora(ev.inicio_ms)}</div>
+              ${!ev.all_day ? `<div class="ate">até ${fmtHora(ev.fim_ms)}</div>` : ''}
+            </div>
+            <div class="agenda-list-info">
+              <div class="titulo">${escHtml(ev.titulo)}</div>
+              ${ev.local ? `<div class="meta"><span><i class="bi bi-geo-alt"></i> ${escHtml(ev.local)}</span></div>` : ''}
+            </div>
+            <span class="compart-privado-badge"><i class="bi bi-lock-fill"></i></span>
+          </div>`).join('')}`;
+    }).join('');
+  } catch (err) {
+    lista.innerHTML = `
+      <div class="agenda-empty">
+        <i class="bi bi-exclamation-triangle" style="color:#EF4444"></i>
+        <p>${escHtml(err.message)}</p>
+      </div>`;
+  }
 }
 
 /* =============================================================

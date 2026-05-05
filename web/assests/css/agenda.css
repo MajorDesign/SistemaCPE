@@ -530,3 +530,153 @@ body.agenda-body {
   .agenda-content { margin-left: 0; }
   .agenda-section-header { flex-direction: column; align-items: stretch; }
 }
+
+/* ============================================================
+   COMPARTILHAMENTO DE AGENDA
+   ============================================================ */
+
+/* Badge no nav */
+.agenda-nav-badge {
+  background: #EF4444;
+  color: #fff;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  margin-left: auto;
+}
+
+/* Tabs */
+.compart-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.compart-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border: 2px solid var(--agenda-border);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--agenda-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+}
+.compart-tab.active {
+  border-color: var(--agenda-primary);
+  color: var(--agenda-dark);
+  background: #fffbea;
+}
+.compart-tab-badge {
+  background: #EF4444;
+  color: #fff;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+}
+
+/* Cards de compartilhamento */
+.compart-grid { display: flex; flex-direction: column; gap: 10px; }
+.compart-grupo-titulo {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--agenda-muted);
+  letter-spacing: .5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  margin-top: 4px;
+}
+.compart-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid var(--agenda-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  transition: box-shadow .15s;
+}
+.compart-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.compart-card-pendente { border-left: 3px solid #F59E0B; }
+.compart-card-recusado { opacity: .65; }
+
+.compart-avatar {
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  background: var(--agenda-primary);
+  color: var(--agenda-dark);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700;
+  flex-shrink: 0;
+}
+.compart-avatar-sm { width: 34px; height: 34px; font-size: 14px; }
+
+.compart-info { flex: 1; min-width: 0; }
+.compart-nome { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.compart-email { font-size: 12px; color: var(--agenda-muted); }
+
+.compart-status-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-top: 3px;
+}
+.compart-status-tag.pendente { background: #FEF3C7; color: #92400E; }
+.compart-status-tag.aceito   { background: #DCFCE7; color: #166534; }
+.compart-status-tag.recusado { background: #FEE2E2; color: #991B1B; }
+
+.compart-acoes { display: flex; gap: 8px; align-items: center; }
+.btn-compart-revogar {
+  background: none;
+  border: 1px solid #E5E7EB;
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--agenda-muted);
+  cursor: pointer;
+  display: flex; align-items: center; gap: 4px;
+  transition: all .15s;
+}
+.btn-compart-revogar:hover { background: #FEE2E2; border-color: #EF4444; color: #EF4444; }
+
+/* Busca de usuários */
+.compart-busca-lista { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.compart-busca-loading, .compart-busca-vazio {
+  text-align: center; color: var(--agenda-muted); font-size: 13px; padding: 12px;
+}
+.compart-busca-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--agenda-border);
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+/* Eventos compartilhados */
+.compart-nav-semana {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.compart-evento-item { cursor: default; }
+.compart-evento-item:hover { background: #f9fafb; }
+
+.compart-privado-badge {
+  font-size: 11px;
+  color: var(--agenda-muted);
+  flex-shrink: 0;
+}
