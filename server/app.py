@@ -1114,6 +1114,20 @@ try:
     from routes.permissions import router as permissions_router
     app.include_router(permissions_router)
     logger.info("✅ Router de Permissões registrado: /api/permissions")
+
+    # Seeder + migrador (refatoração 2026-05-05) — roda no startup.
+    # Idempotentes: podem rodar em toda inicialização sem efeito colateral.
+    try:
+        from services.permission_seeder import seed_pages
+        from services.permission_migrator import migrate_legacy_page_permissions
+        result_seed = seed_pages()
+        logger.info(f"✅ Seeder de páginas: {result_seed}")
+        result_mig = migrate_legacy_page_permissions()
+        logger.info(f"✅ Migrador legacy: {result_mig}")
+    except Exception as seed_err:
+        logger.error(f"⚠️  Seeder/Migrador de permissões falhou: {seed_err}")
+        import traceback
+        logger.error(traceback.format_exc())
 except Exception as err:
     logger.error(f"❌ Erro ao registrar router de Permissões: {str(err)}")
 
@@ -1254,6 +1268,16 @@ try:
     logger.info("✅ Scheduler de Agenda iniciado (lembretes via sino)")
 except Exception as err:
     logger.error(f"❌ Erro ao registrar Agenda: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+# ✅ REGISTRAR ROUTER DE PRÉ-CADASTRO (auto-cadastro guiado)
+try:
+    from routes.pre_cadastro import router as pre_cadastro_router
+    app.include_router(pre_cadastro_router)
+    logger.info("✅ Router de Pré-cadastro registrado: /api/pre-cadastro")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar Pré-cadastro: {str(err)}")
     import traceback
     logger.error(traceback.format_exc())
 

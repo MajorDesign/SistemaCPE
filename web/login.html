@@ -13,6 +13,169 @@
   <!-- ✅ LINK DO LAYOUT.CSS -->
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
 
+  <!-- =========================================
+       MODAL DE PRIMEIRO ACESSO (auto-cadastro)
+       ========================================= -->
+  <style>
+    .fa-link {
+      display: block;
+      text-align: center;
+      margin-top: 16px;
+      color: #555;
+      font-size: 14px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      width: 100%;
+      padding: 8px;
+    }
+    .fa-link:hover { color: #FFA500; text-decoration: underline; }
+    .fa-link strong { color: #B45309; }
+
+    .fa-overlay {
+      position: fixed; inset: 0;
+      background: rgba(15, 23, 42, .65);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center; justify-content: center;
+      z-index: 9999;
+      padding: 16px;
+    }
+    .fa-overlay.show { display: flex; }
+
+    .fa-modal {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 24px 60px rgba(0,0,0,.25);
+      width: 100%;
+      max-width: 560px;
+      max-height: calc(100vh - 32px);
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      animation: faIn .25s ease;
+    }
+    @keyframes faIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    .fa-header {
+      background: linear-gradient(135deg, #FFC107 0%, #FFA500 100%);
+      padding: 20px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      color: #1A1A1A;
+    }
+    .fa-header h3 { margin: 0; font-size: 18px; font-weight: 700; }
+    .fa-header p  { margin: 4px 0 0; font-size: 13px; opacity: .85; }
+    .fa-close {
+      background: rgba(0,0,0,.1); border: none; color: #1A1A1A;
+      width: 32px; height: 32px; border-radius: 50%;
+      cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .fa-close:hover { background: rgba(0,0,0,.2); }
+
+    .fa-body { padding: 24px; overflow-y: auto; flex: 1; }
+
+    .fa-step { display: none; }
+    .fa-step.active { display: block; }
+
+    .fa-stepper { display: flex; gap: 8px; margin-bottom: 20px; }
+    .fa-stepper-item {
+      flex: 1; height: 4px; border-radius: 2px;
+      background: #E5E7EB;
+      transition: background .2s;
+    }
+    .fa-stepper-item.active { background: #FFC107; }
+    .fa-stepper-item.done   { background: #16A34A; }
+
+    .fa-field { margin-bottom: 16px; }
+    .fa-field label {
+      display: block; font-size: 13px; font-weight: 600;
+      color: #374151; margin-bottom: 6px;
+    }
+    .fa-field input, .fa-field select {
+      width: 100%; padding: 10px 14px;
+      border: 1.5px solid #E5E7EB; border-radius: 10px;
+      font-size: 14px; transition: border-color .15s;
+      background: #fff;
+    }
+    .fa-field input:focus, .fa-field select:focus {
+      outline: none; border-color: #FFC107; box-shadow: 0 0 0 3px rgba(255,193,7,.15);
+    }
+    .fa-field .hint { font-size: 12px; color: #6B7280; margin-top: 4px; }
+
+    .fa-pwd-wrap { position: relative; }
+    .fa-pwd-toggle {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer; color: #6B7280;
+    }
+    .fa-pwd-bar {
+      height: 4px; border-radius: 2px; margin-top: 6px;
+      background: #E5E7EB; overflow: hidden; position: relative;
+    }
+    .fa-pwd-bar::before {
+      content: ''; position: absolute; left: 0; top: 0; height: 100%;
+      width: 0%; transition: width .2s, background .2s;
+    }
+    .fa-pwd-bar.fraca::before  { width: 33%;  background: #DC2626; }
+    .fa-pwd-bar.media::before  { width: 66%;  background: #F59E0B; }
+    .fa-pwd-bar.forte::before  { width: 100%; background: #16A34A; }
+
+    .fa-grupo-list {
+      display: flex; flex-direction: column; gap: 8px;
+      max-height: 280px; overflow-y: auto;
+      border: 1.5px solid #E5E7EB; border-radius: 10px;
+      padding: 8px; background: #FAFAFA;
+    }
+    .fa-grupo-card {
+      background: #fff; border: 1.5px solid #E5E7EB;
+      border-radius: 8px; padding: 12px;
+      cursor: pointer; transition: all .15s;
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .fa-grupo-card:hover { border-color: #FFC107; }
+    .fa-grupo-card.selected { border-color: #FFC107; background: #FFF8E1; }
+    .fa-grupo-card input[type="radio"] { margin-top: 2px; cursor: pointer; }
+    .fa-grupo-card .nome  { font-weight: 600; color: #1F2937; font-size: 14px; }
+    .fa-grupo-card .dept  { font-size: 12px; color: #6B7280; }
+    .fa-grupo-card .desc  { font-size: 12px; color: #9CA3AF; margin-top: 4px; }
+
+    .fa-actions {
+      display: flex; gap: 8px; margin-top: 20px;
+      padding-top: 16px; border-top: 1px solid #E5E7EB;
+    }
+    .fa-btn {
+      flex: 1; padding: 12px; border-radius: 10px;
+      font-size: 14px; font-weight: 600;
+      border: none; cursor: pointer; transition: all .15s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .fa-btn-primary {
+      background: linear-gradient(135deg, #FFC107 0%, #FFA500 100%);
+      color: #1A1A1A;
+    }
+    .fa-btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(255,165,0,.35); }
+    .fa-btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+    .fa-btn-secondary { background: #F3F4F6; color: #374151; }
+    .fa-btn-secondary:hover { background: #E5E7EB; }
+
+    .fa-alert {
+      padding: 12px 14px; border-radius: 10px;
+      font-size: 13px; margin-bottom: 16px;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .fa-alert.danger  { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+    .fa-alert.success { background: #F0FDF4; color: #166534; border: 1px solid #BBF7D0; }
+    .fa-alert.warning { background: #FFFBEB; color: #92400E; border: 1px solid #FDE68A; }
+    .fa-alert.info    { background: #EFF6FF; color: #1E40AF; border: 1px solid #BFDBFE; }
+    .fa-alert i { font-size: 18px; flex-shrink: 0; }
+
+    .fa-step-3-icon {
+      width: 80px; height: 80px; margin: 0 auto 16px;
+      border-radius: 50%; background: #DCFCE7;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 40px; color: #16A34A;
+    }
+  </style>
+
 </head>
 
 <body class="login-page">
@@ -93,6 +256,11 @@
           </span>
         </button>
 
+        <!-- ✅ PRIMEIRO ACESSO -->
+        <button type="button" class="fa-link" id="btnFirstAccess">
+          É seu <strong>primeiro acesso</strong>? Solicite seu cadastro aqui.
+        </button>
+
       </form>
 
       <!-- ✅ RODAPÉ -->
@@ -112,8 +280,365 @@
     </div>
   </div>
 
+  <!-- ============================================================ -->
+  <!-- MODAL DE PRIMEIRO ACESSO                                      -->
+  <!-- ============================================================ -->
+  <div class="fa-overlay" id="faOverlay" role="dialog" aria-modal="true">
+    <div class="fa-modal">
+      <div class="fa-header">
+        <div>
+          <h3><i class="bi bi-person-plus"></i> Primeiro Acesso</h3>
+          <p id="faSubtitle">Vamos verificar se você está autorizado</p>
+        </div>
+        <button class="fa-close" id="faClose" type="button" aria-label="Fechar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+
+      <div class="fa-body">
+        <div class="fa-stepper">
+          <div class="fa-stepper-item active" data-step="1"></div>
+          <div class="fa-stepper-item" data-step="2"></div>
+          <div class="fa-stepper-item" data-step="3"></div>
+        </div>
+
+        <!-- ============ STEP 1: VERIFICAR EMAIL ============ -->
+        <div class="fa-step active" id="faStep1">
+          <div class="fa-alert info">
+            <i class="bi bi-info-circle"></i>
+            <span>Informe seu e-mail corporativo. Verificaremos se ele está liberado para auto-cadastro.</span>
+          </div>
+
+          <div id="faStep1Alert"></div>
+
+          <div class="fa-field">
+            <label for="faEmail"><i class="bi bi-envelope"></i> E-mail</label>
+            <input type="email" id="faEmail" placeholder="seu.email@cpe.com.br" maxlength="190" autocomplete="email">
+          </div>
+
+          <div class="fa-actions">
+            <button type="button" class="fa-btn fa-btn-secondary" id="faCancel1">Cancelar</button>
+            <button type="button" class="fa-btn fa-btn-primary" id="faVerificar">
+              <i class="bi bi-check2-circle"></i> Verificar
+            </button>
+          </div>
+        </div>
+
+        <!-- ============ STEP 2: FORMULÁRIO ============ -->
+        <div class="fa-step" id="faStep2">
+          <div id="faStep2Alert"></div>
+
+          <div class="fa-field">
+            <label for="faName"><i class="bi bi-person"></i> Nome Completo</label>
+            <input type="text" id="faName" placeholder="João da Silva" maxlength="120">
+            <div class="hint">Como seu nome aparecerá no sistema.</div>
+          </div>
+
+          <div class="fa-field">
+            <label for="faPassword"><i class="bi bi-lock"></i> Senha</label>
+            <div class="fa-pwd-wrap">
+              <input type="password" id="faPassword" placeholder="Mínimo 8 caracteres" maxlength="100">
+              <button type="button" class="fa-pwd-toggle" id="faPwdToggle" aria-label="Mostrar senha">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+            <div class="fa-pwd-bar" id="faPwdBar"></div>
+            <div class="hint">Use letras, números e ao menos um caractere especial (@, #, $, !).</div>
+          </div>
+
+          <div class="fa-field">
+            <label for="faPasswordConf"><i class="bi bi-lock-fill"></i> Confirme a senha</label>
+            <input type="password" id="faPasswordConf" placeholder="Repita a senha" maxlength="100">
+          </div>
+
+          <div class="fa-field">
+            <label><i class="bi bi-folder"></i> Selecione seu Grupo</label>
+            <div class="fa-grupo-list" id="faGrupoList">
+              <div style="text-align:center;padding:20px;color:#9CA3AF;">
+                <i class="bi bi-hourglass"></i> Carregando grupos...
+              </div>
+            </div>
+            <div class="hint">Caso escolha o grupo errado, o administrador irá recusar e justificar.</div>
+          </div>
+
+          <div class="fa-actions">
+            <button type="button" class="fa-btn fa-btn-secondary" id="faVoltar2">Voltar</button>
+            <button type="button" class="fa-btn fa-btn-primary" id="faSolicitar">
+              <i class="bi bi-send-check"></i> Solicitar Cadastro
+            </button>
+          </div>
+        </div>
+
+        <!-- ============ STEP 3: CONFIRMAÇÃO ============ -->
+        <div class="fa-step" id="faStep3">
+          <div class="fa-step-3-icon"><i class="bi bi-check-circle-fill"></i></div>
+          <h4 style="text-align:center;margin:0 0 8px;color:#1F2937;">Solicitação Enviada!</h4>
+          <p style="text-align:center;color:#6B7280;font-size:14px;margin:0 0 16px;">
+            Sua solicitação foi recebida e está aguardando a aprovação do administrador.
+            Você receberá acesso ao sistema assim que for aprovada.
+          </p>
+          <div class="fa-alert info">
+            <i class="bi bi-info-circle"></i>
+            <span>Seu username de login será: <strong id="faUsernameFinal"></strong></span>
+          </div>
+          <div class="fa-actions">
+            <button type="button" class="fa-btn fa-btn-primary" id="faFechar3">
+              <i class="bi bi-house"></i> Voltar ao Login
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <!-- ✅ SCRIPTS -->
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/login.js"></script>
+
+  <!-- ============================================================ -->
+  <!-- LÓGICA DO PRIMEIRO ACESSO                                     -->
+  <!-- ============================================================ -->
+  <script>
+  (function () {
+    'use strict';
+    const API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
+    const PRECAD = `${API}/api/pre-cadastro`;
+
+    const overlay   = document.getElementById('faOverlay');
+    const subtitle  = document.getElementById('faSubtitle');
+    const stepper   = overlay.querySelectorAll('.fa-stepper-item');
+
+    let emailValido = '';
+    let nomeSugerido = null;
+    let gruposCache  = [];
+    let grupoSelecionado = null;
+
+    // ---- helpers ----------------------------------------------------------
+    function showStep(n) {
+      overlay.querySelectorAll('.fa-step').forEach(el => el.classList.remove('active'));
+      document.getElementById(`faStep${n}`).classList.add('active');
+      stepper.forEach(item => {
+        const s = parseInt(item.dataset.step);
+        item.classList.remove('active', 'done');
+        if (s < n)       item.classList.add('done');
+        else if (s === n) item.classList.add('active');
+      });
+      const titles = {
+        1: 'Vamos verificar se você está autorizado',
+        2: 'Preencha seus dados de cadastro',
+        3: 'Tudo certo!'
+      };
+      subtitle.textContent = titles[n];
+    }
+
+    function alert(containerId, tipo, msg) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      const icones = { danger: 'exclamation-circle', success: 'check-circle', warning: 'exclamation-triangle', info: 'info-circle' };
+      el.innerHTML = `<div class="fa-alert ${tipo}"><i class="bi bi-${icones[tipo] || 'info-circle'}"></i><span>${msg}</span></div>`;
+    }
+    function clearAlert(id) { const el = document.getElementById(id); if (el) el.innerHTML = ''; }
+
+    function abrir() {
+      document.getElementById('faEmail').value = '';
+      document.getElementById('faName').value = '';
+      document.getElementById('faPassword').value = '';
+      document.getElementById('faPasswordConf').value = '';
+      clearAlert('faStep1Alert');
+      clearAlert('faStep2Alert');
+      grupoSelecionado = null;
+      showStep(1);
+      overlay.classList.add('show');
+      setTimeout(() => document.getElementById('faEmail').focus(), 100);
+    }
+    function fechar() { overlay.classList.remove('show'); }
+
+    // ---- step 1: verificar e-mail -----------------------------------------
+    async function verificarEmail() {
+      const email = document.getElementById('faEmail').value.trim().toLowerCase();
+      clearAlert('faStep1Alert');
+
+      if (!email || !email.includes('@')) {
+        alert('faStep1Alert', 'danger', 'Informe um e-mail válido.');
+        return;
+      }
+
+      const btn = document.getElementById('faVerificar');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Verificando...';
+
+      try {
+        const r = await fetch(`${PRECAD}/verificar-email?email=${encodeURIComponent(email)}`);
+        const data = await r.json();
+
+        if (!r.ok) {
+          alert('faStep1Alert', 'danger', data.detail || 'Erro ao verificar e-mail.');
+          return;
+        }
+
+        if (!data.autorizado) {
+          const tipo = data.ja_cadastrado || data.ja_pendente ? 'warning' : 'danger';
+          alert('faStep1Alert', tipo, data.mensagem);
+          return;
+        }
+
+        // autorizado — preenche dados e vai pra step 2
+        emailValido  = data.email;
+        nomeSugerido = data.nome_sugerido;
+        if (nomeSugerido) document.getElementById('faName').value = nomeSugerido;
+
+        // Aviso de recusa anterior, se houver
+        if (data.recusado_anterior) {
+          alert('faStep2Alert', 'warning',
+            `<strong>Cadastro anterior recusado:</strong><br>${escapeHtml(data.motivo_recusa || 'Sem motivo informado')}<br><br>Refaça preenchendo os dados corretamente.`);
+        }
+
+        await carregarGrupos();
+        showStep(2);
+      } catch (err) {
+        alert('faStep1Alert', 'danger', 'Erro de conexão: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check2-circle"></i> Verificar';
+      }
+    }
+
+    // ---- step 2: carregar grupos -----------------------------------------
+    async function carregarGrupos() {
+      const list = document.getElementById('faGrupoList');
+      list.innerHTML = '<div style="text-align:center;padding:20px;color:#9CA3AF;"><i class="bi bi-hourglass"></i> Carregando grupos...</div>';
+      try {
+        const r = await fetch(`${PRECAD}/grupos-publicos`);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        gruposCache = await r.json();
+
+        if (!gruposCache.length) {
+          list.innerHTML = '<div style="text-align:center;padding:20px;color:#DC2626;"><i class="bi bi-exclamation-triangle"></i> Nenhum grupo disponível.</div>';
+          return;
+        }
+
+        list.innerHTML = gruposCache.map(g => `
+          <label class="fa-grupo-card" data-id="${g.id}">
+            <input type="radio" name="faGrupo" value="${g.id}">
+            <div style="flex:1;">
+              <div class="nome">${escapeHtml(g.name)}</div>
+              ${g.department_name ? `<div class="dept"><i class="bi bi-building"></i> ${escapeHtml(g.department_name)}</div>` : ''}
+              ${g.description ? `<div class="desc">${escapeHtml(g.description)}</div>` : ''}
+            </div>
+          </label>
+        `).join('');
+
+        list.querySelectorAll('.fa-grupo-card').forEach(card => {
+          card.addEventListener('click', () => {
+            list.querySelectorAll('.fa-grupo-card').forEach(c => c.classList.remove('selected'));
+            card.classList.add('selected');
+            card.querySelector('input').checked = true;
+            grupoSelecionado = parseInt(card.dataset.id);
+          });
+        });
+      } catch (err) {
+        list.innerHTML = '<div style="text-align:center;padding:20px;color:#DC2626;">Erro ao carregar grupos: ' + escapeHtml(err.message) + '</div>';
+      }
+    }
+
+    // ---- step 2: força da senha ------------------------------------------
+    function avaliarSenha(s) {
+      let pts = 0;
+      if (s.length >= 8) pts++;
+      if (/[A-Z]/.test(s) && /[a-z]/.test(s)) pts++;
+      if (/[0-9]/.test(s)) pts++;
+      if (/[^A-Za-z0-9]/.test(s)) pts++;
+      const bar = document.getElementById('faPwdBar');
+      bar.classList.remove('fraca','media','forte');
+      if (s.length === 0) return;
+      if (pts <= 1)      bar.classList.add('fraca');
+      else if (pts <= 3) bar.classList.add('media');
+      else               bar.classList.add('forte');
+    }
+
+    // ---- step 2: solicitar cadastro --------------------------------------
+    async function solicitar() {
+      const name = document.getElementById('faName').value.trim();
+      const pwd  = document.getElementById('faPassword').value;
+      const pwd2 = document.getElementById('faPasswordConf').value;
+
+      clearAlert('faStep2Alert');
+
+      if (!name || name.length < 3) {
+        alert('faStep2Alert', 'danger', 'Informe seu nome completo (mínimo 3 caracteres).');
+        return;
+      }
+      if (pwd.length < 8) {
+        alert('faStep2Alert', 'danger', 'A senha deve ter no mínimo 8 caracteres.');
+        return;
+      }
+      if (pwd !== pwd2) {
+        alert('faStep2Alert', 'danger', 'As senhas não coincidem.');
+        return;
+      }
+      if (!grupoSelecionado) {
+        alert('faStep2Alert', 'danger', 'Selecione um grupo.');
+        return;
+      }
+
+      const btn = document.getElementById('faSolicitar');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando...';
+
+      try {
+        const r = await fetch(`${PRECAD}/solicitar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: emailValido,
+            name: name,
+            password: pwd,
+            group_id: grupoSelecionado,
+          }),
+        });
+        const data = await r.json();
+
+        if (!r.ok) {
+          alert('faStep2Alert', 'danger', data.detail || 'Erro ao enviar solicitação.');
+          return;
+        }
+
+        document.getElementById('faUsernameFinal').textContent = data.username || '—';
+        showStep(3);
+      } catch (err) {
+        alert('faStep2Alert', 'danger', 'Erro de conexão: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-send-check"></i> Solicitar Cadastro';
+      }
+    }
+
+    // ---- utils ------------------------------------------------------------
+    function escapeHtml(t) {
+      if (t == null) return '';
+      return String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+    }
+
+    // ---- bind events ------------------------------------------------------
+    document.getElementById('btnFirstAccess').addEventListener('click', abrir);
+    document.getElementById('faClose').addEventListener('click', fechar);
+    document.getElementById('faCancel1').addEventListener('click', fechar);
+    document.getElementById('faFechar3').addEventListener('click', fechar);
+    document.getElementById('faVoltar2').addEventListener('click', () => showStep(1));
+    document.getElementById('faVerificar').addEventListener('click', verificarEmail);
+    document.getElementById('faSolicitar').addEventListener('click', solicitar);
+    document.getElementById('faPassword').addEventListener('input', e => avaliarSenha(e.target.value));
+    document.getElementById('faEmail').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); verificarEmail(); }
+    });
+    document.getElementById('faPwdToggle').addEventListener('click', () => {
+      const inp = document.getElementById('faPassword');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    });
+    overlay.addEventListener('click', e => { if (e.target === overlay) fechar(); });
+  })();
+  </script>
 
 </body>
 

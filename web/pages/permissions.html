@@ -1,9 +1,11 @@
 <!-- ================================================== -->
-<!-- ARQUIVO: permissions.html (REFATORADO) -->
-<!-- PÁGINA: Gerenciamento de Permissões de Acesso -->
-<!-- Data: 07/04/2026 21:30 -->
+<!-- ARQUIVO: permissions.html (REFATORADO 2026-05-05)   -->
+<!-- PÁGINA: Gerenciamento de Permissões de Acesso       -->
+<!--                                                      -->
+<!-- Carrega tudo via /api/permissions/catalog            -->
+<!-- (sem hardcoded). 4 abas: Por Role / Por Grupo /      -->
+<!-- Exceções / Matriz. Auto-save em cada toggle.         -->
 <!-- ================================================== -->
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 
@@ -23,439 +25,424 @@
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/components.css">
 
-  <!-- ✅ Controle de acesso centralizado -->
-  <script src="/SistemaCPE/web/assests/js/per_usuario/access-config.js"></script>
-  <script src="/SistemaCPE/web/assests/js/per_usuario/page-access-control.js"></script>
-  <script>checkPageAccess('PERMISSIONS');</script>
-
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
+  <script>pageGuard('PERMISSIONS');</script>
   <style>
-    /* ================================================== */
-    /* CUSTOM STYLES - PERMISSIONS PAGE */
-    /* ================================================== */
-
-    .permission-card {
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 1.5rem;
-      margin-bottom: 1rem;
-      transition: all 0.3s ease;
-      cursor: pointer;
+    /* =================================================
+       ABAS
+    ================================================= */
+    .perm-tabs {
+      display: flex; gap: 6px;
+      border-bottom: 2px solid #E5E7EB;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
     }
-
-    .permission-card:hover {
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      border-color: #667eea;
-    }
-
-    .permission-card.active {
-      background: #f3f4f6;
-      border-color: #667eea;
-      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
-    }
-
-    .permission-toggle {
-      width: 50px;
-      height: 28px;
-      border-radius: 14px;
-      border: 2px solid #d1d5db;
-      background: #f3f4f6;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      display: flex;
-      align-items: center;
-      padding: 2px;
-    }
-
-    .permission-toggle.active {
-      background: #10b981;
-      border-color: #10b981;
-    }
-
-    .permission-toggle::after {
-      content: '';
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      background: white;
-      transition: all 0.3s ease;
-    }
-
-    .permission-toggle.active::after {
-      transform: translateX(22px);
-    }
-
-    .role-badge {
-      display: inline-block;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 0.85rem;
-      font-weight: 500;
-      margin: 4px;
-      background: #f3f4f6;
-      color: #374151;
-      border: 1px solid #e5e7eb;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .role-badge.selected {
-      background: #667eea;
-      color: white;
-      border-color: #667eea;
-    }
-
-    .tabs-nav {
-      display: flex;
-      gap: 1rem;
-      border-bottom: 2px solid #e5e7eb;
-      margin-bottom: 2rem;
-    }
-
-    .tab-item {
-      padding: 1rem 0;
+    .perm-tab {
+      padding: 12px 20px;
       cursor: pointer;
       border-bottom: 3px solid transparent;
-      transition: all 0.3s ease;
-      font-weight: 500;
-      color: #6b7280;
+      margin-bottom: -2px;
+      font-weight: 600;
+      color: #6B7280;
+      transition: all .15s;
+      background: none; border-left: none; border-right: none; border-top: none;
     }
-
-    .tab-item:hover {
-      color: #667eea;
+    .perm-tab:hover { color: #1F2937; }
+    .perm-tab.active { color: #1A1A1A; border-bottom-color: #FFC107; }
+    .perm-tab .badge {
+      background: #E5E7EB; color: #4B5563;
+      font-size: 11px; padding: 2px 8px; border-radius: 10px;
+      margin-left: 6px; font-weight: 500;
     }
+    .perm-tab.active .badge { background: #FFC107; color: #1A1A1A; }
+    .perm-tab-content { display: none; }
+    .perm-tab-content.active { display: block; }
 
-    .tab-item.active {
-      color: #667eea;
-      border-bottom-color: #667eea;
+    /* =================================================
+       CARD DE PÁGINA (usado em "Por Role" e "Por Grupo")
+    ================================================= */
+    .perm-page-card {
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-bottom: 12px;
+      transition: border-color .15s;
     }
+    .perm-page-card:hover { border-color: #FCD34D; }
 
-    .page-icon {
-      width: 40px;
-      height: 40px;
+    .perm-page-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 12px;
+    }
+    .perm-page-icon {
+      width: 40px; height: 40px;
       border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.5rem;
-      background: #f3f4f6;
-      margin-right: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .perm-page-icon.admin       { background: #FEE2E2; color: #DC2626; }
+    .perm-page-icon.operational { background: #DBEAFE; color: #2563EB; }
+    .perm-page-icon.config      { background: #FEF3C7; color: #D97706; }
+
+    .perm-page-info h5 {
+      margin: 0; font-size: 15px; font-weight: 600;
+      color: #1F2937;
+    }
+    .perm-page-info small { color: #6B7280; font-size: 12px; }
+
+    /* =================================================
+       TOGGLE iOS-LIKE (azul) — pedido pelo usuário
+    ================================================= */
+    .perm-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .perm-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .perm-switch-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #CBD5E1;
+      border-radius: 24px;
+      transition: background-color .18s;
+    }
+    .perm-switch-slider::before {
+      position: absolute;
+      content: "";
+      height: 18px; width: 18px;
+      left: 3px; bottom: 3px;
+      background-color: white;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0,0,0,.15);
+      transition: transform .18s;
+    }
+    .perm-switch input:checked + .perm-switch-slider {
+      background-color: #2563EB;
+    }
+    .perm-switch input:checked + .perm-switch-slider::before {
+      transform: translateX(20px);
+    }
+    .perm-switch input:disabled + .perm-switch-slider {
+      opacity: .5; cursor: not-allowed;
     }
 
-    .page-icon.admin {
-      background: #fee2e2;
-      color: #dc2626;
-    }
-
-    .page-icon.operational {
-      background: #dbeafe;
-      color: #2563eb;
-    }
-
-    .page-icon.config {
-      background: #fef3c7;
-      color: #d97706;
-    }
-
-    .stats-mini {
+    /* =================================================
+       LISTA DE TOGGLES (Por Role / Por Grupo)
+    ================================================= */
+    .perm-toggles-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1rem;
-      margin-bottom: 2rem;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 8px;
+    }
+    .perm-toggle-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px;
+      background: #F9FAFB;
+      border: 1px solid #F3F4F6;
+      border-radius: 6px;
+      transition: all .15s;
+    }
+    .perm-toggle-item:hover {
+      background: #F3F4F6;
+      border-color: #E5E7EB;
+    }
+    .perm-toggle-item .label {
+      flex: 1;
+      font-size: 13px;
+      color: #374151;
+      font-weight: 500;
     }
 
-    .stat-mini-card {
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 1.5rem;
-      text-align: center;
+    /* Agrupamento por departamento na aba "Por Grupo" */
+    .perm-dept-group {
+      margin-top: 14px;
     }
-
-    .stat-mini-value {
-      font-size: 2rem;
+    .perm-dept-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
       font-weight: 700;
-      color: #667eea;
-      margin-bottom: 0.5rem;
+      color: #9CA3AF;
+      margin-bottom: 6px;
     }
 
-    .stat-mini-label {
-      font-size: 0.9rem;
-      color: #6b7280;
+    /* Aviso de redundância na aba "Por Grupo" */
+    .perm-warn-banner {
+      background: #FFFBEB;
+      border: 1px solid #FCD34D;
+      border-left: 4px solid #D97706;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin: 8px 0 14px;
+      display: flex; align-items: flex-start; gap: 10px;
+      font-size: 13px;
+      color: #78350F;
+    }
+    .perm-warn-banner i { font-size: 18px; color: #D97706; flex-shrink: 0; margin-top: 1px; }
+    .perm-warn-banner strong { color: #92400E; }
+    .perm-warn-banner .actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+    .perm-warn-banner button {
+      background: #D97706; color: #fff; border: 0;
+      padding: 5px 12px; border-radius: 5px;
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: background .15s;
+    }
+    .perm-warn-banner button:hover { background: #B45309; }
+    .perm-warn-banner button.ghost { background: transparent; color: #92400E; border: 1px solid #FCD34D; }
+    .perm-warn-banner button.ghost:hover { background: #FEF3C7; color: #78350F; }
+
+    /* Indicador de status no header da página */
+    .perm-status-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 6px;
+    }
+    .perm-status-pill.efetivo  { background: #DCFCE7; color: #15803D; }
+    .perm-status-pill.redundante { background: #FEE2E2; color: #B91C1C; }
+    .perm-status-pill.vazio   { background: #F3F4F6; color: #6B7280; }
+
+    /* =================================================
+       MATRIZ
+    ================================================= */
+    .perm-matrix-wrap {
+      overflow-x: auto;
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 10px;
+    }
+    .perm-matrix {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .perm-matrix th, .perm-matrix td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #F3F4F6;
+      text-align: left;
+    }
+    .perm-matrix th {
+      background: #F9FAFB;
+      font-weight: 600;
+      color: #4B5563;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      white-space: nowrap;
+    }
+    .perm-matrix th.center, .perm-matrix td.center { text-align: center; }
+    .perm-matrix td.cell-yes { color: #16A34A; }
+    .perm-matrix td.cell-no  { color: #DC2626; opacity: .4; }
+
+    /* =================================================
+       TOAST de confirmação (auto-save)
+    ================================================= */
+    #permToastWrap {
+      position: fixed;
+      top: 80px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .perm-toast {
+      padding: 10px 16px;
+      border-radius: 8px;
+      background: #1F2937;
+      color: #fff;
+      font-size: 13px;
+      box-shadow: 0 6px 16px rgba(0,0,0,.18);
+      animation: permToastIn .2s ease;
+      pointer-events: auto;
+    }
+    .perm-toast.success { background: #16A34A; }
+    .perm-toast.error   { background: #DC2626; }
+    @keyframes permToastIn {
+      from { transform: translateY(-10px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+
+    /* =================================================
+       VAZIO / LOADING
+    ================================================= */
+    .perm-empty {
+      padding: 40px 20px;
+      text-align: center;
+      color: #9CA3AF;
+    }
+    .perm-empty i { font-size: 36px; display: block; margin-bottom: 8px; }
+
+    /* =================================================
+       RESPONSIVO
+    ================================================= */
+    @media (max-width: 700px) {
+      .perm-toggles-grid { grid-template-columns: 1fr; }
+      .perm-tabs { flex-wrap: wrap; }
     }
   </style>
-
 </head>
 
 <body>
-
-  <!-- [INICIO] Navbar Container -->
   <div id="navbar-container"></div>
-  <!-- [FIM] Navbar Container -->
-
-  <!-- [INICIO] Container Principal -->
   <div class="container-main">
-
-    <!-- [INICIO] Sidebar Container -->
     <div id="sidebar-container"></div>
-    <!-- [FIM] Sidebar Container -->
 
-    <!-- [INICIO] Main Content -->
     <div class="main-content">
-
-      <!-- [INICIO] Top Bar -->
       <div class="top-bar">
-        <h1>
-          <i class="bi bi-shield-lock"></i> Controle de Permissões
-        </h1>
+        <h1><i class="bi bi-shield-lock"></i> Controle de Permissões</h1>
       </div>
-      <!-- [FIM] Top Bar -->
 
-      <!-- [INICIO] Content -->
       <div class="content">
-
-        <!-- [INICIO] Alerts -->
+        <!-- ALERTAS -->
         <div class="alert alert-danger d-none" id="alertBox" role="alert">
-          <i class="bi bi-exclamation-circle"></i>
-          <span id="alertMessage"></span>
+          <i class="bi bi-exclamation-circle"></i> <span id="alertMessage"></span>
         </div>
 
-        <div class="alert alert-success d-none" id="successBox" role="alert">
-          <i class="bi bi-check-circle"></i>
-          <span id="successMessage"></span>
-        </div>
-
-        <div class="alert alert-info d-none" id="infoBox" role="alert">
-          <i class="bi bi-info-circle"></i>
-          <span id="infoMessage"></span>
-        </div>
-        <!-- [FIM] Alerts -->
-
-        <!-- [INICIO] Page Header -->
-        <div class="page-header" style="margin-bottom: 2rem;">
+        <!-- HEADER + ALERTA INFO -->
+        <div class="page-header" style="margin-bottom: 1rem;">
           <h2 class="page-title">
-            <i class="bi bi-shield-check"></i> Gerenciar Permissões de Acesso
+            <i class="bi bi-shield-check"></i> Gerenciar Permissões
           </h2>
-          <p style="color: #6b7280; margin-top: 0.5rem;">
-            Controle quais roles podem acessar páginas do sistema
+          <p style="color:#6B7280;margin:6px 0 0;font-size:14px;">
+            Controle quais <strong>roles</strong> e <strong>grupos</strong> podem acessar cada página.
+            Use exceções para liberar/bloquear usuários específicos.
           </p>
         </div>
-        <!-- [FIM] Page Header -->
 
-        <!-- [INICIO] Alert de Informação -->
-        <div style="background: #dbeafe; border: 1px solid #bfdbfe; border-radius: 8px; padding: 1rem; margin-bottom: 2rem;">
-          <i class="bi bi-lightbulb" style="color: #2563eb; margin-right: 0.5rem;"></i>
-          <small style="color: #1e40af;">
-            <strong>💡 Dica:</strong> As permissões são baseadas em <strong>roles</strong> (papéis de usuário). 
-            Quando um usuário faz login, seu role é verificado para determinar quais páginas ele pode acessar.
-          </small>
+        <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 14px;margin-bottom:20px;color:#1E40AF;font-size:13px;">
+          <i class="bi bi-info-circle"></i>
+          <strong>Lógica:</strong>
+          ADMIN sempre acessa &middot; exceção <em>block</em> nega &middot; exceção <em>allow</em> libera &middot;
+          senão: <strong>role</strong> permitido <strong>OU</strong> <strong>grupo</strong> permitido libera.
         </div>
-        <!-- [FIM] Alert -->
 
-        <!-- [INICIO] Content Tabs -->
-        <div class="tabs-nav">
-          <div class="tab-item active" onclick="switchTab('pages')">
-            <i class="bi bi-file-earmark-text"></i> Páginas do Sistema
-          </div>
-          <div class="tab-item" onclick="switchTab('exceptions')">
+        <!-- ABAS -->
+        <div class="perm-tabs" role="tablist">
+          <button class="perm-tab active" data-tab="role" type="button">
+            <i class="bi bi-person-badge"></i> Por Role
+            <span class="badge" id="cntRole">0</span>
+          </button>
+          <button class="perm-tab" data-tab="group" type="button">
+            <i class="bi bi-diagram-3"></i> Por Grupo
+            <span class="badge" id="cntGroup">0</span>
+          </button>
+          <button class="perm-tab" data-tab="exceptions" type="button">
             <i class="bi bi-exclamation-diamond"></i> Exceções
-          </div>
-          <div class="tab-item" onclick="switchTab('matrix')">
-            <i class="bi bi-table"></i> Matriz de Acesso
-          </div>
-        </div>
-        <!-- [FIM] Tabs -->
-
-        <!-- ================================================== -->
-        <!-- TAB 1: PÁGINAS -->
-        <!-- ================================================== -->
-        <div id="tab-pages" class="tab-content">
-          <h3 style="margin-bottom: 1.5rem;">
-            <i class="bi bi-file-earmark-text"></i> Permissões de Páginas
-          </h3>
-
-          <div id="pagesList"></div>
+            <span class="badge" id="cntExc">0</span>
+          </button>
+          <button class="perm-tab" data-tab="matrix" type="button">
+            <i class="bi bi-table"></i> Matriz
+          </button>
         </div>
 
-        <!-- ================================================== -->
-        <!-- TAB 2: EXCEÇÕES -->
-        <!-- ================================================== -->
-        <div id="tab-exceptions" class="tab-content d-none">
-          <h3 style="margin-bottom: 1.5rem;">
-            <i class="bi bi-exclamation-diamond"></i> Exceções e Regras Especiais
-          </h3>
+        <!-- ============= ABA: POR ROLE ============= -->
+        <div class="perm-tab-content active" data-tab="role" id="tabRole">
+          <div id="rolePagesList">
+            <div class="perm-empty"><i class="bi bi-hourglass"></i> Carregando...</div>
+          </div>
+        </div>
 
-          <p style="color: #6b7280; margin-bottom: 1.5rem;">
-            Conceda ou bloqueie acesso específico para usuários individuais
-          </p>
+        <!-- ============= ABA: POR GRUPO ============= -->
+        <div class="perm-tab-content" data-tab="group" id="tabGroup">
+          <div id="groupPagesList">
+            <div class="perm-empty"><i class="bi bi-hourglass"></i> Carregando...</div>
+          </div>
+        </div>
 
-          <button class="btn btn-primary" onclick="openExceptionModal()">
+        <!-- ============= ABA: EXCEÇÕES ============= -->
+        <div class="perm-tab-content" data-tab="exceptions" id="tabExceptions">
+          <button class="btn btn-primary mb-3" id="btnNewException">
             <i class="bi bi-plus-lg"></i> Nova Exceção
           </button>
-
-          <div id="exceptionsList" style="margin-top: 2rem;"></div>
+          <div id="exceptionsList"></div>
         </div>
 
-        <!-- ================================================== -->
-        <!-- TAB 3: MATRIZ DE ACESSO -->
-        <!-- ================================================== -->
-        <div id="tab-matrix" class="tab-content d-none">
-          <h3 style="margin-bottom: 1.5rem;">
-            <i class="bi bi-table"></i> Matriz de Acesso
-          </h3>
-
-          <p style="color: #6b7280; margin-bottom: 1.5rem;">
-            Visualize todas as permissões de uma vez
-          </p>
-
-          <div style="overflow-x: auto;">
-            <table class="table table-hover" id="matrixTable">
+        <!-- ============= ABA: MATRIZ ============= -->
+        <div class="perm-tab-content" data-tab="matrix" id="tabMatrix">
+          <div class="perm-matrix-wrap">
+            <table class="perm-matrix">
               <thead>
                 <tr>
-                  <th style="background: #f3f4f6; font-weight: 600;">Página</th>
-                  <th class="text-center">👤 USER</th>
-                  <th class="text-center">👨‍💼 RESP.GRUPO</th>
-                  <th class="text-center">🔧 TI</th>
-                  <th class="text-center">📊 MANAGER</th>
-                  <th class="text-center">🔐 ADMIN</th>
+                  <th>Página</th>
+                  <th class="center">Categoria</th>
+                  <th class="center">USER</th>
+                  <th class="center">RESP. GRUPO</th>
+                  <th class="center">TI</th>
+                  <th class="center">MANAGER</th>
+                  <th class="center">ADMIN</th>
+                  <th class="center">Grupos liberados</th>
                 </tr>
               </thead>
               <tbody id="matrixBody"></tbody>
             </table>
           </div>
         </div>
-
-      </div>
-      <!-- [FIM] Content -->
-
-    </div>
-    <!-- [FIM] Main Content -->
-
-  </div>
-  <!-- [FIM] Container Principal -->
-
-  <!-- ================================================== -->
-  <!-- MODAL: Editar Permissão de Página -->
-  <!-- ================================================== -->
-  <div class="modal fade" id="editPageModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title">
-            <i class="bi bi-pencil-square"></i> Editar Permissões da Página
-          </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-
-        <div class="modal-body">
-          <div id="pageModalError" class="alert alert-danger d-none"></div>
-
-          <h6 style="margin-bottom: 1rem;" id="pageNameDisplay"></h6>
-
-          <div style="margin-bottom: 2rem;">
-            <label style="font-weight: 600; margin-bottom: 1rem; display: block;">
-              Roles que podem acessar:
-            </label>
-
-            <div id="roleCheckboxes"></div>
-          </div>
-
-          <div style="padding: 1rem; background: #f3f4f6; border-radius: 8px; margin-bottom: 1rem;">
-            <small>
-              <strong>Selecionados:</strong>
-              <span id="selectedRolesDisplay" style="color: #667eea; font-weight: 600;"></span>
-            </small>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-            Cancelar
-          </button>
-          <button type="button" class="btn btn-primary" onclick="savePagePermission()">
-            <i class="bi bi-check-lg"></i> Salvar Alterações
-          </button>
-        </div>
       </div>
     </div>
   </div>
 
+  <!-- TOAST WRAPPER -->
+  <div id="permToastWrap"></div>
+
   <!-- ================================================== -->
-  <!-- MODAL: Nova Exceção -->
+  <!-- MODAL: Nova/Editar Exceção                          -->
   <!-- ================================================== -->
   <div class="modal fade" id="exceptionModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title">
-            <i class="bi bi-plus-lg"></i> Nova Exceção de Acesso
-          </h5>
+          <h5 class="modal-title"><i class="bi bi-exclamation-diamond"></i> Nova Exceção</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
-
         <div class="modal-body">
-          <div id="exceptionModalError" class="alert alert-danger d-none"></div>
+          <div class="alert alert-danger d-none" id="exceptionModalError"></div>
 
-          <!-- Campo: Usuário -->
           <div class="mb-3">
-            <label class="form-label">
-              <i class="bi bi-person"></i> Selecionar Usuário
-            </label>
+            <label class="form-label"><i class="bi bi-person"></i> Usuário</label>
             <select id="exceptionUserId" class="form-select">
-              <option value="">-- Carregando usuários... --</option>
-            </select>
-          </div>
-
-          <!-- Campo: Tipo de Exceção -->
-          <div class="mb-3">
-            <label class="form-label">
-              <i class="bi bi-lightning"></i> Tipo de Exceção
-            </label>
-            <select id="exceptionType" class="form-select" onchange="updateExceptionItemOptions()">
-              <option value="block_page">Bloquear acesso</option>
-              <option value="allow_page">Conceder acesso / permissão</option>
-            </select>
-            <small class="form-text text-muted">Use <strong>Conceder</strong> para liberar funcionalidades especiais (ex: Gerenciar Categorias)</small>
-          </div>
-
-          <!-- Campo: Página / Funcionalidade (Multi-Select) -->
-          <div class="mb-3">
-            <label class="form-label">
-              <i class="bi bi-list"></i> Selecionar Páginas ou Funcionalidades
-            </label>
-            <select id="exceptionItem" class="form-select" multiple style="height: 220px;">
               <option value="">-- Selecione --</option>
             </select>
-            <small class="form-text text-muted" style="display: block; margin-top: 0.5rem;">
-              💡 Use <strong>Ctrl+Click</strong> para selecionar múltiplos itens. Itens com <strong>⚙️</strong> são funcionalidades especiais.
-            </small>
           </div>
 
-          <!-- Resumo dos Itens Selecionados -->
-          <div style="padding: 1rem; background: #f0f9ff; border: 1px solid #bfdbfe; border-radius: 8px; margin-bottom: 1rem;">
-            <small style="color: #1e40af; font-weight: 600;">
-              <i class="bi bi-info-circle"></i> Itens Selecionados:
-            </small>
-            <div id="selectedItemsPreview" style="margin-top: 0.5rem; color: #1e40af;">
-              <small>Nenhum item selecionado</small>
-            </div>
-          </div>
-
-          <!-- Campo: Motivo -->
           <div class="mb-3">
-            <label class="form-label">
-              <i class="bi bi-chat-left-text"></i> Motivo
-            </label>
-            <textarea id="exceptionReason" class="form-control" rows="3" placeholder="Por que está criando esta exceção?"></textarea>
+            <label class="form-label"><i class="bi bi-lightning"></i> Tipo</label>
+            <select id="exceptionType" class="form-select">
+              <option value="block">Bloquear acesso</option>
+              <option value="allow">Conceder acesso</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label"><i class="bi bi-list"></i> Páginas</label>
+            <select id="exceptionPages" class="form-select" multiple style="height:200px;">
+            </select>
+            <small class="form-text text-muted">Ctrl+clique para múltiplas páginas.</small>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label"><i class="bi bi-chat-left-text"></i> Motivo</label>
+            <textarea id="exceptionReason" class="form-control" rows="3"
+              placeholder="Por que esta exceção?"></textarea>
           </div>
         </div>
-
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-            Cancelar
-          </button>
-          <button type="button" class="btn btn-primary" onclick="saveException()">
-            <i class="bi bi-check-lg"></i> Criar Exceção
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btnSaveException">
+            <i class="bi bi-check-lg"></i> Salvar
           </button>
         </div>
       </div>
@@ -463,657 +450,514 @@
   </div>
 
   <!-- ================================================== -->
-  <!-- SCRIPTS -->
+  <!-- SCRIPTS                                             -->
   <!-- ================================================== -->
-
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
-  <!-- ================================================== -->
-  <!-- CONFIGURAÇÃO: Páginas do Sistema -->
-  <!-- ================================================== -->
   <script>
-    // ✅ Configuração centralizada de páginas
-    const PAGES_CONFIG = {
-      'DASHBOARD': {
-        allowedRoles: ['USER', 'RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'],
-        description: 'Dashboard Principal',
-        category: 'operational',
-        icon: 'bi-speedometer2'
-      },
-      'TICKETS': {
-        allowedRoles: ['USER', 'RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'],
-        description: 'Gerenciamento de Tickets',
-        category: 'operational',
-        icon: 'bi-ticket'
-      },
-      'USERS': {
-        allowedRoles: ['ADMIN', 'TI'],
-        description: 'Gerenciamento de Usuários',
-        category: 'admin',
-        icon: 'bi-people'
-      },
-      'GROUPS': {
-        allowedRoles: ['ADMIN', 'TI', 'MANAGER'],
-        description: 'Gerenciamento de Grupos',
-        category: 'admin',
-        icon: 'bi-diagram-3'
-      },
-      'CHAT': {
-        allowedRoles: ['USER', 'RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'],
-        description: 'Chat e Comunicação',
-        category: 'operational',
-        icon: 'bi-chat-dots'
-      },
-      'TASKS': {
-        allowedRoles: ['USER', 'RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'],
-        description: 'Tarefas e Projetos',
-        category: 'operational',
-        icon: 'bi-check-lg'
-      },
-      'PROJECTS': {
-        allowedRoles: ['USER', 'RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'],
-        description: 'Gerenciamento de Projetos',
-        category: 'operational',
-        icon: 'bi-folder'
-      },
-      'INVENTORY': {
-        allowedRoles: ['ADMIN', 'TI'],
-        description: 'Inventário de Equipamentos',
-        category: 'admin',
-        icon: 'bi-pc-display'
-      },
-      'PASSWORD_VAULT': {
-        allowedRoles: ['ADMIN', 'TI'],
-        description: 'Cofre de Senhas',
-        category: 'admin',
-        icon: 'bi-shield-lock'
-      },
-      'REPORTS': {
-        allowedRoles: ['ADMIN', 'TI', 'MANAGER'],
-        description: 'Relatórios e Análises',
-        category: 'admin',
-        icon: 'bi-graph-up'
-      },
-      'BILLING': {
-        allowedRoles: ['ADMIN', 'MANAGER'],
-        description: 'Faturamento e Pagamentos',
-        category: 'admin',
-        icon: 'bi-credit-card'
-      },
-      'KNOWLEDGE_BASE': {
-        allowedRoles: ['USER', 'RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'],
-        description: 'Base de Conhecimento',
-        category: 'operational',
-        icon: 'bi-book'
-      },
-      'REGISTRATIONS': {
-        allowedRoles: ['ADMIN', 'TI', 'MANAGER'],
-        description: 'Cadastros Diversos',
-        category: 'admin',
-        icon: 'bi-person-plus'
-      },
-      'SETTINGS': {
-        allowedRoles: ['ADMIN'],
-        description: 'Configurações do Sistema',
-        category: 'admin',
-        icon: 'bi-gear'
-      },
-      'DOWNLOAD_AGENTS': {
-        allowedRoles: ['USER', 'RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'],
-        description: 'Download de Agentes',
-        category: 'operational',
-        icon: 'bi-download'
-      },
-      'PERMISSIONS': {
-        allowedRoles: ['ADMIN'],
-        description: 'Gerenciamento de Permissões',
-        category: 'admin',
-        icon: 'bi-shield-lock'
-      }
+  // ==================================================================
+  // PERMISSIONS — refatorado 2026-05-05
+  // Carrega /api/permissions/catalog e gerencia 4 abas com auto-save.
+  // ==================================================================
+  (function () {
+    'use strict';
+
+    const API = (typeof API_BASE_URL !== 'undefined')
+      ? API_BASE_URL
+      : `http://${window.location.hostname || '127.0.0.1'}:8000`;
+    const PERM = `${API}/api/permissions`;
+
+    // ---- Estado ---------------------------------------------------------
+    const state = {
+      pages:      [],   // [{page_key, display_name, ..., roles:[], group_ids:[]}]
+      groups:     [],   // [{id, name, department_id, department_name}]
+      roles:      [],   // ['USER', 'TI', ...]
+      exceptions: [],   // [{id, user_id, page_name, exception_type, reason}]
+      users:      [],   // pra mostrar nome nas exceções e select
+      currentTab: 'role',
     };
 
-    // ✅ Armazenamento de exceções (localStorage)
-    let ACCESS_EXCEPTIONS = JSON.parse(localStorage.getItem('ACCESS_EXCEPTIONS')) || {};
+    // ---- Helpers --------------------------------------------------------
+    const $  = sel => document.querySelector(sel);
+    const $$ = sel => Array.from(document.querySelectorAll(sel));
 
-    const ROLES = ['USER', 'RESPONSAVEL_GRUPO', 'TI', 'MANAGER', 'ADMIN'];
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+    }
 
-    // ✅ Carregar permissões salvas pelo admin (sobrepõe os defaults)
-    const savedPermissions = JSON.parse(localStorage.getItem('PAGE_PERMISSIONS') || '{}');
-    Object.entries(savedPermissions).forEach(([pageName, allowedRoles]) => {
-      if (PAGES_CONFIG[pageName]) {
-        PAGES_CONFIG[pageName].allowedRoles = allowedRoles;
-      }
-    });
+    function showToast(msg, tipo = 'success') {
+      const wrap = $('#permToastWrap');
+      const div  = document.createElement('div');
+      div.className = `perm-toast ${tipo}`;
+      div.innerHTML = (tipo === 'success' ? '<i class="bi bi-check-circle-fill"></i> '
+                     : tipo === 'error'   ? '<i class="bi bi-exclamation-circle-fill"></i> '
+                     : '') + escapeHtml(msg);
+      wrap.appendChild(div);
+      setTimeout(() => { div.style.opacity = '0'; setTimeout(() => div.remove(), 200); }, 2200);
+    }
 
-    console.log("[PERMISSIONS] ✅ Página carregada com sucesso!");
-    console.log("[PERMISSIONS] Páginas configuradas:", Object.keys(PAGES_CONFIG).length);
-  </script>
-
-  <!-- ================================================== -->
-  <!-- FUNCAO: Initialize -->
-  <!-- ================================================== -->
-  <script>
-    const API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
-
-    function getToken() {
-      return localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token') || '';
+    function showError(msg) {
+      const a = $('#alertBox'); const m = $('#alertMessage');
+      m.textContent = msg; a.classList.remove('d-none');
+      setTimeout(() => a.classList.add('d-none'), 5000);
     }
 
     function authHeaders() {
-      return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${getToken()}` };
+      const token = localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token') || '';
+      return { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
     }
 
-    async function initializePermissions() {
-      console.log("[PERMISSIONS] Inicializando...");
+    // ---- Fetch ----------------------------------------------------------
+    async function fetchCatalog() {
+      const r = await fetch(`${PERM}/catalog`);
+      if (!r.ok) throw new Error('Falha ao carregar catálogo: HTTP ' + r.status);
+      const data = await r.json();
+      state.pages  = data.pages  || [];
+      state.groups = data.groups || [];
+      state.roles  = data.roles  || ['USER','RESPONSAVEL_GRUPO','TI','MANAGER','ADMIN'];
+    }
+
+    async function fetchExceptions() {
+      const r = await fetch(`${PERM}/exceptions`, { headers: authHeaders() });
+      if (!r.ok) { state.exceptions = []; return; }
+      const data = await r.json();
+      state.exceptions = data.exceptions || [];
+    }
+
+    async function fetchUsers() {
+      const r = await fetch(`${API}/api/users`, { headers: authHeaders() });
+      if (!r.ok) { state.users = []; return; }
+      const data = await r.json();
+      state.users = Array.isArray(data) ? data : (data.users || []);
+    }
+
+    // ---- Save (auto-save por toggle) ------------------------------------
+    // Envia PUT /catalog/{page_key} com APENAS o lado que mudou.
+    async function saveRolesForPage(pageKey, newRoles) {
+      const page = state.pages.find(p => p.page_key === pageKey);
+      if (!page) return;
+      page.roles = newRoles;  // optimista
+
       try {
-        await loadPagePermissionsFromAPI();
-        renderPagesList();
+        const r = await fetch(`${PERM}/catalog/${pageKey}`, {
+          method: 'PUT', headers: authHeaders(),
+          body: JSON.stringify({ roles: newRoles }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        showToast(`Roles de "${page.display_name}" atualizados`);
         renderMatrix();
-        await loadExceptionsFromAPI();
-        await loadUsers();
-        console.log("[PERMISSIONS] ✅ Inicialização concluída");
       } catch (err) {
-        console.error("[PERMISSIONS] ❌ Erro:", err.message);
-        showAlert("Erro ao inicializar: " + err.message, 'danger');
+        showToast('Erro ao salvar: ' + err.message, 'error');
       }
     }
 
-    // Busca permissões de páginas da API e aplica ao PAGES_CONFIG
-    async function loadPagePermissionsFromAPI() {
+    async function saveGroupsForPage(pageKey, newGroups) {
+      const page = state.pages.find(p => p.page_key === pageKey);
+      if (!page) return;
+      page.group_ids = newGroups;
+
       try {
-        const res  = await fetch(`${API}/api/permissions/pages`, { headers: authHeaders() });
-        const data = await res.json();
-        if (data.success) {
-          Object.entries(data.permissions).forEach(([page, roles]) => {
-            if (PAGES_CONFIG[page]) PAGES_CONFIG[page].allowedRoles = roles;
-          });
-          console.log('[PERMISSIONS] ✅ Permissões carregadas da API');
-        }
-      } catch (e) {
-        console.warn('[PERMISSIONS] ⚠️ Falha ao carregar permissões da API:', e.message);
+        const r = await fetch(`${PERM}/catalog/${pageKey}`, {
+          method: 'PUT', headers: authHeaders(),
+          body: JSON.stringify({ group_ids: newGroups }),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        showToast(`Grupos de "${page.display_name}" atualizados`);
+        renderMatrix();
+      } catch (err) {
+        showToast('Erro ao salvar: ' + err.message, 'error');
       }
     }
 
-    // Busca exceções da API e armazena em ACCESS_EXCEPTIONS
-    async function loadExceptionsFromAPI() {
-      try {
-        const res  = await fetch(`${API}/api/permissions/exceptions`, { headers: authHeaders() });
-        const data = await res.json();
-        if (data.success) {
-          ACCESS_EXCEPTIONS = {};
-          data.exceptions.forEach(ex => {
-            const key = `userId_${ex.user_id}`;
-            if (!ACCESS_EXCEPTIONS[key]) {
-              ACCESS_EXCEPTIONS[key] = { blockPages: [], allowPages: [], ids: {} };
-            }
-            if (ex.exception_type === 'block') {
-              ACCESS_EXCEPTIONS[key].blockPages.push(ex.page_name);
-            } else {
-              ACCESS_EXCEPTIONS[key].allowPages.push(ex.page_name);
-            }
-            // guarda o id do banco para poder deletar
-            ACCESS_EXCEPTIONS[key].ids[`${ex.exception_type}_${ex.page_name}`] = ex.id;
-          });
-          renderExceptionsList();
-        }
-      } catch (e) {
-        console.warn('[PERMISSIONS] ⚠️ Falha ao carregar exceções da API:', e.message);
+    // ---- Render: Aba "Por Role" -----------------------------------------
+    function renderRolesTab() {
+      const list = $('#rolePagesList');
+      if (!state.pages.length) {
+        list.innerHTML = '<div class="perm-empty"><i class="bi bi-inbox"></i>Nenhuma página cadastrada.</div>';
+        return;
       }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(initializePermissions, 100);
-    });
-  </script>
-
-  <!-- ================================================== -->
-  <!-- FUNCAO: switchTab -->
-  <!-- ================================================== -->
-  <script>
-    function switchTab(tabName) {
-      document.querySelectorAll('.tab-content').forEach(tab => {
-        tab.classList.add('d-none');
-      });
-
-      document.querySelectorAll('.tab-item').forEach(item => {
-        item.classList.remove('active');
-      });
-
-      const tabElement = document.getElementById(`tab-${tabName}`);
-      if (tabElement) {
-        tabElement.classList.remove('d-none');
-      }
-
-      event.target.closest('.tab-item')?.classList.add('active');
-    }
-  </script>
-
-  <!-- ================================================== -->
-  <!-- FUNCAO: renderPagesList -->
-  <!-- ================================================== -->
-  <script>
-    function renderPagesList() {
-      const list = document.getElementById('pagesList');
-      let html = '';
-
-      Object.entries(PAGES_CONFIG).forEach(([pageName, config]) => {
-        const rolesHtml = config.allowedRoles.map(role => {
-          return `<span class="badge" style="background: #667eea;">${getRoleLabel(role)}</span>`;
-        }).join('');
-
-        const categoryBg = config.category === 'admin' ? '#fee2e2' : '#dbeafe';
-        const categoryColor = config.category === 'admin' ? '#dc2626' : '#2563eb';
-
-        html += `
-          <div class="permission-card">
-            <div style="display: flex; justify-content: space-between; align-items: start;">
-              <div style="flex-grow: 1;">
-                <div style="display: flex; align-items: center; margin-bottom: 0.5rem;">
-                  <div style="width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: ${categoryBg}; color: ${categoryColor}; margin-right: 1rem; font-size: 1.2rem;">
-                    <i class="bi ${config.icon}"></i>
-                  </div>
-                  <div>
-                    <h5 style="margin: 0; color: #1f2937; font-weight: 600;">
-                      ${pageName}
-                    </h5>
-                    <small style="color: #6b7280;">${config.description}</small>
-                  </div>
-                </div>
-
-                <div style="margin-top: 1rem;">
-                  <small style="font-weight: 600; color: #4b5563; display: block; margin-bottom: 0.5rem;">
-                    Roles permitidos:
-                  </small>
-                  <div>
-                    ${rolesHtml}
-                  </div>
-                </div>
-              </div>
-
-              <div style="text-align: right;">
-                <button class="btn btn-sm btn-outline-primary" onclick="openPageModal('${pageName}')">
-                  <i class="bi bi-pencil"></i> Editar
-                </button>
-              </div>
+      list.innerHTML = state.pages.map(page => {
+        const totalGrupos = (page.group_ids || []).length;
+        const infoGrupos = totalGrupos > 0
+          ? `<span class="perm-status-pill efetivo" title="Esta página também tem ${totalGrupos} grupo(s) liberado(s) na aba 'Por Grupo'.">+${totalGrupos} grupo(s)</span>`
+          : '';
+        return `
+        <div class="perm-page-card">
+          <div class="perm-page-header">
+            <div class="perm-page-icon ${page.category || 'operational'}">
+              <i class="bi ${page.icon || 'bi-file-earmark'}"></i>
+            </div>
+            <div class="perm-page-info" style="flex:1;">
+              <h5>${escapeHtml(page.display_name)}
+                <small style="color:#9CA3AF;font-size:11px;font-weight:500;margin-left:6px;">${escapeHtml(page.page_key)}</small>
+                ${infoGrupos}
+              </h5>
+              <small>${escapeHtml(page.description || '')}</small>
             </div>
           </div>
-        `;
-      });
-
-      list.innerHTML = html || '<p style="color: #6b7280;">Nenhuma página encontrada</p>';
-    }
-
-    function getRoleLabel(role) {
-      const labels = {
-        'USER': '👤 Usuário Comum',
-        'RESPONSAVEL_GRUPO': '👨‍💼 Responsável',
-        'TI': '🔧 TI',
-        'MANAGER': '📊 Gerente',
-        'ADMIN': '🔐 Admin'
-      };
-      return labels[role] || role;
-    }
-  </script>
-
-  <!-- ================================================== -->
-  <!-- FUNCAO: renderMatrix -->
-  <!-- ================================================== -->
-  <script>
-    function renderMatrix() {
-      const tbody = document.getElementById('matrixBody');
-      let html = '';
-
-      Object.entries(PAGES_CONFIG).forEach(([pageName, config]) => {
-        html += '<tr>';
-        html += `<td><strong>${pageName}</strong></td>`;
-
-        ROLES.forEach(role => {
-          const hasAccess = config.allowedRoles.includes(role);
-          const icon = hasAccess 
-            ? '<i class="bi bi-check-circle-fill" style="color: #10b981; font-size: 1.2rem;"></i>'
-            : '<i class="bi bi-x-circle" style="color: #ef4444; font-size: 1.2rem;"></i>';
-          html += `<td class="text-center">${icon}</td>`;
-        });
-
-        html += '</tr>';
-      });
-
-      tbody.innerHTML = html;
-    }
-  </script>
-
-  <!-- ================================================== -->
-  <!-- FUNCAO: openPageModal -->
-  <!-- ================================================== -->
-  <script>
-    function openPageModal(pageName) {
-      const config = PAGES_CONFIG[pageName];
-
-      document.getElementById('pageNameDisplay').innerHTML = `
-        <i class="bi ${config.icon}"></i> ${pageName}
-        <small style="color: #6b7280; font-weight: 400; display: block; margin-top: 0.5rem;">
-          ${config.description}
-        </small>
-      `;
-
-      let checkboxHtml = '';
-      ROLES.forEach(role => {
-        const isChecked = config.allowedRoles.includes(role);
-        checkboxHtml += `
-          <div style="margin-bottom: 0.75rem;">
-            <label style="cursor: pointer; display: flex; align-items: center;">
-              <input type="checkbox" value="${role}" ${isChecked ? 'checked' : ''} 
-                     data-page="${pageName}" onchange="updateSelectedRoles('${pageName}')" 
-                     style="margin-right: 0.5rem;">
-              ${getRoleLabel(role)}
-            </label>
+          <div class="perm-toggles-grid">
+            ${state.roles.map(role => {
+              const checked = (page.roles || []).includes(role);
+              return `
+                <label class="perm-toggle-item">
+                  <span class="perm-switch">
+                    <input type="checkbox" data-role="${role}" data-page="${page.page_key}"
+                           ${checked ? 'checked' : ''}>
+                    <span class="perm-switch-slider"></span>
+                  </span>
+                  <span class="label">${role.replace('_', ' ')}</span>
+                </label>
+              `;
+            }).join('')}
           </div>
-        `;
+        </div>
+      `;
+      }).join('');
+
+      // Bind dos toggles
+      list.querySelectorAll('input[type="checkbox"][data-role]').forEach(cb => {
+        cb.addEventListener('change', async () => {
+          const pageKey = cb.dataset.page;
+          const page = state.pages.find(p => p.page_key === pageKey);
+          if (!page) return;
+          const set = new Set(page.roles || []);
+          if (cb.checked) set.add(cb.dataset.role); else set.delete(cb.dataset.role);
+          await saveRolesForPage(pageKey, Array.from(set));
+          // Re-renderiza ambas as abas: o aviso "role amplo ativo" da aba
+          // de grupo depende do estado atualizado dos roles.
+          renderGroupsTab();
+        });
       });
 
-      document.getElementById('roleCheckboxes').innerHTML = checkboxHtml;
-      updateSelectedRoles(pageName);
-
-      const modal = new bootstrap.Modal(document.getElementById('editPageModal'));
-      modal.show();
-
-      window.currentEditingPage = pageName;
+      $('#cntRole').textContent = state.pages.length;
     }
 
-    function updateSelectedRoles(pageName) {
-      const checkboxes = document.querySelectorAll(`input[data-page="${pageName}"]:checked`);
-      const selected = Array.from(checkboxes).map(cb => getRoleLabel(cb.value)).join(', ');
-      document.getElementById('selectedRolesDisplay').textContent = selected || 'Nenhum';
-    }
-
-    async function savePagePermission() {
-      const pageName = window.currentEditingPage;
-      const checkboxes = document.querySelectorAll(`input[data-page="${pageName}"]:checked`);
-      const selectedRoles = Array.from(checkboxes).map(cb => cb.value);
-
-      if (selectedRoles.length === 0) {
-        showModalError('editPageModal', '❌ Selecione pelo menos um role');
+    // ---- Render: Aba "Por Grupo" ----------------------------------------
+    //
+    // UX importante: quando um role "amplo" (USER ou RESPONSAVEL_GRUPO) já
+    // está liberado em "Por Role", a configuração por grupo vira redundante
+    // pra usuários desse role — qualquer um deles acessa independente do
+    // grupo. Mostramos um banner amarelo explicando isso e oferecemos um
+    // botão "Restringir agora" que remove os roles amplos em 1 clique.
+    function renderGroupsTab() {
+      const list = $('#groupPagesList');
+      if (!state.pages.length) {
+        list.innerHTML = '<div class="perm-empty"><i class="bi bi-inbox"></i>Nenhuma página cadastrada.</div>';
+        return;
+      }
+      if (!state.groups.length) {
+        list.innerHTML = '<div class="perm-empty"><i class="bi bi-info-circle"></i>Nenhum grupo cadastrado. Crie em <a href="/SistemaCPE/web/pages/groups.html">Grupos</a>.</div>';
         return;
       }
 
-      try {
-        const res = await fetch(`${API}/api/permissions/pages/${pageName}`, {
-          method: 'PUT',
-          headers: authHeaders(),
-          body: JSON.stringify({ allowed_roles: selectedRoles })
-        });
-        const data = await res.json();
-
-        if (!res.ok) throw new Error(data.detail || 'Erro ao salvar');
-
-        PAGES_CONFIG[pageName].allowedRoles = selectedRoles;
-        clearPermissionsCache();
-
-        showAlert(`✅ Página "${pageName}" atualizada com sucesso!`, 'success');
-        bootstrap.Modal.getInstance(document.getElementById('editPageModal')).hide();
-        renderPagesList();
-        renderMatrix();
-
-      } catch (err) {
-        showModalError('editPageModal', `❌ Erro: ${err.message}`);
-      }
-    }
-  </script>
-
-  <!-- ================================================== -->
-  <!-- FUNCAO: Exception Operations -->
-  <!-- ================================================== -->
-  <script>
-    function openExceptionModal() {
-      document.getElementById('exceptionUserId').value = '';
-      document.getElementById('exceptionType').value = 'block_page';
-      document.getElementById('exceptionItem').value = '';
-      document.getElementById('exceptionReason').value = '';
-      updateExceptionItemOptions();
-
-      const modal = new bootstrap.Modal(document.getElementById('exceptionModal'));
-      modal.show();
-    }
-
-    // Funcionalidades especiais que podem ser concedidas/bloqueadas individualmente
-    // A chave é salva como page_name em user_access_exceptions
-    const SPECIAL_FEATURES = {
-      'MANAGE_CATEGORIES': {
-        label:       'Gerenciar Categorias e Subcategorias',
-        description: 'Permite criar, editar e excluir categorias e subcategorias de grupos'
-      }
-    };
-
-    function updateExceptionItemOptions() {
-      const select = document.getElementById('exceptionItem');
-      select.innerHTML = '';
-
-      // Grupo 1: Páginas do sistema
-      const groupPages = document.createElement('optgroup');
-      groupPages.label = '📄 Páginas do Sistema';
-      Object.keys(PAGES_CONFIG).forEach(pageName => {
-        const option = document.createElement('option');
-        option.value = `page_${pageName}`;
-        option.textContent = pageName;
-        groupPages.appendChild(option);
+      // Agrupa grupos por departamento
+      const porDept = {};
+      state.groups.forEach(g => {
+        const dept = g.department_name || 'Sem Departamento';
+        (porDept[dept] = porDept[dept] || []).push(g);
       });
-      select.appendChild(groupPages);
 
-      // Grupo 2: Funcionalidades especiais
-      const groupFeatures = document.createElement('optgroup');
-      groupFeatures.label = '⚙️ Funcionalidades Especiais';
-      Object.entries(SPECIAL_FEATURES).forEach(([key, feat]) => {
-        const option = document.createElement('option');
-        option.value = `page_${key}`;  // mesmo prefixo → backend salva sem prefixo
-        option.textContent = `${key} — ${feat.label}`;
-        groupFeatures.appendChild(option);
-      });
-      select.appendChild(groupFeatures);
+      // Roles "amplos" — quando liberados, o controle por grupo perde
+      // efeito real (qualquer usuário desse role acessa).
+      const ROLES_AMPLOS = ['USER', 'RESPONSAVEL_GRUPO'];
 
-      document.getElementById('selectedItemsPreview').innerHTML = '<small>Nenhuma página selecionada</small>';
-    }
+      list.innerHTML = state.pages.map(page => {
+        const grupos = page.group_ids || [];
+        const roles  = page.roles || [];
+        const ampliosAtivos = roles.filter(r => ROLES_AMPLOS.includes(r));
 
-    // Atualizar preview quando selecionar itens
-    document.addEventListener('change', function(e) {
-      if (e.target.id === 'exceptionItem') {
-        const selectedOptions = Array.from(e.target.selectedOptions);
-
-        if (selectedOptions.length === 0) {
-          document.getElementById('selectedItemsPreview').innerHTML = '<small>Nenhum item selecionado</small>';
+        // Calcula status da regra por grupo
+        let statusPill = '';
+        if (ampliosAtivos.length && grupos.length) {
+          statusPill = '<span class="perm-status-pill redundante" title="A regra por role já libera todos os usuários desses roles — a config por grupo é redundante.">por grupo NÃO atua (role amplo libera)</span>';
+        } else if (grupos.length) {
+          statusPill = '<span class="perm-status-pill efetivo" title="O controle por grupo é o que decide o acesso.">por grupo atua</span>';
         } else {
-          const badgesHtml = selectedOptions.map(opt => {
-            const key = opt.value.replace(/^page_/, '');
-            const isFeature = key in SPECIAL_FEATURES;
-            const label = isFeature ? `⚙️ ${key}` : key;
-            const color  = isFeature ? '#6f42c1' : '#667eea';
-            return `<span class="badge" style="background:${color}; margin-right:.4rem; margin-bottom:.4rem;" title="${isFeature ? SPECIAL_FEATURES[key].description : ''}">${label}</span>`;
-          }).join('');
-          document.getElementById('selectedItemsPreview').innerHTML = badgesHtml;
+          statusPill = '<span class="perm-status-pill vazio">nenhum grupo liberado</span>';
         }
-      }
-    });
 
-    async function saveException() {
-      const userId = document.getElementById('exceptionUserId').value;
-      const type   = document.getElementById('exceptionType').value;
-      const pages  = Array.from(document.getElementById('exceptionItem').selectedOptions)
-                       .map(opt => opt.value.replace(/^page_/, ''));
-      const reason = document.getElementById('exceptionReason').value;
-
-      if (!userId) { showModalError('exceptionModal', '❌ Selecione um usuário'); return; }
-      if (pages.length === 0) { showModalError('exceptionModal', '❌ Selecione pelo menos uma página'); return; }
-
-      const exType = type === 'block_page' ? 'block' : 'allow';
-      const currentUser = JSON.parse(localStorage.getItem('cpe_user') || '{}');
-
-      try {
-        const res = await fetch(`${API}/api/permissions/exceptions`, {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({
-            user_id: parseInt(userId),
-            page_names: pages,
-            exception_type: exType,
-            reason: reason,
-            created_by: currentUser.id || null
-          })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Erro ao salvar');
-
-        clearPermissionsCache();
-        showAlert(`✅ ${data.inserted} exceção(ões) criada(s)!`, 'success');
-        bootstrap.Modal.getInstance(document.getElementById('exceptionModal')).hide();
-        await loadExceptionsFromAPI();
-
-      } catch (err) {
-        showModalError('exceptionModal', `❌ Erro: ${err.message}`);
-      }
-    }
-
-    async function deleteException(userId) {
-      if (!confirm('❓ Deletar TODAS as exceções deste usuário?')) return;
-      try {
-        const res  = await fetch(`${API}/api/permissions/exceptions/user/${userId}`, {
-          method: 'DELETE',
-          headers: authHeaders()
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Erro ao deletar');
-
-        clearPermissionsCache();
-        showAlert(`✅ ${data.deleted} exceção(ões) deletada(s)!`, 'success');
-        await loadExceptionsFromAPI();
-
-      } catch (err) {
-        showAlert(`❌ Erro: ${err.message}`, 'danger');
-      }
-    }
-
-    function renderExceptionsList() {
-      const list = document.getElementById('exceptionsList');
-      let html = '';
-
-      if (Object.keys(ACCESS_EXCEPTIONS).length === 0) {
-        html = '<p style="color: #6b7280;"><i class="bi bi-info-circle"></i> Nenhuma exceção configurada</p>';
-      } else {
-        Object.entries(ACCESS_EXCEPTIONS).forEach(([key, exception]) => {
-          const userId = key.replace('userId_', '');
-          const userInfo = USERS_MAP[userId];
-          const userLabel = userInfo
-            ? `${userInfo.name} <small style="color:#6b7280;">(${userInfo.email} — ${userInfo.role})</small>`
-            : `ID: ${userId} <small style="color:#ef4444;">(usuário não encontrado)</small>`;
-
-          const blockCount = exception.blockPages?.length || 0;
-          const allowCount = exception.allowPages?.length || 0;
-          const totalItems = blockCount + allowCount;
-
-          html += `
-            <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
-              <div style="display: flex; justify-content: space-between; align-items: start;">
-                <div style="flex-grow: 1;">
-                  <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem;">
-                    <strong style="font-size: 1rem;">👤 ${userLabel}</strong>
-                    <span class="badge bg-warning">${totalItems} ${totalItems === 1 ? 'exceção' : 'exceções'}</span>
-                  </div>
-
-                  ${blockCount > 0 ? `
-                    <div style="margin: 0.5rem 0; padding: 0.75rem; background: #fee2e2; border-left: 4px solid #ef4444; border-radius: 4px;">
-                      <small style="color: #7f1d1d; font-weight: 600;">
-                        <i class="bi bi-x-circle-fill"></i> Bloqueios (${blockCount}):
-                      </small>
-                      <div style="margin-top: 0.3rem;">
-                        ${exception.blockPages.map(p => `<span class="badge bg-danger" style="margin-right: 0.3rem; margin-bottom: 0.3rem;" title="${SPECIAL_FEATURES[p]?.description || ''}">${SPECIAL_FEATURES[p] ? '⚙️ ' + p : p}</span>`).join('')}
-                      </div>
-                    </div>
-                  ` : ''}
-
-                  ${allowCount > 0 ? `
-                    <div style="margin: 0.5rem 0; padding: 0.75rem; background: #d1fae5; border-left: 4px solid #10b981; border-radius: 4px;">
-                      <small style="color: #065f46; font-weight: 600;">
-                        <i class="bi bi-check-circle-fill"></i> Permissões Concedidas (${allowCount}):
-                      </small>
-                      <div style="margin-top: 0.3rem;">
-                        ${exception.allowPages.map(p => `<span class="badge bg-success" style="margin-right: 0.3rem; margin-bottom: 0.3rem;" title="${SPECIAL_FEATURES[p]?.description || ''}">${SPECIAL_FEATURES[p] ? '⚙️ ' + p : p}</span>`).join('')}
-                      </div>
-                    </div>
-                  ` : ''}
-                </div>
-
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteException(${userId})">
-                  <i class="bi bi-trash"></i> Deletar exceções
+        // Banner de aviso se há roles amplos ativos
+        const banner = ampliosAtivos.length ? `
+          <div class="perm-warn-banner">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            <div style="flex:1;">
+              <strong>Atenção:</strong> ${ampliosAtivos.map(r => `<code>${r.replace('_',' ')}</code>`).join(' e ')} ${ampliosAtivos.length > 1 ? 'estão liberados' : 'está liberado'} em <strong>"Por Role"</strong>.
+              Qualquer usuário desses tipos vai acessar essa página, mesmo que o grupo dele não esteja marcado abaixo.
+              <div class="actions">
+                <button onclick="window._permRestringirRolesAmplos('${page.page_key}')" title="Remove ${ampliosAtivos.join(', ')} de Por Role">
+                  <i class="bi bi-shield-check"></i> Restringir só por grupo
+                </button>
+                <button class="ghost" onclick="window._permIrParaRoles()" title="Trocar para a aba Por Role">
+                  <i class="bi bi-arrow-up-right"></i> Ajustar manualmente em "Por Role"
                 </button>
               </div>
             </div>
-          `;
+          </div>
+        ` : '';
+
+        return `
+          <div class="perm-page-card">
+            <div class="perm-page-header">
+              <div class="perm-page-icon ${page.category || 'operational'}">
+                <i class="bi ${page.icon || 'bi-file-earmark'}"></i>
+              </div>
+              <div class="perm-page-info" style="flex:1;">
+                <h5>${escapeHtml(page.display_name)}
+                  <small style="color:#9CA3AF;font-size:11px;font-weight:500;margin-left:6px;">${escapeHtml(page.page_key)}</small>
+                </h5>
+                <small>${grupos.length} grupo(s) liberado(s) ${statusPill}</small>
+              </div>
+            </div>
+            ${banner}
+            ${Object.entries(porDept).map(([dept, lista]) => `
+              <div class="perm-dept-group">
+                <div class="perm-dept-title"><i class="bi bi-building"></i> ${escapeHtml(dept)}</div>
+                <div class="perm-toggles-grid">
+                  ${lista.map(g => `
+                    <label class="perm-toggle-item">
+                      <span class="perm-switch">
+                        <input type="checkbox" data-group="${g.id}" data-page="${page.page_key}"
+                               ${grupos.includes(g.id) ? 'checked' : ''}>
+                        <span class="perm-switch-slider"></span>
+                      </span>
+                      <span class="label">${escapeHtml(g.name)}</span>
+                    </label>
+                  `).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      }).join('');
+
+      list.querySelectorAll('input[type="checkbox"][data-group]').forEach(cb => {
+        cb.addEventListener('change', () => {
+          const pageKey = cb.dataset.page;
+          const groupId = parseInt(cb.dataset.group);
+          const page = state.pages.find(p => p.page_key === pageKey);
+          if (!page) return;
+          const set = new Set(page.group_ids || []);
+          if (cb.checked) set.add(groupId); else set.delete(groupId);
+          saveGroupsForPage(pageKey, Array.from(set));
+          renderGroupsTab();  // refresca status pill ao mudar
         });
-      }
+      });
 
-      list.innerHTML = html;
+      // Ações rápidas chamadas pelos botões do banner
+      window._permRestringirRolesAmplos = async function (pageKey) {
+        const page = state.pages.find(p => p.page_key === pageKey);
+        if (!page) return;
+        const novoRoles = (page.roles || []).filter(r => !ROLES_AMPLOS.includes(r));
+        if (!confirm(
+          `Remover os roles "${ROLES_AMPLOS.join(', ')}" da página "${page.display_name}"?\n\n` +
+          `Após isso, só usuários TI/MANAGER/ADMIN ou que estejam em grupos marcados aqui terão acesso.`
+        )) return;
+        await saveRolesForPage(pageKey, novoRoles);
+        renderGroupsTab();
+        renderRolesTab();
+      };
+
+      window._permIrParaRoles = function () {
+        document.querySelector('.perm-tab[data-tab="role"]').click();
+      };
+
+      $('#cntGroup').textContent = state.pages.length;
     }
 
-    // Mapa global: userId → dados do usuário (para exibir nome nas exceções)
-    let USERS_MAP = {};
+    // ---- Render: Matriz -------------------------------------------------
+    function renderMatrix() {
+      const tbody = $('#matrixBody');
+      const grupoNome = id => {
+        const g = state.groups.find(x => x.id === id);
+        return g ? g.name : `#${id}`;
+      };
+      tbody.innerHTML = state.pages.map(p => `
+        <tr>
+          <td>
+            <i class="bi ${p.icon || 'bi-file-earmark'}" style="color:#9CA3AF;margin-right:6px;"></i>
+            <strong>${escapeHtml(p.display_name)}</strong>
+            <div style="color:#9CA3AF;font-size:11px;">${escapeHtml(p.page_key)}</div>
+          </td>
+          <td class="center"><span class="badge bg-light text-dark">${p.category || ''}</span></td>
+          ${state.roles.map(role => {
+            const ok = (p.roles || []).includes(role);
+            return `<td class="center ${ok ? 'cell-yes' : 'cell-no'}">
+                      <i class="bi ${ok ? 'bi-check-circle-fill' : 'bi-dash'}"></i>
+                    </td>`;
+          }).join('')}
+          <td>
+            ${(p.group_ids || []).length === 0
+              ? '<span style="color:#9CA3AF;font-size:12px;">—</span>'
+              : (p.group_ids || []).map(id =>
+                  `<span class="badge bg-primary" style="margin:2px;">${escapeHtml(grupoNome(id))}</span>`
+                ).join('')}
+          </td>
+        </tr>
+      `).join('');
+    }
 
-    function loadUsers() {
-      const token = localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token');
-      fetch(`${API}/api/users`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-        .then(r => r.json())
-        .then(data => {
-          const users = data.users || data;
-          const select = document.getElementById('exceptionUserId');
-          select.innerHTML = '<option value="">-- Selecione um usuário --</option>';
-          users.forEach(user => {
-            USERS_MAP[user.id] = user;
-            const option = document.createElement('option');
-            option.value = user.id;
-            option.textContent = `${user.name} (${user.email}) — ${user.role}`;
-            select.appendChild(option);
-          });
-          // Atualiza lista de exceções com nomes reais
-          renderExceptionsList();
-        })
-        .catch(err => {
-          console.warn('[PERMISSIONS] Erro ao carregar usuários:', err);
-          showAlert('⚠️ Erro ao carregar lista de usuários. Verifique se o servidor está rodando.', 'danger');
+    // ---- Render: Exceções -----------------------------------------------
+    function renderExceptionsTab() {
+      const list = $('#exceptionsList');
+      $('#cntExc').textContent = state.exceptions.length;
+
+      if (!state.exceptions.length) {
+        list.innerHTML = '<div class="perm-empty"><i class="bi bi-info-circle"></i>Nenhuma exceção cadastrada.</div>';
+        return;
+      }
+
+      // Agrupa por usuário
+      const porUser = {};
+      state.exceptions.forEach(e => {
+        (porUser[e.user_id] = porUser[e.user_id] || {
+          user_name: e.user_name, user_email: e.user_email, user_role: e.user_role,
+          block: [], allow: []
+        })[e.exception_type === 'block' ? 'block' : 'allow'].push(e);
+      });
+
+      list.innerHTML = Object.entries(porUser).map(([userId, u]) => `
+        <div class="perm-page-card">
+          <div style="display:flex;justify-content:space-between;align-items:start;gap:12px;">
+            <div>
+              <h5 style="margin:0 0 4px;">
+                <i class="bi bi-person-circle"></i> ${escapeHtml(u.user_name || 'Usuário #' + userId)}
+              </h5>
+              <small style="color:#6B7280;">${escapeHtml(u.user_email || '')} &middot; ${escapeHtml(u.user_role || '')}</small>
+              ${u.block.length ? `
+                <div style="margin-top:10px;padding:8px 12px;background:#FEE2E2;border-left:3px solid #DC2626;border-radius:4px;">
+                  <strong style="color:#7F1D1D;font-size:12px;"><i class="bi bi-x-circle-fill"></i> Bloqueios:</strong>
+                  ${u.block.map(b => `<span class="badge bg-danger" style="margin:2px;">${escapeHtml(b.page_name)}</span>`).join('')}
+                </div>` : ''}
+              ${u.allow.length ? `
+                <div style="margin-top:8px;padding:8px 12px;background:#DCFCE7;border-left:3px solid #16A34A;border-radius:4px;">
+                  <strong style="color:#15803D;font-size:12px;"><i class="bi bi-check-circle-fill"></i> Liberações:</strong>
+                  ${u.allow.map(a => `<span class="badge bg-success" style="margin:2px;">${escapeHtml(a.page_name)}</span>`).join('')}
+                </div>` : ''}
+            </div>
+            <button class="btn btn-sm btn-outline-danger" onclick="window.deleteUserExceptions(${userId})" title="Remover todas exceções deste usuário">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Modal exceção
+    window.deleteUserExceptions = async function (userId) {
+      if (!confirm('Remover TODAS as exceções deste usuário?')) return;
+      try {
+        const r = await fetch(`${PERM}/exceptions/user/${userId}`, {
+          method: 'DELETE', headers: authHeaders()
         });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        showToast('Exceções removidas');
+        await fetchExceptions();
+        renderExceptionsTab();
+      } catch (err) {
+        showToast('Erro: ' + err.message, 'error');
+      }
+    };
+
+    function openExceptionModal() {
+      // Popula select de usuários
+      const selUser = $('#exceptionUserId');
+      selUser.innerHTML = '<option value="">-- Selecione --</option>'
+        + state.users.map(u => `<option value="${u.id}">${escapeHtml(u.name)} (${escapeHtml(u.email)}) - ${u.role}</option>`).join('');
+
+      // Popula select de páginas
+      const selPg = $('#exceptionPages');
+      selPg.innerHTML = state.pages.map(p =>
+        `<option value="${p.page_key}">${escapeHtml(p.display_name)} (${p.page_key})</option>`).join('');
+
+      $('#exceptionType').value = 'block';
+      $('#exceptionReason').value = '';
+      $('#exceptionModalError').classList.add('d-none');
+
+      new bootstrap.Modal($('#exceptionModal')).show();
     }
-  </script>
 
-  <!-- ================================================== -->
-  <!-- FUNCOES: Helper Functions -->
-  <!-- ================================================== -->
-  <script>
-    function showAlert(message, type = 'info') {
-      const alertBox = document.getElementById(`${type}Box`);
-      const messageSpan = document.getElementById(`${type}Message`);
+    async function saveException() {
+      const userId = parseInt($('#exceptionUserId').value || 0);
+      const tipo   = $('#exceptionType').value;
+      const reason = $('#exceptionReason').value.trim();
+      const pages  = Array.from($('#exceptionPages').selectedOptions).map(o => o.value);
 
-      if (alertBox && messageSpan) {
-        messageSpan.textContent = message;
-        alertBox.classList.remove('d-none');
+      if (!userId) return showModalErr('Selecione um usuário');
+      if (!pages.length) return showModalErr('Selecione ao menos uma página');
 
-        setTimeout(() => {
-          alertBox.classList.add('d-none');
-        }, 5000);
+      const me = JSON.parse(localStorage.getItem('cpe_user') || '{}');
+      try {
+        const r = await fetch(`${PERM}/exceptions`, {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({
+            user_id: userId, page_names: pages, exception_type: tipo,
+            reason: reason, created_by: me.id || null,
+          }),
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || 'HTTP ' + r.status);
+        bootstrap.Modal.getInstance($('#exceptionModal')).hide();
+        showToast(`${data.inserted || pages.length} exceção(ões) criada(s)`);
+        await fetchExceptions();
+        renderExceptionsTab();
+      } catch (err) {
+        showModalErr('Erro: ' + err.message);
       }
     }
 
-    function showModalError(modalId, message) {
-      const errorBox = document.getElementById(`${modalId}Error`);
-      if (errorBox) {
-        errorBox.textContent = message;
-        errorBox.classList.remove('d-none');
+    function showModalErr(msg) {
+      const el = $('#exceptionModalError');
+      el.textContent = msg;
+      el.classList.remove('d-none');
+      setTimeout(() => el.classList.add('d-none'), 5000);
+    }
 
-        setTimeout(() => {
-          errorBox.classList.add('d-none');
-        }, 5000);
+    // ---- Tabs -----------------------------------------------------------
+    function bindTabs() {
+      $$('.perm-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          const target = tab.dataset.tab;
+          $$('.perm-tab').forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+          $$('.perm-tab-content').forEach(c => c.classList.remove('active'));
+          const content = document.querySelector(`.perm-tab-content[data-tab="${target}"]`);
+          if (content) content.classList.add('active');
+          state.currentTab = target;
+        });
+      });
+    }
+
+    // ---- Init -----------------------------------------------------------
+    async function init() {
+      try {
+        await Promise.all([fetchCatalog(), fetchExceptions(), fetchUsers()]);
+        renderRolesTab();
+        renderGroupsTab();
+        renderMatrix();
+        renderExceptionsTab();
+        bindTabs();
+
+        $('#btnNewException').addEventListener('click', openExceptionModal);
+        $('#btnSaveException').addEventListener('click', saveException);
+
+        console.log('[PERMISSIONS] ✅ pronto:',
+          state.pages.length, 'páginas,',
+          state.groups.length, 'grupos,',
+          state.exceptions.length, 'exceções');
+      } catch (err) {
+        console.error('[PERMISSIONS]', err);
+        showError('Erro ao carregar: ' + err.message);
       }
     }
-  </script>
 
+    document.addEventListener('authenticationSuccess', init);
+    if (document.readyState !== 'loading') setTimeout(init, 200);
+    else document.addEventListener('DOMContentLoaded', () => setTimeout(init, 200));
+  })();
+  </script>
 </body>
-
 </html>

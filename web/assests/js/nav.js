@@ -94,44 +94,73 @@ const globalMenu = [
   // ==================================================
   { path: "/SistemaCPE/web/pages/permissions.html", label: "Permissões", icon: "bi-shield-lock", requiredRoles: ["ADMIN"] }
 ];
-// ================================================== 
-// FUNÇÃO: getFilteredMenu() - Filtrar menu por ROLE
-// Data: 01/04/2026
 // ==================================================
+// getFilteredMenu — REFATORADO 2026-05-05
+//
+// Agora usa /api/permissions/me/menu (lógica canônica do backend que
+// considera role + grupo + exceções), em vez de fazer o filtro
+// localmente baseado só em requiredRoles.
+//
+// Mantém o `globalMenu` hardcoded como fonte de label/icon/submenu —
+// porque essas informações de UI (ordem, ícones, agrupamento em
+// submenu) ainda não estão no banco. O backend só decide QUAIS pages
+// o user pode ver; o front decide COMO mostrar.
+// ==================================================
+function pageKeyFromPath(path) {
+  return (path || '').split('/').pop().replace('.html', '').replace(/-/g, '_').toUpperCase();
+}
+
 async function getFilteredMenu(userRole, userId) {
-  console.log("[NAV/MENU] 🔍 Filtrando menu para role: " + userRole);
+  console.log("[NAV/MENU] 🔍 Filtrando menu pelo backend canônico (role + grupo + exceções)");
 
-  function pageKeyFromPath(path) {
-    return (path || '').split('/').pop().replace('.html', '').replace(/-/g, '_').toUpperCase();
+  // Sem user_id válido: trata como sem permissão (retorna vazio)
+  if (!userId) {
+    console.warn("[NAV/MENU] ⚠️ userId não informado — menu vazio");
+    return [];
   }
 
-  let exc = { allowPages: [], blockPages: [] };
-  if (userId && typeof fetchUserExceptions === 'function') {
-    try {
-      exc = await fetchUserExceptions(userId);
-    } catch (e) {
-      console.warn('[NAV/MENU] ⚠️ Não foi possível carregar exceções:', e.message);
+  // 1) Pergunta ao backend quais page_keys o user pode acessar
+  const apiBase = (typeof API_BASE_URL !== 'undefined')
+    ? API_BASE_URL
+    : `http://${location.hostname || '127.0.0.1'}:8000`;
+
+  let allowedKeys = null;
+  try {
+    const r = await fetch(`${apiBase}/api/permissions/me/menu?user_id=${userId}`);
+    if (r.ok) {
+      const data = await r.json();
+      allowedKeys = new Set((data.pages || []).map(p => p.page_key));
+      console.log(`[NAV/MENU] ✅ Backend retornou ${allowedKeys.size} páginas permitidas`);
+    } else {
+      console.warn(`[NAV/MENU] ⚠️ /me/menu falhou (HTTP ${r.status}); usando fallback por role`);
     }
+  } catch (e) {
+    console.warn('[NAV/MENU] ⚠️ Erro ao chamar /me/menu:', e.message, '- fallback por role');
   }
 
-  return globalMenu.filter(item => {
-    const pageKey = pageKeyFromPath(item.path);
-    if (exc.blockPages.includes(pageKey)) return false;
-    if (exc.allowPages.includes(pageKey)) return true;
+  // Fallback: se o backend caiu, usa requiredRoles do globalMenu (comportamento antigo)
+  // — assim o sistema continua navegável mesmo se a API estiver fora do ar.
+  function passaFallback(item) {
+    return !item.requiredRoles || item.requiredRoles.includes(userRole);
+  }
+  function passa(item) {
+    if (allowedKeys === null) return passaFallback(item);
+    if (!item.path) return true;  // wrapper de submenu: avalia pelos filhos
+    return allowedKeys.has(pageKeyFromPath(item.path));
+  }
 
-    const hasPermission = !item.requiredRoles || item.requiredRoles.includes(userRole);
-
-    if (hasPermission && item.submenu) {
-      item.submenu = item.submenu.filter(subitem => {
-        const subKey = pageKeyFromPath(subitem.path);
-        if (exc.blockPages.includes(subKey)) return false;
-        if (exc.allowPages.includes(subKey)) return true;
-        return !subitem.requiredRoles || subitem.requiredRoles.includes(userRole);
-      });
-    }
-
-    return hasPermission;
-  });
+  // 2) Filtra globalMenu mantendo a estrutura (label, icon, submenu)
+  return globalMenu
+    .map(item => {
+      // Item com submenu: filtra subitens primeiro
+      if (item.submenu && Array.isArray(item.submenu)) {
+        const subFiltered = item.submenu.filter(passa);
+        if (subFiltered.length === 0) return null;     // esconde wrapper se zero filhos
+        return { ...item, submenu: subFiltered };
+      }
+      return passa(item) ? item : null;
+    })
+    .filter(Boolean);
 }
 
 /* =========================================

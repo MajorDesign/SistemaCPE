@@ -69,10 +69,9 @@
     /* ── Spinner ── */
     .aval-loading { text-align:center; padding:40px; color:#9ca3af; }
   </style>
-
-  <script src="/SistemaCPE/web/assests/js/per_usuario/access-config.js"></script>
-  <script src="/SistemaCPE/web/assests/js/per_usuario/page-access-control.js"></script>
-  <script>checkPageAccess('AVALIACOES');</script>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
+  <script>pageGuard('AVALIACOES');</script>
 </head>
 
 <body>
@@ -234,7 +233,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/route-protection.js"></script>
   <script src="/SistemaCPE/web/assests/js/api.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
