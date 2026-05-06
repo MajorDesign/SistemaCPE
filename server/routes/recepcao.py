@@ -23,11 +23,26 @@ Endpoints (prefixo /api/recepcao):
 """
 
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import List, Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
+
+
+# ============================================================
+# UTILS
+# ============================================================
+# Padrão dos códigos de rastreio dos Correios: AA123456789BR
+# (2 letras maiúsculas + 9 dígitos + 2 letras maiúsculas)
+_CODIGO_CORREIOS_RE = re.compile(r"^[A-Z]{2}\d{9}[A-Z]{2}$")
+
+def validar_codigo(codigo: str) -> bool:
+    """Valida o formato do código de rastreio dos Correios (AA123456789BR)."""
+    if not codigo:
+        return True   # opcional
+    return bool(_CODIGO_CORREIOS_RE.match(codigo.strip().upper()))
 
 from database import (
     get_db_or_404,
