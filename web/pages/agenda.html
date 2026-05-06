@@ -34,6 +34,9 @@
 <!-- ===================== WRAPPER ===================== -->
 <div class="agenda-wrapper" id="agendaApp" style="display:none">
 
+  <!-- BACKDROP MOBILE (clicar fecha sidebar) -->
+  <div class="agenda-mobile-backdrop" id="agendaBackdrop" onclick="closeMobileSidebar()"></div>
+
   <!-- SIDEBAR -->
   <aside class="agenda-sidebar" id="agendaSidebar">
     <div class="agenda-sidebar-logo">
@@ -80,6 +83,9 @@
 
     <!-- TOP BAR -->
     <div class="agenda-topbar">
+      <button class="agenda-mobile-burger" onclick="toggleMobileSidebar()" aria-label="Abrir menu">
+        <i class="bi bi-list"></i>
+      </button>
       <span class="agenda-topbar-title" id="topbarTitle">Calendário</span>
       <span class="agenda-topbar-badge"><i class="bi bi-calendar2-event-fill"></i> AGENDA</span>
       <span style="margin-left:auto;display:flex;align-items:center;gap:16px">
@@ -388,6 +394,33 @@
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales/pt-br.global.min.js"></script>
 <script src="/SistemaCPE/web/assests/js/agenda.js"></script>
+
+<!-- ============================================================ -->
+<!-- MOBILE SIDEBAR (overlay com backdrop)                         -->
+<!-- ============================================================ -->
+<script>
+function toggleMobileSidebar() {
+  const sb = document.getElementById('agendaSidebar');
+  const bd = document.getElementById('agendaBackdrop');
+  const open = sb.classList.toggle('mobile-open');
+  bd.classList.toggle('show', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+function closeMobileSidebar() {
+  const sb = document.getElementById('agendaSidebar');
+  const bd = document.getElementById('agendaBackdrop');
+  sb.classList.remove('mobile-open');
+  bd.classList.remove('show');
+  document.body.style.overflow = '';
+}
+// Fecha automaticamente ao clicar em qualquer item da sidebar no mobile
+document.addEventListener('click', e => {
+  const link = e.target.closest('.agenda-nav-link, .agenda-back-btn');
+  if (link && window.matchMedia('(max-width: 768px)').matches) {
+    closeMobileSidebar();
+  }
+});
+</script>
 
 </body>
 </html>

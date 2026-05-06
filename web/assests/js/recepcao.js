@@ -529,15 +529,24 @@ function statusToColor(status) {
 
 function initCalendar() {
   const el = $('calendar');
+  // Em mobile a vista "Semana" do FullCalendar fica ilegível em 414px.
+  // Usamos "listWeek" (agenda em lista) que escala bem em telas estreitas.
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+
   calendar = new FullCalendar.Calendar(el, {
     locale: 'pt-br',
-    initialView: 'timeGridWeek',
+    initialView: isMobile ? 'listWeek' : 'timeGridWeek',
     firstDay: 0,
-    headerToolbar: {
-      left:   'prev,next today',
-      center: 'title',
-      right:  'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
-    },
+    headerToolbar: isMobile
+      ? { left: 'prev,next', center: 'title', right: 'today' }
+      : {
+          left:   'prev,next today',
+          center: 'title',
+          right:  'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
+        },
+    footerToolbar: isMobile
+      ? { center: 'dayGridMonth,listWeek,timeGridDay' }
+      : false,
     // Tradução manual — garante PT-BR mesmo se o pacote de locale não carregar
     buttonText: {
       today:   'Hoje',
@@ -552,7 +561,8 @@ function initCalendar() {
     moreLinkText: n => `+${n} mais`,
     noEventsText: 'Nenhuma reserva no período',
     weekText: 'Sem',
-    height: 720,
+    height: isMobile ? 'auto' : 720,
+    contentHeight: isMobile ? 'auto' : undefined,
     nowIndicator: true,
     slotMinTime: '07:00:00',
     slotMaxTime: '22:00:00',

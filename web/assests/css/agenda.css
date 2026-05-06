@@ -31,6 +31,15 @@ body.agenda-body {
   overflow-x: hidden;
 }
 
+/* Mídias respeitam container — evita estourar largura em mobile */
+body.agenda-body img,
+body.agenda-body canvas,
+body.agenda-body svg,
+body.agenda-body video,
+body.agenda-body iframe { max-width: 100%; }
+body.agenda-body img,
+body.agenda-body video { height: auto; }
+
 /* LOADING */
 #agendaLoading {
   position: fixed; inset: 0;
@@ -50,7 +59,13 @@ body.agenda-body {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* LAYOUT */
-.agenda-wrapper { display: flex; min-height: 100vh; }
+.agenda-wrapper {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
 
 /* SIDEBAR */
 .agenda-sidebar {
@@ -161,10 +176,13 @@ body.agenda-body {
 .agenda-content {
   margin-left: var(--agenda-sidebar-w);
   flex: 1;
+  min-width: 0;          /* evita que children flex empurrem largura */
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   transition: margin-left .25s ease;
+  overflow-x: hidden;
 }
 .agenda-content.sidebar-collapsed { margin-left: var(--agenda-sidebar-collapsed); }
 
@@ -523,12 +541,148 @@ body.agenda-body {
   opacity: .5;
 }
 
-/* Responsivo */
+/* ============================================================
+   RESPONSIVO
+   ============================================================ */
+
+/* Hamburguer (visível só em mobile) */
+.agenda-mobile-burger {
+  display: none;
+  background: none;
+  border: 0;
+  font-size: 24px;
+  color: var(--agenda-dark);
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+.agenda-mobile-burger:hover { color: var(--agenda-primary-d); }
+
+/* Backdrop atrás da sidebar mobile */
+.agenda-mobile-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 99;
+  animation: agendaFadeIn .15s ease;
+}
+@keyframes agendaFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.agenda-mobile-backdrop.show { display: block; }
+
 @media (max-width: 768px) {
-  .agenda-sidebar { transform: translateX(-100%); }
+  /* Sidebar como overlay */
+  .agenda-sidebar {
+    width: 280px;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 100;
+  }
   .agenda-sidebar.mobile-open { transform: translateX(0); }
-  .agenda-content { margin-left: 0; }
-  .agenda-section-header { flex-direction: column; align-items: stretch; }
+
+  /* Mantém textos legíveis quando aberta — sem mais "collapsed" em mobile */
+  .agenda-sidebar.collapsed { width: 280px; }
+  .agenda-sidebar.collapsed .agenda-logo-modulo,
+  .agenda-sidebar.collapsed .agenda-back-btn span,
+  .agenda-sidebar.collapsed .agenda-nav-link span { opacity: 1; }
+
+  /* Conteúdo ocupa 100% da tela */
+  .agenda-content,
+  .agenda-content.sidebar-collapsed { margin-left: 0; }
+
+  /* Hamburguer aparece, toggle do desktop some */
+  .agenda-mobile-burger { display: inline-flex; align-items: center; }
+  .agenda-sidebar-toggle { display: none; }
+
+  /* Topbar mais compacto */
+  .agenda-topbar { padding: 0 12px; gap: 8px; }
+  .agenda-topbar-title { font-size: 16px; }
+  .agenda-topbar-badge { display: none; }
+  #agendaConnInfo { display: none !important; }
+
+  /* Section header em coluna */
+  .agenda-section-header { flex-direction: column; align-items: stretch; gap: 12px; }
+  .agenda-section-header .actions { flex-wrap: wrap; }
+  .agenda-section-header .actions .btn-agenda { flex: 1; min-width: 120px; }
+
+  /* Card e page com menos padding */
+  .agenda-page { padding: 14px; }
+  .agenda-card { padding: 10px; }
+
+  /* ============================================================
+     FULLCALENDAR — modo lista é o padrão em mobile (mais legível)
+     ============================================================ */
+  /* Wrapper principal do calendário não estoura */
+  #calendar { width: 100%; overflow: hidden; }
+  .fc { font-size: 13px; }
+
+  /* Header em linha simples */
+  .fc .fc-toolbar.fc-header-toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .fc .fc-toolbar-chunk { display: flex; gap: 4px; }
+  .fc .fc-toolbar-title {
+    font-size: 14px !important;
+    flex: 1;
+    text-align: center;
+    min-width: 0;
+  }
+  .fc .fc-button {
+    font-size: 11px !important;
+    padding: 4px 8px !important;
+    min-height: 0 !important;
+  }
+
+  /* Footer toolbar (seletor de vista — Mês/Semana/Dia/Agenda) */
+  .fc .fc-toolbar.fc-footer-toolbar {
+    margin-top: 12px;
+    justify-content: center;
+  }
+
+  /* Vista de mês — células menores */
+  .fc .fc-daygrid-day-number,
+  .fc .fc-col-header-cell-cushion { font-size: 12px; padding: 2px 4px; }
+  .fc .fc-daygrid-event { font-size: 11px; padding: 1px 3px; }
+
+  /* Vista de semana/dia — quando o usuário escolher manualmente, deixa
+     scrollar horizontalmente em vez de espremer */
+  .fc-view-harness .fc-timegrid,
+  .fc-view-harness .fc-timegrid-body { min-width: 0; }
+  .fc .fc-scrollgrid-section-sticky > * { background: #fff; }
+
+  /* Vista de lista (padrão em mobile) — fica linda automaticamente */
+  .fc .fc-list-day-cushion { padding: 8px 12px; }
+  .fc .fc-list-event-time { font-size: 12px; }
+  .fc .fc-list-event-title { font-size: 13px; }
+
+  /* Compart tabs lado a lado mas compactas */
+  .compart-tab { padding: 6px 12px; font-size: 12px; }
+
+  /* "Próximos 7 dias" — itens em coluna pra não cortar status */
+  .agenda-list-item {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px;
+  }
+  .agenda-list-time { width: 64px; }
+  .agenda-list-time .hora { font-size: 16px; }
+  .agenda-list-info { min-width: 0; flex: 1 1 calc(100% - 80px); }
+  .agenda-list-info .titulo { font-size: 14px; }
+  .agenda-list-info .meta { font-size: 11px; gap: 8px; }
+  .agenda-list-status {
+    order: -1;          /* status sobe pra cima do bloco */
+    align-self: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .agenda-page { padding: 10px; }
+  .agenda-card { padding: 10px; }
+  /* Modal Bootstrap quase tela cheia em telas muito pequenas */
+  .modal-dialog { margin: 8px; }
 }
 
 /* ============================================================

@@ -33,6 +33,16 @@ body.fleet-body {
   overflow-x: hidden;
 }
 
+/* Mídias respeitam o container — evita estourar largura em mobile */
+body.fleet-body img,
+body.fleet-body canvas,
+body.fleet-body svg,
+body.fleet-body video,
+body.fleet-body iframe { max-width: 100%; height: auto; }
+
+/* Cards de gráfico não impõem largura mínima ao grid pai */
+.fleet-chart-card { min-width: 0; overflow: hidden; }
+
 /* ============================================================
    LOADING
    ============================================================ */
@@ -64,6 +74,9 @@ body.fleet-body {
 .fleet-wrapper {
   display: flex;
   min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 /* ============================================================
@@ -203,10 +216,13 @@ body.fleet-body {
 .fleet-content {
   margin-left: var(--fleet-sidebar-w);
   flex: 1;
+  min-width: 0;          /* evita que children flex empurrem largura */
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   transition: margin-left .25s ease;
+  overflow-x: hidden;    /* contém qualquer conteúdo que tente vazar */
 }
 
 .fleet-content.sidebar-collapsed { margin-left: var(--fleet-sidebar-collapsed); }
@@ -1103,6 +1119,31 @@ body.fleet-body {
    RESPONSIVO
    ============================================================ */
 
+/* Hamburguer (visível só em mobile) */
+.fleet-mobile-burger {
+  display: none;
+  background: none;
+  border: 0;
+  font-size: 24px;
+  color: var(--fleet-dark);
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+.fleet-mobile-burger:hover { color: var(--fleet-primary-d); }
+
+/* Backdrop que aparece atrás da sidebar mobile */
+.fleet-mobile-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 99;
+  animation: fleetFadeIn .15s ease;
+}
+@keyframes fleetFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.fleet-mobile-backdrop.show { display: block; }
+
 @media (max-width: 900px) {
   .fleet-charts-row { grid-template-columns: 1fr; }
   .fleet-grid-3, .fleet-grid-4 { grid-template-columns: 1fr 1fr; }
@@ -1110,15 +1151,95 @@ body.fleet-body {
   .checklist-sig-row { grid-template-columns: 1fr; }
 }
 
+/* ============================================================
+   MOBILE (≤768px) — sidebar vira overlay
+   ============================================================ */
+@media (max-width: 768px) {
+  /* Sidebar oculta por padrão; entra como overlay quando .mobile-open */
+  .fleet-sidebar {
+    width: 280px;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 100;
+  }
+  .fleet-sidebar.mobile-open { transform: translateX(0); }
+
+  /* Mantém todos os textos visíveis quando aberta — sem mais "collapsed" */
+  .fleet-sidebar.collapsed { width: 280px; }
+  .fleet-sidebar-logo-text,
+  .fleet-back-btn span,
+  .fleet-nav-link span { opacity: 1 !important; }
+
+  /* Conteúdo ocupa 100% da tela */
+  .fleet-content,
+  .fleet-content.sidebar-collapsed { margin-left: 0; }
+
+  /* Hamburguer aparece, toggle do desktop some */
+  .fleet-mobile-burger { display: inline-flex; align-items: center; }
+  .fleet-sidebar-toggle { display: none; }
+
+  /* Topbar mais compacta */
+  .fleet-topbar { padding: 0 12px; gap: 8px; }
+  .fleet-topbar-title { font-size: 16px; }
+  .fleet-topbar-badge { display: none; }
+
+  /* Painel de notificações se ajusta */
+  #notifPanel { width: calc(100vw - 24px) !important; right: 12px !important; }
+
+  /* Inputs com fonte ≥16px → iOS não dá zoom ao focar.
+     Indispensável pra fazer checklist no celular sem o layout quebrar. */
+  .fleet-input,
+  .fleet-select,
+  .fleet-textarea { font-size: 16px !important; }
+
+  /* Touch targets adequados pra dedo no checklist (mín. 44px) */
+  .btn-fleet { min-height: 44px; padding: 10px 16px; }
+  .btn-fleet-xs { min-height: 36px; }
+
+  /* Box de foto da inspeção atual — maior pra ser fácil tocar */
+  .cl-photo-upload { min-height: 140px; }
+
+  /* Section header sempre em coluna em mobile */
+  .fleet-section-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .fleet-section-header .actions { flex-wrap: wrap; }
+  .fleet-section-header .actions .btn-fleet { flex: 1; min-width: 120px; }
+}
+
 @media (max-width: 600px) {
   .fleet-stats-grid { grid-template-columns: 1fr 1fr; }
   .fleet-grid-2, .fleet-grid-3, .fleet-grid-4 { grid-template-columns: 1fr; }
-  .fleet-page { padding: 16px; }
-  .fleet-sidebar { width: var(--fleet-sidebar-collapsed); }
-  .fleet-sidebar-logo-text,
-  .fleet-back-btn span,
-  .fleet-nav-link span { opacity: 0; }
-  .fleet-content { margin-left: var(--fleet-sidebar-collapsed); }
+  .fleet-page { padding: 14px; }
+
+  /* Photo grid (6 ângulos do checklist): 3→2 em mobile */
+  .vehicle-photos-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .vehicle-photo-preview { height: 100px; }
+
+  /* Filtros empilhados */
+  .fleet-filters { flex-direction: column; align-items: stretch; }
+  .fleet-filters .fleet-input,
+  .fleet-filters .fleet-select { width: 100%; min-width: 0; }
+
+  /* Modal ocupa quase toda a tela */
+  .fleet-modal,
+  .fleet-modal.wide,
+  .fleet-modal.full { max-width: calc(100vw - 24px); margin: 12px auto; }
+
+  /* Botões em coluna em modais */
+  .fleet-modal-footer { flex-direction: column-reverse; gap: 6px; }
+  .fleet-modal-footer .btn-fleet { width: 100%; }
+}
+
+/* Telas estreitas tipo iPhone XR (414px) — 1 coluna em tudo */
+@media (max-width: 500px) {
+  .fleet-stats-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 380px) {
+  .vehicle-photos-grid { grid-template-columns: 1fr; }
 }
 
 /* ============================================================
