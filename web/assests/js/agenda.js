@@ -260,22 +260,37 @@ function statusToClass(status) {
 
 function initCalendar() {
   const el = $('calendar');
+  // Em mobile a vista "Semana" do FullCalendar fica ilegível (colunas
+  // muito estreitas). Usamos "listWeek" que é uma agenda em lista,
+  // muito mais legível em telas estreitas.
+  const isMobile = window.matchMedia('(max-width: 768px)').matches;
+
   calendar = new FullCalendar.Calendar(el, {
     locale: 'pt-br',
-    initialView: 'timeGridWeek',
+    initialView: isMobile ? 'listWeek' : 'timeGridWeek',
     firstDay: 0,
-    headerToolbar: {
-      left:   'prev,next today',
-      center: 'title',
-      right:  'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
-    },
+    headerToolbar: isMobile
+      ? {
+          left:   'prev,next',
+          center: 'title',
+          right:  'today',
+        }
+      : {
+          left:   'prev,next today',
+          center: 'title',
+          right:  'dayGridMonth,timeGridWeek,timeGridDay,listWeek',
+        },
+    footerToolbar: isMobile
+      ? { center: 'dayGridMonth,listWeek,timeGridDay' }
+      : false,
     buttonText: {
       today: 'Hoje', month: 'Mês', week: 'Semana', day: 'Dia', list: 'Agenda',
     },
     allDayText: 'Dia todo',
     moreLinkText: n => `+${n} mais`,
     noEventsText: 'Nenhum compromisso no período',
-    height: 720,
+    height: isMobile ? 'auto' : 720,
+    contentHeight: isMobile ? 'auto' : undefined,
     nowIndicator: true,
     slotMinTime: '07:00:00',
     slotMaxTime: '22:00:00',

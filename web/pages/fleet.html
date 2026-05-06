@@ -30,6 +30,9 @@
 <!-- ===================== WRAPPER ===================== -->
 <div class="fleet-wrapper" id="fleetApp" style="display:none">
 
+  <!-- BACKDROP MOBILE (clicar fecha sidebar) -->
+  <div class="fleet-mobile-backdrop" id="fleetBackdrop" onclick="closeMobileSidebar()"></div>
+
   <!-- SIDEBAR -->
   <aside class="fleet-sidebar" id="fleetSidebar">
     <div class="fleet-sidebar-logo">
@@ -89,6 +92,9 @@
 
     <!-- TOP BAR -->
     <div class="fleet-topbar">
+      <button class="fleet-mobile-burger" onclick="toggleMobileSidebar()" aria-label="Abrir menu">
+        <i class="bi bi-list"></i>
+      </button>
       <span class="fleet-topbar-title" id="topbarTitle">Dashboard</span>
       <span class="fleet-topbar-badge"><i class="bi bi-truck"></i> FROTAS</span>
       <span style="margin-left:auto;display:flex;align-items:center;gap:16px">
@@ -732,7 +738,7 @@
           <label class="fleet-label"><i class="bi bi-car-front-fill" style="color:#EF4444"></i> Clique nos pontos do veículo onde há arranhão/risco <span class="req">*</span></label>
           <p style="font-size:11px;color:#6B7280;margin:-4px 0 10px">Clique no <strong>circulo</strong> para marcar e anexar a foto. Passe o mouse sobre um ponto marcado para ver a foto.</p>
           <div id="scratchBlueprint" class="car-blueprint"></div>
-          <input type="file" id="scratchPhotoInput" accept="image/*" style="display:none">
+          <input type="file" id="scratchPhotoInput" accept="image/*" capture="environment" style="display:none">
         </div>
 
         <div class="fleet-form-group" id="problemOutrosWrap" style="display:none">
@@ -746,7 +752,7 @@
             <i class="bi bi-camera" style="font-size:28px;color:#FCA5A5"></i>
             <span style="font-size:12px;color:#FCA5A5;margin-top:6px">Clique para anexar foto</span>
           </div>
-          <input type="file" id="clProblemPhoto" accept="image/*" style="display:none" onchange="onProblemPhotoSelected(this)">
+          <input type="file" id="clProblemPhoto" accept="image/*" capture="environment" style="display:none" onchange="onProblemPhotoSelected(this)">
         </div>
 
         <!-- SAÍDA -->
@@ -866,7 +872,7 @@
       <div id="retScratchDiagramWrap2" style="display:none;margin-top:12px">
         <label class="fleet-label"><i class="bi bi-car-front-fill" style="color:#EF4444"></i> Clique nos pontos onde há arranhão/risco</label>
         <div id="retScratchBlueprint" class="car-blueprint"></div>
-        <input type="file" id="retScratchPhotoInput" accept="image/*" style="display:none">
+        <input type="file" id="retScratchPhotoInput" accept="image/*" capture="environment" style="display:none">
       </div>
 
       <div class="fleet-form-group" id="retProblemOutrosWrap" style="display:none;margin-top:8px">
@@ -880,7 +886,7 @@
           <i class="bi bi-camera" style="font-size:28px;color:#FCA5A5"></i>
           <span style="font-size:12px;color:#FCA5A5;margin-top:6px">Clique para anexar foto</span>
         </div>
-        <input type="file" id="retProblemPhoto" accept="image/*" style="display:none" onchange="onRetProblemPhotoSelected(this)">
+        <input type="file" id="retProblemPhoto" accept="image/*" capture="environment" style="display:none" onchange="onRetProblemPhotoSelected(this)">
       </div>
 
       <div id="retProblemDescWrap" style="display:none;margin-top:12px">
@@ -4508,6 +4514,31 @@ function badgeStatus(status) {
   };
   return `<span class="fleet-badge ${status}">${labels[status]||status}</span>`;
 }
+
+/* ============================================================
+   MOBILE SIDEBAR (overlay com backdrop)
+   ============================================================ */
+function toggleMobileSidebar() {
+  const sb = document.getElementById('fleetSidebar');
+  const bd = document.getElementById('fleetBackdrop');
+  const open = sb.classList.toggle('mobile-open');
+  bd.classList.toggle('show', open);
+  document.body.style.overflow = open ? 'hidden' : '';
+}
+function closeMobileSidebar() {
+  const sb = document.getElementById('fleetSidebar');
+  const bd = document.getElementById('fleetBackdrop');
+  sb.classList.remove('mobile-open');
+  bd.classList.remove('show');
+  document.body.style.overflow = '';
+}
+// Fecha automaticamente ao clicar em qualquer item de navegação no mobile
+document.addEventListener('click', e => {
+  const link = e.target.closest('.fleet-nav-link, .fleet-back-btn');
+  if (link && window.matchMedia('(max-width: 768px)').matches) {
+    closeMobileSidebar();
+  }
+});
 
 /* ============================================================
    START

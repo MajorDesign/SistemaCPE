@@ -237,24 +237,11 @@
     // FUNÇÃO: Setup Menu Toggle
     // ====================================
     // [INICIO] setupMenuToggle()
+    // ⚠️ O bind do botão #menuToggle agora é feito dentro do nav.js
+    //    (setupGlobalMenuToggle), que roda automaticamente depois que
+    //    a sidebar é renderizada. Mantido aqui só pra log de início.
     function setupMenuToggle() {
-      const menuToggle = document.getElementById("menuToggle");
-      const sidebarContainer = document.getElementById("sidebar-container");
-
-      if (!menuToggle || !sidebarContainer) {
-        console.warn("[INDEX] ⚠️  Elementos do menu não encontrados");
-        return;
-      }
-
-      menuToggle.addEventListener("click", () => {
-        const sidebar = sidebarContainer.querySelector(".sidebar");
-        if (sidebar) {
-          sidebar.classList.toggle("collapsed");
-          console.log("[INDEX] ☰ Menu toggled");
-        }
-      });
-
-      console.log("[INDEX] ✓ Menu toggle configurado");
+      console.log("[INDEX] ℹ️  Menu toggle gerenciado pelo nav.js");
     }
     // [FIM] setupMenuToggle()
 

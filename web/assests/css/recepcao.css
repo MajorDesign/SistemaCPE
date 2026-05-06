@@ -32,6 +32,15 @@ body.recep-body {
   overflow-x: hidden;
 }
 
+/* Mídias respeitam container — evita estourar largura em mobile */
+body.recep-body img,
+body.recep-body canvas,
+body.recep-body svg,
+body.recep-body video,
+body.recep-body iframe { max-width: 100%; }
+body.recep-body img,
+body.recep-body video { height: auto; }
+
 /* ============================================================
    LOADING
    ============================================================ */
@@ -55,7 +64,13 @@ body.recep-body {
 /* ============================================================
    LAYOUT
    ============================================================ */
-.recep-wrapper { display: flex; min-height: 100vh; }
+.recep-wrapper {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
 
 /* ============================================================
    SIDEBAR
@@ -176,10 +191,13 @@ body.recep-body {
 .recep-content {
   margin-left: var(--recep-sidebar-w);
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   transition: margin-left .25s ease;
+  overflow-x: hidden;
 }
 .recep-content.sidebar-collapsed { margin-left: var(--recep-sidebar-collapsed); }
 
@@ -702,10 +720,127 @@ body.recep-body {
 /* ============================================================
    RESPONSIVO
    ============================================================ */
+
+/* Hamburguer (visível só em mobile) */
+.recep-mobile-burger {
+  display: none;
+  background: none;
+  border: 0;
+  font-size: 24px;
+  color: var(--recep-dark);
+  cursor: pointer;
+  padding: 4px 8px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+.recep-mobile-burger:hover { color: var(--recep-primary-d); }
+
+/* Backdrop atrás da sidebar mobile */
+.recep-mobile-backdrop {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.5);
+  z-index: 99;
+  animation: recepFadeIn .15s ease;
+}
+@keyframes recepFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.recep-mobile-backdrop.show { display: block; }
+
 @media (max-width: 768px) {
-  .recep-sidebar { transform: translateX(-100%); transition: transform .25s ease; }
+  /* Sidebar como overlay */
+  .recep-sidebar {
+    width: 280px;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
+    z-index: 100;
+  }
   .recep-sidebar.mobile-open { transform: translateX(0); }
-  .recep-content { margin-left: 0; }
-  .recep-section-header { flex-direction: column; align-items: stretch; }
-  .recep-section-header .actions { flex-direction: column; }
+  .recep-sidebar.collapsed { width: 280px; }
+  .recep-sidebar.collapsed .recep-logo-modulo,
+  .recep-sidebar.collapsed .recep-back-btn span,
+  .recep-sidebar.collapsed .recep-nav-link span { opacity: 1; }
+
+  /* Conteúdo ocupa 100% */
+  .recep-content,
+  .recep-content.sidebar-collapsed { margin-left: 0; }
+
+  /* Hamburguer aparece, toggle desktop some */
+  .recep-mobile-burger { display: inline-flex; align-items: center; }
+  .recep-sidebar-toggle { display: none; }
+
+  /* Topbar compacto */
+  .recep-topbar { padding: 0 12px; gap: 8px; }
+  .recep-topbar-title { font-size: 16px; }
+  .recep-topbar-badge { display: none; }
+
+  /* Section header em coluna */
+  .recep-section-header { flex-direction: column; align-items: stretch; gap: 12px; }
+  .recep-section-header .actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .recep-section-header .actions > * { width: 100% !important; max-width: 100% !important; }
+
+  /* Padding compacto */
+  .recep-page { padding: 14px; }
+  .recep-card { padding: 10px; }
+
+  /* Legend em coluna */
+  .recep-legend {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  /* ============================================================
+     FULLCALENDAR — mobile
+     ============================================================ */
+  #calendar { width: 100%; overflow: hidden; }
+  .fc { font-size: 13px; }
+  .fc .fc-toolbar.fc-header-toolbar {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .fc .fc-toolbar-chunk { display: flex; gap: 4px; }
+  .fc .fc-toolbar-title {
+    font-size: 14px !important;
+    flex: 1;
+    text-align: center;
+    min-width: 0;
+  }
+  .fc .fc-button {
+    font-size: 11px !important;
+    padding: 4px 8px !important;
+    min-height: 0 !important;
+  }
+  .fc .fc-toolbar.fc-footer-toolbar {
+    margin-top: 12px;
+    justify-content: center;
+  }
+  .fc .fc-daygrid-day-number,
+  .fc .fc-col-header-cell-cushion { font-size: 12px; padding: 2px 4px; }
+  .fc .fc-daygrid-event { font-size: 11px; padding: 1px 3px; }
+  .fc-view-harness .fc-timegrid,
+  .fc-view-harness .fc-timegrid-body { min-width: 0; }
+  .fc .fc-list-day-cushion { padding: 8px 12px; }
+  .fc .fc-list-event-time { font-size: 12px; }
+  .fc .fc-list-event-title { font-size: 13px; }
+
+  /* Grid de salas em 1 coluna */
+  .recep-rooms-grid { grid-template-columns: 1fr !important; }
+
+  /* Tabela de envios — wrapper já tem overflow-x; força scroll */
+  .recep-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .recep-table { min-width: 720px; }  /* preserva colunas legíveis no scroll */
+
+  /* Filtros empilhados */
+  .recep-filters { flex-direction: column; align-items: stretch; gap: 8px; }
+  .recep-filters > * { width: 100% !important; max-width: 100% !important; }
+
+  /* Modal Bootstrap */
+  .modal-dialog { margin: 8px; }
 }

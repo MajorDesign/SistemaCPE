@@ -207,10 +207,6 @@ function renderNavbar() {
       </div>
 
       <div class="navbar-right">
-        <button class="navbar-icon-btn" title="Menu" onclick="toggleSidebarMobile()">
-          <i class="bi bi-list"></i>
-        </button>
-        
         <!-- SINO DE NOTIFICAÇÕES -->
         <button class="navbar-icon-btn notification-bell-btn" 
                 id="notificationBellBtn"
@@ -455,6 +451,31 @@ function toggleSidebarMobile() {
     sidebar.classList.toggle("show");
     console.log("[NAV/MOBILE] ✅ Sidebar mobile toggled");
   }
+}
+
+/* =========================================
+   CONECTA o botão #menuToggle (presente nas top-bars das páginas)
+   à lógica de abrir/fechar a sidebar.
+   - Em mobile (≤768px): abre/fecha como overlay (.show)
+   - Em desktop:        alterna o modo colapsado (.collapsed)
+   ========================================= */
+function setupGlobalMenuToggle() {
+  const btn = document.getElementById("menuToggle");
+  if (!btn) return;
+  if (btn.dataset.bound === "1") return;  // evita bind duplicado
+  btn.dataset.bound = "1";
+
+  btn.addEventListener("click", () => {
+    const isMobile = window.matchMedia("(max-width: 768px)").matches;
+    if (isMobile) {
+      toggleSidebarMobile();
+    } else {
+      const sb = document.querySelector(".sidebar-wrapper");
+      if (sb) sb.classList.toggle("collapsed");
+    }
+  });
+
+  console.log("[NAV/TOGGLE] ✓ Botão #menuToggle conectado");
 }
 
 /* =========================================
@@ -1032,7 +1053,10 @@ async function initializeNavigation() {
       console.log("[NAV/INIT]   ✓ Sidebar");
       console.log("[NAV/INIT]   ✓ Menu items carregados");
       console.log("[NAV/INIT]   ✓ Sistema de notificações pronto");
-      
+
+      // Conecta o botão #menuToggle (top-bar das páginas) à sidebar
+      setupGlobalMenuToggle();
+
       // Inicializar notificações
       initNotifications();
       
