@@ -1330,6 +1330,14 @@ function canInspectFleet() {
   return currentUser.role === 'RESPONSAVEL_GRUPO' && currentUser.group_id === FLEET_GROUP_ID;
 }
 
+// Apenas ADMIN ou Responsável do grupo Frotas podem excluir veículos.
+// Backend valida o mesmo critério em /api/fleet/vehicles/{id} (DELETE).
+function canDeleteVehicle() {
+  if (!currentUser) return false;
+  if (currentUser.role === 'ADMIN') return true;
+  return currentUser.role === 'RESPONSAVEL_GRUPO' && currentUser.group_id === FLEET_GROUP_ID;
+}
+
 /* ============================================================
    INIT
    ============================================================ */
@@ -1595,9 +1603,54 @@ function renderVehicles(vehicles) {
               <i class="bi bi-search"></i> Revisão
             </button>
           </div>` : ''}
+        ${canDeleteVehicle() && v.status !== 'em_viagem' ? `
+          <button class="btn-fleet btn-fleet-sm" style="margin-top:8px;width:100%;background:#FEE2E2;color:#B91C1C;border:1px solid #FCA5A5;font-size:11px"
+                  onclick="event.stopPropagation();deleteVehicle(${v.id}, '${(v.placa || '').replace(/'/g, '&#39;')}')">
+            <i class="bi bi-trash"></i> Excluir veículo
+          </button>` : ''}
       </div>
     </div>
   `).join('');
+}
+
+/* ============================================================
+   DELETE VEHICLE — soft delete (somente ADMIN ou RESP.GRUPO Frotas)
+   ============================================================ */
+async function deleteVehicle(vehicleId, placa) {
+  if (!canDeleteVehicle()) {
+    showToast('Você não tem permissão para excluir veículos.', 'error');
+    return;
+  }
+  // Backend decide automaticamente:
+  //  - HARD DELETE se nunca teve checklist aprovado / viagem / manutenção
+  //  - SOFT DELETE (inativar) se já teve qualquer movimentação
+  if (!confirm(
+    `Excluir o veículo "${placa}"?\n\n` +
+    `• Se ele NUNCA foi usado (sem checklist aprovado, sem viagem, sem ` +
+    `manutenção) → será removido permanentemente.\n` +
+    `• Se já teve qualquer movimentação → será apenas inativado e o ` +
+    `histórico preservado.\n\n` +
+    `Continuar?`
+  )) return;
+
+  try {
+    const r = await fetch(`${API}/vehicles/${vehicleId}`, {
+      method: 'DELETE',
+      headers: { 'X-User-Id': String(currentUser.id) },
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showToast(data.detail || `Erro HTTP ${r.status}`, 'error');
+      return;
+    }
+    // Backend retorna mode: 'hard' | 'soft' | 'noop' — usa pra escolher
+    // ícone do toast (info pra inativação, success pra remoção real).
+    const tipo = data.mode === 'soft' ? 'info' : 'success';
+    showToast(data.message || 'Veículo processado.', tipo);
+    await loadVehicles();
+  } catch (err) {
+    showToast('Erro de conexão: ' + err.message, 'error');
+  }
 }
 
 function filterVehicles() {
