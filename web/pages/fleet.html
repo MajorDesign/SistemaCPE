@@ -1634,9 +1634,10 @@ async function deleteVehicle(vehicleId, placa) {
   )) return;
 
   try {
+    const token = localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token') || '';
     const r = await fetch(`${API}/vehicles/${vehicleId}`, {
       method: 'DELETE',
-      headers: { 'X-User-Id': String(currentUser.id) },
+      headers: { 'X-Auth-Token': token },
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok) {
