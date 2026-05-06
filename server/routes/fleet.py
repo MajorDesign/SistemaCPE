@@ -81,6 +81,18 @@ def _can_manage_fleet(user: dict) -> bool:
     return role == "RESPONSAVEL_GRUPO" and user.get("group_id") == FLEET_GROUP_ID
 
 
+def _can_delete_vehicle(user: dict) -> bool:
+    """
+    Apenas ADMIN ou Responsável do grupo Frotas podem excluir veículos.
+    TI deliberadamente fica de fora — exclusão é decisão de gestão, não de
+    suporte técnico. (Pedido explícito do usuário em 2026-05-06.)
+    """
+    role = user.get("role")
+    if role == "ADMIN":
+        return True
+    return role == "RESPONSAVEL_GRUPO" and user.get("group_id") == FLEET_GROUP_ID
+
+
 # ============================================================
 # VEÍCULOS
 # ============================================================
@@ -123,7 +135,8 @@ def list_vehicles(request: Request):
             LEFT JOIN fleet_vehicle_photos p
                    ON p.vehicle_id = v.id AND p.is_current = 1 AND p.angulo = 'frente'
             LEFT JOIN users u ON u.id = v.created_by
-            ORDER BY FIELD(v.status,'ativo','em_viagem','manutencao','revisao','inativo'), v.modelo
+            WHERE v.status != 'inativo'
+            ORDER BY FIELD(v.status,'ativo','em_viagem','manutencao','revisao'), v.modelo
         """)
         vehicles = cursor.fetchall()
         return {"success": True, "vehicles": vehicles}
@@ -195,6 +208,150 @@ def update_vehicle(vehicle_id: int, request: Request, data: dict):
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+_MOVIMENTACAO_STATUS = (
+    "aprovado", "em_viagem", "devolvido", "retornado", "retornado_com_avaria",
+)
+
+
+def _vehicle_has_movement(cursor, vehicle_id: int) -> bool:
+    """
+    Decide se o veículo já teve movimentação real (saída aprovada de
+    checklist, viagem registrada ou manutenção). Quando houver, o DELETE
+    vira soft delete pra preservar histórico. Quando não, é seguro apagar
+    de verdade junto com os registros auxiliares (fotos, reservas
+    canceladas, alertas).
+    """
+    placeholders = ",".join(["%s"] * len(_MOVIMENTACAO_STATUS))
+    cursor.execute(
+        f"SELECT 1 FROM fleet_checklists "
+        f" WHERE vehicle_id = %s AND status IN ({placeholders}) LIMIT 1",
+        (vehicle_id, *_MOVIMENTACAO_STATUS),
+    )
+    if cursor.fetchone():
+        return True
+
+    cursor.execute(
+        "SELECT 1 FROM fleet_trips WHERE vehicle_id = %s LIMIT 1",
+        (vehicle_id,),
+    )
+    if cursor.fetchone():
+        return True
+
+    cursor.execute(
+        "SELECT 1 FROM fleet_maintenance WHERE vehicle_id = %s LIMIT 1",
+        (vehicle_id,),
+    )
+    if cursor.fetchone():
+        return True
+
+    return False
+
+
+# ============================================================
+# DELETE — Hard delete se nunca foi usado, soft delete se já teve
+# movimentação. Só ADMIN ou Responsável do grupo Frotas.
+# ============================================================
+@router.delete("/vehicles/{vehicle_id}")
+def delete_vehicle(vehicle_id: int, request: Request):
+    user = _get_user_role(request)
+    if not _can_delete_vehicle(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas Administrador ou Responsável do grupo Frotas podem excluir veículos."
+        )
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id, placa, status FROM fleet_vehicles WHERE id = %s",
+            (vehicle_id,),
+        )
+        veiculo = cursor.fetchone()
+        if not veiculo:
+            raise HTTPException(status_code=404, detail="Veículo não encontrado")
+
+        if veiculo["status"] == "em_viagem":
+            raise HTTPException(
+                status_code=400,
+                detail="Não é possível excluir um veículo que está em viagem. "
+                       "Aguarde o retorno ou cancele a viagem antes."
+            )
+
+        if veiculo["status"] == "inativo":
+            return {
+                "success": True,
+                "mode": "noop",
+                "message": "Veículo já estava inativo",
+            }
+
+        teve_movimento = _vehicle_has_movement(cursor, vehicle_id)
+
+        # ─────────────────────────────────────────────────────────
+        # Caminho 1: SOFT DELETE — veículo já teve checklist aprovado
+        # ou viagem ou manutenção. Preserva todo o histórico.
+        # ─────────────────────────────────────────────────────────
+        if teve_movimento:
+            cursor.execute(
+                "UPDATE fleet_vehicles SET status = 'inativo' WHERE id = %s",
+                (vehicle_id,),
+            )
+            conn.commit()
+            logger.info(
+                f"[FLEET] Veículo {veiculo['placa']} (id={vehicle_id}) "
+                f"INATIVADO (soft delete) por user {user.get('id')} ({user.get('role')}) "
+                f"— já tinha movimentação."
+            )
+            return {
+                "success": True,
+                "mode": "soft",
+                "message": (
+                    f"Veículo {veiculo['placa']} foi inativado pois já tem movimentação "
+                    f"registrada (checklists/viagens/manutenções). O histórico foi preservado."
+                ),
+            }
+
+        # ─────────────────────────────────────────────────────────
+        # Caminho 2: HARD DELETE — nunca foi usado. Limpa todos os
+        # registros auxiliares (fotos, reservas, alertas, checklists
+        # pendentes/cancelados) antes de apagar o veículo.
+        # ─────────────────────────────────────────────────────────
+        cursor.execute("DELETE FROM fleet_vehicle_photos  WHERE vehicle_id = %s", (vehicle_id,))
+        cursor.execute("DELETE FROM fleet_vehicle_history WHERE vehicle_id = %s", (vehicle_id,))
+        cursor.execute("DELETE FROM fleet_km_alerts       WHERE vehicle_id = %s", (vehicle_id,))
+        cursor.execute("DELETE FROM fleet_reservations    WHERE vehicle_id = %s", (vehicle_id,))
+        # Checklists aqui só podem estar em ('aguardando_vistoria',
+        # 'aguardando_aprovacao','cancelado') — _vehicle_has_movement
+        # retornaria True caso contrário e cairíamos no soft delete.
+        cursor.execute("DELETE FROM fleet_checklists      WHERE vehicle_id = %s", (vehicle_id,))
+        cursor.execute("DELETE FROM fleet_vehicles        WHERE id = %s",         (vehicle_id,))
+
+        conn.commit()
+        logger.info(
+            f"[FLEET] Veículo {veiculo['placa']} (id={vehicle_id}) "
+            f"APAGADO (hard delete) por user {user.get('id')} ({user.get('role')}) "
+            f"— nunca foi movimentado."
+        )
+        return {
+            "success": True,
+            "mode": "hard",
+            "message": (
+                f"Veículo {veiculo['placa']} foi removido permanentemente "
+                f"(nunca teve movimentação registrada)."
+            ),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[FLEET/DELETE] erro: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir: {e}")
     finally:
         cursor.close()
         conn.close()
