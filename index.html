@@ -23,6 +23,243 @@
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/components.css">
 
+  <style>
+    /* =========================================
+       DASHBOARD — KPIs adaptativos por role
+       ========================================= */
+    .dash-saudacao {
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px;
+      color: #6B7280;
+      margin: 0 0 16px;
+    }
+    .dash-saudacao strong { color: #1A1A1A; font-weight: 700; }
+    .dash-saudacao .role-badge {
+      background: #FFF8E1; color: #92400E; padding: 2px 10px;
+      border-radius: 12px; font-size: 11px; font-weight: 700;
+      margin-left: 8px; text-transform: uppercase; letter-spacing: .04em;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 12px;
+      padding: 18px 20px;
+      transition: box-shadow .15s, transform .15s;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      display: block;
+      border-left: 4px solid #E5E7EB;
+    }
+    .kpi-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); transform: translateY(-1px); text-decoration: none; }
+    .kpi-card.color-success { border-left-color: #16A34A; }
+    .kpi-card.color-warning { border-left-color: #F59E0B; }
+    .kpi-card.color-danger  { border-left-color: #DC2626; }
+    .kpi-card.color-info    { border-left-color: #2563EB; }
+
+    .kpi-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 36px; height: 36px; border-radius: 8px;
+      background: #F3F4F6; color: #6B7280;
+      font-size: 18px; margin-bottom: 10px;
+    }
+    .kpi-card.color-success .kpi-icon { background: #DCFCE7; color: #16A34A; }
+    .kpi-card.color-warning .kpi-icon { background: #FEF3C7; color: #D97706; }
+    .kpi-card.color-danger  .kpi-icon { background: #FEE2E2; color: #DC2626; }
+    .kpi-card.color-info    .kpi-icon { background: #DBEAFE; color: #2563EB; }
+
+    .kpi-label    { font-size: 12px; color: #6B7280; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; }
+    .kpi-value    { font-size: 32px; font-weight: 700; color: #1A1A1A; line-height: 1.1; margin: 4px 0 4px; }
+    .kpi-subtitle { font-size: 12px; color: #9CA3AF; }
+
+    /* =========================================
+       AGENDA + PENDÊNCIAS (2 colunas)
+       ========================================= */
+    .dash-row {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 900px) { .dash-row { grid-template-columns: 1fr; } }
+
+    .dash-panel {
+      background: #fff;
+      border: 1px solid #E5E7EB;
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .dash-panel-title {
+      font-family: 'Poppins', sans-serif;
+      font-size: 14px; font-weight: 700; color: #1A1A1A;
+      margin: 0 0 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .dash-panel-title .badge {
+      margin-left: auto; background: #F3F4F6; color: #6B7280;
+      font-size: 11px; padding: 2px 8px; border-radius: 10px;
+    }
+
+    /* Agenda items */
+    .agenda-item {
+      display: flex; gap: 14px;
+      padding: 10px 0;
+      border-bottom: 1px solid #F3F4F6;
+    }
+    .agenda-item:last-child { border-bottom: 0; padding-bottom: 0; }
+    .agenda-hora {
+      flex-shrink: 0;
+      font-family: 'Poppins', sans-serif;
+      font-weight: 700; font-size: 14px;
+      color: #1A1A1A;
+      width: 56px; text-align: right;
+    }
+    .agenda-hora .ate { display: block; font-size: 11px; color: #9CA3AF; font-weight: 500; margin-top: 2px; }
+    .agenda-info-titulo { font-weight: 600; font-size: 13px; color: #1A1A1A; }
+    .agenda-info-local  { font-size: 12px; color: #6B7280; margin-top: 2px; }
+
+    /* Pendência items */
+    .pendencia-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      background: #FAFAFA;
+      border-left: 3px solid #9CA3AF;
+      text-decoration: none;
+      color: inherit;
+      transition: background .15s;
+    }
+    .pendencia-item:hover { background: #F3F4F6; text-decoration: none; }
+    .pendencia-item.urgencia-alta  { border-left-color: #DC2626; background: #FEF2F2; }
+    .pendencia-item.urgencia-media { border-left-color: #F59E0B; background: #FFFBEB; }
+    .pendencia-icon { font-size: 18px; color: #6B7280; flex-shrink: 0; margin-top: 2px; }
+    .pendencia-item.urgencia-alta  .pendencia-icon { color: #DC2626; }
+    .pendencia-item.urgencia-media .pendencia-icon { color: #D97706; }
+    .pendencia-label { font-size: 13px; line-height: 1.4; flex: 1; }
+
+    /* Estado vazio */
+    .dash-empty {
+      text-align: center; padding: 24px 12px;
+      color: #9CA3AF; font-size: 13px;
+    }
+    .dash-empty i { font-size: 32px; display: block; margin-bottom: 8px; opacity: .5; }
+
+    /* Atalhos rápidos */
+    .atalhos-bar {
+      display: flex; gap: 10px; flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .atalho-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 16px;
+      background: #fff; border: 1px solid #E5E7EB;
+      border-radius: 10px;
+      font-size: 13px; font-weight: 600; color: #1A1A1A;
+      text-decoration: none;
+      transition: all .15s;
+    }
+    .atalho-btn:hover { background: #FFF8E1; border-color: #FFC107; text-decoration: none; }
+    .atalho-btn i { font-size: 16px; color: #D97706; }
+
+    /* =========================================
+       BANNER de próxima reserva (todos)
+       ========================================= */
+    .reserva-banner {
+      display: flex; align-items: center; gap: 14px;
+      background: linear-gradient(90deg, #DBEAFE 0%, #EFF6FF 100%);
+      border: 1px solid #BFDBFE;
+      border-radius: 12px;
+      padding: 14px 18px;
+      margin-bottom: 24px;
+      text-decoration: none; color: inherit;
+      transition: box-shadow .15s;
+    }
+    .reserva-banner:hover { box-shadow: 0 4px 12px rgba(0,0,0,.08); text-decoration: none; }
+    .reserva-banner .icon {
+      flex-shrink: 0; width: 44px; height: 44px;
+      border-radius: 10px; background: #2563EB; color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .reserva-banner .titulo { font-weight: 700; color: #1E3A8A; font-size: 14px; }
+    .reserva-banner .meta   { font-size: 12px; color: #1E40AF; margin-top: 2px; }
+    .reserva-banner .meta i { margin-right: 4px; }
+    .reserva-banner .data-block {
+      flex-shrink: 0; text-align: right;
+      font-family: 'Poppins', sans-serif; font-weight: 700;
+      color: #1E3A8A;
+    }
+    .reserva-banner .data-block .hora { font-size: 18px; }
+    .reserva-banner .data-block .dia  { font-size: 11px; color: #1E40AF; font-weight: 500; }
+
+    /* =========================================
+       Widget Avaliações do grupo
+       ========================================= */
+    .aval-resumo { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+    .aval-media-circle {
+      flex-shrink: 0; width: 70px; height: 70px;
+      border-radius: 50%;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-family: 'Poppins', sans-serif;
+      color: #fff; font-weight: 700;
+    }
+    .aval-media-circle.bom    { background: linear-gradient(135deg, #16A34A, #15803D); }
+    .aval-media-circle.regular{ background: linear-gradient(135deg, #F59E0B, #D97706); }
+    .aval-media-circle.ruim   { background: linear-gradient(135deg, #DC2626, #B91C1C); }
+    .aval-media-circle .num   { font-size: 22px; line-height: 1; }
+    .aval-media-circle .max   { font-size: 10px; opacity: .85; }
+    .aval-media-info { flex: 1; }
+    .aval-media-info .total { font-size: 13px; color: #6B7280; }
+    .aval-media-info .total strong { color: #1A1A1A; }
+    .aval-bar-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; margin-top: 6px;
+    }
+    .aval-bar-row .lbl { width: 70px; color: #4B5563; font-weight: 600; }
+    .aval-bar-row .qtd { width: 38px; text-align: right; color: #4B5563; }
+    .aval-bar { flex: 1; height: 8px; background: #F3F4F6; border-radius: 4px; overflow: hidden; }
+    .aval-bar > div { height: 100%; transition: width .4s; }
+    .aval-bar.pos > div { background: #16A34A; }
+    .aval-bar.neu > div { background: #F59E0B; }
+    .aval-bar.neg > div { background: #DC2626; }
+
+    /* =========================================
+       Widget Frota (mini-grid)
+       ========================================= */
+    .frota-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .frota-mini {
+      background: #FAFAFA; border: 1px solid #F3F4F6;
+      border-radius: 8px; padding: 10px;
+      text-align: center;
+    }
+    .frota-mini .v { font-size: 22px; font-weight: 700; color: #1A1A1A; line-height: 1.1; }
+    .frota-mini .l { font-size: 11px; color: #6B7280; margin-top: 4px; text-transform: uppercase; letter-spacing: .04em; }
+    .frota-prox-manut {
+      margin-top: 12px; padding: 10px 12px;
+      background: #FEF3C7; border-radius: 8px;
+      font-size: 13px; color: #92400E;
+    }
+    .frota-prox-manut strong { color: #78350F; }
+    .frota-prox-manut.urgente { background: #FEE2E2; color: #991B1B; }
+    .frota-prox-manut.urgente strong { color: #7F1D1D; }
+    @media (max-width: 600px) {
+      .frota-mini-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+
   <!-- 🔐 PROTEÇÃO DE ROTAS (DEVE SER O PRIMEIRO SCRIPT!) -->
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
@@ -72,57 +309,87 @@
 
         <!-- CONTENT -->
         <div class="content">
-          
-          <!-- Stats Grid -->
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-label">Total de Tickets</div>
-              <div class="stat-value" id="totalTickets">1,234</div>
-              <div class="stat-change">+12% em relação ao mês anterior</div>
-            </div>
 
-            <div class="stat-card">
-              <div class="stat-label">Resolvidos</div>
-              <div class="stat-value" id="resolvedTickets">856</div>
-              <div class="stat-change">Taxa de resolução: 69%</div>
-            </div>
+          <!-- Saudação -->
+          <p class="dash-saudacao" id="dashSaudacao">Carregando...</p>
 
-            <div class="stat-card">
-              <div class="stat-label">Pendentes</div>
-              <div class="stat-value" id="pendingTickets" style="color: var(--danger);">378</div>
-              <div class="stat-change" style="color: var(--danger);">Requerem atenção</div>
-            </div>
+          <!-- Atalhos rápidos -->
+          <div class="atalhos-bar" id="dashAtalhos"></div>
 
-            <div class="stat-card">
-              <div class="stat-label">Satisfação</div>
-              <div class="stat-value" id="satisfactionRate" style="color: var(--success);">4.8/5</div>
-              <div class="stat-change" style="color: var(--success);">Baseado em 234 avaliações</div>
+          <!-- KPIs (4 cards) -->
+          <div class="kpi-grid" id="dashKpis">
+            <div class="dash-empty" style="grid-column:1/-1">
+              <i class="bi bi-hourglass-split"></i>
+              Carregando indicadores...
             </div>
           </div>
 
-          <!-- Tabela de Atividade Recente -->
-          <div class="card">
-            <h2 class="card-title">Atividade Recente</h2>
-            <div class="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Título</th>
-                    <th>Cliente</th>
-                    <th>Status</th>
-                    <th>Atualizado</th>
-                  </tr>
-                </thead>
-                <tbody id="activityTableBody">
-                  <tr>
-                    <td colspan="5" style="text-align: center; padding: 2rem;">
-                      <span style="color: var(--muted);">Carregando dados...</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+          <!-- Banner: próxima reserva (oculto se não houver) -->
+          <a class="reserva-banner" id="dashReservaBanner" href="#" style="display:none">
+            <div class="icon"><i class="bi bi-calendar-event-fill"></i></div>
+            <div style="flex:1;">
+              <div class="titulo" id="dashReservaTit">—</div>
+              <div class="meta" id="dashReservaMeta">—</div>
             </div>
+            <div class="data-block">
+              <div class="hora" id="dashReservaHora">—</div>
+              <div class="dia"  id="dashReservaDia">—</div>
+            </div>
+          </a>
+
+          <!-- 2 colunas: agenda do dia + pendências -->
+          <div class="dash-row">
+            <!-- Agenda do dia -->
+            <div class="dash-panel">
+              <h3 class="dash-panel-title">
+                <i class="bi bi-calendar2-event-fill" style="color:#FFC107"></i>
+                Agenda do dia
+                <span class="badge" id="dashAgendaCount">0</span>
+              </h3>
+              <div id="dashAgenda">
+                <div class="dash-empty">
+                  <i class="bi bi-hourglass-split"></i> Carregando...
+                </div>
+              </div>
+            </div>
+
+            <!-- Caixa de pendências -->
+            <div class="dash-panel">
+              <h3 class="dash-panel-title">
+                <i class="bi bi-list-check" style="color:#DC2626"></i>
+                O que precisa de você agora
+                <span class="badge" id="dashPendCount">0</span>
+              </h3>
+              <div id="dashPendencias">
+                <div class="dash-empty">
+                  <i class="bi bi-hourglass-split"></i> Carregando...
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2 colunas: avaliações do grupo (RESP.GRUPO) + frota (RESP.GRUPO Frotas) -->
+          <div class="dash-row" id="dashRowGestao" style="display:none">
+            <!-- Avaliações do grupo -->
+            <a class="dash-panel" id="dashAvaliacoes" href="/SistemaCPE/web/pages/avaliacoes.html"
+               style="display:none;text-decoration:none;color:inherit">
+              <h3 class="dash-panel-title">
+                <i class="bi bi-star-fill" style="color:#F59E0B"></i>
+                Avaliações do grupo
+                <span class="badge" id="dashAvalTotal">0</span>
+              </h3>
+              <div id="dashAvalBody"></div>
+            </a>
+
+            <!-- Widgets de frota -->
+            <a class="dash-panel" id="dashFrota" href="/SistemaCPE/web/pages/fleet.html"
+               style="display:none;text-decoration:none;color:inherit">
+              <h3 class="dash-panel-title">
+                <i class="bi bi-truck" style="color:#2563EB"></i>
+                Frotas — Painel do Responsável
+              </h3>
+              <div id="dashFrotaBody"></div>
+            </a>
           </div>
 
         </div>
@@ -275,96 +542,266 @@
     // ====================================
     // FUNÇÃO: Carregar Dados do Dashboard
     // ====================================
-    // [INICIO] loadDashboardData()
-    function loadDashboardData(user) {
-      console.log("[INDEX] 📊 Carregando dados do dashboard...");
+    // [INICIO] loadDashboardData() — chama /api/dashboard/me
+    // Retorna KPIs, agenda do dia, pendências e atalhos adaptados ao
+    // role do usuário (USER / RESPONSAVEL_GRUPO / ADMIN / TI).
+    // ====================================
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s).replace(/[&<>"']/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+      }[c]));
+    }
 
-      // Dados de exemplo
-      const sampleData = [
-        {
-          id: "#1234",
-          titulo: "Problema com login",
-          cliente: "João Silva",
-          status: "Resolvido",
-          statusClass: "badge-success",
-          atualizado: "2 horas atrás"
-        },
-        {
-          id: "#1233",
-          titulo: "Erro ao processar pagamento",
-          cliente: "Maria Santos",
-          status: "Em Andamento",
-          statusClass: "badge-primary",
-          atualizado: "4 horas atrás"
-        },
-        {
-          id: "#1232",
-          titulo: "Dúvida sobre funcionalidade",
-          cliente: "Pedro Costa",
-          status: "Aberto",
-          statusClass: "badge-warning",
-          atualizado: "6 horas atrás"
-        },
-        {
-          id: "#1231",
-          titulo: "Solicitação de feature",
-          cliente: "Ana Oliveira",
-          status: "Aberto",
-          statusClass: "badge-warning",
-          atualizado: "1 dia atrás"
-        }
-      ];
+    async function loadDashboardData(user) {
+      console.log("[INDEX] 📊 Carregando dashboard de", user.name);
+      const apiBase = (typeof API_BASE_URL !== 'undefined')
+        ? API_BASE_URL
+        : `http://${location.hostname || '127.0.0.1'}:8000`;
 
-      // Preencher tabela
       try {
-        const tableBody = document.getElementById("activityTableBody");
-        if (tableBody) {
-          tableBody.innerHTML = sampleData.map(item => `
-            <tr>
-              <td><strong>${item.id}</strong></td>
-              <td>${item.titulo}</td>
-              <td>${item.cliente}</td>
-              <td><span class="badge ${item.statusClass}">${item.status}</span></td>
-              <td>${item.atualizado}</td>
-            </tr>
-          `).join("");
-          
-          console.log("[INDEX] ✓ Tabela de atividades carregada");
-        } else {
-          console.warn("[INDEX] ⚠️  Elemento activityTableBody não encontrado");
-        }
+        const r = await fetch(`${apiBase}/api/dashboard/me?user_id=${user.id}`);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+
+        renderSaudacao(data);
+        renderKpis(data.kpis || []);
+        renderAtalhos(data.atalhos || []);
+        renderAgenda(data.agenda || []);
+        renderPendencias(data.pendencias || []);
+        renderProximaReserva(data.proxima_reserva);
+        renderAvaliacoes(data.avaliacoes);
+        renderFrota(data.frota);
+
+        console.log("[INDEX] ✓ Dashboard carregada");
       } catch (err) {
-        console.error("[INDEX] ❌ Erro ao carregar tabela:", err.message);
+        console.error("[INDEX] ❌ Erro ao carregar dashboard:", err);
+        document.getElementById('dashKpis').innerHTML =
+          `<div class="dash-empty" style="grid-column:1/-1">
+            <i class="bi bi-exclamation-triangle"></i>
+            Não foi possível carregar a dashboard. Tente recarregar a página.
+          </div>`;
+      }
+    }
+
+    function renderSaudacao(data) {
+      const el = document.getElementById('dashSaudacao');
+      el.innerHTML =
+        `<strong>${escapeHtml(data.saudacao || 'Olá')}</strong>` +
+        (data.role_label ? `<span class="role-badge">${escapeHtml(data.role_label)}</span>` : '');
+    }
+
+    function renderKpis(kpis) {
+      const grid = document.getElementById('dashKpis');
+      if (!kpis.length) {
+        grid.innerHTML = '<div class="dash-empty" style="grid-column:1/-1"><i class="bi bi-bar-chart"></i>Sem indicadores configurados.</div>';
+        return;
+      }
+      grid.innerHTML = kpis.map(k => {
+        const cls = `kpi-card color-${k.color || 'default'}`;
+        const tag = k.link ? 'a' : 'div';
+        const href = k.link ? `href="${escapeHtml(k.link)}"` : '';
+        return `
+          <${tag} class="${cls}" ${href}>
+            <span class="kpi-icon"><i class="bi ${escapeHtml(k.icon || 'bi-info-circle')}"></i></span>
+            <div class="kpi-label">${escapeHtml(k.label)}</div>
+            <div class="kpi-value">${escapeHtml(String(k.value))}</div>
+            <div class="kpi-subtitle">${escapeHtml(k.subtitle || '')}</div>
+          </${tag}>
+        `;
+      }).join('');
+    }
+
+    function renderAtalhos(atalhos) {
+      const bar = document.getElementById('dashAtalhos');
+      if (!atalhos.length) { bar.style.display = 'none'; return; }
+      bar.innerHTML = atalhos.map(a => `
+        <a class="atalho-btn" href="${escapeHtml(a.url)}">
+          <i class="bi ${escapeHtml(a.icon || 'bi-plus-lg')}"></i>
+          ${escapeHtml(a.label)}
+        </a>
+      `).join('');
+    }
+
+    function renderAgenda(eventos) {
+      const cont  = document.getElementById('dashAgenda');
+      const count = document.getElementById('dashAgendaCount');
+      count.textContent = eventos.length;
+
+      if (!eventos.length) {
+        cont.innerHTML = `
+          <div class="dash-empty">
+            <i class="bi bi-calendar-x"></i>
+            Nenhum compromisso hoje.
+          </div>`;
+        return;
+      }
+      cont.innerHTML = eventos.map(ev => `
+        <div class="agenda-item">
+          <div class="agenda-hora">
+            ${escapeHtml(ev.hora || '')}
+            ${ev.fim ? `<span class="ate">${escapeHtml(ev.fim)}</span>` : ''}
+          </div>
+          <div>
+            <div class="agenda-info-titulo">${escapeHtml(ev.titulo || 'Compromisso')}</div>
+            <div class="agenda-info-local"><i class="bi bi-geo-alt"></i> ${escapeHtml(ev.local || '—')}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderPendencias(pendencias) {
+      const cont  = document.getElementById('dashPendencias');
+      const count = document.getElementById('dashPendCount');
+      count.textContent = pendencias.length;
+
+      if (!pendencias.length) {
+        cont.innerHTML = `
+          <div class="dash-empty">
+            <i class="bi bi-check-circle"></i>
+            Nada pendente. Tudo em dia!
+          </div>`;
+        return;
+      }
+      cont.innerHTML = pendencias.map(p => `
+        <a class="pendencia-item urgencia-${escapeHtml(p.urgencia || 'media')}"
+           href="${escapeHtml(p.url || '#')}">
+          <i class="bi ${escapeHtml(p.icon || 'bi-exclamation-circle')} pendencia-icon"></i>
+          <div class="pendencia-label">${escapeHtml(p.label)}</div>
+        </a>
+      `).join('');
+    }
+
+    // ---- Banner: próxima reserva de sala (todos os roles) -----------
+    function renderProximaReserva(r) {
+      const banner = document.getElementById('dashReservaBanner');
+      if (!r) { banner.style.display = 'none'; return; }
+      banner.style.display = 'flex';
+      banner.href = r.url || '#';
+      document.getElementById('dashReservaTit').textContent  =
+        r.titulo + (r.status === 'pendente' ? ' (aguardando confirmação)' : '');
+      document.getElementById('dashReservaMeta').innerHTML =
+        `<i class="bi bi-geo-alt"></i> ${escapeHtml(r.sala || '—')}`;
+      document.getElementById('dashReservaHora').textContent = r.hora || '—';
+      document.getElementById('dashReservaDia').textContent  = r.data || '';
+    }
+
+    // ---- Widget Avaliações do grupo (RESPONSAVEL_GRUPO) -------------
+    function renderAvaliacoes(av) {
+      const row   = document.getElementById('dashRowGestao');
+      const panel = document.getElementById('dashAvaliacoes');
+      const body  = document.getElementById('dashAvalBody');
+
+      if (!av) { panel.style.display = 'none'; checkDashRowGestao(); return; }
+
+      panel.style.display = 'block';
+      row.style.display = 'grid';
+      document.getElementById('dashAvalTotal').textContent = av.total || 0;
+
+      if (av.vazio || !av.total) {
+        body.innerHTML = `
+          <div class="dash-empty">
+            <i class="bi bi-star"></i>
+            Nenhuma avaliação registrada ainda no grupo.
+          </div>`;
+        return;
       }
 
-      // Atualizar stats
-      updateStats(user);
+      const cls = av.media >= 8 ? 'bom' : av.media >= 5 ? 'regular' : 'ruim';
+      const pPos = Math.round(av.positivas / av.total * 100);
+      const pNeu = Math.round(av.neutras   / av.total * 100);
+      const pNeg = Math.round(av.negativas / av.total * 100);
 
-      console.log("[INDEX] ✓ Dados carregados com sucesso");
+      body.innerHTML = `
+        <div class="aval-resumo">
+          <div class="aval-media-circle ${cls}">
+            <span class="num">${av.media}</span>
+            <span class="max">/10</span>
+          </div>
+          <div class="aval-media-info">
+            <div class="total"><strong>${av.total}</strong> avaliação(ões) do seu grupo</div>
+            <div class="total" style="color:#9CA3AF;font-size:11px;">${av.media_pct}% de satisfação</div>
+          </div>
+        </div>
+        <div class="aval-bar-row">
+          <span class="lbl">Positivas</span>
+          <div class="aval-bar pos"><div style="width:${pPos}%"></div></div>
+          <span class="qtd">${av.positivas}</span>
+        </div>
+        <div class="aval-bar-row">
+          <span class="lbl">Neutras</span>
+          <div class="aval-bar neu"><div style="width:${pNeu}%"></div></div>
+          <span class="qtd">${av.neutras}</span>
+        </div>
+        <div class="aval-bar-row">
+          <span class="lbl">Negativas</span>
+          <div class="aval-bar neg"><div style="width:${pNeg}%"></div></div>
+          <span class="qtd">${av.negativas}</span>
+        </div>
+      `;
+    }
+
+    // ---- Widget Frota (RESPONSAVEL_GRUPO do grupo Frotas) -----------
+    function renderFrota(f) {
+      const row   = document.getElementById('dashRowGestao');
+      const panel = document.getElementById('dashFrota');
+      const body  = document.getElementById('dashFrotaBody');
+
+      if (!f) { panel.style.display = 'none'; checkDashRowGestao(); return; }
+
+      panel.style.display = 'block';
+      row.style.display = 'grid';
+
+      let manutHtml = '';
+      if (f.proxima_manutencao) {
+        const m = f.proxima_manutencao;
+        const urgente = m.dias <= 3 ? 'urgente' : '';
+        manutHtml = `
+          <div class="frota-prox-manut ${urgente}">
+            <i class="bi bi-wrench-adjustable"></i>
+            Próxima manutenção: <strong>${escapeHtml(m.placa)}</strong>
+            (${escapeHtml(m.tipo)}) — <strong>${escapeHtml(m.label)}</strong>
+            <span style="color:#9CA3AF">(${escapeHtml(m.data)})</span>
+          </div>`;
+      } else {
+        manutHtml = `
+          <div class="frota-prox-manut" style="background:#F0FDF4;color:#166534">
+            <i class="bi bi-check-circle"></i>
+            Nenhuma manutenção agendada próxima.
+          </div>`;
+      }
+
+      body.innerHTML = `
+        <div class="frota-mini-grid">
+          <div class="frota-mini">
+            <div class="v" style="color:${f.checklists_aguardando > 0 ? '#D97706' : '#1A1A1A'}">${f.checklists_aguardando}</div>
+            <div class="l">Checklists aguardando</div>
+          </div>
+          <div class="frota-mini">
+            <div class="v" style="color:#2563EB">${f.reservas_hoje}</div>
+            <div class="l">Reservas de hoje</div>
+          </div>
+          <div class="frota-mini">
+            <div class="v" style="color:#16A34A">${f.proxima_manutencao ? f.proxima_manutencao.dias : '—'}</div>
+            <div class="l">Dias p/ manutenção</div>
+          </div>
+        </div>
+        ${manutHtml}
+      `;
+    }
+
+    // Esconde a row "gestão" se nenhum dos 2 painéis está visível
+    function checkDashRowGestao() {
+      const row    = document.getElementById('dashRowGestao');
+      const aval   = document.getElementById('dashAvaliacoes');
+      const frota  = document.getElementById('dashFrota');
+      const algum  = aval.style.display !== 'none' || frota.style.display !== 'none';
+      row.style.display = algum ? 'grid' : 'none';
     }
     // [FIM] loadDashboardData()
 
-    // ====================================
-    // FUNÇÃO: Atualizar Stats
-    // ====================================
-    // [INICIO] updateStats()
-    function updateStats(user) {
-      console.log("[INDEX] 📈 Atualizando estatísticas...");
-
-      // Em produção, fazer requisições à API:
-      // fetch(`/api/dashboard/stats?userId=${user.id}`)
-      //   .then(res => res.json())
-      //   .then(data => {
-      //     document.getElementById("totalTickets").textContent = data.total;
-      //     document.getElementById("resolvedTickets").textContent = data.resolved;
-      //     document.getElementById("pendingTickets").textContent = data.pending;
-      //     document.getElementById("satisfactionRate").textContent = data.satisfaction;
-      //   })
-      //   .catch(err => console.error("[INDEX] Erro ao carregar stats:", err));
-
-      console.log("[INDEX] ✓ Estatísticas carregadas");
-    }
-    // [FIM] updateStats()
+    // (updateStats removido — KPIs agora vêm do endpoint /api/dashboard/me
+    //  e são renderizados em renderKpis() acima.)
 
     // ====================================
     // FUNÇÃO: Mostrar Erro

@@ -41,7 +41,8 @@ const globalMenu = [
     icon: "bi-box",
     requiredRoles: ["ADMIN", "TI", "MANAGER"],
     submenu: [
-      { path: "/SistemaCPE/web/pages/inventory.html", label: "Equipamentos", icon: "bi-pc-display", requiredRoles: ["ADMIN", "TI", "MANAGER"] }
+      { path: "/SistemaCPE/web/pages/inventory.html",    label: "Equipamentos",   icon: "bi-pc-display", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+      { path: "/SistemaCPE/web/pages/inventory-ti.html", label: "Inventário T.I.", icon: "bi-laptop",     requiredRoles: ["ADMIN", "TI", "MANAGER"] }
     ]
   },
   { path: "/SistemaCPE/web/pages/password-vault.html", label: "Cofre de Senhas", icon: "bi-shield-lock", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
@@ -106,8 +107,18 @@ const globalMenu = [
 // submenu) ainda não estão no banco. O backend só decide QUAIS pages
 // o user pode ver; o front decide COMO mostrar.
 // ==================================================
+// Mapeamentos especiais: nem todo arquivo .html tem o mesmo nome do
+// page_key cadastrado em permission_pages. Quando precisar de um
+// nome diferente, registra aqui.
+const _PAGE_KEY_OVERRIDES = {
+  '/SistemaCPE/index.html': 'DASHBOARD',
+  '/SistemaCPE/':           'DASHBOARD',
+};
+
 function pageKeyFromPath(path) {
-  return (path || '').split('/').pop().replace('.html', '').replace(/-/g, '_').toUpperCase();
+  if (!path) return '';
+  if (_PAGE_KEY_OVERRIDES[path]) return _PAGE_KEY_OVERRIDES[path];
+  return path.split('/').pop().replace('.html', '').replace(/-/g, '_').toUpperCase();
 }
 
 async function getFilteredMenu(userRole, userId) {

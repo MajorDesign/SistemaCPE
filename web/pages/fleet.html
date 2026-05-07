@@ -228,47 +228,86 @@
       <div class="fleet-section-header">
         <h2><i class="bi bi-table" style="color:var(--fleet-primary)"></i> Viagens / Custos</h2>
         <div class="actions">
-          <button class="btn-fleet btn-fleet-secondary" onclick="exportTripsCSV()">
+          <button class="btn-fleet btn-fleet-secondary" id="tripsExportBtn" onclick="exportTripsCSV()">
             <i class="bi bi-download"></i> Exportar CSV
           </button>
-          <button class="btn-fleet btn-fleet-primary" onclick="openTripModal()">
+          <button class="btn-fleet btn-fleet-primary" id="tripsNewBtn" onclick="openTripModal()">
             <i class="bi bi-plus-lg"></i> Novo Registro
           </button>
         </div>
       </div>
 
-      <div class="fleet-filters">
-        <select class="fleet-select" id="tripAno" onchange="loadTrips()" style="max-width:100px"></select>
-        <select class="fleet-select" id="tripMes" onchange="loadTrips()" style="max-width:130px">
-          <option value="">Todos os meses</option>
-          <option value="1">Janeiro</option><option value="2">Fevereiro</option>
-          <option value="3">Março</option><option value="4">Abril</option>
-          <option value="5">Maio</option><option value="6">Junho</option>
-          <option value="7">Julho</option><option value="8">Agosto</option>
-          <option value="9">Setembro</option><option value="10">Outubro</option>
-          <option value="11">Novembro</option><option value="12">Dezembro</option>
-        </select>
-        <select class="fleet-select" id="tripUnidade" onchange="loadTrips()" style="max-width:150px">
-          <option value="">Todas as unidades</option>
-        </select>
+      <!-- Sub-tabs: Viagens | Centro de Custo -->
+      <div class="fleet-subtabs" style="display:flex;gap:6px;border-bottom:2px solid #F3F4F6;margin-bottom:16px">
+        <button class="fleet-subtab active" data-subtab="trips" onclick="switchTripsTab('trips')">
+          <i class="bi bi-list-ul"></i> Por Viagem
+        </button>
+        <button class="fleet-subtab" data-subtab="centers" onclick="switchTripsTab('centers')">
+          <i class="bi bi-pie-chart-fill"></i> Por Centro de Custo
+        </button>
       </div>
 
-      <!-- Totais rápidos -->
-      <div class="fleet-stats-grid" id="tripTotals" style="margin-bottom:16px"></div>
+      <!-- ABA: Por Viagem -->
+      <div id="tripsSubTabContent">
+        <div class="fleet-filters">
+          <select class="fleet-select" id="tripAno" onchange="loadTrips()" style="max-width:100px"></select>
+          <select class="fleet-select" id="tripMes" onchange="loadTrips()" style="max-width:130px">
+            <option value="">Todos os meses</option>
+            <option value="1">Janeiro</option><option value="2">Fevereiro</option>
+            <option value="3">Março</option><option value="4">Abril</option>
+            <option value="5">Maio</option><option value="6">Junho</option>
+            <option value="7">Julho</option><option value="8">Agosto</option>
+            <option value="9">Setembro</option><option value="10">Outubro</option>
+            <option value="11">Novembro</option><option value="12">Dezembro</option>
+          </select>
+          <select class="fleet-select" id="tripUnidade" onchange="loadTrips()" style="max-width:150px">
+            <option value="">Todas as unidades</option>
+          </select>
+        </div>
 
-      <div class="fleet-table-wrapper">
-        <table class="fleet-table">
-          <thead>
-            <tr>
-              <th>Placa</th><th>Modelo</th><th>Saída</th><th>Retorno</th>
-              <th>KM</th><th>Aluguel</th><th>Telemetria</th>
-              <th>Estac.</th><th>Pedágio</th><th>Manutenção</th>
-              <th>Combustível</th><th>Outros</th><th>Total</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="tripsTable"></tbody>
-          <tfoot id="tripsTotalsRow"></tfoot>
-        </table>
+        <!-- Totais rápidos -->
+        <div class="fleet-stats-grid" id="tripTotals" style="margin-bottom:16px"></div>
+
+        <div class="fleet-table-wrapper">
+          <table class="fleet-table">
+            <thead>
+              <tr>
+                <th>Placa</th><th>Modelo</th><th>Saída</th><th>Retorno</th>
+                <th>KM</th><th>Aluguel</th><th>Telemetria</th>
+                <th>Estac.</th><th>Pedágio</th><th>Manutenção</th>
+                <th>Combustível</th><th>Outros</th><th>Total</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="tripsTable"></tbody>
+            <tfoot id="tripsTotalsRow"></tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- ABA: Centro de Custo -->
+      <div id="centersSubTabContent" style="display:none">
+        <div class="fleet-filters">
+          <select class="fleet-select" id="ccAno" onchange="loadCostCenters()" style="max-width:100px"></select>
+          <select class="fleet-select" id="ccMes" onchange="loadCostCenters()" style="max-width:130px">
+            <option value="">Ano inteiro</option>
+            <option value="1">Janeiro</option><option value="2">Fevereiro</option>
+            <option value="3">Março</option><option value="4">Abril</option>
+            <option value="5">Maio</option><option value="6">Junho</option>
+            <option value="7">Julho</option><option value="8">Agosto</option>
+            <option value="9">Setembro</option><option value="10">Outubro</option>
+            <option value="11">Novembro</option><option value="12">Dezembro</option>
+          </select>
+        </div>
+
+        <div id="ccTotalBanner" style="background:linear-gradient(135deg,#FFFBEB 0%,#FEF3C7 100%);border:2px solid #FDE68A;border-radius:12px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:14px">
+          <i class="bi bi-cash-stack" style="font-size:28px;color:#D97706"></i>
+          <div style="flex:1">
+            <div style="font-size:11px;color:#92400E;font-weight:700;text-transform:uppercase">Total geral do período</div>
+            <div id="ccTotalGeral" style="font-size:22px;font-weight:700;color:#78350F">R$ 0,00</div>
+          </div>
+        </div>
+
+        <div id="ccCardsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px"></div>
       </div>
     </section>
 
@@ -528,6 +567,29 @@
           </select>
         </div>
       </div>
+      <!-- Centro de custo: causa + condutor responsável (só ADMIN/TI/RESP_GRUPO podem mexer) -->
+      <div class="fleet-grid-2" id="maintCentroCustoBlock">
+        <div class="fleet-form-group">
+          <label class="fleet-label">
+            Causa
+            <small style="font-weight:400;color:#9CA3AF;margin-left:6px">— colisão/arranhão imputa custo ao grupo do condutor responsável</small>
+          </label>
+          <select class="fleet-select" id="maintCausa" onchange="onMaintCausaChange()">
+            <option value="normal">Normal (rotina, troca de óleo, revisão...)</option>
+            <option value="colisao">Colisão</option>
+            <option value="arranhao">Arranhão / Risco</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div class="fleet-form-group" id="maintRespWrap" style="display:none">
+          <label class="fleet-label">Condutor responsável <span class="req">*</span></label>
+          <select class="fleet-select" id="maintRespCondutor">
+            <option value="">Selecione...</option>
+          </select>
+          <small id="maintRespHint" style="font-size:11px;color:#9CA3AF;margin-top:4px;display:block"></small>
+        </div>
+      </div>
+
       <div class="fleet-form-group">
         <label class="fleet-label">Observações</label>
         <textarea class="fleet-textarea" id="maintObs" placeholder="Observações..."></textarea>
@@ -615,6 +677,16 @@
         </div>
       </div>
 
+      <div class="fleet-grid-2">
+        <div class="fleet-form-group">
+          <label class="fleet-label">
+            Valor do aluguel mensal (R$)
+            <small style="font-weight:400;color:#9CA3AF;margin-left:6px">— usado pra calcular o custo de dias parados em colisão/arranhão</small>
+          </label>
+          <input class="fleet-input" id="vehAluguelMensal" type="number" step="0.01" min="0" placeholder="0,00">
+        </div>
+      </div>
+
       <!-- Fotos do veículo — 6 ângulos -->
       <div class="fleet-form-group">
         <label class="fleet-label">
@@ -623,6 +695,25 @@
         </label>
         <div class="vehicle-photos-grid" id="vehiclePhotosGrid">
           <!-- Populado por buildVehiclePhotosGrid() -->
+        </div>
+      </div>
+
+      <!-- Fotos adicionais — multi-upload com legenda livre -->
+      <div class="fleet-form-group" id="vehAdicionaisSection" style="display:none">
+        <label class="fleet-label" style="display:flex;align-items:center;justify-content:space-between">
+          <span>
+            Fotos adicionais
+            <small style="font-weight:400;color:#9CA3AF;margin-left:6px">— ângulos extras para comparação no checklist (ex: rodas, portas individuais, interior)</small>
+          </span>
+          <button type="button" class="btn-fleet btn-fleet-secondary btn-fleet-sm" onclick="addAdicionalPhotoZone()">
+            <i class="bi bi-plus-lg"></i> Adicionar foto
+          </button>
+        </label>
+        <div class="vehicle-photos-grid" id="vehiclePhotosAdicionaisGrid">
+          <!-- Populado por buildVehiclePhotosAdicionaisGrid() -->
+        </div>
+        <div id="vehAdicionaisEmpty" style="font-size:12px;color:#9CA3AF;padding:10px 0;display:none">
+          Nenhuma foto adicional cadastrada. Clique em "Adicionar foto" para incluir ângulos extras.
         </div>
       </div>
 
@@ -707,6 +798,12 @@
         <div class="fleet-form-group">
           <label class="fleet-label">Destino <span class="req">*</span></label>
           <input class="fleet-input" id="clDestino" placeholder="Ex: Visita ao cliente - Av. Afonso Pena, BH">
+        </div>
+
+        <!-- AVISO: veículo tem manutenção agendada futura -->
+        <div id="clManutAvisoBanner" style="display:none;background:#FEF3C7;border:1.5px solid #FDE68A;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#92400E;align-items:center;gap:10px">
+          <i class="bi bi-tools" style="font-size:18px;flex-shrink:0"></i>
+          <span id="clManutAvisoTexto" style="flex:1"></span>
         </div>
 
         <!-- INSPEÇÃO VISUAL -->
@@ -1147,6 +1244,28 @@
 </div>
 
 <!-- ============================================================
+     MODAL: DETALHES DA REVISÃO/MANUTENÇÃO ATIVA
+     ============================================================ -->
+<div class="fleet-modal-overlay" id="modalRevisaoDetail">
+  <div class="fleet-modal" style="max-width:560px">
+    <div class="fleet-modal-header" style="background:#EDE9FE;border-bottom:1px solid #DDD6FE">
+      <span class="fleet-modal-title" style="color:#5B21B6">
+        <i class="bi bi-search"></i> <span id="revDetailTitle">Veículo em revisão</span>
+      </span>
+      <button class="fleet-modal-close" onclick="closeModal('modalRevisaoDetail')">&times;</button>
+    </div>
+    <div class="fleet-modal-body" id="revDetailBody">
+      <div style="text-align:center;padding:20px;color:#9CA3AF">
+        <i class="bi bi-hourglass-split"></i> Carregando...
+      </div>
+    </div>
+    <div class="fleet-modal-footer">
+      <button class="btn-fleet btn-fleet-secondary" onclick="closeModal('modalRevisaoDetail')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
      MODAL: RECUSAR DEVOLUÇÃO
      ============================================================ -->
 <div class="fleet-modal-overlay" id="modalRecusaRetorno">
@@ -1574,9 +1693,16 @@ function renderVehicles(vehicles) {
           const [nome, hi, hf, dest] = v.reserva_ativa.split('|');
           return '<span class="fleet-badge" style="background:#EDE9FE;color:#7C3AED"><i class="bi bi-calendar-check-fill"></i> Reservado</span>'
             + '<div style="font-size:10px;color:#7C3AED;margin-top:4px"><i class="bi bi-person-fill"></i> '+nome+' &bull; '+hi+'-'+hf+'</div>';
-        })() : badgeStatus(v.status)}
+        })() : (
+          (v.status === 'manutencao' || v.status === 'revisao')
+            ? `<span class="fleet-badge revisao" style="cursor:pointer" title="Clique para ver detalhes da revisão"
+                     onclick="event.stopPropagation();openRevisaoDetail(${v.id})">
+                 <i class="bi bi-search"></i> Em Revisão
+               </span>`
+            : badgeStatus(v.status)
+        )}
         ${v.manutencao_proxima ? '<div style="font-size:10px;color:#D97706;margin-top:4px"><i class="bi bi-tools"></i> '+v.manutencao_proxima+'</div>' : ''}
-        ${v.status === 'manutencao' && canManageFleet() ? `
+        ${v.status === 'manutencao' && canManageFleet() && v.avaria_descricao && !v.avaria_corrigida_em ? `
           <div style="display:flex;gap:4px;margin-top:8px">
             <button class="btn-fleet btn-fleet-sm" style="flex:1;background:#DCFCE7;color:#16A34A;border:1px solid #BBF7D0;font-size:11px"
                     onclick="event.stopPropagation();openCorrigirAvaria(${v.id})">
@@ -1593,16 +1719,24 @@ function renderVehicles(vehicles) {
             <i class="bi bi-check-circle-fill"></i> Liberar para uso
           </button>` : ''}
         ${v.status === 'ativo' && canManageFleet() ? `
-          <div style="display:flex;gap:4px;margin-top:8px">
-            <button class="btn-fleet btn-fleet-sm" style="flex:1;background:#FEF3C7;color:#D97706;border:1px solid #FDE68A;font-size:11px"
+          <div style="margin-top:8px">
+            <button class="btn-fleet btn-fleet-sm" style="width:100%;background:#FEF3C7;color:#D97706;border:1px solid #FDE68A;font-size:11px"
                     onclick="event.stopPropagation();enviarParaManutencao(${v.id})">
               <i class="bi bi-tools"></i> Manutenção
             </button>
-            <button class="btn-fleet btn-fleet-sm" style="flex:1;background:#EDE9FE;color:#7C3AED;border:1px solid #DDD6FE;font-size:11px"
-                    onclick="event.stopPropagation();enviarParaRevisao(${v.id})">
-              <i class="bi bi-search"></i> Revisão
-            </button>
           </div>` : ''}
+        ${v.status === 'em_viagem' ? (() => {
+          const sub = v.is_subscribed == 1 || v.is_subscribed === true;
+          const bg  = sub ? '#DBEAFE' : '#EFF6FF';
+          const ic  = sub ? 'bi-bell-fill' : 'bi-bell';
+          const lbl = sub ? 'Você será avisado' : 'Avise-me quando voltar';
+          return `<button class="btn-fleet btn-fleet-sm av-btn" id="aviseBtn_${v.id}"
+                  data-veh="${v.id}" data-state="${sub ? 'on' : 'off'}"
+                  style="margin-top:8px;width:100%;background:${bg};color:#1D4ED8;border:1px solid #BFDBFE;font-size:11px"
+                  onclick="event.stopPropagation();toggleAviseMe(${v.id})">
+            <i class="bi ${ic}"></i> ${lbl}
+          </button>`;
+        })() : ''}
         ${canDeleteVehicle() && v.status !== 'em_viagem' ? `
           <button class="btn-fleet btn-fleet-sm" style="margin-top:8px;width:100%;background:#FEE2E2;color:#B91C1C;border:1px solid #FCA5A5;font-size:11px"
                   onclick="event.stopPropagation();deleteVehicle(${v.id}, '${(v.placa || '').replace(/'/g, '&#39;')}')">
@@ -1675,6 +1809,42 @@ const PHOTO_ANGLES = [
   { key: 'paralama_traseiro',    label: 'Para-lama traseiro',      icon: 'bi-chevron-double-right' },
 ];
 
+/* Combina os 6 ângulos padrão com os adicionais detectados nos dados.
+   - refMap / inspMap : { angulo → path } (usados pra saber quais adicionais existem)
+   - vehiclePhotos / inspPhotos : arrays de fotos completas (pra puxar legendas)
+   Retorna [{key, label, icon, isExtra}] na ordem: padrão → adicionais. */
+function _allAnglesFromData(refMap, inspMap, vehiclePhotos, inspPhotos) {
+  const result = PHOTO_ANGLES.map(a => ({ ...a, isExtra: false }));
+  const seen = new Set(result.map(a => a.key));
+
+  const legendas = {};
+  for (const arr of [vehiclePhotos || [], inspPhotos || []]) {
+    for (const p of arr) {
+      if ((p.angulo || '').startsWith('adicional') && p.legenda) {
+        legendas[p.angulo] = p.legenda;
+      }
+    }
+  }
+
+  const allKeys = new Set([
+    ...Object.keys(refMap  || {}),
+    ...Object.keys(inspMap || {}),
+  ]);
+  for (const k of allKeys) {
+    if (k.startsWith('adicional') && !seen.has(k)) {
+      result.push({
+        key:     k,
+        label:   legendas[k] || 'Adicional',
+        icon:    'bi-card-image',
+        isExtra: true,
+      });
+      seen.add(k);
+    }
+  }
+  return result;
+}
+
+// Renderiza apenas os 6 ângulos padrão. Ignora angulos adicional_* e arranhado_*.
 function buildVehiclePhotosGrid(photosByAngulo = {}) {
   const grid = document.getElementById('vehiclePhotosGrid');
   grid.innerHTML = PHOTO_ANGLES.map(ang => {
@@ -1744,6 +1914,138 @@ function togglePhotoHistory(angulo) {
 }
 
 /* ============================================================
+   FOTOS ADICIONAIS — multi-photo com legenda livre
+   Cada nova zona é identificada por _newAdicionaisCount;
+   ao salvar o veículo, fotos com arquivo + legenda são enviadas.
+   ============================================================ */
+let _newAdicionaisCount = 0;
+
+function _escapeAttr(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function buildVehiclePhotosAdicionaisGrid(adicionais = []) {
+  _newAdicionaisCount = 0;
+  const grid = document.getElementById('vehiclePhotosAdicionaisGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (const p of adicionais) _renderAdicionalExistente(grid, p);
+  toggleAdicionaisEmpty();
+}
+
+function _renderAdicionalExistente(grid, p) {
+  const zoneId = `adicZone_existing_${p.id}`;
+  const legenda = _escapeAttr(p.legenda || 'Adicional');
+  const div = document.createElement('div');
+  div.className = 'vehicle-photo-zone';
+  div.id = zoneId;
+  div.innerHTML = `
+    <div class="vehicle-photo-label" title="${legenda}">
+      <i class="bi bi-card-image"></i> ${legenda}
+    </div>
+    <div class="vehicle-photo-preview" style="cursor:default" title="${legenda}">
+      <img src="${_escapeAttr(p.foto_path)}" alt="${legenda}"
+           onerror="this.parentElement.innerHTML='<i class=\\'bi bi-image\\'></i>'">
+    </div>
+    <button type="button" class="btn-fleet btn-fleet-xs"
+            style="background:#FEE2E2;color:#B91C1C;border:1px solid #FCA5A5"
+            onclick="deleteAdicionalPhoto(${p.id}, '${zoneId}')">
+      <i class="bi bi-trash"></i> Remover
+    </button>`;
+  grid.appendChild(div);
+}
+
+function addAdicionalPhotoZone() {
+  const vehId = document.getElementById('vehId').value;
+  if (!vehId) {
+    showToast('Salve o veículo primeiro para poder anexar fotos adicionais.', 'info');
+    return;
+  }
+  _newAdicionaisCount++;
+  const idx = _newAdicionaisCount;
+  const zoneId = `adicZone_new_${idx}`;
+  const grid = document.getElementById('vehiclePhotosAdicionaisGrid');
+  const div = document.createElement('div');
+  div.className = 'vehicle-photo-zone vehicle-photo-zone--novo';
+  div.id = zoneId;
+  div.dataset.novo = '1';
+  div.dataset.idx = idx;
+  div.innerHTML = `
+    <input type="text" class="fleet-input adic-legenda-input"
+           id="adicLegenda_${idx}"
+           placeholder="Etiqueta (ex: Roda dianteira esq.)"
+           maxlength="80"
+           style="font-size:12px;padding:6px 8px">
+    <div class="vehicle-photo-preview" id="adicPreview_${idx}"
+         onclick="document.getElementById('adicFile_${idx}').click()"
+         title="Clique para selecionar a imagem">
+      <i class="bi bi-camera"></i>
+    </div>
+    <input type="file" id="adicFile_${idx}" accept="image/*" style="display:none"
+           onchange="onAdicionalSelected(${idx}, this)">
+    <div style="display:flex;gap:4px">
+      <button type="button" class="btn-fleet btn-fleet-secondary btn-fleet-xs" style="flex:1"
+              onclick="document.getElementById('adicFile_${idx}').click()">
+        <i class="bi bi-upload"></i> Foto
+      </button>
+      <button type="button" class="btn-fleet btn-fleet-xs"
+              style="background:#FEE2E2;color:#B91C1C;border:1px solid #FCA5A5"
+              onclick="document.getElementById('${zoneId}').remove();toggleAdicionaisEmpty()"
+              title="Cancelar">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>`;
+  grid.appendChild(div);
+  toggleAdicionaisEmpty();
+  // Foco direto no input para o usuário digitar o nome
+  setTimeout(() => document.getElementById(`adicLegenda_${idx}`)?.focus(), 50);
+}
+
+function onAdicionalSelected(idx, input) {
+  if (!input.files?.[0]) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const prev = document.getElementById(`adicPreview_${idx}`);
+    if (prev) prev.innerHTML = `<img src="${e.target.result}" alt=""
+                                    style="width:100%;height:100%;object-fit:cover;border-radius:4px">`;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+async function deleteAdicionalPhoto(photoId, zoneId) {
+  if (!confirm('Remover esta foto adicional? A ação não pode ser desfeita.')) return;
+  const vehId = document.getElementById('vehId').value;
+  if (!vehId) return;
+  try {
+    const token = _getAuthToken();
+    const r = await fetch(`${API}/vehicles/${vehId}/photo/${photoId}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'X-Auth-Token': token },
+    });
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      showToast(data.detail || 'Erro ao remover foto', 'error');
+      return;
+    }
+    document.getElementById(zoneId)?.remove();
+    toggleAdicionaisEmpty();
+    showToast('Foto adicional removida', 'success');
+  } catch (err) {
+    showToast('Erro: ' + err.message, 'error');
+  }
+}
+
+function toggleAdicionaisEmpty() {
+  const grid = document.getElementById('vehiclePhotosAdicionaisGrid');
+  const empty = document.getElementById('vehAdicionaisEmpty');
+  if (!grid || !empty) return;
+  empty.style.display = grid.children.length === 0 ? 'block' : 'none';
+}
+
+/* ============================================================
    VEÍCULOS — MODAL
    ============================================================ */
 function openVehicleModal() {
@@ -1755,10 +2057,13 @@ function openVehicleModal() {
   document.getElementById('vehCor').value = '';
   document.getElementById('vehUnidade').value = '';
   document.getElementById('vehKmAtual').value = '';
+  document.getElementById('vehAluguelMensal').value = '';
   document.getElementById('vehStatusGroup').style.display = 'none';
   document.getElementById('vehKmAlertsSection').style.display = 'none';
+  document.getElementById('vehAdicionaisSection').style.display = 'none';
   document.getElementById('modalVehicleTitle').textContent = 'Novo Veículo';
   buildVehiclePhotosGrid({});
+  buildVehiclePhotosAdicionaisGrid([]);
   openModal('modalVehicle');
 }
 
@@ -1774,21 +2079,29 @@ async function editVehicle(id) {
   document.getElementById('vehCor').value = v.cor || '';
   document.getElementById('vehUnidade').value = v.unidade || '';
   document.getElementById('vehKmAtual').value = v.km_atual || 0;
+  document.getElementById('vehAluguelMensal').value = v.valor_aluguel_mensal || 0;
   document.getElementById('vehStatus').value = v.status;
   document.getElementById('vehStatusGroup').style.display = 'block';
   document.getElementById('modalVehicleTitle').textContent = `Editar Veículo — ${v.placa}`;
 
-  // Buscar fotos por ângulo
+  // Buscar fotos por ângulo (separa padrão de adicionais)
   const ph = await apiFetch(`/vehicles/${id}/photos`);
   const photosByAngulo = {};
+  const adicionais = [];
   if (ph?.photos) {
     for (const p of ph.photos) {
       const ang = p.angulo || 'frente';
-      if (!photosByAngulo[ang]) photosByAngulo[ang] = [];
-      photosByAngulo[ang].push(p);
+      if (ang.startsWith('adicional')) {
+        if (p.is_current == 1) adicionais.push(p);
+      } else if (!ang.startsWith('arranhado_')) {
+        if (!photosByAngulo[ang]) photosByAngulo[ang] = [];
+        photosByAngulo[ang].push(p);
+      }
     }
   }
   buildVehiclePhotosGrid(photosByAngulo);
+  buildVehiclePhotosAdicionaisGrid(adicionais);
+  document.getElementById('vehAdicionaisSection').style.display = 'block';
   // Mostrar alertas de KM
   document.getElementById('vehKmAlertsSection').style.display = 'block';
   await loadKmAlerts(id);
@@ -1808,6 +2121,7 @@ async function saveVehicle() {
     cor:     document.getElementById('vehCor').value,
     unidade: document.getElementById('vehUnidade').value,
     km_atual: parseInt(document.getElementById('vehKmAtual').value) || 0,
+    valor_aluguel_mensal: parseFloat(document.getElementById('vehAluguelMensal').value) || 0,
     status:  document.getElementById('vehStatus').value || 'ativo',
   };
 
@@ -1840,17 +2154,47 @@ async function saveVehicle() {
     if (!r.ok) photoErrors++;
   }
 
+  // Upload das fotos adicionais novas (zonas com arquivo + legenda)
+  const novasAdic = document.querySelectorAll('#vehiclePhotosAdicionaisGrid .vehicle-photo-zone--novo');
+  let adicSemArquivo = 0;
+  let adicSemLegenda = 0;
+  for (const zone of novasAdic) {
+    const idx = zone.dataset.idx;
+    const fileInput = document.getElementById(`adicFile_${idx}`);
+    const legendaInput = document.getElementById(`adicLegenda_${idx}`);
+    const file = fileInput?.files?.[0];
+    const legenda = (legendaInput?.value || '').trim();
+    if (!file) { adicSemArquivo++; continue; }
+    if (!legenda) { adicSemLegenda++; continue; }
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('angulo', 'adicional');
+    fd.append('legenda', legenda);
+    const r = await fetch(`${API}/vehicles/${vehicleId}/photo`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'X-Auth-Token': token },
+      body: fd,
+    });
+    if (!r.ok) photoErrors++;
+  }
+
+  if (adicSemLegenda) showToast(`${adicSemLegenda} foto(s) adicional(is) ignorada(s) — sem etiqueta.`, 'info');
+  if (adicSemArquivo) showToast(`${adicSemArquivo} foto(s) adicional(is) ignorada(s) — sem arquivo.`, 'info');
   if (photoErrors) showToast(`Veículo salvo, mas ${photoErrors} foto(s) falharam`, 'info');
-  else showToast(res.message || 'Veículo salvo!', 'success');
+  else if (!adicSemLegenda && !adicSemArquivo) showToast(res.message || 'Veículo salvo!', 'success');
   closeModal('modalVehicle');
   loadVehicles();
 }
 
 function populateVehicleSelects() {
-  // Checklist: só veículos ativos SEM manutenção agendada E sem checklist pendente
-  const disponíveis = allVehicles.filter(v => v.status === 'ativo' && !v.manutencao_proxima && !v.checklist_pendente_id);
-  const comManut = allVehicles.filter(v => v.status === 'ativo' && v.manutencao_proxima);
-  const comPendencia = allVehicles.filter(v => v.status === 'ativo' && !v.manutencao_proxima && v.checklist_pendente_id);
+  // Checklist: veículos ativos = disponíveis. Ter manutenção AGENDADA pra
+  // dia futuro não bloqueia — o auto-block do backend só dispara quando
+  // chega o dia (data_entrada <= hoje), e quando isso acontece o status
+  // já vira 'manutencao' (some do filtro 'ativo'). Aqui só sinalizamos
+  // visualmente que existe agendamento futuro com um ⚠️ no rótulo.
+  const disponíveis  = allVehicles.filter(v => v.status === 'ativo' && !v.checklist_pendente_id);
+  const comPendencia = allVehicles.filter(v => v.status === 'ativo' && v.checklist_pendente_id);
   const clSel = document.getElementById('clVehicle');
   if (clSel) {
     const cur = clSel.value;
@@ -1861,12 +2205,12 @@ function populateVehicleSelects() {
       'devolvido':           'devolvido — aguardando vistoria de retorno',
     };
     clSel.innerHTML = '<option value="">Selecione o veículo...</option>'
-      + disponíveis.map(v => '<option value="'+v.id+'">'+v.placa+' — '+v.modelo+' ('+( v.unidade||'')+')</option>').join('')
+      + disponíveis.map(v => {
+          const warn = v.manutencao_proxima ? ' ⚠️ (manut. agendada)' : '';
+          return '<option value="'+v.id+'">'+v.placa+' — '+v.modelo+' ('+(v.unidade||'')+')'+warn+'</option>';
+        }).join('')
       + (comPendencia.length ? '<optgroup label="Indisponíveis (checklist pendente)">'
         + comPendencia.map(v => '<option value="" disabled style="color:#9CA3AF">'+v.placa+' — '+v.modelo+' ('+(lblPendente[v.checklist_pendente_status]||v.checklist_pendente_status)+')</option>').join('')
-        + '</optgroup>' : '')
-      + (comManut.length ? '<optgroup label="Indisponíveis (manutenção agendada)">'
-        + comManut.map(v => '<option value="" disabled style="color:#9CA3AF">'+v.placa+' — '+v.modelo+' ('+v.manutencao_proxima+')</option>').join('')
         + '</optgroup>' : '');
     if (cur) clSel.value = cur;
   }
@@ -2036,6 +2380,9 @@ function openChecklistForm() {
 
 async function onVehicleSelect() {
   const id = parseInt(document.getElementById('clVehicle').value);
+  const banner = document.getElementById('clManutAvisoBanner');
+  if (banner) banner.style.display = 'none';
+
   if (!id) {
     document.getElementById('clPhotoGrid').innerHTML = `
       <div style="grid-column:1/-1;text-align:center;padding:24px;color:#9CA3AF;font-size:13px">
@@ -2060,6 +2407,14 @@ async function onVehicleSelect() {
     document.getElementById('clKmSaida').value = '';
     return;
   }
+  // Aviso: veículo tem manutenção agendada (futura) — checklist permitido,
+  // só uma ressalva visível pro condutor saber que vai voltar pra oficina.
+  if (vehSel?.manutencao_proxima && banner) {
+    document.getElementById('clManutAvisoTexto').innerHTML =
+      `<strong>Atenção:</strong> este veículo tem <strong>${vehSel.manutencao_proxima}</strong>. ` +
+      `Garanta que ele esteja de volta antes dessa data — após o agendamento, ele entrará automaticamente em manutenção.`;
+    banner.style.display = 'flex';
+  }
   // Auto-preencher KM do veículo
   const veh = allVehicles.find(v => v.id === id);
   if (veh && veh.km_atual) {
@@ -2068,12 +2423,17 @@ async function onVehicleSelect() {
   await buildChecklistPhotoGrid(id);
 }
 
+/* Lista de ângulos adicionais do veículo selecionado no checklist atual.
+   Preenchida em buildChecklistPhotoGrid e usada no upload das fotos. */
+let CL_ADICIONAIS = [];
+
 async function buildChecklistPhotoGrid(vehicleId) {
   const grid = document.getElementById('clPhotoGrid');
   grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:16px;color:#9CA3AF"><i class="bi bi-hourglass-split"></i> Carregando fotos...</div>';
 
-  // Buscar fotos de referência do veículo
+  // Buscar fotos de referência do veículo (padrão + adicionais)
   let refByAngulo = {};
+  CL_ADICIONAIS = [];
   if (vehicleId) {
     const ph = await apiFetch(`/vehicles/${vehicleId}/photos`);
     if (ph?.photos) {
@@ -2081,40 +2441,63 @@ async function buildChecklistPhotoGrid(vehicleId) {
         const ang = p.angulo || 'frente';
         if (!refByAngulo[ang]) refByAngulo[ang] = [];
         refByAngulo[ang].push(p);
+        if (ang.startsWith('adicional') && p.is_current == 1) {
+          CL_ADICIONAIS.push(p);
+        }
       }
     }
   }
 
-  grid.innerHTML = PHOTO_ANGLES.map(ang => {
+  const padrao = PHOTO_ANGLES.map(ang => {
     const current = (refByAngulo[ang.key] || []).find(p => p.is_current == 1);
-    return `
-      <div class="cl-photo-item">
-        <div class="cl-photo-label"><i class="bi ${ang.icon}"></i> ${ang.label}</div>
-        <div class="cl-photo-row">
-          <div class="cl-photo-col">
-            <div class="cl-photo-sub-label">Referência</div>
-            <div class="cl-photo-box cl-photo-ref">
-              ${current?.foto_path
-                ? `<img src="${current.foto_path}" alt="${ang.label}"
-                        onerror="this.parentElement.innerHTML='<i class=\\'bi bi-image-fill\\'></i>'">`
-                : '<i class="bi bi-image-fill"></i>'}
-            </div>
-          </div>
-          <div class="cl-photo-col">
-            <div class="cl-photo-sub-label">Inspeção atual</div>
-            <div class="cl-photo-box cl-photo-upload" id="clZone_${ang.key}"
-                 onclick="document.getElementById('clFile_${ang.key}').click()"
-                 title="Clique para adicionar foto da inspeção">
-              <i class="bi bi-camera"></i>
-              <span>Fotografar</span>
-            </div>
-            <input type="file" id="clFile_${ang.key}" accept="image/*" capture="environment"
-                   style="display:none" onchange="onClPhotoSelected('${ang.key}', this)">
+    return _clPhotoItem({
+      key:   ang.key,
+      label: ang.label,
+      icon:  ang.icon,
+      refSrc: current?.foto_path,
+    });
+  }).join('');
+
+  const adic = CL_ADICIONAIS.map(p => _clPhotoItem({
+    key:    p.angulo,
+    label:  p.legenda || 'Adicional',
+    icon:   'bi-card-image',
+    refSrc: p.foto_path,
+    extra:  true,
+  })).join('');
+
+  grid.innerHTML = padrao + adic;
+}
+
+function _clPhotoItem({ key, label, icon, refSrc, extra }) {
+  const safeLabel = String(label || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+  return `
+    <div class="cl-photo-item${extra ? ' cl-photo-item--extra' : ''}">
+      <div class="cl-photo-label"><i class="bi ${icon}"></i> ${safeLabel}${extra ? ' <small style="color:#9CA3AF;font-weight:400">(adicional)</small>' : ''}</div>
+      <div class="cl-photo-row">
+        <div class="cl-photo-col">
+          <div class="cl-photo-sub-label">Referência</div>
+          <div class="cl-photo-box cl-photo-ref">
+            ${refSrc
+              ? `<img src="${refSrc}" alt="${safeLabel}"
+                      onerror="this.parentElement.innerHTML='<i class=\\'bi bi-image-fill\\'></i>'">`
+              : '<i class="bi bi-image-fill"></i>'}
           </div>
         </div>
+        <div class="cl-photo-col">
+          <div class="cl-photo-sub-label">Inspeção atual</div>
+          <div class="cl-photo-box cl-photo-upload" id="clZone_${key}"
+               onclick="document.getElementById('clFile_${key}').click()"
+               title="Clique para adicionar foto da inspeção">
+            <i class="bi bi-camera"></i>
+            <span>Fotografar</span>
+          </div>
+          <input type="file" id="clFile_${key}" accept="image/*" capture="environment"
+                 style="display:none" onchange="onClPhotoSelected('${key}', this)">
+        </div>
       </div>
-    `;
-  }).join('');
+    </div>
+  `;
 }
 
 function onClPhotoSelected(angulo, input) {
@@ -2170,23 +2553,27 @@ async function openVistoriaSaida(id) {
 
   // Buscar fotos de referência do veículo
   let refByAngulo = {};
+  let vehiclePhotosFull = [];
   const phData = await apiFetch(`/vehicles/${c.vehicle_id}/photos`);
   if (phData?.photos) {
+    vehiclePhotosFull = phData.photos;
     for (const p of phData.photos) {
       if (p.is_current == 1) refByAngulo[p.angulo] = p.foto_path;
     }
   }
 
+  const allAngles = _allAnglesFromData(refByAngulo, inspByAngulo, vehiclePhotosFull, inspPhotos);
   const vstPhotosSection = document.getElementById('vstPhotosSection');
-  const hasAnyPhoto = PHOTO_ANGLES.some(a => refByAngulo[a.key] || inspByAngulo[a.key]);
+  const hasAnyPhoto = allAngles.some(a => refByAngulo[a.key] || inspByAngulo[a.key]);
   if (hasAnyPhoto) {
-    document.getElementById('vstPhotosGrid').innerHTML = PHOTO_ANGLES.map(a => {
+    document.getElementById('vstPhotosGrid').innerHTML = allAngles.map(a => {
       const refSrc = refByAngulo[a.key];
       const inspSrc = inspByAngulo[a.key];
       if (!refSrc && !inspSrc) return '';
+      const tag = a.isExtra ? ' <small style="color:#9CA3AF;font-weight:500">(adicional)</small>' : '';
       return `<div style="margin-bottom:12px">
         <div style="font-size:11px;font-weight:700;color:#6B7280;margin-bottom:6px;text-transform:uppercase;display:flex;align-items:center;gap:4px">
-          <i class="bi ${a.icon}"></i> ${a.label}
+          <i class="bi ${a.icon}"></i> ${a.label}${tag}
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div>
@@ -2324,13 +2711,13 @@ async function saveChecklist() {
   const checklistId = res.id;
   const token = _getAuthToken();
 
-  // Upload fotos de inspeção
-  for (const ang of PHOTO_ANGLES) {
-    const file = CL_INSPECTION_FILES[ang.key];
+  // Upload fotos de inspeção (padrão + adicionais)
+  for (const angKey of Object.keys(CL_INSPECTION_FILES)) {
+    const file = CL_INSPECTION_FILES[angKey];
     if (!file) continue;
     const fd = new FormData();
     fd.append('file', file);
-    fd.append('angulo', ang.key);
+    fd.append('angulo', angKey);
     await fetch(`${API}/checklists/${checklistId}/photos`, {
       method: 'POST', credentials: 'include',
       headers: { 'X-Auth-Token': token }, body: fd,
@@ -2553,17 +2940,18 @@ async function viewChecklist(id) {
   }
   footer.innerHTML += `<button class="btn-fleet btn-fleet-secondary" onclick="closeModal('modalChecklistDetail')">Fechar</button>`;
 
-  // Fotos de inspeção
+  // Fotos de inspeção (padrão + adicionais)
   const photos = c.inspection_photos || [];
   if (photos.length) {
     const byAngulo = {};
     photos.forEach(p => { byAngulo[p.angulo] = p.foto_path; });
-    const photosHtml = PHOTO_ANGLES.map(a => {
+    const photosHtml = _allAnglesFromData({}, byAngulo, [], photos).map(a => {
       const src = byAngulo[a.key];
       if (!src) return '';
+      const tag = a.isExtra ? ' <small style="color:#9CA3AF;font-weight:400">(adicional)</small>' : '';
       return `
         <div style="text-align:center">
-          <div style="font-size:11px;font-weight:600;color:#6B7280;margin-bottom:6px;text-transform:uppercase">${a.label}</div>
+          <div style="font-size:11px;font-weight:600;color:#6B7280;margin-bottom:6px;text-transform:uppercase">${a.label}${tag}</div>
           <img src="${src}" alt="${a.label}"
                style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;border:1px solid #E5E7EB;cursor:zoom-in"
                onclick="window.open('${src}','_blank')">
@@ -2628,12 +3016,13 @@ async function viewChecklistPhotos(id) {
   const byAngulo = {};
   photos.forEach(p => { byAngulo[p.angulo] = p.foto_path; });
 
-  const photosHtml = PHOTO_ANGLES.map(a => {
+  const photosHtml = _allAnglesFromData({}, byAngulo, [], photos).map(a => {
     const src = byAngulo[a.key];
+    const tag = a.isExtra ? ' <small style="color:#9CA3AF;font-weight:400">(adicional)</small>' : '';
     return `
       <div style="text-align:center">
         <div style="font-size:11px;font-weight:600;color:#6B7280;margin-bottom:6px;text-transform:uppercase;display:flex;align-items:center;gap:4px;justify-content:center">
-          <i class="bi ${a.icon}"></i> ${a.label}
+          <i class="bi ${a.icon}"></i> ${a.label}${tag}
         </div>
         ${src
           ? `<img src="${src}" alt="${a.label}"
@@ -3004,15 +3393,16 @@ async function openVistoriaRetorno(id) {
     document.getElementById('vrCondSigBox').style.display = 'none';
   }
 
-  // Fotos da saída
+  // Fotos da saída (padrão + adicionais)
   const photos = (c.inspection_photos || []).filter(p => p.angulo !== 'problema' && p.angulo !== 'avaria_retorno');
   const byAngulo = {};
   photos.forEach(p => { byAngulo[p.angulo] = p.foto_path; });
-  document.getElementById('vrPhotosGrid').innerHTML = PHOTO_ANGLES.map(a => {
+  document.getElementById('vrPhotosGrid').innerHTML = _allAnglesFromData({}, byAngulo, [], photos).map(a => {
     const src = byAngulo[a.key];
     if (!src) return '';
+    const tag = a.isExtra ? ' <small style="color:#9CA3AF;font-weight:400">(adicional)</small>' : '';
     return `<div style="text-align:center">
-      <div style="font-size:10px;color:#9CA3AF;margin-bottom:4px;text-transform:uppercase">${a.label}</div>
+      <div style="font-size:10px;color:#9CA3AF;margin-bottom:4px;text-transform:uppercase">${a.label}${tag}</div>
       <img src="${src}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;cursor:zoom-in"
            onclick="window.open('${src}','_blank')">
     </div>`;
@@ -3330,13 +3720,15 @@ function showDayDetail(day) {
 async function openReservationModal() {
   if (!allVehicles.length) await loadVehicles();
   const sel = document.getElementById('resVehicle');
-  const livres = allVehicles.filter(v => v.status === 'ativo' && !v.manutencao_proxima);
-  const comManut = allVehicles.filter(v => v.status === 'ativo' && v.manutencao_proxima);
+  // Veículos ativos = disponíveis. Manutenção agendada futura é só um aviso,
+  // não bloqueia (o auto-block já garante que veículos com manutenção HOJE
+  // estão como status='manutencao' e somem deste filtro).
+  const livres = allVehicles.filter(v => v.status === 'ativo');
   sel.innerHTML = '<option value="">Selecione...</option>'
-    + livres.map(v => '<option value="'+v.id+'">'+v.placa+' — '+v.modelo+'</option>').join('')
-    + (comManut.length ? '<optgroup label="Indisponíveis (manutenção agendada)">'
-      + comManut.map(v => '<option value="" disabled style="color:#9CA3AF">'+v.placa+' — '+v.modelo+' ('+v.manutencao_proxima+')</option>').join('')
-      + '</optgroup>' : '');
+    + livres.map(v => {
+        const warn = v.manutencao_proxima ? ' ⚠️ (manut. agendada)' : '';
+        return '<option value="'+v.id+'">'+v.placa+' — '+v.modelo+warn+'</option>';
+      }).join('');
   document.getElementById('resDestino').value = '';
   document.getElementById('resData').value = new Date().toISOString().split('T')[0];
   document.getElementById('resInicio').value = '08:00';
@@ -3510,9 +3902,45 @@ function onMaintVehicleChange() {
   document.getElementById('maintKm').value = v?.km_atual || '';
 }
 
+/* Quem pode atribuir condutor responsável (causa colisão/arranhão).
+   Mantém alinhado com _CARGO_PODE_IMPUTAR no backend. */
+function _canImputarCausa() {
+  const role = currentUser?.role;
+  return role === 'ADMIN' || role === 'TI' || role === 'RESPONSAVEL_GRUPO';
+}
+
+function _setupMaintCentroCusto() {
+  const allowed = _canImputarCausa();
+  const causaSel = document.getElementById('maintCausa');
+  if (causaSel) causaSel.disabled = !allowed;
+  const hint = document.getElementById('maintRespHint');
+  if (hint) {
+    hint.textContent = allowed
+      ? 'Em colisão/arranhão, o custo é imputado ao centro de custo deste condutor.'
+      : 'Apenas Administradores ou Responsáveis de Grupo podem alterar.';
+  }
+  onMaintCausaChange();
+}
+
+function onMaintCausaChange() {
+  const causa = document.getElementById('maintCausa')?.value || 'normal';
+  const wrap = document.getElementById('maintRespWrap');
+  if (!wrap) return;
+  wrap.style.display = (causa === 'colisao' || causa === 'arranhao') ? 'block' : 'none';
+}
+
+function _populateMaintRespCondutor(selectedId = '') {
+  const sel = document.getElementById('maintRespCondutor');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Selecione...</option>' +
+    (allMotoristas || []).map(m => `<option value="${m.id}"${String(m.id)===String(selectedId)?' selected':''}>${m.name}</option>`).join('');
+  sel.disabled = !_canImputarCausa();
+}
+
 async function openMaintenanceModal() {
   if (!allVehicles.length) await loadVehicles();
   if (!allMaintTypes.length) await loadMaintTypes();
+  if (!allMotoristas?.length) await loadMotoristas();
 
   document.getElementById('maintId').value = '';
   document.getElementById('modalMaintTitle').textContent = 'Novo Registro de Manutencao';
@@ -3521,6 +3949,9 @@ async function openMaintenanceModal() {
   document.getElementById('maintDataEntrada').value = new Date().toISOString().split('T')[0];
   document.getElementById('maintDataConclusao').value = '';
   document.getElementById('maintStatus').value = 'agendado';
+  document.getElementById('maintCausa').value = 'normal';
+  _populateMaintRespCondutor('');
+  _setupMaintCentroCusto();
 
   const sel = document.getElementById('maintVehicle');
   sel.innerHTML = '<option value="">Selecione...</option>' +
@@ -3534,6 +3965,7 @@ async function openMaintenanceModal() {
 async function editMaintenance(id) {
   if (!allVehicles.length) await loadVehicles();
   if (!allMaintTypes.length) await loadMaintTypes();
+  if (!allMotoristas?.length) await loadMotoristas();
 
   const data = await apiFetch('/maintenance');
   const r = data?.records?.find(x => x.id === id);
@@ -3553,6 +3985,9 @@ async function editMaintenance(id) {
   document.getElementById('maintFornecedor').value = r.fornecedor || '';
   document.getElementById('maintStatus').value = r.status || 'agendado';
   document.getElementById('maintObs').value = r.observacoes || '';
+  document.getElementById('maintCausa').value = r.causa || 'normal';
+  _populateMaintRespCondutor(r.condutor_responsavel_id || '');
+  _setupMaintCentroCusto();
 
   // Mostrar seção de recibos e carregar arquivos
   document.getElementById('maintFilesSection').style.display = 'block';
@@ -3615,6 +4050,13 @@ async function saveMaintenance() {
   if (!vehicle_id) { showToast('Selecione o veículo', 'error'); return; }
   if (!tipo) { showToast('Selecione o tipo de servico', 'error'); return; }
 
+  const causa = document.getElementById('maintCausa').value || 'normal';
+  const condutorResp = document.getElementById('maintRespCondutor').value || null;
+  if ((causa === 'colisao' || causa === 'arranhao') && _canImputarCausa() && !condutorResp) {
+    showToast('Selecione o condutor responsável quando a causa é colisão ou arranhão.', 'error');
+    return;
+  }
+
   const body = {
     vehicle_id: parseInt(vehicle_id),
     tipo,
@@ -3626,6 +4068,8 @@ async function saveMaintenance() {
     fornecedor: document.getElementById('maintFornecedor').value,
     status: document.getElementById('maintStatus').value,
     observacoes: document.getElementById('maintObs').value,
+    causa,
+    condutor_responsavel_id: condutorResp ? parseInt(condutorResp) : null,
   };
 
   const url = id ? `/maintenance/${id}` : '/maintenance';
@@ -3679,6 +4123,110 @@ function openCorrigirAvaria(vehicleId) {
   `;
   document.getElementById('avariaCorrecaoObs').value = '';
   openModal('modalCorrigirAvaria');
+}
+
+/* ============================================================
+   DETALHES DA REVISÃO ATIVA — abre modal e busca a manutenção
+   atual do veículo.
+   ============================================================ */
+async function openRevisaoDetail(vehicleId) {
+  const v = allVehicles.find(x => x.id === vehicleId);
+  document.getElementById('revDetailTitle').textContent =
+    v ? `${v.placa} — ${v.modelo}` : 'Veículo em revisão';
+  document.getElementById('revDetailBody').innerHTML =
+    '<div style="text-align:center;padding:20px;color:#9CA3AF"><i class="bi bi-hourglass-split"></i> Carregando...</div>';
+  openModal('modalRevisaoDetail');
+
+  const data = await apiFetch(`/vehicles/${vehicleId}/active-maintenance`);
+  const m = data?.maintenance;
+  const body = document.getElementById('revDetailBody');
+
+  if (!m) {
+    body.innerHTML = `
+      <div style="text-align:center;padding:24px">
+        <i class="bi bi-info-circle" style="font-size:32px;color:#9CA3AF;display:block;margin-bottom:8px"></i>
+        <p style="color:#6B7280;margin:0">Nenhuma revisão / manutenção ativa registrada para este veículo.</p>
+        <p style="color:#9CA3AF;font-size:12px;margin-top:6px">Crie um registro em <strong>Manutenção</strong> para detalhar a revisão.</p>
+      </div>`;
+    return;
+  }
+
+  const fmtD = iso => iso
+    ? new Date((iso.length === 10 ? iso + 'T00:00:00' : iso))
+        .toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' })
+    : '—';
+
+  const causaLabel = {
+    normal:  'Rotina',
+    colisao: 'Colisão',
+    arranhao:'Arranhão / Risco',
+    outro:   'Outro',
+  }[m.causa || 'normal'] || 'Rotina';
+
+  const statusLabel = {
+    agendado:    '<span class="fleet-badge agendado">Agendado</span>',
+    em_andamento:'<span class="fleet-badge em_andamento">Em andamento</span>',
+  }[m.status] || m.status;
+
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px 18px;font-size:13px;margin-bottom:14px">
+      <div><div style="font-size:11px;color:#6B7280;text-transform:uppercase;font-weight:600;margin-bottom:2px">Tipo</div>
+           <div style="font-weight:600">${m.tipo || '—'}</div></div>
+      <div><div style="font-size:11px;color:#6B7280;text-transform:uppercase;font-weight:600;margin-bottom:2px">Causa</div>
+           <div style="font-weight:600">${causaLabel}</div></div>
+      <div><div style="font-size:11px;color:#6B7280;text-transform:uppercase;font-weight:600;margin-bottom:2px">Entrada</div>
+           <div style="font-weight:600">${fmtD(m.data_entrada)}</div></div>
+      <div><div style="font-size:11px;color:#6B7280;text-transform:uppercase;font-weight:600;margin-bottom:2px">Previsão de retorno</div>
+           <div style="font-weight:600;color:${m.data_conclusao ? '#16A34A' : '#9CA3AF'}">${m.data_conclusao ? fmtD(m.data_conclusao) : 'A definir'}</div></div>
+      <div><div style="font-size:11px;color:#6B7280;text-transform:uppercase;font-weight:600;margin-bottom:2px">Status</div>
+           <div>${statusLabel}</div></div>
+      ${m.fornecedor ? `<div><div style="font-size:11px;color:#6B7280;text-transform:uppercase;font-weight:600;margin-bottom:2px">Fornecedor</div>
+                            <div style="font-weight:600">${m.fornecedor}</div></div>` : ''}
+    </div>
+    ${m.descricao ? `
+      <div style="background:#F9FAFB;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:10px">
+        <div style="font-size:11px;color:#6B7280;text-transform:uppercase;font-weight:700;margin-bottom:4px">Descrição</div>
+        ${m.descricao}
+      </div>` : ''}
+    ${m.observacoes ? `
+      <div style="background:#F9FAFB;border-radius:8px;padding:10px 12px;font-size:13px">
+        <div style="font-size:11px;color:#6B7280;text-transform:uppercase;font-weight:700;margin-bottom:4px">Observações</div>
+        ${m.observacoes}
+      </div>` : ''}
+  `;
+}
+
+/* ============================================================
+   AVISE-ME — toggle subscription para retorno do veículo
+   ============================================================ */
+async function toggleAviseMe(vehicleId) {
+  const btn = document.getElementById(`aviseBtn_${vehicleId}`);
+  if (!btn) return;
+  const isOn = btn.dataset.state === 'on';
+  btn.disabled = true;
+
+  try {
+    const url = `/vehicles/${vehicleId}/subscribe`;
+    const res = await apiFetch(url, { method: isOn ? 'DELETE' : 'POST' });
+    if (!res?.success) {
+      showToast(res?.detail || 'Erro ao atualizar avise-me', 'error');
+      return;
+    }
+    const nowOn = !isOn;
+    btn.dataset.state = nowOn ? 'on' : 'off';
+    btn.style.background = nowOn ? '#DBEAFE' : '#EFF6FF';
+    btn.innerHTML = nowOn
+      ? '<i class="bi bi-bell-fill"></i> Você será avisado'
+      : '<i class="bi bi-bell"></i> Avise-me quando voltar';
+    // Atualiza estado no array em memória pra não perder no próximo render
+    const v = allVehicles.find(x => x.id === vehicleId);
+    if (v) v.is_subscribed = nowOn ? 1 : 0;
+    showToast(nowOn ? 'Avise-me ativado!' : 'Avise-me cancelado.', 'success');
+  } catch (err) {
+    showToast('Erro: ' + err.message, 'error');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 async function confirmarCorrecaoAvaria() {
@@ -4145,6 +4693,97 @@ function exportTripsCSV() {
   a.href = URL.createObjectURL(blob);
   a.download = `frotas_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
+}
+
+/* ============================================================
+   CENTRO DE CUSTO — agrega gastos por grupo no período
+   ============================================================ */
+
+function switchTripsTab(tab) {
+  document.querySelectorAll('.fleet-subtab').forEach(b => {
+    b.classList.toggle('active', b.dataset.subtab === tab);
+  });
+  const isCenters = tab === 'centers';
+  document.getElementById('tripsSubTabContent').style.display   = isCenters ? 'none' : '';
+  document.getElementById('centersSubTabContent').style.display = isCenters ? ''     : 'none';
+  // Botões "Novo Registro" / "Exportar" só fazem sentido na aba de viagens
+  document.getElementById('tripsExportBtn').style.display = isCenters ? 'none' : '';
+  document.getElementById('tripsNewBtn').style.display    = isCenters ? 'none' : '';
+
+  if (isCenters) _initCostCentersFilters().then(loadCostCenters);
+}
+
+let _ccFiltersInited = false;
+async function _initCostCentersFilters() {
+  if (_ccFiltersInited) return;
+  const anoSel = document.getElementById('ccAno');
+  const now = new Date();
+  const ano = now.getFullYear();
+  anoSel.innerHTML = '';
+  for (let y = ano; y >= ano - 5; y--) {
+    anoSel.insertAdjacentHTML('beforeend', `<option value="${y}"${y===ano?' selected':''}>${y}</option>`);
+  }
+  document.getElementById('ccMes').value = String(now.getMonth() + 1);
+  _ccFiltersInited = true;
+}
+
+async function loadCostCenters() {
+  const ano = document.getElementById('ccAno').value;
+  const mes = document.getElementById('ccMes').value;
+  const grid = document.getElementById('ccCardsGrid');
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#9CA3AF;padding:40px"><i class="bi bi-hourglass-split"></i> Carregando...</div>';
+
+  let url = `/cost-centers?ano=${ano}`;
+  if (mes) url += `&mes=${mes}`;
+  const data = await apiFetch(url);
+  if (!data?.success) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#DC2626;padding:40px"><i class="bi bi-exclamation-triangle"></i> Erro ao carregar centros de custo.</div>';
+    return;
+  }
+
+  document.getElementById('ccTotalGeral').textContent = fmtBRL(data.total_geral || 0);
+
+  const centers = data.centers || [];
+  if (!centers.length) {
+    grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:#9CA3AF;padding:40px"><i class="bi bi-inbox"></i> Sem custos no período.</div>';
+    return;
+  }
+
+  grid.innerHTML = centers.map(_ccCard).join('');
+}
+
+function _ccRow(label, value, icon) {
+  const v = parseFloat(value) || 0;
+  const cls = v === 0 ? ' zero' : '';
+  return `
+    <div class="cc-card-row${cls}">
+      <span><i class="bi ${icon}" style="margin-right:6px"></i>${label}</span>
+      <strong>${fmtBRL(v)}</strong>
+    </div>`;
+}
+
+function _ccCard(c) {
+  const isFrotas = (c.group_name || '').toLowerCase() === 'frotas';
+  const cls = 'cc-card' + (isFrotas ? ' frotas' : '');
+  return `
+    <div class="${cls}">
+      <div class="cc-card-header">
+        <div class="cc-card-icon"><i class="bi ${isFrotas ? 'bi-building-gear' : 'bi-people-fill'}"></i></div>
+        <div class="cc-card-title">${c.group_name || 'Sem grupo'}</div>
+        <div class="cc-card-total">${fmtBRL(c.total)}</div>
+      </div>
+      <div class="cc-card-rows">
+        ${_ccRow('Combustível',           c.combustivel,        'bi-fuel-pump-fill')}
+        ${_ccRow('Estacionamento',        c.estacionamento,     'bi-p-square')}
+        ${_ccRow('Pedágio',               c.pedagio,            'bi-cone-striped')}
+        ${_ccRow('Lavagem',               c.lavagem,            'bi-droplet-fill')}
+        ${_ccRow('Outros (viagem)',       c.outros_viagem,      'bi-three-dots')}
+        ${_ccRow('Arranhão / Risco',      c.arranhao,           'bi-eraser-fill')}
+        ${_ccRow('Colisão',               c.colisao,            'bi-exclamation-octagon-fill')}
+        ${_ccRow('Aluguel idle (parado)', c.idle_aluguel,       'bi-hourglass-split')}
+        ${isFrotas ? _ccRow('Manutenção normal', c.manutencao_normal, 'bi-wrench-adjustable') : ''}
+      </div>
+    </div>`;
 }
 
 /* ============================================================
