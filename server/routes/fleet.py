@@ -99,7 +99,7 @@ def _can_delete_vehicle(user: dict) -> bool:
 
 @router.get("/vehicles")
 def list_vehicles(request: Request):
-    _get_user_id(request)
+    user_id = _get_user_id(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -107,6 +107,10 @@ def list_vehicles(request: Request):
             SELECT v.*,
                    p.foto_path AS foto_referencia,
                    u.name AS created_by_name,
+                   (SELECT 1 FROM fleet_vehicle_subscriptions s
+                     WHERE s.vehicle_id = v.id AND s.user_id = %s AND s.tipo='return'
+                     LIMIT 1
+                   ) AS is_subscribed,
                    (SELECT CONCAT(m.tipo,' a partir de ',m.data_entrada)
                     FROM fleet_maintenance m
                     WHERE m.vehicle_id = v.id AND m.status IN ('agendado','em_andamento')
@@ -137,7 +141,7 @@ def list_vehicles(request: Request):
             LEFT JOIN users u ON u.id = v.created_by
             WHERE v.status != 'inativo'
             ORDER BY FIELD(v.status,'ativo','em_viagem','manutencao','revisao'), v.modelo
-        """)
+        """, (user_id,))
         vehicles = cursor.fetchall()
         return {"success": True, "vehicles": vehicles}
     finally:
@@ -157,8 +161,10 @@ def create_vehicle(request: Request, data: dict):
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute("""
-            INSERT INTO fleet_vehicles (placa, modelo, tipo, ano, cor, unidade, km_atual, status, created_by)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'ativo', %s)
+            INSERT INTO fleet_vehicles
+                (placa, modelo, tipo, ano, cor, unidade, km_atual, status,
+                 valor_aluguel_mensal, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'ativo', %s, %s)
         """, (
             placa,
             modelo,
@@ -167,6 +173,7 @@ def create_vehicle(request: Request, data: dict):
             data.get("cor", ""),
             data.get("unidade", ""),
             data.get("km_atual") or 0,
+            float(data.get("valor_aluguel_mensal") or 0),
             user_id,
         ))
         conn.commit()
@@ -191,7 +198,8 @@ def update_vehicle(vehicle_id: int, request: Request, data: dict):
     try:
         cursor.execute("""
             UPDATE fleet_vehicles
-            SET modelo=%s, tipo=%s, ano=%s, cor=%s, unidade=%s, km_atual=%s, status=%s
+            SET modelo=%s, tipo=%s, ano=%s, cor=%s, unidade=%s, km_atual=%s,
+                status=%s, valor_aluguel_mensal=%s
             WHERE id=%s
         """, (
             data.get("modelo"),
@@ -201,6 +209,7 @@ def update_vehicle(vehicle_id: int, request: Request, data: dict):
             data.get("unidade"),
             data.get("km_atual") or 0,
             data.get("status"),
+            float(data.get("valor_aluguel_mensal") or 0),
             vehicle_id,
         ))
         conn.commit()
@@ -370,11 +379,27 @@ async def upload_vehicle_photo(
     file: UploadFile = File(...),
     motivo: str = Form(""),
     angulo: str = Form("frente"),
+    legenda: str = Form(""),
 ):
+    """Upload de foto do veículo.
+
+    - Ângulos fixos (frente, lateral, parachoque_*, paralama_*, quatro_portas):
+      single-photo com histórico (arquiva a anterior).
+    - Ângulos `adicional_*` ou `arranhado_*`: multi-photo (não arquiva nada).
+      Cada upload gera um angulo único `adicional_<uuid8>` para preservar
+      múltiplos `is_current=1` simultaneamente.
+    """
     user_id = _get_user_id(request)
 
-    if angulo not in ALLOWED_ANGULOS and not angulo.startswith("arranhado_"):
+    is_adicional = (angulo or "").startswith("adicional")
+    is_arranhado = (angulo or "").startswith("arranhado_")
+
+    if not is_adicional and not is_arranhado and angulo not in ALLOWED_ANGULOS:
         angulo = "frente"
+
+    # Adicionais sempre recebem uma chave única para coexistirem
+    if is_adicional:
+        angulo = f"adicional_{uuid.uuid4().hex[:8]}"
 
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -386,24 +411,81 @@ async def upload_vehicle_photo(
         shutil.copyfileobj(file.file, f)
 
     photo_url = f"/SistemaCPE/web/uploads/fleet/{filename}"
+    legenda_clean = (legenda or "").strip()[:80] or None
 
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        # Arquivar foto atual deste ângulo
+        if not is_adicional and not is_arranhado:
+            # Single-photo: arquiva a foto atual deste ângulo
+            cursor.execute(
+                """UPDATE fleet_vehicle_photos
+                   SET is_current=0, substituida_por_user_id=%s, motivo_substituicao=%s
+                   WHERE vehicle_id=%s AND is_current=1 AND angulo=%s""",
+                (user_id, motivo or f"Substituição de foto — {angulo}", vehicle_id, angulo),
+            )
+
         cursor.execute(
-            """UPDATE fleet_vehicle_photos
-               SET is_current=0, substituida_por_user_id=%s, motivo_substituicao=%s
-               WHERE vehicle_id=%s AND is_current=1 AND angulo=%s""",
-            (user_id, motivo or f"Substituição de foto — {angulo}", vehicle_id, angulo),
+            """INSERT INTO fleet_vehicle_photos
+               (vehicle_id, foto_path, angulo, legenda, is_current)
+               VALUES (%s, %s, %s, %s, 1)""",
+            (vehicle_id, photo_url, angulo, legenda_clean),
         )
-        # Inserir nova foto atual para este ângulo
-        cursor.execute(
-            "INSERT INTO fleet_vehicle_photos (vehicle_id, foto_path, angulo, is_current) VALUES (%s, %s, %s, 1)",
-            (vehicle_id, photo_url, angulo),
-        )
+        photo_id = cursor.lastrowid
         conn.commit()
-        return {"success": True, "foto_path": photo_url, "angulo": angulo}
+        return {
+            "success":   True,
+            "id":        photo_id,
+            "foto_path": photo_url,
+            "angulo":    angulo,
+            "legenda":   legenda_clean,
+        }
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/vehicles/{vehicle_id}/photo/{photo_id}")
+def delete_vehicle_photo(vehicle_id: int, photo_id: int, request: Request):
+    """Remove uma foto do veículo. Só permitido para fotos adicionais
+    (angulo LIKE 'adicional_%') — fotos dos ângulos padrão são substituídas
+    via upload, não removidas."""
+    _get_user_id(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id, angulo, foto_path FROM fleet_vehicle_photos WHERE id=%s AND vehicle_id=%s",
+            (photo_id, vehicle_id),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Foto não encontrada.")
+        if not (row["angulo"] or "").startswith("adicional"):
+            raise HTTPException(
+                status_code=400,
+                detail="Apenas fotos adicionais podem ser removidas. Para trocar uma foto de ângulo padrão, faça upload de uma nova.",
+            )
+
+        cursor.execute("DELETE FROM fleet_vehicle_photos WHERE id=%s", (photo_id,))
+        conn.commit()
+
+        # Best-effort: apagar arquivo físico
+        try:
+            rel = (row["foto_path"] or "").replace("/SistemaCPE/web/uploads/fleet/", "")
+            if rel:
+                fp = os.path.join(UPLOAD_DIR, rel)
+                if os.path.exists(fp):
+                    os.remove(fp)
+        except Exception:
+            pass
+
+        return {"success": True, "id": photo_id}
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -505,9 +587,18 @@ def get_checklist(checklist_id: int, request: Request):
         )
         checklist["problems"] = cursor.fetchall()
 
+        # Inspection photos enriquecidas com a `legenda` do ângulo correspondente
+        # da tabela de fotos do veículo (quando angulo='adicional_*').
         cursor.execute(
-            "SELECT * FROM fleet_checklist_photos WHERE checklist_id = %s ORDER BY angulo, created_at",
-            (checklist_id,)
+            """SELECT cp.*, vp.legenda AS legenda
+                 FROM fleet_checklist_photos cp
+                 LEFT JOIN fleet_vehicle_photos vp
+                   ON vp.vehicle_id = %s
+                  AND vp.angulo     = cp.angulo
+                  AND vp.is_current = 1
+                WHERE cp.checklist_id = %s
+                ORDER BY cp.angulo, cp.created_at""",
+            (checklist["vehicle_id"], checklist_id)
         )
         checklist["inspection_photos"] = cursor.fetchall()
 
@@ -527,7 +618,11 @@ async def upload_checklist_photo(
 ):
     _get_user_id(request)
 
-    if angulo not in ALLOWED_ANGULOS and not angulo.startswith("arranhado_"):
+    if (
+        angulo not in ALLOWED_ANGULOS
+        and not angulo.startswith("arranhado_")
+        and not angulo.startswith("adicional")
+    ):
         angulo = "frente"
 
     ext = os.path.splitext(file.filename or "")[1].lower()
@@ -928,6 +1023,9 @@ def vistoriar_retorno(checklist_id: int, request: Request, data: dict):
         # Promover fotos da inspeção para referência do veículo
         _promote_photos_to_reference(cursor, checklist_id, row["vehicle_id"], user["id"])
 
+        # Notificar quem se inscreveu para "avise-me" — veículo voltou à empresa
+        _notify_return_subscribers(cursor, row["vehicle_id"])
+
         conn.commit()
         msg = "Retorno registrado com avaria — veiculo em manutencao!" if tem_avaria else "Retorno confirmado com sucesso!"
         return {"success": True, "message": msg, "tem_avaria": tem_avaria}
@@ -1142,6 +1240,153 @@ def _log_vehicle_history(cursor, vehicle_id, evento, descricao, status_anterior,
     """, (vehicle_id, evento, descricao, status_anterior, status_novo, user_id))
 
 
+# ============================================================
+# AVISE-ME — usuário se inscreve para ser notificado quando o
+# veículo voltar à empresa (status muda de em_viagem para outra).
+# ============================================================
+
+def _notify_return_subscribers(cursor, vehicle_id: int) -> int:
+    """Notifica e remove todas as subscriptions tipo 'return' de um veículo.
+    Chamado quando o veículo é vistoriado de retorno (em_viagem → ativo/manutencao).
+    Retorna o número de notificações enviadas."""
+    cursor.execute(
+        "SELECT placa, modelo FROM fleet_vehicles WHERE id=%s",
+        (vehicle_id,)
+    )
+    veh = cursor.fetchone()
+    if not veh:
+        return 0
+    placa = veh["placa"] if isinstance(veh, dict) else veh[0]
+    modelo = veh["modelo"] if isinstance(veh, dict) else veh[1]
+
+    cursor.execute(
+        "SELECT id, user_id FROM fleet_vehicle_subscriptions WHERE vehicle_id=%s AND tipo='return'",
+        (vehicle_id,)
+    )
+    subs = cursor.fetchall()
+    if not subs:
+        return 0
+
+    msg = f"O veículo {placa} ({modelo}) voltou para a empresa."
+    sub_ids = []
+    for s in subs:
+        uid = s["user_id"] if isinstance(s, dict) else s[1]
+        sid = s["id"] if isinstance(s, dict) else s[0]
+        cursor.execute(
+            "INSERT INTO notificacoes (usuario_id, mensagem, tipo, lido) VALUES (%s, %s, 'fleet_return', 0)",
+            (uid, msg),
+        )
+        sub_ids.append(sid)
+
+    if sub_ids:
+        ph = ",".join(["%s"] * len(sub_ids))
+        cursor.execute(f"DELETE FROM fleet_vehicle_subscriptions WHERE id IN ({ph})", sub_ids)
+
+    return len(sub_ids)
+
+
+@router.get("/vehicles/{vehicle_id}/subscription")
+def get_vehicle_subscription(vehicle_id: int, request: Request):
+    user_id = _get_user_id(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id FROM fleet_vehicle_subscriptions WHERE vehicle_id=%s AND user_id=%s AND tipo='return'",
+            (vehicle_id, user_id),
+        )
+        row = cursor.fetchone()
+        return {"success": True, "subscribed": bool(row)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/vehicles/{vehicle_id}/subscribe")
+def subscribe_vehicle_return(vehicle_id: int, request: Request):
+    """Inscreve o usuário para ser avisado quando o veículo voltar."""
+    user_id = _get_user_id(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT id, status FROM fleet_vehicles WHERE id=%s", (vehicle_id,))
+        veh = cursor.fetchone()
+        if not veh:
+            raise HTTPException(status_code=404, detail="Veículo não encontrado.")
+        if veh["status"] != "em_viagem":
+            raise HTTPException(
+                status_code=400,
+                detail="Avise-me só está disponível enquanto o veículo está em viagem."
+            )
+
+        cursor.execute(
+            """INSERT IGNORE INTO fleet_vehicle_subscriptions
+               (vehicle_id, user_id, tipo) VALUES (%s, %s, 'return')""",
+            (vehicle_id, user_id),
+        )
+        conn.commit()
+        return {"success": True, "subscribed": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/vehicles/{vehicle_id}/subscribe")
+def unsubscribe_vehicle_return(vehicle_id: int, request: Request):
+    user_id = _get_user_id(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "DELETE FROM fleet_vehicle_subscriptions WHERE vehicle_id=%s AND user_id=%s AND tipo='return'",
+            (vehicle_id, user_id),
+        )
+        conn.commit()
+        return {"success": True, "subscribed": False}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================
+# MANUTENÇÃO ATIVA DE UM VEÍCULO — usado pelo modal "Em Revisão"
+# ============================================================
+@router.get("/vehicles/{vehicle_id}/active-maintenance")
+def vehicle_active_maintenance(vehicle_id: int, request: Request):
+    """Retorna a manutenção ativa (agendado/em_andamento) mais recente do veículo,
+    com tipo, descrição, data_entrada, data_conclusao prevista e fornecedor."""
+    _get_user_id(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT m.id, m.tipo, m.causa, m.descricao, m.fornecedor,
+                   m.data_entrada, m.data_conclusao, m.status,
+                   m.km_atual, m.observacoes,
+                   cr.name AS condutor_responsavel_nome
+            FROM fleet_maintenance m
+            LEFT JOIN users cr ON cr.id = m.condutor_responsavel_id
+            WHERE m.vehicle_id = %s AND m.status IN ('agendado','em_andamento')
+            ORDER BY m.data_entrada DESC, m.created_at DESC
+            LIMIT 1
+        """, (vehicle_id,))
+        row = cursor.fetchone()
+        if not row:
+            return {"success": True, "maintenance": None}
+        return {"success": True, "maintenance": convert_datetime_to_string(row)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.post("/vehicles/{vehicle_id}/liberar")
 def liberar_veiculo(vehicle_id: int, request: Request):
     """Somente responsável do grupo Frotas (ou ADMIN/TI) libera veículo em manutenção ou revisão."""
@@ -1302,11 +1547,16 @@ def list_maintenance(request: Request, vehicle_id: int = None, status: str = Non
             params.append(status)
 
         cursor.execute(f"""
-            SELECT m.*, v.placa, v.modelo, u.name AS criado_por_nome,
+            SELECT m.*, v.placa, v.modelo,
+                   u.name  AS criado_por_nome,
+                   cr.name AS condutor_responsavel_nome,
+                   g.name  AS centro_custo_nome,
                    (SELECT COUNT(*) FROM fleet_maintenance_files f WHERE f.maintenance_id = m.id) AS qtd_arquivos
             FROM fleet_maintenance m
             JOIN fleet_vehicles v ON v.id = m.vehicle_id
-            LEFT JOIN users u ON u.id = m.created_by
+            LEFT JOIN users u  ON u.id  = m.created_by
+            LEFT JOIN users cr ON cr.id = m.condutor_responsavel_id
+            LEFT JOIN cpe_grupo g ON g.id = m.group_id
             WHERE {' AND '.join(where)}
             ORDER BY m.data_entrada DESC, m.created_at DESC
             LIMIT 200
@@ -1319,20 +1569,61 @@ def list_maintenance(request: Request, vehicle_id: int = None, status: str = Non
         conn.close()
 
 
+_CAUSAS_VALIDAS = ("normal", "colisao", "arranhao", "outro")
+_CARGO_PODE_IMPUTAR = ("ADMIN", "TI", "RESPONSAVEL_GRUPO")
+
+
+def _resolve_responsavel(user: dict, data: dict, cursor):
+    """Decide causa, condutor_responsavel_id e group_id da manutenção.
+
+    Regra:
+    - causa só vai pra colisao/arranhao se o usuário tem cargo permitido
+      (ADMIN, TI, RESPONSAVEL_GRUPO) E informou um condutor responsável.
+    - Caso contrário, vira 'normal' e group_id fica NULL (= grupo Frotas).
+    - Para causas colisao/arranhao, group_id é resolvido do condutor responsável.
+    """
+    causa = (data.get("causa") or "normal").lower()
+    if causa not in _CAUSAS_VALIDAS:
+        causa = "normal"
+
+    condutor_responsavel_id = data.get("condutor_responsavel_id") or None
+    group_id = None
+
+    pode_imputar = user.get("role") in _CARGO_PODE_IMPUTAR
+    if not pode_imputar:
+        # Usuário comum não pode atribuir responsabilidade — força normal/CPE
+        return "normal", None, None
+
+    if causa in ("colisao", "arranhao"):
+        if not condutor_responsavel_id:
+            # Sem responsável → tratamos como normal (custo fica em Frotas)
+            return "normal", None, None
+        group_id = _resolve_group_id_from_condutor(cursor, condutor_responsavel_id)
+
+    return causa, condutor_responsavel_id, group_id
+
+
 @router.post("/maintenance")
 def create_maintenance(request: Request, data: dict):
-    user_id = _get_user_id(request)
+    user = _get_user_role(request)
+    user_id = user["id"]
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
+        causa, cond_resp_id, group_id = _resolve_responsavel(user, data, cursor)
+
         cursor.execute("""
             INSERT INTO fleet_maintenance
-                (vehicle_id, tipo, descricao, data_entrada, data_conclusao,
+                (vehicle_id, tipo, causa, condutor_responsavel_id, group_id,
+                 descricao, data_entrada, data_conclusao,
                  km_atual, custo, fornecedor, status, observacoes, created_by)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             data.get("vehicle_id"),
             data.get("tipo", "outro"),
+            causa,
+            cond_resp_id,
+            group_id,
             data.get("descricao"),
             data.get("data_entrada"),
             data.get("data_conclusao"),
@@ -1361,7 +1652,8 @@ def create_maintenance(request: Request, data: dict):
 
 @router.put("/maintenance/{maintenance_id}")
 def update_maintenance(maintenance_id: int, request: Request, data: dict):
-    user_id = _get_user_id(request)
+    user = _get_user_role(request)
+    user_id = user["id"]
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -1370,13 +1662,19 @@ def update_maintenance(maintenance_id: int, request: Request, data: dict):
         row = cursor.fetchone()
         vehicle_id = row["vehicle_id"] if row else data.get("vehicle_id")
 
+        causa, cond_resp_id, group_id = _resolve_responsavel(user, data, cursor)
+
         cursor.execute("""
             UPDATE fleet_maintenance SET
-                tipo=%s, descricao=%s, data_entrada=%s, data_conclusao=%s,
+                tipo=%s, causa=%s, condutor_responsavel_id=%s, group_id=%s,
+                descricao=%s, data_entrada=%s, data_conclusao=%s,
                 km_atual=%s, custo=%s, fornecedor=%s, status=%s, observacoes=%s
             WHERE id=%s
         """, (
             data.get("tipo"),
+            causa,
+            cond_resp_id,
+            group_id,
             data.get("descricao"),
             data.get("data_entrada"),
             data.get("data_conclusao"),
@@ -1548,24 +1846,39 @@ def list_trips(request: Request, ano: int = None, mes: int = None, unidade: str 
         conn.close()
 
 
+def _resolve_group_id_from_condutor(cursor, condutor_id):
+    """Retorna o group_id do condutor ou None se não houver."""
+    if not condutor_id:
+        return None
+    cursor.execute("SELECT group_id FROM users WHERE id=%s", (condutor_id,))
+    row = cursor.fetchone()
+    if not row:
+        return None
+    return row["group_id"] if isinstance(row, dict) else row[0]
+
+
 @router.post("/trips")
 def create_trip(request: Request, data: dict):
     _get_user_id(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
+        condutor_id = data.get("condutor_id") or None
+        group_id = _resolve_group_id_from_condutor(cursor, condutor_id)
+
         cursor.execute("""
             INSERT INTO fleet_trips (
-                vehicle_id, checklist_id, condutor_id, unidade, descricao,
+                vehicle_id, checklist_id, condutor_id, group_id, unidade, descricao,
                 data_saida, data_retorno, km_inicial, km_final,
                 custo_aluguel, custo_telemetria, custo_estacionamento,
                 custo_pedagio, custo_manutencao, custo_combustivel, custo_outros,
                 observacoes
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             data.get("vehicle_id"),
             data.get("checklist_id") or None,
-            data.get("condutor_id") or None,
+            condutor_id,
+            group_id,
             data.get("unidade"),
             data.get("descricao"),
             data.get("data_saida"),
@@ -1597,9 +1910,12 @@ def update_trip(trip_id: int, request: Request, data: dict):
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
+        condutor_id = data.get("condutor_id") or None
+        group_id = _resolve_group_id_from_condutor(cursor, condutor_id)
+
         cursor.execute("""
             UPDATE fleet_trips SET
-                vehicle_id=%s, condutor_id=%s, unidade=%s, descricao=%s,
+                vehicle_id=%s, condutor_id=%s, group_id=%s, unidade=%s, descricao=%s,
                 data_saida=%s, data_retorno=%s, km_inicial=%s, km_final=%s,
                 custo_aluguel=%s, custo_telemetria=%s, custo_estacionamento=%s,
                 custo_pedagio=%s, custo_manutencao=%s, custo_combustivel=%s,
@@ -1607,7 +1923,8 @@ def update_trip(trip_id: int, request: Request, data: dict):
             WHERE id=%s
         """, (
             data.get("vehicle_id"),
-            data.get("condutor_id") or None,
+            condutor_id,
+            group_id,
             data.get("unidade"),
             data.get("descricao"),
             data.get("data_saida"),
@@ -1646,6 +1963,157 @@ def delete_trip(trip_id: int, request: Request):
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================
+# CENTRO DE CUSTO — agrega gastos por grupo no período
+# ============================================================
+@router.get("/cost-centers")
+def cost_centers(request: Request, ano: int = None, mes: int = None):
+    """Agrega custos por grupo (centro de custo) no período.
+
+    Inclui:
+    - Custos de viagem (combustível, estacionamento, pedágio, lavagem, outros)
+      → grupo do condutor.
+    - Manutenção com causa colisão/arranhão → grupo do condutor responsável.
+    - Idle aluguel calculado on-the-fly: dias parados × (aluguel mensal / 30)
+      para cada manutenção colisão/arranhão concluída.
+    - Manutenção normal e seu idle → grupo Frotas (FLEET_GROUP_ID).
+    """
+    _get_user_id(request)
+
+    today = datetime.now()
+    ano = int(ano) if ano else today.year
+    # mes pode ser None = ano inteiro
+    mes = int(mes) if mes else None
+
+    if mes:
+        date_filter_trip = "YEAR(t.data_saida)=%s AND MONTH(t.data_saida)=%s"
+        date_filter_maint = "YEAR(m.data_entrada)=%s AND MONTH(m.data_entrada)=%s"
+        date_params = (ano, mes)
+    else:
+        date_filter_trip = "YEAR(t.data_saida)=%s"
+        date_filter_maint = "YEAR(m.data_entrada)=%s"
+        date_params = (ano,)
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        # Mapa group_id → {name, totals...}. Grupo "Frotas" sempre presente.
+        cursor.execute("SELECT id, name FROM cpe_grupo")
+        all_groups = {g["id"]: g["name"] for g in cursor.fetchall()}
+        # Bucket especial p/ trips/manut sem condutor (cai em Frotas)
+        if FLEET_GROUP_ID not in all_groups:
+            all_groups[FLEET_GROUP_ID] = "Frotas"
+
+        # Inicializa totais
+        result = {gid: {
+            "group_id":      gid,
+            "group_name":    name,
+            "combustivel":   0.0,
+            "estacionamento": 0.0,
+            "pedagio":       0.0,
+            "lavagem":       0.0,
+            "outros_viagem": 0.0,
+            "arranhao":      0.0,
+            "colisao":       0.0,
+            "idle_aluguel":  0.0,
+            "manutencao_normal": 0.0,
+            "total":         0.0,
+        } for gid, name in all_groups.items()}
+
+        def _bucket(gid):
+            """Devolve o bucket do grupo; cai em Frotas se gid for None/desconhecido."""
+            if gid and gid in result:
+                return result[gid]
+            return result[FLEET_GROUP_ID]
+
+        # 1) Custos de viagem
+        cursor.execute(f"""
+            SELECT
+                t.group_id,
+                COALESCE(SUM(t.custo_combustivel),    0) AS combustivel,
+                COALESCE(SUM(t.custo_estacionamento), 0) AS estacionamento,
+                COALESCE(SUM(t.custo_pedagio),        0) AS pedagio,
+                COALESCE(SUM(t.custo_lavagem),        0) AS lavagem,
+                COALESCE(SUM(t.custo_outros),         0) AS outros
+            FROM fleet_trips t
+            WHERE {date_filter_trip}
+            GROUP BY t.group_id
+        """, date_params)
+        for row in cursor.fetchall():
+            b = _bucket(row["group_id"])
+            b["combustivel"]    += float(row["combustivel"])
+            b["estacionamento"] += float(row["estacionamento"])
+            b["pedagio"]        += float(row["pedagio"])
+            b["lavagem"]        += float(row["lavagem"])
+            b["outros_viagem"]  += float(row["outros"])
+
+        # 2) Manutenção: separar normal/colisao/arranhao + calcular idle
+        cursor.execute(f"""
+            SELECT
+                m.id, m.causa, m.group_id, m.custo,
+                m.data_entrada, m.data_conclusao,
+                v.valor_aluguel_mensal
+            FROM fleet_maintenance m
+            JOIN fleet_vehicles v ON v.id = m.vehicle_id
+            WHERE {date_filter_maint}
+              AND m.status NOT IN ('cancelado')
+        """, date_params)
+
+        for row in cursor.fetchall():
+            causa = (row["causa"] or "normal").lower()
+            custo = float(row["custo"] or 0)
+
+            # Idle: só conta se tem início, fim e aluguel definido
+            idle = 0.0
+            if row["data_entrada"] and row["data_conclusao"] and row["valor_aluguel_mensal"]:
+                dias = (row["data_conclusao"] - row["data_entrada"]).days
+                if dias > 0:
+                    idle = dias * (float(row["valor_aluguel_mensal"]) / 30.0)
+
+            # Bucket: colisão/arranhão → group do responsável; outros → Frotas
+            if causa in ("colisao", "arranhao"):
+                b = _bucket(row["group_id"])
+                if causa == "colisao":
+                    b["colisao"] += custo
+                else:
+                    b["arranhao"] += custo
+                b["idle_aluguel"] += idle
+            else:
+                b = result[FLEET_GROUP_ID]
+                b["manutencao_normal"] += custo
+                b["idle_aluguel"]      += idle
+
+        # 3) Total por bucket + filtra grupos sem nada gasto
+        out = []
+        for gid, b in result.items():
+            b["total"] = round(
+                b["combustivel"] + b["estacionamento"] + b["pedagio"]
+                + b["lavagem"] + b["outros_viagem"]
+                + b["arranhao"] + b["colisao"] + b["idle_aluguel"]
+                + b["manutencao_normal"],
+                2,
+            )
+            for k in ("combustivel","estacionamento","pedagio","lavagem","outros_viagem",
+                      "arranhao","colisao","idle_aluguel","manutencao_normal"):
+                b[k] = round(b[k], 2)
+            if b["total"] > 0 or gid == FLEET_GROUP_ID:
+                out.append(b)
+
+        # Ordena: Frotas no fim, demais por total desc
+        out.sort(key=lambda x: (x["group_id"] == FLEET_GROUP_ID, -x["total"]))
+
+        return {
+            "success":   True,
+            "ano":       ano,
+            "mes":       mes,
+            "centers":   out,
+            "total_geral": round(sum(b["total"] for b in out), 2),
+        }
     finally:
         cursor.close()
         conn.close()

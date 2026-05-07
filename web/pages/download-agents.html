@@ -211,9 +211,15 @@
 
         list.innerHTML = agents.map(a => {
           const systems = (a.systems||[]).map(s => '<span class="badge-sys">'+s+'</span>').join('');
+          const autoUpdateBadge = a.id === 'cpe-inventario'
+            ? '<span style="font-size:11px;background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle"><i class="bi bi-arrow-repeat"></i> Auto-atualizável</span>'
+            : '';
           const files = Object.entries(a.files||{}).map(([key, f]) => {
             const iconCls = key === 'exe' ? 'exe' : (key === 'zip' ? 'zip' : 'src');
-            const iconBi  = key === 'exe' ? 'bi-windows' : (key === 'zip' ? 'bi-file-zip' : 'bi-file-earmark-code');
+            const iconBi  = key === 'exe' ? 'bi-windows'
+                          : key === 'zip' ? 'bi-file-zip'
+                          : key === 'bat' ? 'bi-terminal'
+                          : 'bi-file-earmark-code';
             const disabled = !f.available;
             const url = API + '/' + a.id + '/download?format=' + key;
             const meta = f.available
@@ -239,7 +245,7 @@
               <div class="agent-header">
                 <div class="agent-icon-wrap"><i class="bi ${a.icon||'bi-box'}"></i></div>
                 <div style="flex:1;min-width:0">
-                  <h3 class="agent-title">${a.name}${versionBadge}</h3>
+                  <h3 class="agent-title">${a.name}${versionBadge}${autoUpdateBadge}</h3>
                   <p class="agent-desc">${a.description||''}</p>
                   <div class="agent-systems">${systems}</div>
                   <div class="agent-updated">Atualizado: ${a.last_updated ? relDate(a.last_updated) : '—'}</div>

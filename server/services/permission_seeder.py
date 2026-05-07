@@ -134,6 +134,12 @@ PAGES_CATALOG: list[PageDef] = [
      "category": "admin", "icon": "bi-pc-display",
      "url": "/SistemaCPE/web/pages/inventory.html",                "ordem": 230},
 
+    {"page_key": "INVENTORY_TI",     "display_name": "Inventário T.I.",
+     "description": "Dispositivos monitorados por agente — notebooks, desktops, servidores",
+     "category": "admin", "icon": "bi-laptop",
+     "url": "/SistemaCPE/web/pages/inventory-ti.html",             "ordem": 231,
+     "default_roles": ["ADMIN", "TI", "MANAGER"]},
+
     {"page_key": "PASSWORD_VAULT",   "display_name": "Cofre de Senhas",
      "description": "Cofre de senhas com acesso por grupo",
      "category": "admin", "icon": "bi-shield-lock-fill",

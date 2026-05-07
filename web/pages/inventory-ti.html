@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventário T.I. - CPE Control</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
+
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
+  <script>pageGuard('INVENTORY_TI');</script>
+
+  <style>
+    /* ── KPI cards ─────────────────────────────────────────────── */
+    .kpi-bar {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+    }
+    .kpi-card {
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.04);
+      min-width: 130px;
+    }
+    .kpi-icon {
+      font-size: 20px;
+      width: 38px; height: 38px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .kpi-icon.total   { background:#ede9fe; color:#6d28d9; }
+    .kpi-icon.online  { background:#d1fae5; color:#065f46; }
+    .kpi-icon.offline { background:#fee2e2; color:#991b1b; }
+    .kpi-icon.alerta  { background:#fef3c7; color:#92400e; }
+    .kpi-val { font-size: 22px; font-weight: 700; color: #111827; line-height: 1; }
+    .kpi-lbl { font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; }
+
+    /* ── Layout principal ────────────────────────────────────────── */
+    .inv-layout {
+      display: flex;
+      gap: 0;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    }
+
+    /* ── Painel de filtros (esquerda) ────────────────────────────── */
+    .inv-filter-panel {
+      width: 180px;
+      flex-shrink: 0;
+      border-right: 1px solid #e5e7eb;
+      padding: 14px 0;
+      background: #fafafa;
+    }
+    .inv-filter-title {
+      font-size: 10px; font-weight: 700;
+      color: #9ca3af; text-transform: uppercase;
+      letter-spacing: .07em;
+      padding: 0 14px 8px;
+    }
+    .inv-filter-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 14px;
+      cursor: pointer; font-size: 13px; color: #374151;
+      transition: all .15s;
+      border-left: 3px solid transparent;
+    }
+    .inv-filter-item:hover { background: #f3f4f6; }
+    .inv-filter-item.active {
+      background: #eef2ff; color: #4338ca;
+      font-weight: 600; border-left-color: #667eea;
+    }
+    .inv-filter-badge {
+      margin-left: auto;
+      background: #e5e7eb; color: #374151;
+      border-radius: 10px; padding: 1px 7px;
+      font-size: 11px; font-weight: 700;
+    }
+    .inv-filter-item.active .inv-filter-badge { background: #c7d2fe; color: #3730a3; }
+
+    /* ── Área da tabela ──────────────────────────────────────────── */
+    .inv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+    .inv-toolbar {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px; border-bottom: 1px solid #e5e7eb;
+      flex-wrap: wrap;
+    }
+    .inv-search {
+      flex: 1; min-width: 180px;
+      padding: 8px 12px; border: 1px solid #e5e7eb;
+      border-radius: 8px; font-size: 13px;
+    }
+    .inv-search:focus {
+      outline: none; border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102,126,234,.1);
+    }
+    .inv-btn {
+      padding: 8px 14px; border-radius: 8px;
+      border: 1px solid #e5e7eb; background: white;
+      font-size: 13px; cursor: pointer;
+      display: flex; align-items: center; gap: 6px;
+      white-space: nowrap; transition: background .15s;
+      color: #374151; text-decoration: none;
+    }
+    .inv-btn:hover { background: #f3f4f6; }
+
+    /* ── Tabela ──────────────────────────────────────────────────── */
+    .inv-table-wrap { overflow-x: auto; }
+    .inv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .inv-table th {
+      background: #f9fafb; padding: 10px 12px;
+      text-align: left; font-weight: 600; color: #6b7280;
+      border-bottom: 1px solid #e5e7eb; white-space: nowrap;
+    }
+    .inv-table td { padding: 10px 12px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+    .inv-table tbody tr.data-row { cursor: pointer; }
+    .inv-table tbody tr.data-row:hover td { background: #f9fafb; }
+    .inv-table tbody tr.data-row.expanded td { background: #f0f4ff; }
+
+    .inv-hostname { color: #059669; font-weight: 600; font-size: 13px; }
+
+    /* Tipo badge */
+    .tipo-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 600;
+      padding: 2px 8px; border-radius: 10px;
+    }
+    .tipo-notebook { background:#ede9fe; color:#6d28d9; }
+    .tipo-desktop  { background:#dbeafe; color:#1d4ed8; }
+    .tipo-servidor { background:#fee2e2; color:#dc2626; }
+    .tipo-terminal { background:#fef3c7; color:#92400e; }
+    .tipo-outro    { background:#f3f4f6; color:#374151; }
+
+    /* Status dot */
+    .st-dot { width:11px; height:11px; border-radius:50%; display:inline-block; }
+    .st-online  { background:#10b981; }
+    .st-offline { background:#374151; }
+    .st-alerta  { background:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.25); }
+
+    /* Barra de uso */
+    .usage-wrap { display:flex; align-items:center; gap:5px; }
+    .usage-bar  { width:44px; height:5px; background:#e5e7eb; border-radius:3px; overflow:hidden; flex-shrink:0; }
+    .usage-fill { height:100%; border-radius:3px; }
+    .ufill-ok      { background:#10b981; }
+    .ufill-warning { background:#f59e0b; }
+    .ufill-danger  { background:#ef4444; }
+    .usage-pct { font-size:11px; color:#374151; white-space:nowrap; }
+
+    /* Alerta tags específicas */
+    .alert-tags { display:flex; flex-direction:column; gap:3px; }
+    .alert-tag  {
+      display:inline-flex; align-items:center; gap:3px;
+      font-size:10px; font-weight:600; white-space:nowrap;
+      padding:2px 7px; border-radius:8px;
+      background:#fef3c7; color:#92400e;
+    }
+    .alert-tag.offline { background:#fee2e2; color:#dc2626; }
+    .no-alert { color:#d1d5db; font-size:14px; }
+
+    /* Linha com alerta: fundo amarelo suave */
+    .inv-table tbody tr.data-row.tr-alerta td { background:rgba(254,243,199,.35); }
+    .inv-table tbody tr.data-row.tr-alerta:hover td { background:rgba(254,243,199,.6); }
+
+    /* Apelido editável */
+    .apelido-cell { display:flex; align-items:center; gap:4px; }
+    .apelido-edit-btn {
+      border:none; background:none; color:#9ca3af;
+      cursor:pointer; padding:0 2px; font-size:12px; display:none;
+    }
+    .apelido-cell:hover .apelido-edit-btn { display:inline; }
+
+    /* ── Linha expandida ─────────────────────────────────────────── */
+    .detail-row { display:none; }
+    .detail-row td {
+      background:#f8faff !important;
+      padding: 16px 20px !important;
+      border-bottom: 2px solid #e5e7eb !important;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      gap: 6px 20px;
+    }
+    .detail-item  { display:flex; gap:6px; font-size:13px; }
+    .detail-lbl   { color:#6b7280; min-width:140px; flex-shrink:0; }
+    .detail-val   { color:#111827; font-weight:500; word-break:break-all; }
+    .detail-actions { margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; }
+
+    /* ── Rodapé / paginação ──────────────────────────────────────── */
+    .inv-footer {
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 10px 16px; border-top: 1px solid #e5e7eb;
+      font-size:13px; color:#6b7280; flex-wrap:wrap; gap:8px;
+    }
+    .pag-btns { display:flex; gap:4px; }
+    .pag-btn {
+      padding:5px 10px; border:1px solid #e5e7eb;
+      border-radius:6px; background:white; font-size:12px; cursor:pointer;
+    }
+    .pag-btn.active { background:#667eea; color:white; border-color:#667eea; }
+    .pag-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+    /* ── Vazio / carregando ──────────────────────────────────────── */
+    .empty-row td { text-align:center; padding:3rem 1rem !important; color:#9ca3af; }
+    .empty-row .bi { font-size:2.5rem; color:#d1d5db; display:block; margin-bottom:.5rem; }
+
+    /* ── Modal ───────────────────────────────────────────────────── */
+    .modal-header { background:linear-gradient(135deg,#667eea,#764ba2); color:white; border:none; }
+    .modal-header .btn-close { filter:brightness(0) invert(1); }
+    .modal-section { margin-bottom:1.25rem; }
+    .modal-section-title {
+      font-size:11px; font-weight:700; color:#9ca3af;
+      text-transform:uppercase; letter-spacing:.07em;
+      margin-bottom:8px; border-bottom:1px solid #f3f4f6; padding-bottom:4px;
+    }
+    .modal-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; }
+    .modal-item { display:flex; flex-direction:column; gap:2px; }
+    .modal-lbl  { font-size:11px; color:#9ca3af; font-weight:600; }
+    .modal-val  { font-size:13px; color:#111827; font-weight:500; word-break:break-all; }
+
+    .disco-table { width:100%; font-size:12px; border-collapse:collapse; }
+    .disco-table th { color:#6b7280; font-weight:600; padding:4px 8px; border-bottom:1px solid #e5e7eb; text-align:left; }
+    .disco-table td { padding:4px 8px; border-bottom:1px solid #f3f4f6; }
+
+    @media (max-width: 768px) {
+      .inv-filter-panel { display:none; }
+      .kpi-card { min-width:110px; }
+      .modal-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- NAVBAR (injetada pelo nav.js) -->
+  <nav id="navbar-container"></nav>
+
+  <div class="container-main">
+    <!-- SIDEBAR (injetada pelo nav.js) -->
+    <div id="sidebar-container"></div>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <div class="main-content">
+      <div class="top-bar">
+        <h1><i class="bi bi-laptop"></i> Inventário T.I.</h1>
+        <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
+      </div>
+
+      <div class="content">
+
+        <!-- Alerta de erro -->
+        <div class="alert alert-danger d-none mb-3" id="alertBox" role="alert">
+          <i class="bi bi-exclamation-circle"></i> <span id="alertMsg"></span>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpi-bar">
+          <div class="kpi-card">
+            <div class="kpi-icon total"><i class="bi bi-laptop"></i></div>
+            <div><div class="kpi-val" id="kpiTotal">—</div><div class="kpi-lbl">Total</div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon online"><i class="bi bi-wifi"></i></div>
+            <div><div class="kpi-val" id="kpiOnline">—</div><div class="kpi-lbl">Online</div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon offline"><i class="bi bi-wifi-off"></i></div>
+            <div><div class="kpi-val" id="kpiOffline">—</div><div class="kpi-lbl">Offline</div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon alerta"><i class="bi bi-exclamation-triangle"></i></div>
+            <div><div class="kpi-val" id="kpiAlerts">—</div><div class="kpi-lbl">Com alerta</div></div>
+          </div>
+        </div>
+
+        <!-- Layout: filtros + tabela -->
+        <div class="inv-layout">
+
+          <!-- Painel de filtros -->
+          <div class="inv-filter-panel">
+            <div class="inv-filter-title">Dispositivos</div>
+            <div class="inv-filter-item active" data-tipo="" onclick="setFilter('')">
+              <i class="bi bi-grid"></i> Todos
+              <span class="inv-filter-badge" id="cnt-all">0</span>
+            </div>
+            <div class="inv-filter-item" data-tipo="notebook" onclick="setFilter('notebook')">
+              <i class="bi bi-laptop"></i> Notebooks
+              <span class="inv-filter-badge" id="cnt-notebook">0</span>
+            </div>
+            <div class="inv-filter-item" data-tipo="desktop" onclick="setFilter('desktop')">
+              <i class="bi bi-pc-display"></i> Desktops
+              <span class="inv-filter-badge" id="cnt-desktop">0</span>
+            </div>
+            <div class="inv-filter-item" data-tipo="servidor" onclick="setFilter('servidor')">
+              <i class="bi bi-server"></i> Servidores
+              <span class="inv-filter-badge" id="cnt-servidor">0</span>
+            </div>
+            <div class="inv-filter-item" data-tipo="terminal" onclick="setFilter('terminal')">
+              <i class="bi bi-display"></i> Terminais
+              <span class="inv-filter-badge" id="cnt-terminal">0</span>
+            </div>
+            <div class="inv-filter-item" data-tipo="outro" onclick="setFilter('outro')">
+              <i class="bi bi-device-hdd"></i> Outros
+              <span class="inv-filter-badge" id="cnt-outro">0</span>
+            </div>
+          </div>
+
+          <!-- Área da tabela -->
+          <div class="inv-main">
+            <!-- Barra de ferramentas -->
+            <div class="inv-toolbar">
+              <input class="inv-search" id="searchInput" type="text"
+                     placeholder="Buscar hostname, usuário, modelo...">
+              <button class="inv-btn" onclick="loadData()">
+                <i class="bi bi-arrow-clockwise"></i> Atualizar
+              </button>
+              <select class="inv-btn" id="pageSize" onchange="changePageSize()"
+                      style="cursor:pointer; padding-right:8px;">
+                <option value="25">25 / pág.</option>
+                <option value="50">50 / pág.</option>
+                <option value="100">100 / pág.</option>
+              </select>
+            </div>
+
+            <!-- Tabela -->
+            <div class="inv-table-wrap">
+              <table class="inv-table">
+                <thead>
+                  <tr>
+                    <th style="width:32px;">
+                      <input type="checkbox" id="chkAll" onchange="toggleAll(this)">
+                    </th>
+                    <th>Tipo</th>
+                    <th>Hostname</th>
+                    <th>IP / Apelido</th>
+                    <th title="Alertas"><i class="bi bi-bell"></i></th>
+                    <th title="Status">●</th>
+                    <th>Disco</th>
+                    <th>RAM</th>
+                    <th>Ligado há</th>
+                    <th>Última atualização</th>
+                    <th>Agente</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="invBody">
+                  <tr class="empty-row">
+                    <td colspan="12">
+                      <i class="bi bi-arrow-clockwise"></i>
+                      Carregando dispositivos...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Rodapé -->
+            <div class="inv-footer">
+              <span id="footerInfo">—</span>
+              <div class="pag-btns" id="pagBtns"></div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /content -->
+    </div><!-- /main-content -->
+  </div><!-- /container-main -->
+
+  <!-- MODAL: Detalhes completos -->
+  <div class="modal fade" id="detailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-laptop"></i> <span id="modalTitle">Detalhes</span>
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="modalBody" style="padding:1.5rem;">
+          Carregando...
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-danger btn-sm" onclick="deleteFromModal()">
+            <i class="bi bi-trash"></i> Remover
+          </button>
+          <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Editar apelido -->
+  <div class="modal fade" id="apelidoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title">Apelido / Patrimônio</h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="text" class="form-control" id="apelidoInput"
+                 placeholder="Ex: NB-TI-001">
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary btn-sm" onclick="saveApelido()">Salvar</button>
+          <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+
+  <script>
+  /* ── Estado global ──────────────────────────────────────── */
+  let _all         = [];
+  let _filtered    = [];
+  let _currentTipo = "";
+  let _page        = 1;
+  let _pageSize    = 25;
+  let _expandedId  = null;
+  let _apelidoId   = null;
+  let _modalId     = null;
+
+  const API = window.API_BASE_URL
+    || `http://${location.hostname || '127.0.0.1'}:8000`;
+
+  function tok() {
+    return localStorage.getItem("cpe_token")
+        || sessionStorage.getItem("cpe_token") || "";
+  }
+
+  /* ── Init ───────────────────────────────────────────────── */
+  document.addEventListener("DOMContentLoaded", async () => {
+    await loadData();
+    document.getElementById("searchInput")
+      .addEventListener("input", () => { _page = 1; applyFilters(); });
+  });
+
+  /* ── Carregar dados ─────────────────────────────────────── */
+  async function loadData() {
+    try {
+      const headers = { "X-Auth-Token": tok() };
+      const [devRes, statsRes] = await Promise.all([
+        fetch(`${API}/api/inventario/dispositivos`, { headers }),
+        fetch(`${API}/api/inventario/stats`,        { headers }),
+      ]);
+      if (!devRes.ok) throw new Error(`HTTP ${devRes.status}`);
+
+      const devData = await devRes.json();
+      _all = devData.dispositivos || [];
+
+      if (statsRes.ok) {
+        const s = await statsRes.json();
+        document.getElementById("kpiTotal").textContent   = s.total    ?? 0;
+        document.getElementById("kpiOnline").textContent  = s.online   ?? 0;
+        document.getElementById("kpiOffline").textContent = s.offline  ?? 0;
+        document.getElementById("kpiAlerts").textContent  =
+          _all.filter(d => (d.alerts || 0) > 0).length;
+
+        document.getElementById("cnt-all").textContent      = s.total     ?? 0;
+        document.getElementById("cnt-notebook").textContent = s.notebooks ?? 0;
+        document.getElementById("cnt-desktop").textContent  = s.desktops  ?? 0;
+        document.getElementById("cnt-servidor").textContent = s.servidores?? 0;
+        document.getElementById("cnt-terminal").textContent = s.terminais ?? 0;
+        document.getElementById("cnt-outro").textContent    = s.outros    ?? 0;
+      }
+
+      _page = 1;
+      applyFilters();
+    } catch (err) {
+      showError("Erro ao carregar: " + err.message);
+      renderEmpty("Erro ao carregar dispositivos.");
+    }
+  }
+
+  /* ── Filtros ────────────────────────────────────────────── */
+  function setFilter(tipo) {
+    _currentTipo = tipo;
+    _page = 1;
+    document.querySelectorAll(".inv-filter-item")
+      .forEach(el => el.classList.toggle("active", el.dataset.tipo === tipo));
+    applyFilters();
+  }
+
+  function applyFilters() {
+    const q = (document.getElementById("searchInput").value || "").toLowerCase();
+    _filtered = _all.filter(d => {
+      if (_currentTipo && d.tipo !== _currentTipo) return false;
+      if (!q) return true;
+      return ["hostname","usuario_logado","marca","modelo","apelido","estado_br","cidade","ip_interno"]
+        .some(k => (d[k] || "").toLowerCase().includes(q));
+    });
+    renderTable();
+  }
+
+  /* ── Render tabela ──────────────────────────────────────── */
+  function renderTable() {
+    const total = _filtered.length;
+    if (total === 0) {
+      renderEmpty(_all.length === 0
+        ? "Nenhum dispositivo. Instale o agente nas máquinas."
+        : "Nenhum resultado para o filtro.");
+      updateFooter(0, 0);
+      return;
+    }
+    const start = (_page - 1) * _pageSize;
+    const end   = Math.min(start + _pageSize, total);
+    document.getElementById("invBody").innerHTML =
+      _filtered.slice(start, end).map(renderRow).join("");
+    updateFooter(total, end - start);
+    renderPagination(total);
+  }
+
+  const _tipoMap = {
+    notebook: ["bi-laptop",     "tipo-notebook", "Notebook"],
+    desktop:  ["bi-pc-display", "tipo-desktop",  "Desktop"],
+    servidor: ["bi-server",     "tipo-servidor", "Servidor"],
+    terminal: ["bi-display",    "tipo-terminal", "Terminal"],
+    outro:    ["bi-device-hdd", "tipo-outro",    "Outro"],
+  };
+
+  function renderRow(d) {
+    const offline    = d.status === "offline";
+    const diskPct    = d.disco_livre_pct != null ? parseFloat(d.disco_livre_pct) : null;
+    const ramPct     = d.memoria_uso_pct != null ? parseFloat(d.memoria_uso_pct) : null;
+    const diskAlerta = diskPct != null && diskPct < 15;
+    const ramAlerta  = ramPct  != null && ramPct  > 90;
+    const hasAlert   = offline || diskAlerta || ramAlerta;
+
+    const [icon, cls, lbl] = _tipoMap[d.tipo] || _tipoMap.outro;
+    const diskUsed = diskPct != null ? 100 - diskPct : null;
+    const isExp    = _expandedId === d.id;
+
+    // Dot: verde=ok, amarelo=alerta, cinza=offline
+    const dotCls   = offline ? 'st-offline' : hasAlert ? 'st-alerta' : 'st-online';
+    const dotTitle = offline ? 'Offline' : hasAlert ? 'Online com alertas' : 'Online';
+
+    // Tags de alerta específicas
+    let alertHtml;
+    if (!hasAlert) {
+      alertHtml = '<span class="no-alert" title="Sem alertas">✓</span>';
+    } else {
+      const tags = [];
+      if (offline)    tags.push('<span class="alert-tag offline"><i class="bi bi-wifi-off"></i> Offline</span>');
+      if (diskAlerta) tags.push(`<span class="alert-tag" title="Disco livre crítico (< 15%)"><i class="bi bi-hdd"></i> Disco ${diskPct.toFixed(0)}% livre</span>`);
+      if (ramAlerta)  tags.push(`<span class="alert-tag" title="Uso de RAM crítico (> 90%)"><i class="bi bi-memory"></i> RAM ${ramPct.toFixed(0)}%</span>`);
+      alertHtml = `<div class="alert-tags">${tags.join('')}</div>`;
+    }
+
+    return `
+      <tr class="data-row${isExp?' expanded':''}${hasAlert?' tr-alerta':''}" id="row-${d.id}" onclick="toggleExpand(${d.id})">
+        <td onclick="event.stopPropagation()">
+          <input type="checkbox" class="dev-chk" data-id="${d.id}">
+        </td>
+        <td>
+          <span class="tipo-badge ${cls}">
+            <i class="bi ${icon}"></i> ${lbl}
+          </span>
+        </td>
+        <td>
+          <div class="inv-hostname">${esc(d.hostname)}</div>
+          ${d.sistema_operacional
+            ? `<div style="font-size:11px;color:#9ca3af;">${esc(d.sistema_operacional)}</div>`
+            : ''}
+        </td>
+        <td>
+          <div style="font-size:12px;color:#374151;">${esc(d.ip_interno||'—')}</div>
+          <div class="apelido-cell" onclick="event.stopPropagation()">
+            <span style="font-size:11px;color:#9ca3af;" id="apelido-${d.id}">
+              ${esc(d.apelido||'—')}
+            </span>
+            <button class="apelido-edit-btn"
+              onclick="openApelido(${d.id},'${escA(d.apelido||'')}')">
+              <i class="bi bi-pencil"></i>
+            </button>
+          </div>
+        </td>
+        <td>${alertHtml}</td>
+        <td>
+          <span class="st-dot ${dotCls}" title="${dotTitle}"></span>
+        </td>
+        <td>${usageBar(diskUsed,
+          d.disco_livre_pct!=null?`livre: ${parseFloat(d.disco_livre_pct).toFixed(0)}%`:'',
+          false)}</td>
+        <td>${usageBar(ramPct,
+          d.memoria_uso_pct!=null?`uso: ${parseFloat(d.memoria_uso_pct).toFixed(0)}%`:'',
+          true)}</td>
+        <td style="font-size:12px;color:#374151;">
+          ${d.dias_ligado!=null ? d.dias_ligado+'d' : '—'}
+        </td>
+        <td style="font-size:12px;color:#6b7280;">${fmtDate(d.ultimo_heartbeat)}</td>
+        <td style="font-size:11px;color:#9ca3af;">${esc(d.versao_agente||'—')}</td>
+        <td onclick="event.stopPropagation()">
+          <button class="inv-btn" style="padding:4px 8px;font-size:12px;"
+            onclick="openModal(${d.id})">
+            <i class="bi bi-info-circle"></i> Detalhes
+          </button>
+        </td>
+      </tr>
+      <tr class="detail-row" id="detail-${d.id}"
+        ${isExp ? 'style="display:table-row;"' : ''}>
+        <td colspan="12">${renderInlineDetail(d)}</td>
+      </tr>`;
+  }
+
+  function usageBar(pct, title, invertWarning) {
+    if (pct == null) return '<span style="color:#d1d5db;font-size:12px;">—</span>';
+    const bad = invertWarning ? pct > 90 : pct > 85;
+    const warn = invertWarning ? pct > 75 : pct > 70;
+    const cls = bad ? 'ufill-danger' : warn ? 'ufill-warning' : 'ufill-ok';
+    return `<div class="usage-wrap" title="${title}">
+      <div class="usage-bar">
+        <div class="usage-fill ${cls}" style="width:${Math.min(pct,100)}%;"></div>
+      </div>
+      <span class="usage-pct">${pct.toFixed(0)}%</span>
+    </div>`;
+  }
+
+  function renderInlineDetail(d) {
+    const loc = [d.cidade, d.estado_br].filter(Boolean).join(", ") || "—";
+    return `
+      <div class="detail-grid">
+        <div class="detail-item"><span class="detail-lbl">Usuário logado:</span><span class="detail-val">${esc(d.usuario_logado||'—')}</span></div>
+        <div class="detail-item"><span class="detail-lbl">Localização:</span><span class="detail-val">${esc(loc)}</span></div>
+        <div class="detail-item"><span class="detail-lbl">IP Interno:</span><span class="detail-val">${esc(d.ip_interno||'—')}</span></div>
+        <div class="detail-item"><span class="detail-lbl">IP Externo:</span><span class="detail-val">${esc(d.ip_externo||'—')}</span></div>
+        <div class="detail-item"><span class="detail-lbl">Marca / Modelo:</span><span class="detail-val">${esc([d.marca,d.modelo].filter(Boolean).join(' / ')||'—')}</span></div>
+        <div class="detail-item"><span class="detail-lbl">Nº de Série:</span><span class="detail-val">${esc(d.numero_serie||'—')}</span></div>
+        <div class="detail-item"><span class="detail-lbl">Sistema Operacional:</span><span class="detail-val">${esc(d.sistema_operacional||'—')}</span></div>
+        <div class="detail-item"><span class="detail-lbl">Processador:</span><span class="detail-val">${esc(d.cpu_modelo||'—')}${d.cpu_nucleos?' ('+d.cpu_nucleos+' núcleos)':''}</span></div>
+        <div class="detail-item"><span class="detail-lbl">RAM:</span><span class="detail-val">${d.memoria_total_gb!=null?d.memoria_total_gb+' GB':' —'} (${d.memoria_uso_pct!=null?d.memoria_uso_pct+'% em uso':'—'})</span></div>
+        <div class="detail-item"><span class="detail-lbl">Disco:</span><span class="detail-val">${d.disco_total_gb!=null?d.disco_total_gb+' GB total':'—'} / ${d.disco_livre_gb!=null?d.disco_livre_gb+' GB livres':'—'}</span></div>
+        <div class="detail-item"><span class="detail-lbl">Dias ligado:</span><span class="detail-val">${d.dias_ligado!=null?d.dias_ligado+' dias':'—'}</span></div>
+        <div class="detail-item"><span class="detail-lbl">Cadastrado em:</span><span class="detail-val">${fmtDate(d.criado_em,true)}</span></div>
+      </div>
+      <div class="detail-actions">
+        <button class="inv-btn" style="font-size:12px;background:#667eea;color:white;border:none;"
+          onclick="openModal(${d.id});event.stopPropagation();">
+          <i class="bi bi-info-circle"></i> Mais informações
+        </button>
+        <button class="inv-btn" style="font-size:12px;"
+          onclick="openApelido(${d.id},'${escA(d.apelido||'')}');event.stopPropagation();">
+          <i class="bi bi-tag"></i> Editar apelido
+        </button>
+        <button class="inv-btn" style="font-size:12px;color:#dc2626;border-color:#fecaca;"
+          onclick="confirmDelete(${d.id},'${escA(d.hostname)}');event.stopPropagation();">
+          <i class="bi bi-trash"></i> Remover
+        </button>
+      </div>`;
+  }
+
+  function renderEmpty(msg) {
+    document.getElementById("invBody").innerHTML = `
+      <tr class="empty-row"><td colspan="12">
+        <i class="bi bi-laptop"></i>${esc(msg)}
+      </td></tr>`;
+    document.getElementById("pagBtns").innerHTML = "";
+  }
+
+  /* ── Expand linha ───────────────────────────────────────── */
+  function toggleExpand(id) {
+    const prev = _expandedId;
+    _expandedId = prev === id ? null : id;
+    if (prev !== null && prev !== id) {
+      document.getElementById(`row-${prev}`)?.classList.remove("expanded");
+      const pd = document.getElementById(`detail-${prev}`);
+      if (pd) pd.style.display = "none";
+    }
+    document.getElementById(`row-${id}`)?.classList.toggle("expanded", _expandedId === id);
+    const det = document.getElementById(`detail-${id}`);
+    if (det) det.style.display = _expandedId === id ? "table-row" : "none";
+  }
+
+  /* ── Modal detalhes ─────────────────────────────────────── */
+  async function openModal(id) {
+    _modalId = id;
+    document.getElementById("modalTitle").textContent = "Carregando...";
+    document.getElementById("modalBody").innerHTML =
+      '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+    bootstrap.Modal.getOrCreateInstance(
+      document.getElementById("detailModal")).show();
+    try {
+      const r = await fetch(`${API}/api/inventario/dispositivos/${id}`,
+        { headers: { "X-Auth-Token": tok() } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      document.getElementById("modalTitle").textContent = d.hostname;
+      document.getElementById("modalBody").innerHTML = renderModalBody(d);
+    } catch (err) {
+      document.getElementById("modalBody").innerHTML =
+        `<p class="text-danger">Erro: ${esc(err.message)}</p>`;
+    }
+  }
+
+  function renderModalBody(d) {
+    const loc = [d.cidade, d.estado_br].filter(Boolean).join(", ") || "—";
+    const offline = d.status === "offline";
+    let discosHtml = "—";
+    if (Array.isArray(d.discos_json) && d.discos_json.length) {
+      discosHtml = `<table class="disco-table">
+        <tr><th>Partição</th><th>FS</th><th>Total</th><th>Livre</th><th>% Livre</th></tr>
+        ${d.discos_json.map(ds => `<tr>
+          <td>${esc(ds.mountpoint)}</td><td>${esc(ds.fstype||'—')}</td>
+          <td>${ds.total_gb} GB</td><td>${ds.livre_gb} GB</td>
+          <td>${ds.livre_pct!=null?ds.livre_pct.toFixed(1)+'%':'—'}</td>
+        </tr>`).join('')}
+      </table>`;
+    }
+    return `
+      <div class="modal-section">
+        <div class="modal-section-title">Identificação</div>
+        <div class="modal-grid">
+          <div class="modal-item"><span class="modal-lbl">Status</span>
+            <span class="modal-val">
+              <span class="st-dot ${offline?'st-offline':'st-online'}"
+                style="width:9px;height:9px;"></span>
+              ${offline?'Offline':'Online'}
+            </span></div>
+          <div class="modal-item"><span class="modal-lbl">Tipo</span><span class="modal-val">${esc(d.tipo||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Hostname</span><span class="modal-val">${esc(d.hostname)}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Apelido / Patrimônio</span><span class="modal-val">${esc(d.apelido||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Usuário logado</span><span class="modal-val">${esc(d.usuario_logado||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Localização</span><span class="modal-val">${esc(loc)}</span></div>
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Hardware</div>
+        <div class="modal-grid">
+          <div class="modal-item"><span class="modal-lbl">Marca</span><span class="modal-val">${esc(d.marca||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Modelo</span><span class="modal-val">${esc(d.modelo||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Nº de Série</span><span class="modal-val">${esc(d.numero_serie||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Arquitetura</span><span class="modal-val">${esc(d.arquitetura||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Processador</span><span class="modal-val">${esc(d.cpu_modelo||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Núcleos (lógicos)</span><span class="modal-val">${d.cpu_nucleos??'—'}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Uso CPU (na coleta)</span><span class="modal-val">${d.cpu_uso_pct!=null?d.cpu_uso_pct+'%':'—'}</span></div>
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Memória e Armazenamento</div>
+        <div class="modal-grid">
+          <div class="modal-item"><span class="modal-lbl">RAM Total</span><span class="modal-val">${d.memoria_total_gb!=null?d.memoria_total_gb+' GB':'—'}</span></div>
+          <div class="modal-item"><span class="modal-lbl">RAM em Uso</span><span class="modal-val">${d.memoria_uso_pct!=null?d.memoria_uso_pct+'%':'—'}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Disco Total</span><span class="modal-val">${d.disco_total_gb!=null?d.disco_total_gb+' GB':'—'}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Disco Livre</span><span class="modal-val">${d.disco_livre_gb!=null?d.disco_livre_gb+' GB ('+d.disco_livre_pct+'% livre)':'—'}</span></div>
+        </div>
+        <div style="margin-top:12px;">
+          <div class="modal-lbl" style="margin-bottom:6px;">Partições</div>
+          ${discosHtml}
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Sistema e Rede</div>
+        <div class="modal-grid">
+          <div class="modal-item"><span class="modal-lbl">S.O.</span><span class="modal-val">${esc(d.sistema_operacional||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Versão SO</span><span class="modal-val">${esc((d.versao_os||'').substring(0,60)||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">IP Interno</span><span class="modal-val">${esc(d.ip_interno||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">IP Externo</span><span class="modal-val">${esc(d.ip_externo||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Dias ligado</span><span class="modal-val">${d.dias_ligado!=null?d.dias_ligado+' dias':'—'}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Versão do Agente</span><span class="modal-val">${esc(d.versao_agente||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Último heartbeat</span><span class="modal-val">${fmtDate(d.ultimo_heartbeat,true)}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Cadastrado em</span><span class="modal-val">${fmtDate(d.criado_em,true)}</span></div>
+        </div>
+      </div>`;
+  }
+
+  function deleteFromModal() {
+    if (!_modalId) return;
+    bootstrap.Modal.getInstance(document.getElementById("detailModal")).hide();
+    const d = _all.find(x => x.id === _modalId);
+    confirmDelete(_modalId, d ? d.hostname : "este dispositivo");
+  }
+
+  /* ── Apelido ────────────────────────────────────────────── */
+  function openApelido(id, current) {
+    _apelidoId = id;
+    document.getElementById("apelidoInput").value = current;
+    bootstrap.Modal.getOrCreateInstance(
+      document.getElementById("apelidoModal")).show();
+  }
+
+  async function saveApelido() {
+    const apelido = document.getElementById("apelidoInput").value.trim();
+    try {
+      const r = await fetch(
+        `${API}/api/inventario/dispositivos/${_apelidoId}/apelido`,
+        { method:"PATCH",
+          headers:{"X-Auth-Token":tok(),"Content-Type":"application/json"},
+          body: JSON.stringify({ apelido }) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = _all.find(x => x.id === _apelidoId);
+      if (d) d.apelido = apelido;
+      const span = document.getElementById(`apelido-${_apelidoId}`);
+      if (span) span.textContent = apelido || "—";
+      bootstrap.Modal.getInstance(
+        document.getElementById("apelidoModal")).hide();
+    } catch (err) { alert("Erro: " + err.message); }
+  }
+
+  /* ── Delete ─────────────────────────────────────────────── */
+  function confirmDelete(id, hostname) {
+    if (!confirm(`Remover "${hostname}" do inventário?\n\nVoltará a aparecer quando o agente enviar o próximo relatório.`)) return;
+    deleteDevice(id);
+  }
+
+  async function deleteDevice(id) {
+    try {
+      const r = await fetch(`${API}/api/inventario/dispositivos/${id}`,
+        { method:"DELETE", headers:{"X-Auth-Token":tok()} });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      _all = _all.filter(d => d.id !== id);
+      if (_expandedId === id) _expandedId = null;
+      applyFilters();
+    } catch (err) { showError("Erro ao remover: " + err.message); }
+  }
+
+  /* ── Paginação ──────────────────────────────────────────── */
+  function changePageSize() {
+    _pageSize = parseInt(document.getElementById("pageSize").value);
+    _page = 1; renderTable();
+  }
+  function goPage(n) { _page = n; renderTable(); }
+
+  function renderPagination(total) {
+    const pages = Math.ceil(total / _pageSize);
+    if (pages <= 1) { document.getElementById("pagBtns").innerHTML = ""; return; }
+    let h = `<button class="pag-btn" onclick="goPage(${_page-1})"
+      ${_page===1?'disabled':''}>‹</button>`;
+    for (let i = 1; i <= pages; i++) {
+      if (pages > 7 && Math.abs(i - _page) > 2 && i !== 1 && i !== pages) {
+        if (i === 2 || i === pages-1)
+          h += '<span style="padding:5px 4px;color:#9ca3af;">…</span>';
+        continue;
+      }
+      h += `<button class="pag-btn ${i===_page?'active':''}"
+        onclick="goPage(${i})">${i}</button>`;
+    }
+    h += `<button class="pag-btn" onclick="goPage(${_page+1})"
+      ${_page===pages?'disabled':''}>›</button>`;
+    document.getElementById("pagBtns").innerHTML = h;
+  }
+
+  function updateFooter(total, showing) {
+    const s = (_page-1)*_pageSize + 1;
+    const e = (_page-1)*_pageSize + showing;
+    document.getElementById("footerInfo").textContent =
+      total === 0 ? "Nenhum resultado"
+                  : `Exibindo ${s}–${e} de ${total} dispositivos`;
+  }
+
+  /* ── Checkbox all ───────────────────────────────────────── */
+  function toggleAll(chk) {
+    document.querySelectorAll(".dev-chk")
+      .forEach(c => c.checked = chk.checked);
+  }
+
+  /* ── Helpers ────────────────────────────────────────────── */
+  function esc(s) {
+    return String(s||'')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function escA(s) {
+    return String(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  }
+  function fmtDate(iso, full=false) {
+    if (!iso) return '—';
+    try {
+      const d = new Date(iso);
+      if (full) return d.toLocaleString('pt-BR');
+      const mins = Math.floor((Date.now()-d)/60000);
+      if (mins < 1)  return 'agora';
+      if (mins < 60) return `há ${mins}min`;
+      const hrs = Math.floor(mins/60);
+      if (hrs < 24)  return `há ${hrs}h`;
+      return d.toLocaleDateString('pt-BR');
+    } catch { return iso; }
+  }
+  function showError(msg) {
+    const b = document.getElementById("alertBox");
+    document.getElementById("alertMsg").textContent = msg;
+    b.classList.remove("d-none");
+    setTimeout(() => b.classList.add("d-none"), 6000);
+  }
+  </script>
+</body>
+</html>

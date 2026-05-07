@@ -59,6 +59,45 @@ AGENTS = {
     },
 }
 
+# Agente de inventário T.I. — arquivo único, sem pasta release/
+_INV_AGENT_PY   = os.path.join(TOOLS_DIR, "inventory_agent", "CPEAgente.py")
+_INV_VERSION_RE = re.compile(r'^VERSAO\s*=\s*["\']([^"\']+)["\']', re.MULTILINE)
+
+
+def _inv_agent_versao() -> str | None:
+    try:
+        text = open(_INV_AGENT_PY, encoding="utf-8").read()
+        m = _INV_VERSION_RE.search(text)
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+
+def _inventario_agent_info() -> dict:
+    """Constrói entrada do agente de inventário dinamicamente (versão lida do fonte)."""
+    py_info = _file_info(_INV_AGENT_PY)
+
+    files = {
+        "src": {
+            "label":      "Agente Python (CPEAgente.py)",
+            "filename":   "CPEAgente.py",
+            "available":  py_info is not None,
+            "size_bytes": py_info["size_bytes"] if py_info else 0,
+            "modified":   py_info["modified"]    if py_info else None,
+        },
+    }
+
+    return {
+        "id":           "cpe-inventario",
+        "name":         "Agente de Inventário T.I.",
+        "description":  "Arquivo único auto-suficiente. Execute uma vez — instala dependências, registra no startup do Windows e envia dados a cada 5 minutos. Auto-atualiza-se via servidor.",
+        "icon":         "bi-cpu",
+        "systems":      ["Windows 10", "Windows 11", "Windows Server 2019+"],
+        "version":      _inv_agent_versao(),
+        "files":        files,
+        "last_updated": py_info["modified"] if py_info else None,
+    }
+
 
 _VERSION_RE = re.compile(r"_v([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE)
 
@@ -136,12 +175,25 @@ def list_agents():
             "files":        files_meta,
             "last_updated": mais_recente,
         })
+
+    # Agente de inventário T.I. (estrutura diferente: .py + .bat, sem release/)
+    result.append(_inventario_agent_info())
+
     return {"success": True, "agents": result}
 
 
 @router.get("/{agent_id}/download")
 def download_agent(agent_id: str, request: Request, format: str = "exe"):
-    """Serve o arquivo do agente no formato solicitado (exe|src)."""
+    """Serve o arquivo do agente no formato solicitado (exe|src|bat|py)."""
+
+    # Agente de inventário T.I. — arquivo único CPEAgente.py
+    if agent_id == "cpe-inventario":
+        if not os.path.exists(_INV_AGENT_PY):
+            raise HTTPException(status_code=404, detail="CPEAgente.py não encontrado no servidor.")
+        logger.info(f"[AGENTS] Download cpe-inventario -> CPEAgente.py")
+        return FileResponse(_INV_AGENT_PY, filename="CPEAgente.py",
+                            media_type="application/octet-stream")
+
     agent = AGENTS.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agente nao encontrado")

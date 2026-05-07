@@ -468,6 +468,16 @@
     display: block;
     max-height: 500px;
   }
+
+  /* Submenu abre no hover — sem precisar clicar */
+  .has-submenu:hover > .submenu {
+    display: block !important;
+    max-height: 500px;
+  }
+
+  .has-submenu:hover > .menu-link .submenu-arrow {
+    transform: rotate(90deg);
+  }
   
   .submenu-item {
     margin: 0;

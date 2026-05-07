@@ -1138,6 +1138,14 @@ try:
 except Exception as err:
     logger.error(f"❌ Erro ao registrar router de Permissões: {str(err)}")
 
+# ✅ REGISTRAR ROUTER DA DASHBOARD (KPIs + agenda + pendências adaptados por role)
+try:
+    from routes.dashboard import router as dashboard_router
+    app.include_router(dashboard_router)
+    logger.info("✅ Router de Dashboard registrado: /api/dashboard")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Dashboard: {str(err)}")
+
 # ✅ REGISTRAR ROUTER DE CATEGORIAS/SUBCATEGORIAS (EXTERNO)
 try:
     from routes.categorias import categorias_router, subcategorias_router
@@ -1285,6 +1293,14 @@ try:
     logger.info("✅ Router de Pré-cadastro registrado: /api/pre-cadastro")
 except Exception as err:
     logger.error(f"❌ Erro ao registrar Pré-cadastro: {str(err)}")
+
+# ✅ REGISTRAR ROUTER DO INVENTÁRIO T.I. (dispositivos + agente)
+try:
+    from routes.inventory import router as inventory_router
+    app.include_router(inventory_router)
+    logger.info("✅ Router de Inventário T.I. registrado: /api/inventario")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Inventário T.I.: {str(err)}")
     import traceback
     logger.error(traceback.format_exc())
 
