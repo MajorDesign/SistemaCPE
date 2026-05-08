@@ -99,7 +99,9 @@ def _can_delete_vehicle(user: dict) -> bool:
 
 @router.get("/vehicles")
 def list_vehicles(request: Request):
-    user_id = _get_user_id(request)
+    user = _get_user_role(request)
+    user_id = user["id"]
+    is_fleet_mgr = _can_manage_fleet(user)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -143,6 +145,10 @@ def list_vehicles(request: Request):
             ORDER BY FIELD(v.status,'ativo','em_viagem','manutencao','revisao'), v.modelo
         """, (user_id,))
         vehicles = cursor.fetchall()
+        # Aluguel mensal é confidencial — só Frotas/ADMIN/TI vê.
+        if not is_fleet_mgr:
+            for v in vehicles:
+                v.pop("valor_aluguel_mensal", None)
         return {"success": True, "vehicles": vehicles}
     finally:
         cursor.close()
@@ -151,7 +157,13 @@ def list_vehicles(request: Request):
 
 @router.post("/vehicles")
 def create_vehicle(request: Request, data: dict):
-    user_id = _get_user_id(request)
+    user = _get_user_role(request)
+    if not _can_manage_fleet(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas Administrador, T.I. ou Responsável do grupo Frotas podem cadastrar veículos."
+        )
+    user_id = user["id"]
     placa = (data.get("placa") or "").strip().upper()
     modelo = (data.get("modelo") or "").strip()
     if not placa or not modelo:
@@ -192,7 +204,12 @@ def create_vehicle(request: Request, data: dict):
 
 @router.put("/vehicles/{vehicle_id}")
 def update_vehicle(vehicle_id: int, request: Request, data: dict):
-    _get_user_id(request)
+    user = _get_user_role(request)
+    if not _can_manage_fleet(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas Administrador, T.I. ou Responsável do grupo Frotas podem editar veículos."
+        )
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -1533,7 +1550,12 @@ MAINTENANCE_LABELS = {
 
 @router.get("/maintenance")
 def list_maintenance(request: Request, vehicle_id: int = None, status: str = None):
-    _get_user_id(request)
+    user = _get_user_role(request)
+    if not _can_manage_fleet(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas Administrador, T.I. ou Responsável do grupo Frotas podem ver manutenções."
+        )
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -1796,12 +1818,18 @@ def iniciar_viagem(checklist_id: int, request: Request):
 
 @router.get("/trips")
 def list_trips(request: Request, ano: int = None, mes: int = None, unidade: str = None):
-    _get_user_id(request)
+    user = _get_user_role(request)
+    is_fleet_mgr = _can_manage_fleet(user)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
         where = ["1=1"]
         params = []
+        # Usuário comum só vê suas próprias viagens (custos confidenciais
+        # de outros usuários ficam fora). Apenas Frotas/ADMIN/TI vê tudo.
+        if not is_fleet_mgr:
+            where.append("t.condutor_id = %s")
+            params.append(user["id"])
         if ano:
             where.append("YEAR(t.data_saida) = %s")
             params.append(ano)
@@ -1982,8 +2010,15 @@ def cost_centers(request: Request, ano: int = None, mes: int = None):
     - Idle aluguel calculado on-the-fly: dias parados × (aluguel mensal / 30)
       para cada manutenção colisão/arranhão concluída.
     - Manutenção normal e seu idle → grupo Frotas (FLEET_GROUP_ID).
+
+    Confidencial — só ADMIN/TI/Responsável de Frotas podem ver.
     """
-    _get_user_id(request)
+    user = _get_user_role(request)
+    if not _can_manage_fleet(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas Administrador, T.I. ou Responsável do grupo Frotas podem ver o centro de custo."
+        )
 
     today = datetime.now()
     ano = int(ano) if ano else today.year
@@ -2125,7 +2160,14 @@ def cost_centers(request: Request, ano: int = None, mes: int = None):
 
 @router.get("/dashboard")
 def get_dashboard(request: Request):
-    _get_user_id(request)
+    """Dashboard agrega custos da frota — confidencial.
+    Só ADMIN/TI/Responsável de Frotas podem ver."""
+    user = _get_user_role(request)
+    if not _can_manage_fleet(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas Administrador, T.I. ou Responsável do grupo Frotas podem ver o dashboard de frotas."
+        )
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:

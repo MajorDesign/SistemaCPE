@@ -85,20 +85,33 @@ GROUP_ID_FROTAS = 13
 # ---------------------------------------------------------------------
 def _agenda_do_dia(cursor, user_id: int, group_id: Optional[int]) -> list[dict]:
     """
-    Compromissos de hoje vindos da agenda do Carbonio.
+    Compromissos de hoje agregados de várias fontes:
 
-    A integração Carbonio guarda cache local em `agenda_eventos_cache`
-    (se existir). Caso o usuário não tenha conectado a agenda ainda,
-    retorna lista vazia silenciosamente.
+    1. Reservas de sala onde o usuário é dono (`recepcao_reservas`)
+    2. Reservas de sala onde o usuário foi convidado (`recepcao_convidados`)
+    3. Reservas de veículo do usuário/condutor (`fleet_reservations`)
+    4. Eventos da agenda Carbonio (best-effort: tenta pegar ao vivo se o
+       usuário tiver token; falha silenciosa se não tiver)
 
-    Como fallback, mostramos também reservas de sala do dia em que o
-    usuário é solicitante ou está convidado.
+    Retorna até 8 itens ordenados por horário.
     """
     eventos: list[dict] = []
-    hoje_inicio = datetime.combine(datetime.now().date(), time.min)
-    hoje_fim    = datetime.combine(datetime.now().date(), time.max)
+    seen_keys: set[str] = set()  # evita duplicar mesma reserva (dono + convidado)
 
-    # Reservas de sala onde o usuário é o dono da reserva
+    def _push(hora: str, fim: str, titulo: str, local: str, fonte: str, key: str = ""):
+        if key and key in seen_keys:
+            return
+        if key:
+            seen_keys.add(key)
+        eventos.append({
+            "hora":   hora or "",
+            "fim":    fim  or "",
+            "titulo": titulo or "Compromisso",
+            "local":  local  or "—",
+            "fonte":  fonte,
+        })
+
+    # 1) Reservas de sala — dono
     if _existe_tabela(cursor, "recepcao_reservas"):
         cursor.execute("""
             SELECT r.id, r.titulo, r.inicio, r.fim, s.nome AS sala_nome
@@ -110,40 +123,131 @@ def _agenda_do_dia(cursor, user_id: int, group_id: Optional[int]) -> list[dict]:
              ORDER BY r.inicio
         """, (user_id,))
         for r in cursor.fetchall():
-            eventos.append({
-                "hora":    r["inicio"].strftime("%H:%M") if r.get("inicio") else "",
-                "fim":     r["fim"].strftime("%H:%M") if r.get("fim") else "",
-                "titulo":  r["titulo"] or "Reserva",
-                "local":   f"Sala {r['sala_nome']}",
-                "fonte":   "recepcao",
-            })
+            _push(
+                hora=r["inicio"].strftime("%H:%M") if r.get("inicio") else "",
+                fim=r["fim"].strftime("%H:%M")    if r.get("fim")    else "",
+                titulo=r["titulo"] or "Reserva",
+                local=f"Sala {r['sala_nome']}",
+                fonte="recepcao",
+                key=f"reserva:{r['id']}",
+            )
 
-    # Eventos do Carbonio (se houver tabela de cache)
-    if _existe_tabela(cursor, "agenda_eventos_cache"):
-        try:
-            cursor.execute("""
-                SELECT titulo, inicio, fim, local
-                  FROM agenda_eventos_cache
-                 WHERE usuario_id = %s
-                   AND inicio BETWEEN %s AND %s
-                 ORDER BY inicio
-                 LIMIT 10
-            """, (user_id, hoje_inicio, hoje_fim))
-            for ev in cursor.fetchall():
-                eventos.append({
-                    "hora":   ev["inicio"].strftime("%H:%M") if ev.get("inicio") else "",
-                    "fim":    ev["fim"].strftime("%H:%M") if ev.get("fim") else "",
-                    "titulo": ev.get("titulo") or "Compromisso",
-                    "local":  ev.get("local") or "—",
-                    "fonte":  "carbonio",
-                })
-        except Exception:
-            # Tabela existe mas com schema diferente — silencia
-            pass
+    # 2) Reservas de sala — convidado
+    if _existe_tabela(cursor, "recepcao_convidados"):
+        cursor.execute("""
+            SELECT r.id, r.titulo, r.inicio, r.fim, s.nome AS sala_nome,
+                   o.name AS organizador_nome
+              FROM recepcao_convidados c
+              JOIN recepcao_reservas r ON r.id = c.reserva_id
+              JOIN recepcao_salas    s ON s.id = r.sala_id
+              LEFT JOIN users o ON o.id = r.usuario_id
+             WHERE c.usuario_id = %s
+               AND DATE(r.inicio) = CURDATE()
+               AND r.status IN ('confirmada','pendente')
+             ORDER BY r.inicio
+        """, (user_id,))
+        for r in cursor.fetchall():
+            org = r.get("organizador_nome") or ""
+            _push(
+                hora=r["inicio"].strftime("%H:%M") if r.get("inicio") else "",
+                fim=r["fim"].strftime("%H:%M")    if r.get("fim")    else "",
+                titulo=(r["titulo"] or "Reunião") + (f" — {org}" if org else ""),
+                local=f"Sala {r['sala_nome']}",
+                fonte="recepcao_convite",
+                key=f"reserva:{r['id']}",
+            )
+
+    # 3) Reservas de veículo (frota)
+    if _existe_tabela(cursor, "fleet_reservations"):
+        cursor.execute("""
+            SELECT fr.id, fr.destino, fr.horario_inicio, fr.horario_fim,
+                   v.placa, v.modelo
+              FROM fleet_reservations fr
+              JOIN fleet_vehicles v ON v.id = fr.vehicle_id
+             WHERE fr.solicitante_id = %s
+               AND fr.data_reserva = CURDATE()
+               AND fr.status IN ('aprovado','pendente')
+             ORDER BY fr.horario_inicio
+        """, (user_id,))
+        for r in cursor.fetchall():
+            hora = r["horario_inicio"].strftime("%H:%M") if hasattr(r.get("horario_inicio"), "strftime") else (str(r.get("horario_inicio") or "")[:5] or "")
+            fim  = r["horario_fim"].strftime("%H:%M")    if hasattr(r.get("horario_fim"),   "strftime") else (str(r.get("horario_fim")   or "")[:5] or "")
+            _push(
+                hora=hora,
+                fim=fim,
+                titulo=f"Viagem: {r.get('destino') or '—'}",
+                local=f"{r.get('placa') or ''} {r.get('modelo') or ''}".strip() or "Veículo",
+                fonte="frota",
+                key=f"frota:{r['id']}",
+            )
+
+    # 4) Eventos do Carbonio (live, best-effort)
+    try:
+        eventos_carbonio = _carbonio_eventos_hoje(cursor, user_id)
+        for ev in eventos_carbonio:
+            _push(
+                hora=ev.get("hora", ""),
+                fim=ev.get("fim", ""),
+                titulo=ev.get("titulo", "Compromisso"),
+                local=ev.get("local", "—"),
+                fonte="carbonio",
+                key=f"carb:{ev.get('id') or ev.get('titulo')}",
+            )
+    except Exception as exc:
+        # Sem token, network falhou, etc. — silencioso (não quebra dashboard)
+        logger.debug(f"[DASHBOARD] Carbonio agenda indisponível p/ user {user_id}: {exc}")
 
     # Ordena por hora
     eventos.sort(key=lambda e: e.get("hora") or "23:59")
-    return eventos[:8]  # máximo 8 itens
+    return eventos[:8]
+
+
+def _carbonio_eventos_hoje(cursor, user_id: int) -> list[dict]:
+    """Busca eventos do Carbonio para HOJE. Retorna lista vazia se o usuário
+    não tem token, token expirou, ou Carbonio offline. Nunca propaga erro."""
+    cursor.execute(
+        "SELECT carbonio_token, carbonio_token_exp FROM users WHERE id = %s",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+    if not row or not row.get("carbonio_token"):
+        return []
+    if row.get("carbonio_token_exp") and row["carbonio_token_exp"] < datetime.now():
+        return []
+
+    try:
+        from services.crypto_helper import decrypt_str  # type: ignore
+        from services.carbonio_service import listar_eventos  # type: ignore
+    except ImportError:
+        return []
+
+    try:
+        token = decrypt_str(row["carbonio_token"])
+        if not token:
+            return []
+        ini = datetime.combine(datetime.now().date(), time.min)
+        fim = datetime.combine(datetime.now().date(), time.max)
+        ini_ms = int(ini.timestamp() * 1000)
+        fim_ms = int(fim.timestamp() * 1000)
+        eventos = listar_eventos(token, ini_ms, fim_ms)
+    except Exception:
+        return []
+
+    out = []
+    for ev in eventos:
+        try:
+            ini_dt = datetime.fromtimestamp(ev["inicio_ms"] / 1000)
+            fim_dt = datetime.fromtimestamp(ev["fim_ms"]    / 1000)
+        except (KeyError, TypeError, ValueError):
+            continue
+        out.append({
+            "id":     ev.get("id"),
+            "hora":   "Dia todo" if ev.get("all_day") else ini_dt.strftime("%H:%M"),
+            "fim":    "" if ev.get("all_day") else fim_dt.strftime("%H:%M"),
+            "titulo": ev.get("titulo") or "Compromisso",
+            "local":  ev.get("local") or "—",
+        })
+    return out
 
 
 # ---------------------------------------------------------------------

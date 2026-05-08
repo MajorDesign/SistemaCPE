@@ -47,7 +47,7 @@
 
     <nav class="fleet-nav">
       <ul>
-        <li class="fleet-nav-item active" data-section="dashboard">
+        <li class="fleet-nav-item active fleet-nav-fleet-only" data-section="dashboard" style="display:none">
           <a class="fleet-nav-link" onclick="showSection('dashboard')">
             <i class="bi bi-speedometer2"></i><span>Dashboard</span>
           </a>
@@ -72,7 +72,7 @@
             <i class="bi bi-calendar2-week-fill"></i><span>Agendamentos</span>
           </a>
         </li>
-        <li class="fleet-nav-item" data-section="maintenance">
+        <li class="fleet-nav-item fleet-nav-fleet-only" data-section="maintenance" style="display:none">
           <a class="fleet-nav-link" onclick="showSection('maintenance')">
             <i class="bi bi-wrench-adjustable-circle-fill"></i><span>Manutenção</span>
           </a>
@@ -157,7 +157,7 @@
       <div class="fleet-section-header">
         <h2><i class="bi bi-car-front-fill" style="color:var(--fleet-primary)"></i> Veículos</h2>
         <div class="actions">
-          <button class="btn-fleet btn-fleet-primary" onclick="openVehicleModal()">
+          <button class="btn-fleet btn-fleet-primary" data-fleet-mgr-only onclick="openVehicleModal()">
             <i class="bi bi-plus-lg"></i> Novo Veículo
           </button>
         </div>
@@ -1457,6 +1457,37 @@ function canDeleteVehicle() {
   return currentUser.role === 'RESPONSAVEL_GRUPO' && currentUser.group_id === FLEET_GROUP_ID;
 }
 
+/* Aplica visibilidade de menus/seções/botões com base no papel.
+   Usuário comum NÃO vê: Dashboard, Manutenção, sub-tab "Centro de Custo",
+   campo "Valor aluguel mensal" no modal de veículo, botão "Novo Registro"
+   em viagens, botão "Novo Veículo".
+   Backend faz a defesa em profundidade — aqui é só UX. */
+function aplicarPermissoesFleet() {
+  const isFleetMgr = canManageFleet();
+
+  // Itens do sidebar marcados como "fleet only" (Dashboard, Manutenção)
+  document.querySelectorAll('.fleet-nav-fleet-only').forEach(el => {
+    el.style.display = isFleetMgr ? '' : 'none';
+  });
+
+  // Sub-tab "Centro de Custo" dentro de Viagens/Custos
+  const ccTab = document.querySelector('.fleet-subtab[data-subtab="centers"]');
+  if (ccTab) ccTab.style.display = isFleetMgr ? '' : 'none';
+
+  // Botão "Novo Registro" em Viagens (só Frotas pode lançar custos manualmente)
+  const tripsNewBtn = document.getElementById('tripsNewBtn');
+  if (tripsNewBtn) tripsNewBtn.style.display = isFleetMgr ? '' : 'none';
+
+  // Botão "+ Novo Veículo"
+  document.querySelectorAll('[data-fleet-mgr-only]').forEach(el => {
+    el.style.display = isFleetMgr ? '' : 'none';
+  });
+
+  // Campo "Valor aluguel mensal" no modal de veículo (confidencial)
+  const aluguelWrap = document.getElementById('vehAluguelMensal')?.closest('.fleet-form-group');
+  if (aluguelWrap) aluguelWrap.style.display = isFleetMgr ? '' : 'none';
+}
+
 /* ============================================================
    INIT
    ============================================================ */
@@ -1487,6 +1518,9 @@ async function init() {
     currentUser = { id: userData.id, name: userData.name, email: userData.email, role: userData.role, group_id: userData.group_id ?? null };
     document.getElementById('topbarUser').textContent = currentUser.name;
 
+    // Aplica visibilidade do menu/UI baseada no papel (frotas vs comum)
+    aplicarPermissoesFleet();
+
     // Pré-carregar dados comuns
     await Promise.all([loadMotoristas(), loadLiberadores()]);
 
@@ -1515,8 +1549,13 @@ async function init() {
       selAno.appendChild(opt);
     }
 
-    // Carregar dashboard e notificações
-    await loadDashboard();
+    // Carregar dashboard só se for usuário com acesso (não-frotas → 403)
+    if (canManageFleet()) {
+      await loadDashboard();
+    } else {
+      // Usuário comum entra direto em "Veículos" — não vê o dashboard de custos
+      showSection('vehicles');
+    }
     fetchNotifications();
 
     document.getElementById('fleetLoading').style.display = 'none';
@@ -2070,6 +2109,12 @@ function openVehicleModal() {
 async function editVehicle(id) {
   const v = allVehicles.find(x => x.id === id);
   if (!v) return;
+
+  // Edição de dados do veículo é restrita a Frotas/ADMIN/TI.
+  // Usuário comum só pode visualizar a lista — clicar no card não abre o modal.
+  if (!canManageFleet()) {
+    return;
+  }
 
   document.getElementById('vehId').value = v.id;
   document.getElementById('vehPlaca').value = v.placa;

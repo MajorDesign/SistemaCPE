@@ -273,20 +273,38 @@
       return u.id || u.usuario_id || null;
     }
 
-    // Resolvida na inicialização — indica se o usuário pode gerenciar categorias
-    // (ADMIN/TI por role, ou via exceção MANAGE_CATEGORIES no banco)
+    // Resolvida na inicialização — define o escopo de gerenciamento de categorias
+    //   _catScope = 'all' → ADMIN/TI/exceção: pode em qualquer grupo
+    //   _catScope = 'own' → RESPONSAVEL_GRUPO: só no próprio grupo (_catGroupId)
+    //   _catScope = null  → sem permissão; botão "Categorias" não aparece
     let _podeGerenciarCat = false;
+    let _catScope         = null;
+    let _catGroupId       = null;
 
     async function resolverPermissaoCategorias() {
+      _podeGerenciarCat = false;
+      _catScope         = null;
+      _catGroupId       = null;
+
       const userId = getCurrentUserId();
-      if (!userId) { _podeGerenciarCat = false; return; }
+      if (!userId) return;
       try {
         const res  = await fetch(`${API_BASE}/categorias/check-permissao?usuario_id=${userId}`);
         const data = await res.json();
         _podeGerenciarCat = data.pode === true;
+        _catScope         = data.scope || null;
+        _catGroupId       = data.group_id || null;
       } catch (e) {
-        _podeGerenciarCat = false;
+        // mantém defaults (sem permissão)
       }
+    }
+
+    // Decide se o botão "Categorias" deve aparecer no card de um grupo específico.
+    function podeGerenciarCategoriasDo(group) {
+      if (!_podeGerenciarCat) return false;
+      if (_catScope === 'all') return true;
+      if (_catScope === 'own') return group?.id === _catGroupId;
+      return false;
     }
 
     console.log("[GROUPS/CONFIG] 🔌 Variáveis globais inicializadas");
@@ -462,7 +480,7 @@
               <button class="btn-group-action" onclick="editGroup(${group.id}, event)">
                 <i class="bi bi-pencil"></i> Editar
               </button>
-              ${_podeGerenciarCat ? `
+              ${podeGerenciarCategoriasDo(group) ? `
               <button class="btn-group-action" style="background:#6f42c1;color:#fff;" onclick="abrirGerenciarCategorias(${group.id}, '${group.name.replace(/'/g, "\\'")}', event)">
                 <i class="bi bi-tags"></i> Categorias
               </button>` : ''}

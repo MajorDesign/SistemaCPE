@@ -6,7 +6,7 @@ Arquivo único: instala deps, registra startup, ícone na bandeja.
 """
 
 # ══════════════════════════════════════════════════════════════
-VERSAO     = "1.3.1"
+VERSAO     = "1.3.2"
 API_URL    = "http://127.0.0.1:8000"
 AGENT_KEY  = "cpe-inv-2026"
 INTERVAL   = 300
@@ -347,18 +347,39 @@ def _update(skip=False):
         meu = os.path.abspath(__file__); tmp = meu+".tmp"
         with open(tmp,"wb") as f: f.write(r2.content)
         os.replace(tmp, meu); log.info(f"Atualizado v{sv}. Reiniciando...")
-        subprocess.Popen([sys.executable]+sys.argv); sys.exit(0)
+        # Relaunch silencioso — sem console flash mesmo se rodando em python.exe
+        if platform.system() == "Windows":
+            subprocess.Popen([sys.executable]+sys.argv,
+                             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW)
+        else:
+            subprocess.Popen([sys.executable]+sys.argv)
+        sys.exit(0)
     except Exception as e: log.warning(f"Update: {e}")
 
 # ══════════════════════════════════════════════════════════════
 #  Coleta de hardware
 # ══════════════════════════════════════════════════════════════
+# No Windows, usar STARTUPINFO + CREATE_NO_WINDOW para evitar que
+# o console do PowerShell pisque na tela do usuário a cada coleta.
+# Sem isso, executar o agente com pythonw.exe ainda mostra a janela
+# do PowerShell brevemente (problema relatado em produção).
+if platform.system() == "Windows":
+    _SI = subprocess.STARTUPINFO()
+    _SI.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    _SI.wShowWindow = 0  # SW_HIDE
+    _NO_WINDOW_FLAGS = subprocess.CREATE_NO_WINDOW
+else:
+    _SI = None
+    _NO_WINDOW_FLAGS = 0
+
+
 def _ps(cmd):
     if platform.system() != "Windows": return ""
     try:
         r = subprocess.run(["powershell","-NoProfile","-NonInteractive",
                             "-OutputFormat","Text","-Command",cmd],
-                           capture_output=True, timeout=10)
+                           capture_output=True, timeout=10,
+                           startupinfo=_SI, creationflags=_NO_WINDOW_FLAGS)
         return r.stdout.decode("utf-8-sig", errors="ignore").strip()
     except: return ""
 
