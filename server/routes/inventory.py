@@ -22,7 +22,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from database import get_db_connection
@@ -32,6 +32,26 @@ logger = logging.getLogger(__name__)
 
 AGENT_KEY            = os.getenv("INVENTORY_AGENT_KEY", "")
 OFFLINE_THRESHOLD_M  = 20   # minutos sem heartbeat → offline
+
+
+# ─── Permissões ──────────────────────────────────────────────────────────────
+def _require_admin_ti(request: Request) -> dict:
+    """Valida que o usuário autenticado é ADMIN ou TI.
+    Usado em endpoints com info sensível de rede (Omada)."""
+    from security import parse_session_token, COOKIE_NAME, get_user_by_id
+    token = (request.cookies.get(COOKIE_NAME)
+             or request.headers.get("X-Auth-Token")
+             or request.headers.get("x-auth-token"))
+    uid = parse_session_token(token) if token else None
+    user = get_user_by_id(uid) if uid else None
+    if not user:
+        raise HTTPException(status_code=401, detail="Não autenticado")
+    if user.get("role") not in ("ADMIN", "TI"):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas Administrador ou T.I. podem ver dispositivos Omada."
+        )
+    return user
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -188,29 +208,53 @@ def estatisticas():
 
 # ─── Auto-update do agente ────────────────────────────────────────────────────
 
-# Arquivo do agente que será servido para download
-_AGENT_FILE = (
-    pathlib.Path(__file__).resolve()
-    .parent   # routes/
-    .parent   # server/
-    .parent   # SistemaCPE/
-    / "tools" / "inventory_agent" / "CPEAgente.py"
-)
+# A distribuição oficial é o .exe (PyInstaller --onefile --windowed) — usuários
+# não precisam ter Python instalado. O .py fica como fallback para máquinas dev.
+import glob
+
+_INV_DIR        = (pathlib.Path(__file__).resolve()
+                   .parent.parent.parent / "tools" / "inventory_agent")
+_RELEASE_DIR    = _INV_DIR / "release"
+_RELEASE_GLOB   = "CPEAgente_v*.exe"
+_AGENT_PY       = _INV_DIR / "CPEAgente.py"        # fallback / leitura de versão
+_VERSION_FROM_FILENAME_RE = re.compile(r"_v([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE)
+
+
+def _latest_exe() -> Optional[pathlib.Path]:
+    """Pega o .exe mais recente em release/. Retorna None se não houver build."""
+    candidates = glob.glob(str(_RELEASE_DIR / _RELEASE_GLOB))
+    if not candidates:
+        return None
+    return pathlib.Path(max(candidates, key=os.path.getmtime))
+
+
+def _versao_do_exe(path: pathlib.Path) -> Optional[str]:
+    m = _VERSION_FROM_FILENAME_RE.search(path.name)
+    return m.group(1).rstrip(".") if m else None
+
+
+def _versao_do_py() -> Optional[str]:
+    """Lê VERSAO do CPEAgente.py — usado como fallback quando não há .exe."""
+    try:
+        texto = _AGENT_PY.read_text(encoding="utf-8")
+        m = re.search(r'^VERSAO\s*=\s*["\']([^"\']+)["\']', texto, re.MULTILINE)
+        return m.group(1) if m else None
+    except Exception:
+        return None
 
 
 def _agent_versao() -> str:
-    """Lê a versão do agente diretamente do arquivo-fonte (linha VERSAO = "...")."""
-    try:
-        texto = _AGENT_FILE.read_text(encoding="utf-8")
-        m = re.search(r'^VERSAO\s*=\s*["\']([^"\']+)["\']', texto, re.MULTILINE)
-        return m.group(1) if m else "0.0.0"
-    except Exception:
-        return "0.0.0"
+    """Versão considerada 'oficial' pelo servidor — prioriza o filename do .exe."""
+    exe = _latest_exe()
+    if exe:
+        v = _versao_do_exe(exe)
+        if v: return v
+    return _versao_do_py() or "0.0.0"
 
 
 @router.get("/agent/version")
 def agent_version():
-    """Retorna a versão atual do CPEAgente.py disponível no servidor."""
+    """Retorna a versão atual do agente disponível no servidor (do .exe em release/)."""
     return {
         "version":      _agent_versao(),
         "download_url": "/api/inventario/agent/download",
@@ -220,17 +264,25 @@ def agent_version():
 @router.get("/agent/download")
 def agent_download():
     """
-    Serve o CPEAgente.py para que os clientes possam se auto-atualizar.
-    Qualquer máquina com o agente instalado consulta este endpoint;
-    se a versão do servidor for mais nova, baixa e substitui o arquivo local.
+    Serve o CPEAgente.exe mais recente para que os clientes possam se auto-atualizar.
+    Qualquer máquina com o agente instalado consulta /agent/version; se houver
+    versão maior, baixa o .exe daqui e troca o binário via helper batch.
     """
-    if not _AGENT_FILE.exists():
-        raise HTTPException(404, "Arquivo do agente não encontrado no servidor.")
-    return FileResponse(
-        path=str(_AGENT_FILE),
-        media_type="text/plain; charset=utf-8",
-        filename="CPEAgente.py",
-    )
+    exe = _latest_exe()
+    if exe and exe.exists():
+        return FileResponse(
+            path=str(exe),
+            media_type="application/octet-stream",
+            filename=exe.name,
+        )
+    # Fallback: ambiente dev que ainda não buildou o .exe
+    if _AGENT_PY.exists():
+        return FileResponse(
+            path=str(_AGENT_PY),
+            media_type="text/plain; charset=utf-8",
+            filename="CPEAgente.py",
+        )
+    raise HTTPException(404, "Agente não encontrado no servidor. Rode tools/inventory_agent/scripts/build.bat.")
 
 
 # ─── Recebimento do relatório do agente ───────────────────────────────────────
@@ -355,3 +407,116 @@ def remover_dispositivo(device_id: int):
     finally:
         cursor.close()
         conn.close()
+
+
+# ─── Omada Controller (TP-Link) — read-only ──────────────────────────────────
+# Lista APs/switches/gateways do Omada Controller para integrar ao
+# inventário. Só ADMIN/TI veem (info sensível de rede).
+
+@router.get("/omada/devices")
+def omada_devices(request: Request):
+    """Lista dispositivos do Omada Controller (todos os sites visíveis)."""
+    _require_admin_ti(request)
+    try:
+        from services.omada_service import (
+            listar_devices_todos_sites, OmadaError, _configurado,
+        )
+    except ImportError as exc:
+        raise HTTPException(500, f"omada_service indisponível: {exc}")
+
+    if not _configurado():
+        raise HTTPException(
+            503,
+            "Integração Omada não configurada. Defina OMADA_BASE_URL/USER/PASS no .env."
+        )
+
+    try:
+        devices = listar_devices_todos_sites()
+    except OmadaError as exc:
+        logger.error("[OMADA] %s", exc)
+        raise HTTPException(502, f"Omada: {exc}")
+    except Exception as exc:
+        logger.exception("[OMADA] Falha geral")
+        raise HTTPException(502, f"Omada offline ou inalcançável: {exc}")
+
+    online  = sum(1 for d in devices if d.get("status") == "online")
+    offline = len(devices) - online
+
+    return {
+        "success": True,
+        "devices": devices,
+        "stats":   {
+            "total":   len(devices),
+            "online":  online,
+            "offline": offline,
+        },
+    }
+
+
+@router.get("/omada/sites")
+def omada_sites(request: Request):
+    """Lista os sites visíveis no controller (pra filtro no frontend)."""
+    _require_admin_ti(request)
+    try:
+        from services.omada_service import listar_sites, OmadaError
+    except ImportError as exc:
+        raise HTTPException(500, f"omada_service indisponível: {exc}")
+    try:
+        return {"success": True, "sites": listar_sites()}
+    except OmadaError as exc:
+        raise HTTPException(502, f"Omada: {exc}")
+    except Exception as exc:
+        raise HTTPException(502, f"Omada inalcançável: {exc}")
+
+
+@router.get("/omada/clients")
+def omada_clients(request: Request, site_id: Optional[str] = Query(None)):
+    """Lista clientes Omada ativos. `site_id` opcional filtra por um site;
+    sem ele, agrega todos os sites visíveis."""
+    _require_admin_ti(request)
+    try:
+        from services.omada_service import (
+            listar_clientes, listar_clientes_todos_sites, OmadaError,
+        )
+    except ImportError as exc:
+        raise HTTPException(500, f"omada_service indisponível: {exc}")
+    try:
+        clients = listar_clientes(site_id) if site_id else listar_clientes_todos_sites()
+    except OmadaError as exc:
+        raise HTTPException(502, f"Omada: {exc}")
+    except Exception as exc:
+        raise HTTPException(502, f"Omada inalcançável: {exc}")
+
+    # Contagens por categoria pra montar os filtros no front
+    cnt = {"telemovel": 0, "escritorio": 0, "rede": 0, "outros": 0}
+    for c in clients:
+        cat = c.get("categoria") or "outros"
+        cnt[cat] = cnt.get(cat, 0) + 1
+    return {"success": True, "clients": clients, "stats": {"total": len(clients), **cnt}}
+
+
+@router.get("/omada/topology")
+def omada_topology(request: Request, site_id: Optional[str] = Query(None)):
+    """Snapshot da topologia: switches, APs, gateways e contagem de
+    clientes por AP. `site_id` obrigatório se houver mais de um site
+    (defina explicitamente no frontend)."""
+    _require_admin_ti(request)
+    try:
+        from services.omada_service import topologia, OmadaError, listar_sites
+    except ImportError as exc:
+        raise HTTPException(500, f"omada_service indisponível: {exc}")
+    try:
+        if site_id:
+            return {"success": True, "topology": topologia(site_id)}
+        # Sem site_id: monta uma topologia por site (frontend escolhe qual mostrar)
+        out = []
+        for s in listar_sites():
+            try:
+                out.append(topologia(s["id"]))
+            except Exception:
+                pass
+        return {"success": True, "topologies": out}
+    except OmadaError as exc:
+        raise HTTPException(502, f"Omada: {exc}")
+    except Exception as exc:
+        raise HTTPException(502, f"Omada inalcançável: {exc}")

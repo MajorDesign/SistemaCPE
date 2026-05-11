@@ -41,8 +41,9 @@ const globalMenu = [
     icon: "bi-box",
     requiredRoles: ["ADMIN", "TI", "MANAGER"],
     submenu: [
-      { path: "/SistemaCPE/web/pages/inventory.html",    label: "Equipamentos",   icon: "bi-pc-display", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
-      { path: "/SistemaCPE/web/pages/inventory-ti.html", label: "Inventário T.I.", icon: "bi-laptop",     requiredRoles: ["ADMIN", "TI", "MANAGER"] }
+      { path: "/SistemaCPE/web/pages/inventory.html",    label: "Equipamentos",         icon: "bi-pc-display",     requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+      { path: "/SistemaCPE/web/pages/inventory-ti.html", label: "Inventário T.I.",       icon: "bi-laptop",         requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+      { path: "/SistemaCPE/web/pages/network.html",      label: "Monitoramento de Rede", icon: "bi-broadcast-pin",  requiredRoles: ["ADMIN", "TI"] }
     ]
   },
   { path: "/SistemaCPE/web/pages/password-vault.html", label: "Cofre de Senhas", icon: "bi-shield-lock", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },

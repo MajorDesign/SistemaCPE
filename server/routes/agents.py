@@ -57,46 +57,19 @@ AGENTS = {
         ],
         "source_file": os.path.join(TOOLS_DIR, "termo_notebook", "termo_notebook.py"),
     },
+    "cpe-inventario": {
+        "id":          "cpe-inventario",
+        "name":        "Agente de Inventário T.I.",
+        "description": "Executável Windows auto-suficiente — instala-se sozinho, registra no startup e reporta inventário (CPU, RAM, disco, IP, usuário) ao servidor a cada 5 minutos. Auto-atualiza no próximo heartbeat.",
+        "icon":        "bi-cpu",
+        "systems":     ["Windows 10", "Windows 11", "Windows Server 2019+"],
+        "release_dir": os.path.join(TOOLS_DIR, "inventory_agent", "release"),
+        "exe_glob":    "CPEAgente_v*.exe",
+        "legacy_exe":  [],
+        "source_file": os.path.join(TOOLS_DIR, "inventory_agent", "CPEAgente.py"),
+        "auto_update": True,  # flag p/ frontend mostrar selo "Auto-atualizável"
+    },
 }
-
-# Agente de inventário T.I. — arquivo único, sem pasta release/
-_INV_AGENT_PY   = os.path.join(TOOLS_DIR, "inventory_agent", "CPEAgente.py")
-_INV_VERSION_RE = re.compile(r'^VERSAO\s*=\s*["\']([^"\']+)["\']', re.MULTILINE)
-
-
-def _inv_agent_versao() -> str | None:
-    try:
-        text = open(_INV_AGENT_PY, encoding="utf-8").read()
-        m = _INV_VERSION_RE.search(text)
-        return m.group(1) if m else None
-    except Exception:
-        return None
-
-
-def _inventario_agent_info() -> dict:
-    """Constrói entrada do agente de inventário dinamicamente (versão lida do fonte)."""
-    py_info = _file_info(_INV_AGENT_PY)
-
-    files = {
-        "src": {
-            "label":      "Agente Python (CPEAgente.py)",
-            "filename":   "CPEAgente.py",
-            "available":  py_info is not None,
-            "size_bytes": py_info["size_bytes"] if py_info else 0,
-            "modified":   py_info["modified"]    if py_info else None,
-        },
-    }
-
-    return {
-        "id":           "cpe-inventario",
-        "name":         "Agente de Inventário T.I.",
-        "description":  "Arquivo único auto-suficiente. Execute uma vez — instala dependências, registra no startup do Windows e envia dados a cada 5 minutos. Auto-atualiza-se via servidor.",
-        "icon":         "bi-cpu",
-        "systems":      ["Windows 10", "Windows 11", "Windows Server 2019+"],
-        "version":      _inv_agent_versao(),
-        "files":        files,
-        "last_updated": py_info["modified"] if py_info else None,
-    }
 
 
 _VERSION_RE = re.compile(r"_v([0-9]+(?:\.[0-9]+)*)", re.IGNORECASE)
@@ -143,17 +116,22 @@ def list_agents():
         exe_info = _file_info(exe_path)
         src_info = _file_info(agent.get("source_file"))
 
+        src_filename = os.path.basename(agent.get("source_file") or "")
+        exe_filename = (
+            os.path.basename(exe_path) if exe_path
+            else (agent.get("exe_glob", "").replace("*", "X") or "Agente.exe")
+        )
         files_meta = {
             "exe": {
                 "label":      "Executável Windows (.exe)",
-                "filename":   os.path.basename(exe_path) if exe_path else "TermoNotebookCPE.exe",
+                "filename":   exe_filename,
                 "available":  exe_info is not None,
                 "size_bytes": exe_info["size_bytes"] if exe_info else 0,
                 "modified":   exe_info["modified"]    if exe_info else None,
             },
             "src": {
                 "label":      "Código-fonte (.py)",
-                "filename":   "termo_notebook.py",
+                "filename":   src_filename or "agent.py",
                 "available":  src_info is not None,
                 "size_bytes": src_info["size_bytes"] if src_info else 0,
                 "modified":   src_info["modified"]    if src_info else None,
@@ -174,26 +152,15 @@ def list_agents():
             "version":      version,
             "files":        files_meta,
             "last_updated": mais_recente,
+            "auto_update":  bool(agent.get("auto_update")),
         })
-
-    # Agente de inventário T.I. (estrutura diferente: .py + .bat, sem release/)
-    result.append(_inventario_agent_info())
 
     return {"success": True, "agents": result}
 
 
 @router.get("/{agent_id}/download")
 def download_agent(agent_id: str, request: Request, format: str = "exe"):
-    """Serve o arquivo do agente no formato solicitado (exe|src|bat|py)."""
-
-    # Agente de inventário T.I. — arquivo único CPEAgente.py
-    if agent_id == "cpe-inventario":
-        if not os.path.exists(_INV_AGENT_PY):
-            raise HTTPException(status_code=404, detail="CPEAgente.py não encontrado no servidor.")
-        logger.info(f"[AGENTS] Download cpe-inventario -> CPEAgente.py")
-        return FileResponse(_INV_AGENT_PY, filename="CPEAgente.py",
-                            media_type="application/octet-stream")
-
+    """Serve o arquivo do agente no formato solicitado (exe|src)."""
     agent = AGENTS.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agente nao encontrado")
@@ -210,7 +177,7 @@ def download_agent(agent_id: str, request: Request, format: str = "exe"):
         path = agent.get("source_file")
         if not path or not os.path.exists(path):
             raise HTTPException(status_code=404, detail="Código-fonte não encontrado.")
-        filename = "termo_notebook.py"
+        filename = os.path.basename(path)
     else:
         raise HTTPException(status_code=400, detail=f"Formato invalido: {format}")
 

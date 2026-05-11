@@ -243,3 +243,12 @@ server/*.log
 .env.local
 .env.production
 server/.env
+
+# CPE Inventory Agent — builds locais (cada ambiente builda o seu)
+tools/inventory_agent/release/
+tools/inventory_agent/dist/
+tools/inventory_agent/build/
+tools/inventory_agent/.venv/
+tools/inventory_agent/__pycache__/
+tools/inventory_agent/*.spec
+tools/inventory_agent/cpe_agent.log

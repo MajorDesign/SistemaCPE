@@ -1304,6 +1304,15 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+try:
+    from routes.network import router as network_router
+    app.include_router(network_router)
+    logger.info("✅ Router de Monitoramento de Rede registrado: /api/network")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Monitoramento de Rede: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ SERVIR UPLOADS ESTÁTICOS (fotos de veículos)
 try:
     _uploads_dir = os.path.normpath(

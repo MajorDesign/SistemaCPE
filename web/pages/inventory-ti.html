@@ -247,6 +247,110 @@
       .kpi-card { min-width:110px; }
       .modal-grid { grid-template-columns:1fr; }
     }
+
+    /* ── Omada — sub-abas e categorias ───────────────────────────── */
+    .omada-tab {
+      background: transparent; border: 1px solid transparent;
+      padding: 6px 12px; border-radius: 6px; font-size: 13px;
+      color: #6b7280; cursor: pointer; display: inline-flex;
+      align-items: center; gap: 6px; transition: all .15s;
+    }
+    .omada-tab:hover { background: #f3f4f6; color: #1f2937; }
+    .omada-tab.active {
+      background: #fff; color: #1f2937; border-color: #e5e7eb;
+      box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    }
+    .ot-count {
+      background: #e5e7eb; color: #374151; font-size: 11px;
+      padding: 1px 6px; border-radius: 8px; font-weight: 600;
+    }
+    .omada-tab.active .ot-count { background: #fef3c7; color: #92400e; }
+
+    .omada-cat-bar {
+      display: flex; gap: 6px; padding: 10px 16px;
+      border-bottom: 1px solid #e5e7eb; background: #fafafa;
+      flex-wrap: wrap;
+    }
+    .omada-cat {
+      background: #fff; border: 1px solid #e5e7eb;
+      padding: 5px 12px; border-radius: 16px; font-size: 12px;
+      color: #374151; cursor: pointer; display: inline-flex;
+      align-items: center; gap: 5px; font-weight: 500;
+    }
+    .omada-cat:hover { border-color: #c7d2fe; color: #4338ca; }
+    .omada-cat.active {
+      background: #eef2ff; border-color: #c7d2fe; color: #4338ca;
+      font-weight: 600;
+    }
+    .omada-cat span {
+      background: #f3f4f6; padding: 1px 6px; border-radius: 8px;
+      font-size: 10px; font-weight: 700;
+    }
+    .omada-cat.active span { background: #c7d2fe; color: #3730a3; }
+
+    /* ── Omada — Topologia (layout flex em árvore horizontal) ─────── */
+    .topo-site-block { margin-bottom: 32px; }
+    .topo-site-title {
+      font-size: 13px; font-weight: 700; color: #1f2937;
+      margin-bottom: 12px; padding-bottom: 6px;
+      border-bottom: 2px solid #fef3c7;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .topo-tree {
+      display: grid; grid-template-columns: 200px 1fr;
+      gap: 0; align-items: start; padding: 14px;
+      background: #fafafa; border-radius: 10px;
+    }
+    .topo-root { padding-top: 20px; }
+    .topo-branch { display: flex; flex-direction: column; gap: 14px; }
+    .topo-branch-line {
+      position: relative; padding-left: 30px;
+    }
+    .topo-branch-line::before {
+      content: ''; position: absolute; left: 0; top: 50%;
+      width: 24px; height: 2px; background: #d1d5db;
+    }
+    .topo-branch-line::after {
+      content: ''; position: absolute; left: 0; top: -7px; bottom: -7px;
+      width: 2px; background: #d1d5db;
+    }
+    .topo-branch-line:first-child::after { top: 50%; }
+    .topo-branch-line:last-child::after  { bottom: 50%; }
+    .topo-branch-line:only-child::after  { display: none; }
+    .topo-node {
+      background: #fff; border: 1.5px solid #e5e7eb;
+      border-radius: 8px; padding: 8px 14px;
+      cursor: pointer; position: relative; display: inline-block;
+      box-shadow: 0 1px 3px rgba(0,0,0,.05);
+      transition: box-shadow .15s, border-color .15s;
+      min-width: 160px;
+    }
+    .topo-node:hover { box-shadow: 0 4px 10px rgba(0,0,0,.08); border-color: #fbbf24; }
+    .topo-node.switch  { background: #1f2937; color: #fff; border-color: #1f2937; }
+    .topo-node.switch:hover { border-color: #fbbf24; }
+    .topo-node.gateway { background: #fef3c7; border-color: #fbbf24; }
+    .topo-node.ap.offline { opacity: .55; border-style: dashed; }
+    .topo-node-title { font-weight: 700; font-size: 13px; }
+    .topo-node-sub   { font-size: 11px; opacity: .75; margin-top: 2px; }
+    .topo-node-clients {
+      background: #16a34a; color: #fff; border-radius: 10px;
+      padding: 2px 9px; font-size: 11px; font-weight: 700;
+      position: absolute; top: -8px; right: -8px; white-space: nowrap;
+    }
+    .topo-node.offline .topo-node-clients { background: #9ca3af; }
+
+    /* Modal AP detail */
+    .ap-stat-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+      margin-bottom: 18px;
+    }
+    .ap-stat {
+      background: #f9fafb; border-radius: 8px; padding: 12px;
+      text-align: center;
+    }
+    .ap-stat .lbl { font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; }
+    .ap-stat .val { font-size: 22px; font-weight: 700; color: #1f2937; line-height: 1.2; margin-top: 4px; }
+    .ap-stat .sub { font-size: 11px; color: #9ca3af; }
   </style>
 </head>
 
@@ -322,6 +426,16 @@
               <i class="bi bi-device-hdd"></i> Outros
               <span class="inv-filter-badge" id="cnt-outro">0</span>
             </div>
+
+            <!-- Omada (rede) — só ADMIN/TI. Categoria diferente: usa fonte externa. -->
+            <div class="inv-filter-title" id="omadaSectionTitle"
+                 style="display:none;margin-top:14px">Rede</div>
+            <div class="inv-filter-item" id="omadaFilterItem"
+                 data-tipo="omada" onclick="setFilter('omada')"
+                 style="display:none">
+              <i class="bi bi-router"></i> Omada (APs)
+              <span class="inv-filter-badge" id="cnt-omada">0</span>
+            </div>
           </div>
 
           <!-- Área da tabela -->
@@ -341,8 +455,69 @@
               </select>
             </div>
 
+            <!-- Toolbar Omada (só aparece com filtro 'omada' ativo) -->
+            <div class="inv-toolbar omada-toolbar" id="omadaToolbar"
+                 style="display:none;border-bottom:1px solid #e5e7eb;background:#fafafa">
+              <div style="display:flex;align-items:center;gap:8px">
+                <i class="bi bi-geo-alt" style="color:#6b7280"></i>
+                <select id="omadaSiteSel" class="inv-btn" onchange="onOmadaSiteChange()"
+                        style="min-width:180px;cursor:pointer;padding-right:8px">
+                  <option value="">Todos os sites</option>
+                </select>
+              </div>
+              <div class="omada-tabs" style="display:flex;gap:4px;margin-left:auto">
+                <button class="omada-tab active" data-tab="devices" onclick="setOmadaTab('devices')">
+                  <i class="bi bi-router"></i> Dispositivos <span class="ot-count" id="otCntDev">0</span>
+                </button>
+                <button class="omada-tab" data-tab="clients" onclick="setOmadaTab('clients')">
+                  <i class="bi bi-people"></i> Clientes <span class="ot-count" id="otCntCli">0</span>
+                </button>
+                <button class="omada-tab" data-tab="topology" onclick="setOmadaTab('topology')">
+                  <i class="bi bi-diagram-3"></i> Topologia
+                </button>
+              </div>
+            </div>
+
+            <!-- Filtros de categoria de cliente (aparecem só na aba Clientes) -->
+            <div class="omada-cat-bar" id="omadaCatBar" style="display:none">
+              <button class="omada-cat active" data-cat=""           onclick="setOmadaCat('')">Todos <span id="catAll">0</span></button>
+              <button class="omada-cat"        data-cat="telemovel"  onclick="setOmadaCat('telemovel')"><i class="bi bi-phone"></i> Telemóvel <span id="catTel">0</span></button>
+              <button class="omada-cat"        data-cat="escritorio" onclick="setOmadaCat('escritorio')"><i class="bi bi-pc-display"></i> Escritório <span id="catEsc">0</span></button>
+              <button class="omada-cat"        data-cat="rede"       onclick="setOmadaCat('rede')"><i class="bi bi-router"></i> Rede <span id="catRed">0</span></button>
+              <button class="omada-cat"        data-cat="outros"     onclick="setOmadaCat('outros')"><i class="bi bi-three-dots"></i> Outros <span id="catOut">0</span></button>
+
+              <!-- Filtros secundários: rede (SSID) + conexão + ordenação -->
+              <span style="flex:1"></span>
+              <div style="display:flex;gap:6px;align-items:center;font-size:12px;color:#6b7280">
+                <i class="bi bi-broadcast"></i>
+                <select class="inv-btn" id="omadaSsidSel" onchange="setOmadaSsid(this.value)"
+                        style="cursor:pointer;padding:5px 8px;font-size:12px;min-width:140px">
+                  <option value="">Todas as redes</option>
+                </select>
+                <select class="inv-btn" id="omadaConnSel" onchange="setOmadaConn(this.value)"
+                        style="cursor:pointer;padding:5px 8px;font-size:12px">
+                  <option value="">Cabo + Wi-Fi</option>
+                  <option value="wifi">Só Wi-Fi</option>
+                  <option value="wired">Só cabo</option>
+                </select>
+                <select class="inv-btn" id="omadaSortSel" onchange="setOmadaSort(this.value)"
+                        style="cursor:pointer;padding:5px 8px;font-size:12px"
+                        title="Ordenar lista">
+                  <option value="nome">Ordenar: Nome</option>
+                  <option value="ssid">Ordenar: Rede</option>
+                  <option value="ap_name">Ordenar: AP</option>
+                  <option value="signal_desc">Ordenar: Sinal ↓</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Container Topologia (Omada — aparece só na aba 'topology') -->
+            <div id="omadaTopoWrap" style="display:none;padding:20px;overflow-x:auto">
+              <div id="omadaTopoBody"></div>
+            </div>
+
             <!-- Tabela -->
-            <div class="inv-table-wrap">
+            <div class="inv-table-wrap" id="invTableWrap">
               <table class="inv-table">
                 <thead>
                   <tr>
@@ -408,6 +583,30 @@
     </div>
   </div>
 
+  <!-- MODAL: Detalhes de AP/Switch Omada -->
+  <div class="modal fade" id="apModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-router"></i> <span id="apModalTitle">Dispositivo Omada</span>
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" id="apModalBody" style="padding:1.5rem;">
+          Carregando...
+        </div>
+        <div class="modal-footer">
+          <a id="apModalOpen" class="btn btn-outline-primary btn-sm"
+             target="_blank" rel="noopener" href="https://172.16.0.90/">
+            <i class="bi bi-box-arrow-up-right"></i> Abrir no Controller
+          </a>
+          <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: Editar apelido -->
   <div class="modal fade" id="apelidoModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-sm">
@@ -433,9 +632,18 @@
 
   <script>
   /* ── Estado global ──────────────────────────────────────── */
-  let _all         = [];
+  let _all         = [];   // dispositivos com agente CPE
+  let _omada       = [];   // dispositivos Omada (APs/switches/gateways)
+  let _omadaClients= [];   // clientes Omada ativos
+  let _omadaSites  = [];   // [{id, name}]
+  let _omadaSite   = "";   // site selecionado ("" = todos)
+  let _omadaTab    = "devices";  // 'devices' | 'clients' | 'topology'
+  let _omadaCat    = "";   // categoria de cliente filtrada
+  let _omadaSsid   = "";   // SSID/rede filtrada na aba Clientes
+  let _omadaConn   = "";   // '' | 'wifi' | 'wired'
+  let _omadaSort   = "nome";  // ordenação atual da lista de clientes
   let _filtered    = [];
-  let _currentTipo = "";
+  let _currentTipo = "";   // "" | notebook | desktop | servidor | terminal | outro | omada
   let _page        = 1;
   let _pageSize    = 25;
   let _expandedId  = null;
@@ -450,12 +658,183 @@
         || sessionStorage.getItem("cpe_token") || "";
   }
 
+  function _currentUser() {
+    try { return JSON.parse(localStorage.getItem("cpe_user") || sessionStorage.getItem("cpe_user") || "{}"); }
+    catch { return {}; }
+  }
+  function _isAdminOrTI() {
+    const r = _currentUser().role;
+    return r === "ADMIN" || r === "TI";
+  }
+
   /* ── Init ───────────────────────────────────────────────── */
   document.addEventListener("DOMContentLoaded", async () => {
+    // Mostra categoria Omada só para ADMIN/TI
+    if (_isAdminOrTI()) {
+      document.getElementById("omadaFilterItem").style.display = "";
+      document.getElementById("omadaSectionTitle").style.display = "";
+      loadOmada();  // pré-carrega em background
+    }
     await loadData();
     document.getElementById("searchInput")
       .addEventListener("input", () => { _page = 1; applyFilters(); });
   });
+
+  /* ── Carregar Omada (devices + clients + sites) ─────────── */
+  async function loadOmada() {
+    const headers = { "X-Auth-Token": tok() };
+    try {
+      // Carrega devices + sites em paralelo (clients é mais pesado, fica sob demanda)
+      const qs = _omadaSite ? `?site_id=${encodeURIComponent(_omadaSite)}` : "";
+      const [dr, sr] = await Promise.all([
+        fetch(`${API}/api/inventario/omada/devices${qs}`, { headers }),
+        fetch(`${API}/api/inventario/omada/sites`, { headers }),
+      ]);
+
+      if (dr.status === 401 || dr.status === 403) {
+        document.getElementById("omadaFilterItem").style.display = "none";
+        document.getElementById("omadaSectionTitle").style.display = "none";
+        _omada = [];
+      } else if (dr.ok) {
+        const d = await dr.json();
+        _omada = d.devices || [];
+        if (_omadaSite) {
+          _omada = _omada.filter(x => x.site_id === _omadaSite);
+        }
+      } else {
+        _omada = [];
+      }
+
+      if (sr.ok) {
+        const sd = await sr.json();
+        _omadaSites = sd.sites || [];
+        _populateSiteSelect();
+      }
+
+      document.getElementById("cnt-omada").textContent = _omada.length;
+      document.getElementById("otCntDev").textContent  = _omada.length;
+      if (_currentTipo === "omada") applyFilters();
+    } catch (err) {
+      console.warn("[OMADA] falha:", err.message);
+      _omada = [];
+      document.getElementById("cnt-omada").textContent = "0";
+    }
+  }
+
+  async function loadOmadaClients() {
+    try {
+      const qs = _omadaSite ? `?site_id=${encodeURIComponent(_omadaSite)}` : "";
+      const r = await fetch(`${API}/api/inventario/omada/clients${qs}`,
+        { headers: { "X-Auth-Token": tok() } });
+      if (!r.ok) { _omadaClients = []; return; }
+      const d = await r.json();
+      _omadaClients = d.clients || [];
+      // Atualiza contagens dos filtros de categoria
+      const s = d.stats || {};
+      document.getElementById("otCntCli").textContent = s.total || 0;
+      document.getElementById("catAll").textContent = s.total || 0;
+      document.getElementById("catTel").textContent = s.telemovel || 0;
+      document.getElementById("catEsc").textContent = s.escritorio || 0;
+      document.getElementById("catRed").textContent = s.rede || 0;
+      document.getElementById("catOut").textContent = s.outros || 0;
+      _populateSsidSelect();
+    } catch (err) {
+      console.warn("[OMADA/clients]", err.message);
+      _omadaClients = [];
+    }
+  }
+
+  function _populateSiteSelect() {
+    const sel = document.getElementById("omadaSiteSel");
+    if (!sel) return;
+    const cur = _omadaSite;
+    sel.innerHTML = '<option value="">Todos os sites</option>' +
+      _omadaSites.map(s => `<option value="${esc(s.id)}"${s.id===cur?' selected':''}>${esc(s.name)}</option>`).join('');
+  }
+
+  function onOmadaSiteChange() {
+    _omadaSite = document.getElementById("omadaSiteSel").value || "";
+    _page = 1;
+    loadOmada().then(() => {
+      if (_omadaTab === "clients")  loadOmadaClients().then(() => applyFilters());
+      if (_omadaTab === "topology") renderTopology();
+    });
+  }
+
+  /* ── Sub-abas Omada ─────────────────────────────────────── */
+  function setOmadaTab(tab) {
+    _omadaTab = tab;
+    _page = 1;
+    document.querySelectorAll(".omada-tab").forEach(b =>
+      b.classList.toggle("active", b.dataset.tab === tab));
+    // Visibilidade dos containers
+    document.getElementById("omadaCatBar").style.display  = tab === "clients" ? "" : "none";
+    document.getElementById("omadaTopoWrap").style.display = tab === "topology" ? "" : "none";
+    document.getElementById("invTableWrap").style.display  = tab === "topology" ? "none" : "";
+
+    if (tab === "clients") {
+      if (_omadaClients.length === 0) loadOmadaClients().then(() => applyFilters());
+      else applyFilters();
+    } else if (tab === "topology") {
+      renderTopology();
+    } else {
+      applyFilters();
+    }
+  }
+
+  function setOmadaCat(cat) {
+    _omadaCat = cat;
+    _omadaSsid = "";  // muda categoria → limpa filtro de rede
+    _page = 1;
+    document.querySelectorAll(".omada-cat").forEach(b =>
+      b.classList.toggle("active", b.dataset.cat === cat));
+    _populateSsidSelect();
+    applyFilters();
+  }
+
+  function setOmadaSsid(ssid) {
+    _omadaSsid = ssid || "";
+    _page = 1;
+    applyFilters();
+  }
+
+  function setOmadaConn(conn) {
+    _omadaConn = conn || "";
+    _page = 1;
+    applyFilters();
+  }
+
+  function setOmadaSort(sort) {
+    _omadaSort = sort || "nome";
+    _page = 1;
+    applyFilters();
+  }
+
+  /* Popula o dropdown de SSID com as redes disponíveis nos clientes
+     filtrados pela categoria atual. Inclui contagem por rede. */
+  function _populateSsidSelect() {
+    const sel = document.getElementById("omadaSsidSel");
+    if (!sel) return;
+    // Universo base: clientes da categoria atual (sem aplicar SSID/conn ainda)
+    const base = _omadaClients.filter(c =>
+      !_omadaCat || c.categoria === _omadaCat);
+    const counts = {};
+    let cabo = 0;
+    for (const c of base) {
+      if (c.wireless && c.ssid) {
+        counts[c.ssid] = (counts[c.ssid] || 0) + 1;
+      } else if (!c.wireless) {
+        cabo++;
+      }
+    }
+    const opts = ['<option value="">Todas as redes ('+base.length+')</option>'];
+    Object.keys(counts).sort().forEach(s =>
+      opts.push(`<option value="${esc(s)}"${s===_omadaSsid?' selected':''}>${esc(s)} (${counts[s]})</option>`));
+    if (cabo > 0) {
+      opts.push(`<option value="__wired__"${_omadaSsid==='__wired__'?' selected':''}>Cabo (${cabo})</option>`);
+    }
+    sel.innerHTML = opts.join('');
+  }
 
   /* ── Carregar dados ─────────────────────────────────────── */
   async function loadData() {
@@ -500,17 +879,63 @@
     _page = 1;
     document.querySelectorAll(".inv-filter-item")
       .forEach(el => el.classList.toggle("active", el.dataset.tipo === tipo));
+
+    // Toolbar e categorias do Omada só aparecem na seção Omada
+    const isOmada = tipo === "omada";
+    document.getElementById("omadaToolbar").style.display = isOmada ? "" : "none";
+    if (!isOmada) {
+      document.getElementById("omadaCatBar").style.display = "none";
+      document.getElementById("omadaTopoWrap").style.display = "none";
+      document.getElementById("invTableWrap").style.display = "";
+    } else {
+      // Garante que a aba selecionada controla a visibilidade dos containers
+      setOmadaTab(_omadaTab);
+      return;  // setOmadaTab já chama applyFilters/renderTopology
+    }
     applyFilters();
   }
 
   function applyFilters() {
     const q = (document.getElementById("searchInput").value || "").toLowerCase();
-    _filtered = _all.filter(d => {
-      if (_currentTipo && d.tipo !== _currentTipo) return false;
-      if (!q) return true;
-      return ["hostname","usuario_logado","marca","modelo","apelido","estado_br","cidade","ip_interno"]
-        .some(k => (d[k] || "").toLowerCase().includes(q));
-    });
+    if (_currentTipo === "omada" && _omadaTab === "clients") {
+      _filtered = _omadaClients.filter(c => {
+        if (_omadaCat && c.categoria !== _omadaCat) return false;
+        // Filtro de rede (SSID) ou "cabo"
+        if (_omadaSsid === "__wired__") {
+          if (c.wireless) return false;
+        } else if (_omadaSsid) {
+          if (!c.wireless || c.ssid !== _omadaSsid) return false;
+        }
+        // Filtro de tipo de conexão
+        if (_omadaConn === "wifi"  && !c.wireless) return false;
+        if (_omadaConn === "wired" &&  c.wireless) return false;
+        if (!q) return true;
+        return ["nome","mac","ip","ssid","ap_name","os_name","vendor","site_name"]
+          .some(k => (c[k] || "").toString().toLowerCase().includes(q));
+      });
+      // Ordenação configurável
+      const dir = _omadaSort.endsWith("_desc") ? -1 : 1;
+      const key = _omadaSort.replace(/_desc$/, "");
+      _filtered.sort((a, b) => {
+        let av = a[key], bv = b[key];
+        if (key === "signal") { av = av ?? -1; bv = bv ?? -1; return (av - bv) * dir; }
+        return String(av || "").localeCompare(String(bv || ""), "pt", { sensitivity: "base" }) * dir;
+      });
+    } else if (_currentTipo === "omada") {
+      // Aba devices (default)
+      _filtered = _omada.filter(d => {
+        if (!q) return true;
+        return ["hostname","mac","ip","modelo","site_name","firmware"]
+          .some(k => (d[k] || "").toString().toLowerCase().includes(q));
+      });
+    } else {
+      _filtered = _all.filter(d => {
+        if (_currentTipo && d.tipo !== _currentTipo) return false;
+        if (!q) return true;
+        return ["hostname","usuario_logado","marca","modelo","apelido","estado_br","cidade","ip_interno"]
+          .some(k => (d[k] || "").toLowerCase().includes(q));
+      });
+    }
     renderTable();
   }
 
@@ -518,16 +943,25 @@
   function renderTable() {
     const total = _filtered.length;
     if (total === 0) {
-      renderEmpty(_all.length === 0
-        ? "Nenhum dispositivo. Instale o agente nas máquinas."
-        : "Nenhum resultado para o filtro.");
+      const msg = _currentTipo === "omada"
+        ? (_omada.length === 0
+            ? "Nenhum dispositivo Omada (controller offline?)."
+            : "Nenhum resultado para o filtro.")
+        : (_all.length === 0
+            ? "Nenhum dispositivo. Instale o agente nas máquinas."
+            : "Nenhum resultado para o filtro.");
+      renderEmpty(msg);
       updateFooter(0, 0);
       return;
     }
     const start = (_page - 1) * _pageSize;
     const end   = Math.min(start + _pageSize, total);
-    document.getElementById("invBody").innerHTML =
-      _filtered.slice(start, end).map(renderRow).join("");
+    const slice = _filtered.slice(start, end);
+    let renderer = renderRow;
+    if (_currentTipo === "omada") {
+      renderer = _omadaTab === "clients" ? renderRowClient : renderRowOmada;
+    }
+    document.getElementById("invBody").innerHTML = slice.map(renderer).join("");
     updateFooter(total, end - start);
     renderPagination(total);
   }
@@ -539,6 +973,248 @@
     terminal: ["bi-display",    "tipo-terminal", "Terminal"],
     outro:    ["bi-device-hdd", "tipo-outro",    "Outro"],
   };
+
+  // ── Render de uma linha Omada (AP / switch / gateway) ──────────────
+  const _omadaTipoMap = {
+    ap:      ["bi-wifi",          "tipo-notebook", "AP"],
+    switch:  ["bi-diagram-3-fill", "tipo-desktop", "Switch"],
+    gateway: ["bi-router",         "tipo-servidor","Gateway"],
+    outro:   ["bi-device-hdd",     "tipo-outro",   "Outro"],
+  };
+  function renderRowOmada(d) {
+    const offline = d.status === "offline";
+    const [icon, cls, lbl] = _omadaTipoMap[d.tipo] || _omadaTipoMap.outro;
+    const cpu = d.cpu_pct != null ? parseFloat(d.cpu_pct) : null;
+    const mem = d.mem_pct != null ? parseFloat(d.mem_pct) : null;
+    const dotCls   = offline ? 'st-offline' : 'st-online';
+    const dotTitle = offline ? 'Offline' : 'Online';
+    const macAttr = (d.mac || '').replace(/"/g,'&quot;');
+
+    return `
+      <tr class="data-row" style="cursor:pointer"
+          onclick="openApModalByMac('${macAttr}')">
+        <td></td>
+        <td>
+          <span class="tipo-badge ${cls}">
+            <i class="bi ${icon}"></i> ${lbl}
+          </span>
+        </td>
+        <td>
+          <div class="inv-hostname">${esc(d.hostname)}</div>
+          <div style="font-size:11px;color:#9ca3af;">${esc(d.modelo||'—')}</div>
+        </td>
+        <td>
+          <div style="font-size:12px;color:#374151;">${esc(d.ip||'—')}</div>
+          <div style="font-size:11px;color:#9ca3af;" title="${esc(d.mac||'')}">${esc(d.site_name||'')}</div>
+        </td>
+        <td>
+          <span style="font-size:11px;color:#374151" title="Clientes wifi conectados">
+            <i class="bi bi-people"></i> ${d.clients||0}
+          </span>
+        </td>
+        <td>
+          <span class="st-dot ${dotCls}" title="${dotTitle}"></span>
+        </td>
+        <td>${usageBar(cpu, cpu!=null?`CPU ${cpu.toFixed(0)}%`:'', true)}</td>
+        <td>${usageBar(mem, mem!=null?`Memória ${mem.toFixed(0)}%`:'', true)}</td>
+        <td style="font-size:12px;color:#374151;">${esc(d.uptime||'—')}</td>
+        <td style="font-size:12px;color:#6b7280;" title="${esc(d.mac||'')}">${esc(d.mac||'—')}</td>
+        <td style="font-size:11px;color:#9ca3af;">${esc(d.firmware||'—')}</td>
+        <td onclick="event.stopPropagation()">
+          <button class="inv-btn" style="padding:4px 8px;font-size:12px;"
+                  onclick="openApModalByMac('${macAttr}')">
+            <i class="bi bi-info-circle"></i> Detalhes
+          </button>
+        </td>
+      </tr>`;
+  }
+
+  // ── Render de uma linha de Cliente Omada ────────────────────────
+  function renderRowClient(c) {
+    const sig = c.signal;
+    const sigCls = sig == null ? '' : (sig >= 75 ? 'ufill-ok' : sig >= 50 ? 'ufill-warning' : 'ufill-danger');
+    const sigHtml = sig == null ? '<span style="color:#d1d5db">—</span>' :
+      `<div class="usage-wrap" title="Sinal Wi-Fi ${sig}%">
+         <div class="usage-bar"><div class="usage-fill ${sigCls}" style="width:${Math.min(sig,100)}%"></div></div>
+         <span class="usage-pct">${sig}%</span>
+       </div>`;
+    const catLbl = ({telemovel:'Telemóvel',escritorio:'Escritório',rede:'Rede',outros:'Outros'}[c.categoria]||'—');
+    const catIcon = ({telemovel:'bi-phone',escritorio:'bi-pc-display',rede:'bi-router',outros:'bi-three-dots'}[c.categoria]||'bi-circle');
+    const catCls  = ({telemovel:'tipo-notebook',escritorio:'tipo-desktop',rede:'tipo-servidor',outros:'tipo-outro'}[c.categoria]||'tipo-outro');
+    const wired = !c.wireless;
+
+    return `
+      <tr class="data-row">
+        <td></td>
+        <td>
+          <span class="tipo-badge ${catCls}">
+            <i class="bi ${catIcon}"></i> ${catLbl}
+          </span>
+        </td>
+        <td>
+          <div class="inv-hostname">${esc(c.nome)}</div>
+          <div style="font-size:11px;color:#9ca3af;" title="${esc(c.mac||'')}">${esc(c.vendor||'—')}</div>
+        </td>
+        <td>
+          <div style="font-size:12px;color:#374151;">${esc(c.ip||'—')}</div>
+          <div style="font-size:11px;color:#9ca3af;">${esc(c.site_name||'')}</div>
+        </td>
+        <td>
+          ${wired ? '<span style="font-size:11px;color:#374151"><i class="bi bi-ethernet"></i> Cabo</span>'
+                  : `<span style="font-size:11px;color:#374151"><i class="bi bi-wifi"></i> ${esc(c.ssid||'')}</span>`}
+        </td>
+        <td>${sigHtml}</td>
+        <td>
+          <span style="font-size:12px;color:#374151" title="${esc(c.ap_mac||'')}">
+            ${esc(c.ap_name||'—')}
+          </span>
+        </td>
+        <td style="font-size:11px;color:#6b7280">${esc(c.os_name||'—')}</td>
+        <td style="font-size:11px;color:#6b7280">${(c.rx_rate_kbps/1000).toFixed(1)} Mbps ↓</td>
+        <td style="font-size:11px;color:#6b7280">${(c.tx_rate_kbps/1000).toFixed(1)} Mbps ↑</td>
+        <td style="font-size:11px;color:#9ca3af" title="${esc(c.mac||'')}">${esc(c.mac||'—')}</td>
+        <td></td>
+      </tr>`;
+  }
+
+  /* ── Modal AP detail ─────────────────────────────────────── */
+  function openApModalByMac(mac) {
+    const d = _omada.find(x => (x.mac || x.id) === mac);
+    if (!d) return;
+    document.getElementById("apModalTitle").textContent = d.hostname || mac;
+    const offline = d.status === "offline";
+    const cpu = d.cpu_pct != null ? d.cpu_pct : '—';
+    const mem = d.mem_pct != null ? d.mem_pct : '—';
+    const diasLigado = d.uptime_s ? Math.floor(d.uptime_s / 86400) : null;
+    const clientsAqui = _omadaClients.filter(c => c.ap_mac === d.mac).length;
+    document.getElementById("apModalBody").innerHTML = `
+      <div style="margin-bottom:14px;display:flex;align-items:center;gap:10px">
+        <span class="st-dot ${offline?'st-offline':'st-online'}" style="width:11px;height:11px"></span>
+        <strong style="font-size:14px">${offline?'Offline':'Conectado'}</strong>
+        <span style="color:#9ca3af;font-size:12px">·</span>
+        <span style="font-size:12px;color:#6b7280">${esc(d.uptime||'—')}</span>
+      </div>
+      <div class="ap-stat-grid">
+        <div class="ap-stat">
+          <div class="lbl">CPU</div>
+          <div class="val">${cpu}${cpu!=='—'?'%':''}</div>
+        </div>
+        <div class="ap-stat">
+          <div class="lbl">Memória</div>
+          <div class="val">${mem}${mem!=='—'?'%':''}</div>
+        </div>
+        <div class="ap-stat">
+          <div class="lbl">Dias ligado</div>
+          <div class="val">${diasLigado != null ? diasLigado : '—'}</div>
+          <div class="sub">${esc(d.uptime||'')}</div>
+        </div>
+        <div class="ap-stat">
+          <div class="lbl">Clientes</div>
+          <div class="val">${clientsAqui || d.clients || 0}</div>
+          <div class="sub">conectados agora</div>
+        </div>
+      </div>
+      <div class="modal-section">
+        <div class="modal-section-title">Informação</div>
+        <div class="modal-grid">
+          <div class="modal-item"><span class="modal-lbl">Modelo</span><span class="modal-val">${esc(d.modelo||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Nº Série</span><span class="modal-val">${esc(d.sn||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">MAC</span><span class="modal-val">${esc(d.mac||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">IP</span><span class="modal-val">${esc(d.ip||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Firmware</span><span class="modal-val">${esc(d.firmware||'—')}</span></div>
+          <div class="modal-item"><span class="modal-lbl">Site</span><span class="modal-val">${esc(d.site_name||'—')}</span></div>
+        </div>
+      </div>
+      ${clientsAqui ? `
+      <div class="modal-section">
+        <div class="modal-section-title">Clientes conectados a este AP (${clientsAqui})</div>
+        <div style="max-height:280px;overflow-y:auto;border:1px solid #f3f4f6;border-radius:6px">
+          <table class="disco-table" style="width:100%">
+            <tr><th>Nome</th><th>IP</th><th>SSID</th><th>Sinal</th></tr>
+            ${_omadaClients.filter(c => c.ap_mac === d.mac).map(c => `
+              <tr>
+                <td>${esc(c.nome)}</td>
+                <td>${esc(c.ip||'—')}</td>
+                <td>${esc(c.ssid||'cabo')}</td>
+                <td>${c.signal != null ? c.signal+'%' : '—'}</td>
+              </tr>`).join('')}
+          </table>
+        </div>
+      </div>` : ''}`;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("apModal")).show();
+  }
+
+  /* ── Topologia ───────────────────────────────────────────── */
+  async function renderTopology() {
+    const body = document.getElementById("omadaTopoBody");
+    body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+    // Garante que clientes estão carregados pra contar por AP
+    if (_omadaClients.length === 0) await loadOmadaClients();
+
+    try {
+      const qs = _omadaSite ? `?site_id=${encodeURIComponent(_omadaSite)}` : "";
+      const r = await fetch(`${API}/api/inventario/omada/topology${qs}`,
+        { headers: { "X-Auth-Token": tok() } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      const topos = d.topology ? [d.topology] : (d.topologies || []);
+      if (!topos.length) {
+        body.innerHTML = '<div class="dash-empty" style="text-align:center;color:#9ca3af;padding:24px">Nenhum site disponível.</div>';
+        return;
+      }
+      body.innerHTML = topos.map(_renderTopoSite).join('');
+    } catch (err) {
+      body.innerHTML = `<div style="color:#dc2626;padding:14px">Erro: ${esc(err.message)}</div>`;
+    }
+  }
+
+  function _renderTopoSite(t) {
+    // Raiz: switch (ou primeiro gateway, ou texto "Site")
+    const root = t.switches[0] || t.gateways[0];
+    const branches = [...t.aps, ...t.gateways.filter(g => g !== root), ...t.outros];
+    if (!root && branches.length === 0) {
+      return `<div class="topo-site-block">
+        <div class="topo-site-title"><i class="bi bi-geo-alt"></i> ${esc(t.site_name||'')}</div>
+        <div class="dash-empty" style="text-align:center;color:#9ca3af;padding:14px">Sem dispositivos.</div>
+      </div>`;
+    }
+    return `
+      <div class="topo-site-block">
+        <div class="topo-site-title">
+          <i class="bi bi-geo-alt"></i> ${esc(t.site_name||'')}
+          <span style="color:#9ca3af;font-weight:400;font-size:12px">
+            · ${t.aps.length} AP(s) · ${t.switches.length} switch(es)
+          </span>
+        </div>
+        <div class="topo-tree">
+          <div class="topo-root">
+            ${root ? _topoNode(root, 'switch') : '<div style="color:#9ca3af">—</div>'}
+          </div>
+          <div class="topo-branch">
+            ${branches.map(d => `
+              <div class="topo-branch-line">
+                ${_topoNode(d, d.tipo === 'gateway' ? 'gateway' : (d.tipo === 'ap' ? 'ap' : 'outro'))}
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function _topoNode(d, kind) {
+    const offline = d.status === "offline";
+    const cls = `topo-node ${kind}${offline?' offline':''}`;
+    const macAttr = (d.mac||'').replace(/"/g,'&quot;');
+    const clientsBadge = d.clients_count
+      ? `<span class="topo-node-clients">${d.clients_count} clientes</span>`
+      : '';
+    return `
+      <div class="${cls}" onclick="openApModalByMac('${macAttr}')" title="${esc(d.modelo||'')}">
+        <div class="topo-node-title">${esc(d.hostname||'—')}</div>
+        <div class="topo-node-sub">${esc(d.ip||'')} · ${esc(d.modelo||'')}</div>
+        ${clientsBadge}
+      </div>`;
+  }
 
   function renderRow(d) {
     const offline    = d.status === "offline";
