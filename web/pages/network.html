@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitoramento de Rede - CPE Control</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
+
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
+  <script>pageGuard('NETWORK');</script>
+
+  <style>
+    /* ── KPIs do topo ───────────────────────────────────────── */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .kpi-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    }
+    .kpi-icon {
+      width: 42px; height: 42px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; flex-shrink: 0;
+    }
+    .kpi-icon.total   { background:#ede9fe; color:#6d28d9; }
+    .kpi-icon.online  { background:#d1fae5; color:#065f46; }
+    .kpi-icon.warn    { background:#fef3c7; color:#92400e; }
+    .kpi-icon.danger  { background:#fee2e2; color:#991b1b; }
+    .kpi-val { font-size:24px; font-weight:700; color:#111827; line-height:1; }
+    .kpi-lbl { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; margin-top:4px; }
+
+    /* ── Grid de unidades ───────────────────────────────────── */
+    .units-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 16px;
+    }
+
+    .unit-card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 0;
+      box-shadow: 0 2px 6px rgba(0,0,0,.04);
+      overflow: hidden;
+      transition: box-shadow .15s, transform .15s;
+    }
+    .unit-card:hover { box-shadow: 0 6px 14px rgba(0,0,0,.08); }
+    .unit-card.alert-card { border-color:#fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,.15); }
+    .unit-card.down-card  { border-color:#ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,.18); }
+
+    .unit-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid #f3f4f6;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .unit-header h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: #111827;
+      flex: 1;
+    }
+    .unit-header .id-pill {
+      font-size: 11px; font-weight: 600; color: #6b7280;
+      background: #f3f4f6; padding: 2px 8px; border-radius: 10px;
+      font-family: 'Courier New', monospace;
+    }
+    .unit-header .menu-btn {
+      background: none; border: none; color: #9ca3af; padding: 4px 8px;
+      cursor: pointer; border-radius: 6px;
+    }
+    .unit-header .menu-btn:hover { background: #f3f4f6; color: #1f2937; }
+
+    .unit-meta {
+      display: flex; gap: 14px; padding: 8px 18px;
+      font-size: 11px; color: #6b7280;
+      border-bottom: 1px solid #f3f4f6;
+      flex-wrap: wrap;
+    }
+    .unit-meta .item { display: flex; align-items: center; gap: 4px; }
+    .unit-meta .item.warn { color: #d97706; }
+    .unit-meta .item.danger { color: #dc2626; }
+
+    /* ── WAN row ───────────────────────────────────────────── */
+    .wan-list { padding: 6px 0; }
+    .wan-row {
+      display: grid;
+      grid-template-columns: 28px 1fr auto;
+      gap: 10px;
+      padding: 10px 18px;
+      align-items: center;
+      border-bottom: 1px solid #f9fafb;
+    }
+    .wan-row:last-child { border-bottom: 0; }
+    .wan-dot {
+      width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+    }
+    .wan-dot.online   { background:#10b981; box-shadow: 0 0 0 4px rgba(16,185,129,.18); }
+    .wan-dot.degraded { background:#f59e0b; box-shadow: 0 0 0 4px rgba(245,158,11,.18); animation: pulse 1.5s infinite; }
+    .wan-dot.offline  { background:#ef4444; box-shadow: 0 0 0 4px rgba(239,68,68,.18); animation: pulse 1.2s infinite; }
+    .wan-dot.unknown  { background:#9ca3af; }
+    .wan-dot.disabled { background:#d1d5db; }
+    .wan-dot.via_mark { background:#3b82f6; box-shadow: 0 0 0 4px rgba(59,130,246,.18); }
+    @keyframes pulse {
+      0%,100% { box-shadow: 0 0 0 4px rgba(239,68,68,.18); }
+      50%     { box-shadow: 0 0 0 7px rgba(239,68,68,.05); }
+    }
+
+    .wan-label { font-size:13px; font-weight:600; color:#1f2937; }
+    .wan-iface { font-size:11px; color:#9ca3af; font-family:'Courier New',monospace; }
+    .wan-status-text { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+    .wan-status-text.online   { color:#059669; }
+    .wan-status-text.degraded { color:#d97706; }
+    .wan-status-text.offline  { color:#dc2626; }
+    .wan-status-text.unknown  { color:#6b7280; }
+    .wan-status-text.disabled { color:#9ca3af; }
+    .wan-status-text.via_mark { color:#1d4ed8; }
+
+    .wan-metrics {
+      display: flex; gap: 12px;
+      font-size: 11px; color:#6b7280;
+    }
+    .wan-metrics .m { display:flex; align-items:center; gap:3px; }
+    .wan-metrics .m strong { color:#1f2937; font-weight:600; }
+
+    /* ── Footer com botão de detalhes ──────────────────────── */
+    .unit-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 18px; background:#fafafa;
+      font-size:11px; color:#9ca3af;
+    }
+    .unit-footer .ago { font-style: italic; }
+    .btn-mini {
+      background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
+      padding: 4px 10px; font-size: 11px; color: #374151;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 4px;
+    }
+    .btn-mini:hover { background:#f3f4f6; border-color:#d1d5db; }
+
+    /* ── Card "Adicionar Unidade" ──────────────────────────── */
+    .unit-card.add-new {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 220px;
+      border: 2px dashed #d1d5db;
+      background: #fafafa;
+      cursor: pointer;
+      color: #6b7280;
+    }
+    .unit-card.add-new:hover {
+      border-color: #fbbf24; background: #fffbeb; color: #92400e;
+    }
+    .unit-card.add-new i { font-size: 36px; opacity: .6; }
+
+    /* ── Toolbar ──────────────────────────────────────────── */
+    .net-toolbar {
+      display: flex; gap: 10px; align-items: center;
+      margin-bottom: 16px; flex-wrap: wrap;
+    }
+    .net-btn {
+      background: #fff; border: 1px solid #e5e7eb;
+      padding: 8px 14px; border-radius: 8px; font-size: 13px;
+      cursor: pointer; display:inline-flex; align-items:center; gap:6px;
+      color: #374151;
+    }
+    .net-btn:hover { background:#f3f4f6; }
+    .net-btn-primary {
+      background: #fbbf24; color: #1f2937; border-color: #f59e0b;
+    }
+    .net-btn-primary:hover { background:#f59e0b; }
+
+    .net-status {
+      font-size: 12px; color: #6b7280; margin-left: auto;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .net-status .dot-live {
+      width:8px; height:8px; border-radius:50%; background:#10b981;
+      animation: blink 1.5s infinite;
+    }
+    @keyframes blink {
+      0%,100% { opacity: 1; } 50% { opacity: 0.3; }
+    }
+
+    /* ── Loading ──────────────────────────────────────────── */
+    .loading-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 16px;
+    }
+    .skeleton {
+      height: 240px; border-radius: 12px;
+      background: linear-gradient(90deg, #f3f4f6, #e5e7eb, #f3f4f6);
+      background-size: 200% 100%;
+      animation: skeleton 1.5s infinite;
+    }
+    @keyframes skeleton {
+      0% { background-position: 0% 0; }
+      100% { background-position: -200% 0; }
+    }
+  </style>
+</head>
+
+<body>
+  <nav id="navbar-container"></nav>
+
+  <div class="container-main">
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+      <div class="top-bar">
+        <h1><i class="bi bi-broadcast-pin"></i> Monitoramento de Rede</h1>
+        <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
+      </div>
+
+      <div class="content">
+        <!-- Toolbar -->
+        <div class="net-toolbar">
+          <button class="net-btn net-btn-primary" onclick="openUnitModal()">
+            <i class="bi bi-plus-lg"></i> Nova unidade
+          </button>
+          <button class="net-btn" onclick="refresh()">
+            <i class="bi bi-arrow-clockwise"></i> Atualizar agora
+          </button>
+          <label style="font-size:13px;color:#374151;display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="autoRefresh" checked
+                   onchange="toggleAuto(this.checked)">
+            Auto-atualizar a cada 60s
+          </label>
+          <span class="net-status" id="liveStatus">
+            <span class="dot-live"></span>
+            <span id="liveStatusText">Carregando...</span>
+          </span>
+        </div>
+
+        <!-- KPIs -->
+        <div class="kpi-row" id="kpiRow">
+          <div class="kpi-card">
+            <div class="kpi-icon total"><i class="bi bi-router"></i></div>
+            <div><div class="kpi-val" id="kpiTotal">—</div><div class="kpi-lbl">Unidades</div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon online"><i class="bi bi-wifi"></i></div>
+            <div><div class="kpi-val" id="kpiOnline">—</div><div class="kpi-lbl">WANs online</div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon warn"><i class="bi bi-exclamation-triangle"></i></div>
+            <div><div class="kpi-val" id="kpiDegraded">—</div><div class="kpi-lbl">Com lentidão</div></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon danger"><i class="bi bi-x-circle"></i></div>
+            <div><div class="kpi-val" id="kpiOffline">—</div><div class="kpi-lbl">Offline</div></div>
+          </div>
+        </div>
+
+        <!-- Lista de unidades -->
+        <div id="unitsArea">
+          <div class="loading-cards">
+            <div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       MODAL: Cadastrar / Editar unidade
+       ============================================================ -->
+  <div class="modal fade" id="unitModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header" style="background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:0">
+          <h5 class="modal-title" id="unitModalTitle">
+            <i class="bi bi-router"></i> Nova Unidade
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="padding:1.5rem">
+          <div class="alert alert-danger d-none" id="unitErr"></div>
+
+          <input type="hidden" id="unitId">
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Nome amigável <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="unitNome" placeholder="Ex: Rio Grande Norte">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Identity do Mikrotik <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="unitIdentity" placeholder="Ex: MK-CPERN">
+              <small class="form-text text-muted">Exato como aparece em <code>/system identity print</code></small>
+            </div>
+            <div class="col-md-8">
+              <label class="form-label">Host (IP que o servidor alcança) <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" id="unitHost" placeholder="Ex: 10.16.14.2">
+              <small class="form-text text-muted">Geralmente o IP do <code>/30</code> do WG_MATRIZ (lado da unidade)</small>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Porta API</label>
+              <input type="number" class="form-control" id="unitPorta" value="8728" min="1" max="65535">
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <h6 style="font-size:13px;font-weight:700;color:#1f2937">
+            <i class="bi bi-broadcast"></i> WAN 1 (operadora primária)
+          </h6>
+          <div class="row g-3 mt-1">
+            <div class="col-md-6">
+              <label class="form-label">Interface</label>
+              <input type="text" class="form-control" id="unitWan1Iface" value="ether1" placeholder="ether1">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Operadora / Nome</label>
+              <input type="text" class="form-control" id="unitWan1Label" placeholder="Ex: CENTURY 1GB">
+            </div>
+          </div>
+
+          <h6 style="font-size:13px;font-weight:700;color:#1f2937;margin-top:14px">
+            <i class="bi bi-broadcast"></i> WAN 2 (redundância)
+          </h6>
+          <div class="row g-3 mt-1">
+            <div class="col-md-6">
+              <label class="form-label">Interface</label>
+              <input type="text" class="form-control" id="unitWan2Iface" value="ether2" placeholder="ether2">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Operadora / Nome</label>
+              <input type="text" class="form-control" id="unitWan2Label" placeholder="Ex: ALGAR 1GB">
+            </div>
+          </div>
+
+          <hr class="my-4">
+
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Modelo (opcional)</label>
+              <input type="text" class="form-control" id="unitModelo" placeholder="Ex: CCR2004-16G-2S+">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Status</label>
+              <select class="form-select" id="unitAtivo">
+                <option value="1">Ativo</option>
+                <option value="0">Inativo (não monitorar)</option>
+              </select>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Observações</label>
+              <textarea class="form-control" id="unitObs" rows="2" maxlength="500"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline-danger me-auto" id="unitBtnDel" onclick="deleteCurrentUnit()" style="display:none">
+            <i class="bi bi-trash"></i> Excluir
+          </button>
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-primary" onclick="saveUnit()">
+            <i class="bi bi-check-lg"></i> Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+
+  <script>
+  const API = window.API_BASE_URL || `http://${location.hostname || '127.0.0.1'}:8000`;
+
+  let _units    = [];   // cadastro do banco
+  let _snaps    = [];   // status ao vivo
+  let _interval = null;
+  let _lastFetch = null;
+
+  function tok() {
+    return localStorage.getItem("cpe_token")
+        || sessionStorage.getItem("cpe_token") || "";
+  }
+
+  async function api(path, opts={}) {
+    const res = await fetch(`${API}/api/network${path}`, {
+      ...opts,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Auth-Token": tok(),
+        ...(opts.headers || {}),
+      },
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  /* ── Init ─────────────────────────────────────────── */
+  document.addEventListener("DOMContentLoaded", async () => {
+    await refresh();
+    toggleAuto(true);
+  });
+
+  function toggleAuto(on) {
+    if (_interval) { clearInterval(_interval); _interval = null; }
+    if (on) _interval = setInterval(refresh, 60_000);
+  }
+
+  /* ── Refresh = carrega cadastro + status ───────────── */
+  async function refresh() {
+    setStatus("Atualizando...");
+    try {
+      const [u, s] = await Promise.all([
+        api("/units?ativo=1"),
+        api("/status"),
+      ]);
+      _units = u.units || [];
+      _snaps = s.snapshots || [];
+      _lastFetch = new Date();
+      renderKpis(s.summary || {});
+      renderUnits();
+      setStatus(`Atualizado ${fmtTime(_lastFetch)}`);
+    } catch (err) {
+      setStatus(`Erro: ${err.message}`, true);
+    }
+  }
+
+  function setStatus(text, isErr=false) {
+    const el = document.getElementById("liveStatusText");
+    el.textContent = text;
+    el.style.color = isErr ? "#dc2626" : "#6b7280";
+  }
+
+  function renderKpis(s) {
+    document.getElementById("kpiTotal").textContent    = s.total ?? "—";
+    document.getElementById("kpiOnline").textContent   =
+      _snaps.reduce((a, snap) => a + (snap.wans || []).filter(w => w.status === "online").length, 0);
+    document.getElementById("kpiDegraded").textContent = s.wan_degraded ?? 0;
+    document.getElementById("kpiOffline").textContent  = s.wan_offline ?? 0;
+  }
+
+  /* ── Render cards ───────────────────────────────────── */
+  function renderUnits() {
+    const area = document.getElementById("unitsArea");
+    if (_units.length === 0) {
+      area.innerHTML = `
+        <div class="units-grid">
+          <div class="unit-card add-new" onclick="openUnitModal()">
+            <div style="text-align:center">
+              <i class="bi bi-plus-circle"></i>
+              <div style="margin-top:8px">Cadastrar a primeira unidade</div>
+            </div>
+          </div>
+        </div>`;
+      return;
+    }
+    // Indexa snapshots por unit_id
+    const snapByUnit = Object.fromEntries(_snaps.map(s => [s.unit_id, s]));
+    const cards = _units.map(u => _renderUnitCard(u, snapByUnit[u.id])).join("");
+    const addCard = `
+      <div class="unit-card add-new" onclick="openUnitModal()" title="Adicionar nova unidade">
+        <div style="text-align:center">
+          <i class="bi bi-plus-circle"></i>
+          <div style="margin-top:8px">Adicionar unidade</div>
+        </div>
+      </div>`;
+    area.innerHTML = `<div class="units-grid">${cards}${addCard}</div>`;
+  }
+
+  function _renderUnitCard(u, snap) {
+    const wans = snap?.wans || [
+      {label: u.wan1_label, interface: u.wan1_interface, status: "unknown"},
+      {label: u.wan2_label, interface: u.wan2_interface, status: "unknown"},
+    ];
+    const allOffline = wans.every(w => w.status === "offline" || w.status === "unknown");
+    const anyOffline = wans.some(w => w.status === "offline");
+    const anyDegraded = wans.some(w => w.status === "degraded");
+    let cardCls = "unit-card";
+    if (allOffline) cardCls += " down-card";
+    else if (anyOffline || anyDegraded) cardCls += " alert-card";
+
+    const sys = snap?.system || {};
+    const cpu = sys.cpu_pct != null ? sys.cpu_pct + "%" : "—";
+    const mem = sys.mem_pct != null ? sys.mem_pct + "%" : "—";
+    const uptime = (sys.uptime || "").split(/\s+/)[0] || "—"; // ex "11w3d"
+    const erro = snap?.erro;
+
+    return `
+      <div class="${cardCls}">
+        <div class="unit-header">
+          <h3>${esc(u.nome)}</h3>
+          <span class="id-pill">${esc(u.identity)}</span>
+          <button class="menu-btn" onclick="editUnit(${u.id})" title="Editar">
+            <i class="bi bi-pencil"></i>
+          </button>
+        </div>
+        ${erro ? `
+          <div class="unit-meta">
+            <span class="item danger">
+              <i class="bi bi-exclamation-octagon-fill"></i>
+              Não foi possível conectar: ${esc(erro)}
+            </span>
+          </div>` : `
+          <div class="unit-meta">
+            <span class="item"><i class="bi bi-hdd-network"></i> ${esc(u.host)}</span>
+            <span class="item ${cpu !== "—" && parseInt(cpu) > 70 ? "warn" : ""}">
+              <i class="bi bi-cpu"></i> CPU ${cpu}
+            </span>
+            <span class="item ${mem !== "—" && parseInt(mem) > 85 ? "warn" : ""}">
+              <i class="bi bi-memory"></i> RAM ${mem}
+            </span>
+            <span class="item"><i class="bi bi-clock"></i> ${esc(uptime)}</span>
+          </div>`}
+        <div class="wan-list">
+          ${wans.map(_renderWanRow).join("")}
+        </div>
+        <div class="unit-footer">
+          <span class="ago">${snap ? `coletado ${fmtTime(_lastFetch)}` : "sem coleta"}</span>
+          <button class="btn-mini" onclick="editUnit(${u.id})">
+            <i class="bi bi-gear"></i> Configurar
+          </button>
+        </div>
+      </div>`;
+  }
+
+  function _renderWanRow(w) {
+    const ms   = w.latency_ms != null ? Math.round(w.latency_ms) + "ms" : "—";
+    const loss = w.packet_loss != null ? w.packet_loss + "% perda" : "";
+    const lblStatus = {
+      online:   "Operacional",
+      degraded: "Lentidão",
+      offline:  "Sem sinal",
+      unknown:  "Desconhecido",
+      disabled: "Desabilitada",
+      via_mark: "Via routing-mark",
+    }[w.status] || "—";
+    const rx = w.rx_bps ? fmtMbps(w.rx_bps) : "";
+    const tx = w.tx_bps ? fmtMbps(w.tx_bps) : "";
+    return `
+      <div class="wan-row">
+        <div class="wan-dot ${w.status}"></div>
+        <div>
+          <div class="wan-label">${esc(w.label)}</div>
+          <div class="wan-iface">${esc(w.interface)} · <span class="wan-status-text ${w.status}">${lblStatus}</span></div>
+          ${w.erro ? `<div style="font-size:10px;color:#dc2626;margin-top:2px" title="${esc(w.erro)}"><i class="bi bi-bug"></i> ${esc(w.erro.substring(0,80))}</div>` : ""}
+        </div>
+        <div class="wan-metrics">
+          ${w.status !== "offline" && w.status !== "unknown" && w.status !== "disabled" ? `
+            <span class="m" title="Latência média"><i class="bi bi-speedometer2"></i> <strong>${ms}</strong></span>
+            ${loss ? `<span class="m" title="Perda de pacotes"><i class="bi bi-x-octagon"></i> ${loss}</span>` : ""}
+            ${rx ? `<span class="m" title="Download"><i class="bi bi-arrow-down"></i> ${rx}</span>` : ""}
+            ${tx ? `<span class="m" title="Upload"><i class="bi bi-arrow-up"></i> ${tx}</span>` : ""}
+          ` : ""}
+        </div>
+      </div>`;
+  }
+
+  /* ── Modal: cadastro/edição ───────────────────────── */
+  function openUnitModal(unit) {
+    document.getElementById("unitErr").classList.add("d-none");
+    document.getElementById("unitId").value          = unit?.id || "";
+    document.getElementById("unitNome").value        = unit?.nome || "";
+    document.getElementById("unitIdentity").value    = unit?.identity || "";
+    document.getElementById("unitHost").value        = unit?.host || "";
+    document.getElementById("unitPorta").value       = unit?.porta || 8728;
+    document.getElementById("unitWan1Iface").value   = unit?.wan1_interface || "ether1";
+    document.getElementById("unitWan1Label").value   = unit?.wan1_label || "WAN 1";
+    document.getElementById("unitWan2Iface").value   = unit?.wan2_interface || "ether2";
+    document.getElementById("unitWan2Label").value   = unit?.wan2_label || "WAN 2";
+    document.getElementById("unitModelo").value      = unit?.modelo || "";
+    document.getElementById("unitAtivo").value       = unit ? (unit.ativo ? "1" : "0") : "1";
+    document.getElementById("unitObs").value         = unit?.observacoes || "";
+    document.getElementById("unitModalTitle").innerHTML = unit
+      ? `<i class="bi bi-pencil"></i> Editar — ${esc(unit.nome)}`
+      : `<i class="bi bi-plus-circle"></i> Nova Unidade`;
+    document.getElementById("unitBtnDel").style.display = unit ? "" : "none";
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("unitModal")).show();
+  }
+
+  function editUnit(id) {
+    const u = _units.find(x => x.id === id);
+    if (u) openUnitModal(u);
+  }
+
+  async function saveUnit() {
+    const id = document.getElementById("unitId").value;
+    const body = {
+      nome:           document.getElementById("unitNome").value.trim(),
+      identity:       document.getElementById("unitIdentity").value.trim(),
+      host:           document.getElementById("unitHost").value.trim(),
+      porta:          parseInt(document.getElementById("unitPorta").value) || 8728,
+      wan1_interface: document.getElementById("unitWan1Iface").value.trim() || "ether1",
+      wan1_label:     document.getElementById("unitWan1Label").value.trim() || "WAN 1",
+      wan2_interface: document.getElementById("unitWan2Iface").value.trim() || "ether2",
+      wan2_label:     document.getElementById("unitWan2Label").value.trim() || "WAN 2",
+      modelo:         document.getElementById("unitModelo").value.trim() || null,
+      ativo:          document.getElementById("unitAtivo").value === "1",
+      observacoes:    document.getElementById("unitObs").value.trim() || null,
+    };
+    if (!body.nome || !body.identity || !body.host) {
+      _showErr("Preencha Nome, Identity e Host.");
+      return;
+    }
+    try {
+      if (id) await api(`/units/${id}`, { method: "PUT",  body: JSON.stringify(body) });
+      else    await api(`/units`,         { method: "POST", body: JSON.stringify(body) });
+      bootstrap.Modal.getInstance(document.getElementById("unitModal")).hide();
+      await refresh();
+    } catch (err) {
+      _showErr(err.message);
+    }
+  }
+
+  async function deleteCurrentUnit() {
+    const id = document.getElementById("unitId").value;
+    if (!id) return;
+    if (!confirm("Excluir esta unidade? O histórico também será apagado.")) return;
+    try {
+      await api(`/units/${id}`, { method: "DELETE" });
+      bootstrap.Modal.getInstance(document.getElementById("unitModal")).hide();
+      await refresh();
+    } catch (err) { _showErr(err.message); }
+  }
+
+  function _showErr(msg) {
+    const e = document.getElementById("unitErr");
+    e.textContent = msg;
+    e.classList.remove("d-none");
+  }
+
+  /* ── Helpers ──────────────────────────────────────── */
+  function esc(s) {
+    return String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;")
+                        .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  }
+  function fmtTime(d) {
+    if (!d) return "—";
+    return d.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+  }
+  function fmtMbps(bps) {
+    const mbps = bps / 1_000_000;
+    if (mbps >= 1) return mbps.toFixed(1) + " Mbps";
+    const kbps = bps / 1_000;
+    if (kbps >= 1) return kbps.toFixed(0) + " kbps";
+    return bps + " bps";
+  }
+  </script>
+</body>
+</html>

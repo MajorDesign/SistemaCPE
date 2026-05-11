@@ -140,6 +140,12 @@ PAGES_CATALOG: list[PageDef] = [
      "url": "/SistemaCPE/web/pages/inventory-ti.html",             "ordem": 231,
      "default_roles": ["ADMIN", "TI", "MANAGER"]},
 
+    {"page_key": "NETWORK",          "display_name": "Monitoramento de Rede",
+     "description": "Painel de status dos Mikrotik das unidades CPE (WANs, ping, lentidão)",
+     "category": "admin", "icon": "bi-broadcast-pin",
+     "url": "/SistemaCPE/web/pages/network.html",                  "ordem": 232,
+     "default_roles": ["ADMIN", "TI"]},
+
     {"page_key": "PASSWORD_VAULT",   "display_name": "Cofre de Senhas",
      "description": "Cofre de senhas com acesso por grupo",
      "category": "admin", "icon": "bi-shield-lock-fill",

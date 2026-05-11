@@ -211,7 +211,7 @@
 
         list.innerHTML = agents.map(a => {
           const systems = (a.systems||[]).map(s => '<span class="badge-sys">'+s+'</span>').join('');
-          const autoUpdateBadge = a.id === 'cpe-inventario'
+          const autoUpdateBadge = a.auto_update
             ? '<span style="font-size:11px;background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle"><i class="bi bi-arrow-repeat"></i> Auto-atualizável</span>'
             : '';
           const files = Object.entries(a.files||{}).map(([key, f]) => {

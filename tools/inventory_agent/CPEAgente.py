@@ -6,8 +6,10 @@ Arquivo único: instala deps, registra startup, ícone na bandeja.
 """
 
 # ══════════════════════════════════════════════════════════════
-VERSAO     = "1.3.2"
-API_URL    = "http://127.0.0.1:8000"
+VERSAO     = "1.4.0"
+# Servidor de inventário T.I. da CPE (intranet). Sobrescrevível
+# pela variável de ambiente CPE_AGENT_API_URL pra ambientes de teste.
+API_URL    = "http://172.16.0.11:8000"
 AGENT_KEY  = "cpe-inv-2026"
 INTERVAL   = 300
 TIMEOUT_S  = 15
@@ -16,11 +18,36 @@ LOCATION_CIDADE = ""
 # ══════════════════════════════════════════════════════════════
 
 import os, sys, subprocess, time, json, platform, socket
-import logging, argparse, tempfile, threading
+import logging, argparse, tempfile, threading, uuid
 from datetime import datetime
 
+# Permite override do servidor pela env var sem rebuildar
+API_URL = os.environ.get("CPE_AGENT_API_URL", API_URL).rstrip("/")
+
+
+def _eh_exe() -> bool:
+    """True quando rodando como executável compilado (PyInstaller --onefile).
+    Detecta `sys.frozen` que o bootloader do PyInstaller injeta."""
+    return getattr(sys, "frozen", False)
+
+
+def _meu_caminho() -> str:
+    """Caminho absoluto do executável (.exe) ou do script (.py)."""
+    return os.path.abspath(sys.executable if _eh_exe() else __file__)
+
 # ─── Log (arquivo; stdout só se disponível) ───────────────────
-_DIR    = os.path.dirname(os.path.abspath(__file__))
+# Quando rodando como .exe, escrever na pasta do .exe geralmente falha
+# (Program Files etc). Usamos %LOCALAPPDATA%\CPEAgente como fallback.
+if _eh_exe():
+    _DIR = os.path.join(os.environ.get("LOCALAPPDATA",
+                                       os.path.expanduser("~")),
+                        "CPEAgente")
+    try:
+        os.makedirs(_DIR, exist_ok=True)
+    except Exception:
+        _DIR = tempfile.gettempdir()
+else:
+    _DIR = os.path.dirname(os.path.abspath(__file__))
 _LOGF   = os.path.join(_DIR, "cpe_agent.log")
 _hdlrs  = []
 try:    _hdlrs.append(logging.FileHandler(_LOGF, encoding="utf-8"))
@@ -48,7 +75,8 @@ def _deps_ok() -> bool:
         except ImportError: return False
     return True
 
-if not _deps_ok():
+# No .exe (PyInstaller) todas as deps já estão embutidas — pula o instalador.
+if not _eh_exe() and not _deps_ok():
     def _instalar():
         root = tk.Tk()
         root.title("CPE Control")
@@ -296,9 +324,14 @@ def _registrar_startup() -> bool:
     if platform.system() != "Windows": return False
     try:
         import winreg
-        pythonw = sys.executable.replace("python.exe", "pythonw.exe")
-        if not os.path.exists(pythonw): pythonw = sys.executable
-        cmd = f'"{pythonw}" "{os.path.abspath(__file__)}"'
+        if _eh_exe():
+            # .exe roda sozinho (PyInstaller --windowed = sem console)
+            cmd = f'"{_meu_caminho()}"'
+        else:
+            # .py precisa de pythonw.exe (Python sem console)
+            pythonw = sys.executable.replace("python.exe", "pythonw.exe")
+            if not os.path.exists(pythonw): pythonw = sys.executable
+            cmd = f'"{pythonw}" "{os.path.abspath(__file__)}"'
         k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY, 0, winreg.KEY_SET_VALUE)
         winreg.SetValueEx(k, _RUN_VAL, 0, winreg.REG_SZ, cmd)
         winreg.CloseKey(k); log.info(f"Startup OK: {cmd}"); return True
@@ -335,6 +368,12 @@ def _ver(v):
     except: return (0,)
 
 def _update(skip=False):
+    """Verifica versão no servidor e auto-atualiza se houver versão maior.
+
+    .py : substitui o arquivo in-place e relança via python.
+    .exe: baixa pra um arquivo .new ao lado; um helper .bat aguarda o
+          processo morrer, troca os arquivos e relança o .exe novo
+          (Windows não permite sobrescrever .exe em execução)."""
     if skip: return
     try:
         r = requests.get(f"{API_URL}/api/inventario/agent/version", timeout=TIMEOUT_S)
@@ -344,10 +383,36 @@ def _update(skip=False):
         log.info(f"Atualizando para v{sv}...")
         r2 = requests.get(f"{API_URL}/api/inventario/agent/download", timeout=60)
         if not r2.ok: return
-        meu = os.path.abspath(__file__); tmp = meu+".tmp"
+
+        meu = _meu_caminho()
+
+        if _eh_exe():
+            # Cenário .exe: cria helper batch que faz a troca depois
+            # do processo atual morrer.
+            novo = meu + ".new"
+            with open(novo, "wb") as f: f.write(r2.content)
+            helper = os.path.join(tempfile.gettempdir(),
+                                  f"cpeagente_update_{uuid.uuid4().hex[:8]}.bat")
+            # /b no taskkill seria mais limpo, mas como já vamos sys.exit
+            # logo abaixo, basta aguardar uns segundos antes da troca.
+            with open(helper, "w", encoding="utf-8") as f:
+                f.write(
+                    "@echo off\r\n"
+                    "timeout /t 4 /nobreak >nul\r\n"
+                    f'del "{meu}" 2>nul\r\n'
+                    f'move /Y "{novo}" "{meu}" >nul\r\n'
+                    f'start "" "{meu}"\r\n'
+                    'del "%~f0"\r\n'
+                )
+            subprocess.Popen(["cmd","/c",helper],
+                             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW)
+            log.info(f"Helper de update v{sv} disparado. Encerrando.")
+            sys.exit(0)
+
+        # Cenário .py: substituição direta funciona
+        tmp = meu + ".tmp"
         with open(tmp,"wb") as f: f.write(r2.content)
         os.replace(tmp, meu); log.info(f"Atualizado v{sv}. Reiniciando...")
-        # Relaunch silencioso — sem console flash mesmo se rodando em python.exe
         if platform.system() == "Windows":
             subprocess.Popen([sys.executable]+sys.argv,
                              creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW)
@@ -520,7 +585,8 @@ def main():
     # ── Se rodando com python.exe (console aberto), relança com pythonw.exe ──
     # Isso faz o console sumir imediatamente e o agente continuar só na bandeja.
     # Modo --test é exceção: precisa do console para imprimir os dados.
-    if sys.platform == "win32" and "--test" not in sys.argv:
+    # Quando rodando como .exe (PyInstaller --windowed), nunca há console.
+    if sys.platform == "win32" and not _eh_exe() and "--test" not in sys.argv:
         _exe = sys.executable
         if os.path.basename(_exe).lower() not in ("pythonw.exe", "pythonw"):
             _pw = os.path.join(os.path.dirname(_exe), "pythonw.exe")
