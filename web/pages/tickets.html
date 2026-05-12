@@ -113,6 +113,117 @@
         </div>
 
         <!-- ========================================
+             ABAS DE VISÃO (Meus / Pra mim / Todos)
+             ======================================== -->
+        <ul class="nav nav-pills tickets-view-tabs mb-3" role="tablist">
+          <li class="nav-item">
+            <button class="nav-link active" data-vista="todos" type="button" onclick="setTicketsVista('todos')">
+              <i class="bi bi-collection"></i> Todos
+              <span class="badge bg-secondary ms-1" id="vistaCountTodos">0</span>
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-vista="meus" type="button" onclick="setTicketsVista('meus')">
+              <i class="bi bi-person-fill-up"></i> Abertos por mim
+              <span class="badge bg-secondary ms-1" id="vistaCountMeus">0</span>
+            </button>
+          </li>
+          <li class="nav-item" id="vistaParaMimItem">
+            <button class="nav-link" data-vista="para_mim" type="button" onclick="setTicketsVista('para_mim')">
+              <i class="bi bi-inbox-fill"></i> Para mim
+              <span class="badge bg-secondary ms-1" id="vistaCountParaMim">0</span>
+            </button>
+          </li>
+          <li class="nav-item">
+            <button class="nav-link" data-vista="antigos" type="button" onclick="setTicketsVista('antigos')">
+              <i class="bi bi-archive"></i> Chamados antigos
+              <span class="badge bg-secondary ms-1" id="vistaCountAntigos">0</span>
+            </button>
+          </li>
+        </ul>
+
+        <!-- ========================================
+             PAINEL: Chamados Antigos (somente consulta)
+             ======================================== -->
+        <div id="painelChamadosAntigos" class="d-none">
+          <div class="alert alert-info py-2 px-3 mb-3 small d-flex align-items-center gap-2">
+            <i class="bi bi-info-circle"></i>
+            <span>
+              Base de chamados importada do sistema legado.
+              <strong>Somente consulta</strong> — não permite alterações.
+              <span id="antigosUltimoImport" class="text-muted ms-2"></span>
+            </span>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-md-5">
+              <div class="input-group input-group-sm">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" id="antigosSearch" class="form-control"
+                       placeholder="Buscar por título, solicitante, e-mail, mensagem ou trackid..."
+                       onkeydown="if (event.key === 'Enter') buscarChamadosAntigos(1)">
+                <button class="btn btn-primary" onclick="buscarChamadosAntigos(1)">Buscar</button>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <select id="antigosCategoria" class="form-select form-select-sm" onchange="buscarChamadosAntigos(1)">
+                <option value="">Todas categorias</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <select id="antigosStatus" class="form-select form-select-sm" onchange="buscarChamadosAntigos(1)">
+                <option value="">Todos status</option>
+                <option value="Aberto">Aberto</option>
+                <option value="Em andamento">Em andamento</option>
+                <option value="Resolvido">Resolvido</option>
+                <option value="Fechado">Fechado</option>
+              </select>
+            </div>
+            <div class="col-md-1">
+              <input type="date" id="antigosDataIni" class="form-control form-control-sm"
+                     onchange="buscarChamadosAntigos(1)" title="Data inicial">
+            </div>
+            <div class="col-md-1">
+              <input type="date" id="antigosDataFim" class="form-control form-control-sm"
+                     onchange="buscarChamadosAntigos(1)" title="Data final">
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+              <thead>
+                <tr>
+                  <th style="width:140px">Trackid</th>
+                  <th>Assunto</th>
+                  <th>Solicitante</th>
+                  <th>Categoria</th>
+                  <th>Status</th>
+                  <th>Atribuído</th>
+                  <th>Abertura</th>
+                  <th>Fechamento</th>
+                </tr>
+              </thead>
+              <tbody id="antigosBody">
+                <tr><td colspan="8" class="text-center text-muted py-4">Use o buscador acima para listar os chamados.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination-bar mt-3">
+            <div><span id="antigosResumo">—</span></div>
+            <div class="page-controls">
+              <button class="btn btn-sm btn-outline-secondary" onclick="antigosPagAnt()">
+                <i class="bi bi-chevron-left"></i>
+              </button>
+              <span>Página <strong id="antigosPagAtual">1</strong> / <strong id="antigosTotalPags">1</strong></span>
+              <button class="btn btn-sm btn-outline-secondary" onclick="antigosPagProx()">
+                <i class="bi bi-chevron-right"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========================================
              ADVANCED FILTERS
              ======================================== -->
         <div class="advanced-filters d-none mb-3" id="advancedFilters">
@@ -297,17 +408,31 @@
        MODAL - DETALHE DO TICKET
        ======================================== -->
   <div class="modal fade" id="ticketDetailModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl" id="ticketDetailDialog">
       <div class="modal-content">
 
-        <!-- HEADER -->
+        <!-- HEADER (estilo janela do Windows) -->
         <div class="ticket-detail-header">
-          <div class="d-flex justify-content-between align-items-start">
-            <div>
-              <h4 class="mb-1" id="detailTitle"></h4>
-              <small id="detailId"></small>
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2 ticket-header-title">
+              <i class="bi bi-ticket-detailed"></i>
+              <span id="detailTitle"></span>
+              <small id="detailId" class="text-muted"></small>
             </div>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <div class="ticket-window-controls">
+              <button type="button" class="win-btn win-btn-min"
+                onclick="minimizeTicketModal()" title="Minimizar">
+                <i class="bi bi-dash-lg"></i>
+              </button>
+              <button type="button" class="win-btn win-btn-max"
+                onclick="toggleDetailFullscreen()" title="Maximizar/Restaurar">
+                <i class="bi bi-arrows-fullscreen" id="iconDetailFullscreen"></i>
+              </button>
+              <button type="button" class="win-btn win-btn-close"
+                data-bs-dismiss="modal" title="Fechar">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -347,10 +472,15 @@
                 <div class="description-section">
                   <h6 class="section-title"><i class="bi bi-file-text"></i> Descrição do Chamado</h6>
                   <div class="description-box" id="detailDescription"></div>
+                  <div id="detailDescriptionAttachments"></div>
                 </div>
 
                 <div class="comments-section">
-                  <h6 class="section-title"><i class="bi bi-chat-dots"></i> Histórico de Comentários</h6>
+                  <h6 class="section-title section-title--toggle"
+                      onclick="toggleCommentsSection()" role="button">
+                    <i class="bi bi-chat-dots"></i> Histórico de Comentários
+                    <i class="bi bi-chevron-up ms-auto" id="commentsToggleIcon"></i>
+                  </h6>
                   <div id="detailCommentsList" class="comments-list"></div>
                 </div>
               </div>
@@ -358,25 +488,28 @@
               <!-- COLUNA DIREITA: formulário de resposta -->
               <div class="chat-right">
 
-                <!-- INFO RÁPIDA -->
+                <!-- INFO RÁPIDA (compacta — uma linha horizontal) -->
                 <div class="ticket-quick-info">
                   <div class="info-row">
-                    <span class="label">Usuário:</span>
+                    <span class="label"><i class="bi bi-person"></i></span>
                     <strong id="detailUserName"></strong>
                   </div>
                   <div class="info-row">
-                    <span class="label">Email:</span>
+                    <span class="label"><i class="bi bi-envelope"></i></span>
                     <span id="detailEmail" class="text-break"></span>
                   </div>
                   <div class="info-row">
-                    <span class="label">Status:</span>
+                    <span class="label"><i class="bi bi-flag"></i></span>
                     <span id="detailStatusQuick"></span>
                   </div>
                   <div class="info-row">
-                    <span class="label">Atribuído:</span>
+                    <span class="label"><i class="bi bi-person-check"></i></span>
                     <strong id="detailAssignedName"></strong>
                   </div>
                 </div>
+
+                <!-- Wrap do form de resposta (centralizado verticalmente) -->
+                <div class="reply-block">
 
                 <!-- ABAS DE MODO DE RESPOSTA -->
                 <div class="reply-menu-tabs">
@@ -410,6 +543,15 @@
                         O usuário receberá uma notificação desta resposta
                       </small>
                     </div>
+                    <div class="mb-2">
+                      <label class="btn btn-outline-secondary btn-sm mb-0">
+                        <i class="bi bi-paperclip"></i> Anexar imagem (≤250 KB)
+                        <input type="file" id="replyAttachInput" hidden multiple
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          onchange="onReplyAttachChange(event, 'reply')">
+                      </label>
+                      <div id="replyAttachPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    </div>
                     <button type="submit" class="btn btn-success btn-sm w-100">
                       <i class="bi bi-send"></i> Enviar Resposta
                     </button>
@@ -429,12 +571,22 @@
                         Não será visível para o usuário solicitante
                       </small>
                     </div>
+                    <div class="mb-2">
+                      <label class="btn btn-outline-secondary btn-sm mb-0">
+                        <i class="bi bi-paperclip"></i> Anexar imagem (≤250 KB)
+                        <input type="file" id="internalAttachInput" hidden multiple
+                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          onchange="onReplyAttachChange(event, 'internal')">
+                      </label>
+                      <div id="internalAttachPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    </div>
                     <button type="submit" class="btn btn-warning btn-sm w-100">
                       <i class="bi bi-bookmark"></i> Salvar Comentário
                     </button>
                   </form>
                 </div>
 
+                </div><!-- /reply-block -->
               </div><!-- /chat-right -->
             </div><!-- /chat-layout -->
           </div><!-- /tab-chat -->
@@ -587,10 +739,6 @@
 
         <!-- FOOTER DO MODAL DE DETALHE -->
         <div class="modal-footer">
-          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
-            Fechar
-          </button>
-
           <!--
             ✅ id="btnDeletarTicket" adicionado.
             tickets.js → applyDetailPermissions() oculta este botão para USER
@@ -617,13 +765,13 @@
   </div><!-- /ticketDetailModal -->
 
   <!-- ========================================
-       MODAL - NOVO / EDITAR TICKET
+       MODAL - NOVO / EDITAR TICKET (horizontal, 2 colunas)
        ======================================== -->
   <div class="modal fade" id="ticketModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
       <div class="modal-content ticket-form-content">
 
-        <!-- HEADER -->
+        <!-- HEADER (gradiente do sistema) -->
         <div class="modal-header ticket-form-header">
           <h5 class="modal-title" id="ticketModalLabel">
             <i class="bi bi-plus-square"></i> Novo Ticket
@@ -635,112 +783,113 @@
         <div class="modal-body ticket-form-body">
           <form id="ticketForm">
 
-            <!-- ASSUNTO -->
-            <div class="mb-3">
-              <label class="form-label">
-                Assunto <span class="text-danger">*</span>
-              </label>
-              <input type="text" class="form-control" id="ticketTitle" placeholder="Título do ticket" required>
-              <small class="text-muted">Mínimo 3 caracteres</small>
+            <div class="row g-3">
+
+              <!-- ASSUNTO (linha inteira) -->
+              <div class="col-12">
+                <label class="form-label">
+                  <i class="bi bi-tag text-primary"></i> Assunto <span class="text-danger">*</span>
+                </label>
+                <input type="text" class="form-control" id="ticketTitle"
+                  placeholder="Resuma o problema em poucas palavras" required>
+                <small class="text-muted">Mínimo 3 caracteres</small>
+              </div>
+
+              <!-- SOLICITANTE -->
+              <div class="col-md-6">
+                <label class="form-label">
+                  <i class="bi bi-person text-primary"></i> Solicitante
+                </label>
+                <input type="text" class="form-control" id="ticketClient" placeholder="Seu nome" readonly>
+              </div>
+
+              <!-- EMAIL -->
+              <div class="col-md-6">
+                <label class="form-label">
+                  <i class="bi bi-envelope text-primary"></i> E-mail
+                </label>
+                <input type="email" class="form-control" id="ticketEmail" placeholder="Seu e-mail" readonly>
+              </div>
+
+              <!-- GRUPO -->
+              <div class="col-md-6">
+                <label class="form-label">
+                  <i class="bi bi-diagram-3 text-primary"></i> Grupo/Setor <span class="text-danger">*</span>
+                </label>
+                <select class="form-select" id="ticketGroupName" required>
+                  <option value="">Carregando grupos...</option>
+                </select>
+              </div>
+
+              <!-- PRIORIDADE -->
+              <div class="col-md-6">
+                <label class="form-label">
+                  <i class="bi bi-flag text-primary"></i> Prioridade <span class="text-danger">*</span>
+                </label>
+                <select class="form-select" id="ticketPriority" required>
+                  <option value="">Selecione...</option>
+                  <option value="low">Baixa</option>
+                  <option value="medium" selected>Média</option>
+                  <option value="high">Alta</option>
+                  <option value="urgent">Urgente</option>
+                </select>
+              </div>
+
+              <!-- CATEGORIA -->
+              <div class="col-md-6 d-none" id="ticketCategoriaDiv">
+                <label class="form-label">
+                  <i class="bi bi-folder text-primary"></i> Categoria
+                  <small class="text-muted">(opcional)</small>
+                </label>
+                <select class="form-select" id="ticketCategoria">
+                  <option value="">Selecione uma categoria...</option>
+                </select>
+              </div>
+
+              <!-- SUBCATEGORIA -->
+              <div class="col-md-6 d-none" id="ticketSubcategoriaDiv">
+                <label class="form-label">
+                  <i class="bi bi-diagram-2 text-primary"></i> Subcategoria
+                  <small class="text-muted">(opcional)</small>
+                </label>
+                <select class="form-select" id="ticketSubcategoria">
+                  <option value="">Selecione uma subcategoria...</option>
+                </select>
+              </div>
+
+              <!-- DESCRIÇÃO (linha inteira) -->
+              <div class="col-12">
+                <label class="form-label">
+                  <i class="bi bi-card-text text-primary"></i> Descrição <span class="text-danger">*</span>
+                </label>
+                <textarea class="form-control" id="ticketDescription" rows="4"
+                  placeholder="Descreva o problema com o máximo de detalhes..." required></textarea>
+                <small class="text-muted">Mínimo 5 caracteres</small>
+              </div>
+
+              <!-- ANEXOS (linha inteira) -->
+              <div class="col-12">
+                <label class="form-label">
+                  <i class="bi bi-paperclip text-primary"></i> Anexar imagens
+                  <small class="text-muted">(opcional — JPG/PNG/WEBP/GIF até 250 KB cada)</small>
+                </label>
+                <input type="file" class="form-control form-control-sm" id="ticketAttachInput"
+                  accept="image/jpeg,image/png,image/webp,image/gif" multiple
+                  onchange="onTicketAttachChange(event)">
+                <div id="ticketAttachPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
+              </div>
+
             </div>
-
-            <!-- DESCRIÇÃO -->
-            <div class="mb-3">
-              <label class="form-label">
-                Descrição <span class="text-danger">*</span>
-              </label>
-              <textarea class="form-control" id="ticketDescription" rows="4" placeholder="Descreva o problema..."
-                required></textarea>
-              <small class="text-muted">Mínimo 5 caracteres</small>
-            </div>
-
-            <!--
-              SOLICITANTE: readonly, preenchido automaticamente pelo tickets.js
-              com o nome do usuário logado (localStorage cpe_user.name).
-            -->
-            <div class="mb-3">
-              <label class="form-label">Solicitante</label>
-              <input type="text" class="form-control" id="ticketClient" placeholder="Seu nome" readonly>
-              <small class="text-muted">Preenchido automaticamente com seus dados</small>
-            </div>
-
-            <!--
-              EMAIL: readonly, preenchido automaticamente pelo tickets.js
-              com o email do usuário logado (localStorage cpe_user.email).
-            -->
-            <div class="mb-3">
-              <label class="form-label">Email</label>
-              <input type="email" class="form-control" id="ticketEmail" placeholder="Seu email" readonly>
-              <small class="text-muted">Preenchido automaticamente com seus dados</small>
-            </div>
-
-            <!--
-              GRUPO DE DESTINO: o usuario pode escolher qualquer grupo para abrir o chamado.
-              Populado via tickets.js. O grupo do usuario e selecionado por padrao.
-            -->
-            <div class="mb-3">
-              <label class="form-label">
-                Grupo/Setor de Destino <span class="text-danger">*</span>
-              </label>
-              <select class="form-select" id="ticketGroupName" required>
-                <option value="">Carregando grupos...</option>
-              </select>
-              <small class="text-muted">Selecione o grupo que ira atender seu chamado</small>
-            </div>
-
-
-            <!-- CATEGORIA: opcional, aparece após selecionar o grupo -->
-            <div class="mb-3 d-none" id="ticketCategoriaDiv">
-              <label class="form-label">
-                <i class="bi bi-folder"></i> Categoria
-                <small class="text-muted">(opcional)</small>
-              </label>
-              <select class="form-select" id="ticketCategoria">
-                <option value="">Selecione uma categoria...</option>
-              </select>
-            </div>
-
-            <!-- SUBCATEGORIA: opcional, aparece após selecionar categoria com subcategorias -->
-            <div class="mb-3 d-none" id="ticketSubcategoriaDiv">
-              <label class="form-label">
-                <i class="bi bi-diagram-2"></i> Subcategoria
-                <small class="text-muted">(opcional)</small>
-              </label>
-              <select class="form-select" id="ticketSubcategoria">
-                <option value="">Selecione uma subcategoria...</option>
-              </select>
-            </div>
-
-            <!-- PRIORIDADE: único campo editável além de assunto e descrição -->
-            <div class="mb-3">
-              <label class="form-label">
-                Prioridade <span class="text-danger">*</span>
-              </label>
-              <select class="form-select" id="ticketPriority" required>
-                <option value="">Selecione...</option>
-                <option value="low">Baixa</option>
-                <option value="medium" selected>Média</option>
-                <option value="high">Alta</option>
-                <option value="urgent">Urgente</option>
-              </select>
-            </div>
-
-            <!-- Campo oculto: group_id real enviado ao backend -->
 
           </form>
         </div>
 
-        <!-- FOOTER -->
+        <!-- FOOTER — Cancelar (vermelho) / Criar (verde) -->
         <div class="modal-footer ticket-form-footer">
-          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
-            Cancelar
+          <button type="button" class="btn btn-sm btn-danger" data-bs-dismiss="modal">
+            <i class="bi bi-x-lg"></i> Cancelar
           </button>
-          <!--
-            ✅ Corrigido: requestSubmit() em vez de dispatchEvent(new Event('submit')).
-            requestSubmit() aciona a validação nativa do form antes de submeter,
-            comportamento correto e compatível com todos os browsers modernos.
-          -->
-          <button type="button" class="btn btn-sm btn-primary"
+          <button type="button" class="btn btn-sm btn-success"
             onclick="document.getElementById('ticketForm').requestSubmit()">
             <i class="bi bi-check-lg"></i> Criar Ticket
           </button>
@@ -1000,6 +1149,177 @@
       </div>
     </div>
   </div><!-- /avaliacaoModal -->
+
+  <!-- ========================================
+       MODAL — FINALIZAR CHAMADO (com motivo/solução)
+       ======================================== -->
+  <div class="modal fade" id="finalizarModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#1A1A1A;color:#FFC107;border-bottom:3px solid #FFC107;">
+          <h5 class="modal-title" style="color:#FFC107;">
+            <i class="bi bi-check2-circle"></i> Finalizar Chamado
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Descreva a <strong>solução aplicada</strong> ou o <strong>motivo do fechamento</strong>.
+            Este texto será enviado por e-mail ao solicitante e ficará registrado no histórico.
+          </p>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-card-text text-primary"></i> Solução / Motivo do fechamento
+            </label>
+            <textarea class="form-control" id="finalizarSolucao" rows="4" maxlength="2000"
+              placeholder="Ex.: Reiniciado o serviço X no servidor; problema resolvido após atualização do driver Y..."></textarea>
+            <small class="text-muted">Até 2000 caracteres</small>
+          </div>
+          <div class="alert alert-danger d-none py-2 px-3 small" id="finalizarError"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-danger" data-bs-dismiss="modal">
+            <i class="bi bi-x-lg"></i> Cancelar
+          </button>
+          <button type="button" class="btn btn-sm btn-success" onclick="submitFinalizarTicket()">
+            <i class="bi bi-check-lg"></i> Confirmar Finalização
+          </button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /finalizarModal -->
+
+  <!-- ========================================
+       MODAL — VISUALIZAR IMAGEM (ampliada)
+       ======================================== -->
+  <div class="modal fade" id="imageViewerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+      <div class="modal-content bg-dark border-0">
+        <div class="modal-header border-0 py-2">
+          <span class="text-white small" id="imageViewerFilename">imagem</span>
+          <div class="ms-auto d-flex gap-2">
+            <a id="imageViewerOpen" href="#" target="_blank" rel="noopener"
+               class="btn btn-sm btn-outline-light" title="Abrir em nova aba">
+              <i class="bi bi-box-arrow-up-right"></i>
+            </a>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+        </div>
+        <div class="modal-body p-0 text-center" style="background:#000;">
+          <img id="imageViewerImg" src="" alt=""
+            style="max-width:100%;max-height:80vh;object-fit:contain;background:#000;">
+        </div>
+      </div>
+    </div>
+  </div><!-- /imageViewerModal -->
+
+  <!-- ========================================
+       PAINEL LATERAL — split view (segundo ticket)
+       ======================================== -->
+  <div id="ticketDetailModal2" aria-hidden="true">
+    <div class="ticket-detail-header">
+      <div class="d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2 ticket-header-title">
+          <i class="bi bi-ticket-detailed" id="iconDetailHeader2"></i>
+          <span id="detailTitle2"></span>
+          <small id="detailId2"></small>
+        </div>
+        <div class="ticket-window-controls">
+          <button type="button" class="win-btn win-btn-min"
+            onclick="minimizeSplitPanel()" title="Minimizar para o dock">
+            <i class="bi bi-dash-lg"></i>
+          </button>
+          <button type="button" class="win-btn win-btn-max"
+            onclick="swapSplitTickets()" title="Tornar ativo (trocar lado)">
+            <i class="bi bi-arrow-left-right"></i>
+          </button>
+          <button type="button" class="win-btn win-btn-close"
+            onclick="closeSplitView()" title="Fechar split">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-body p-3" style="overflow-y:auto;">
+      <div class="ticket-quick-info mb-3">
+        <div class="info-row"><span class="label"><i class="bi bi-person"></i></span><strong id="detail2UserName"></strong></div>
+        <div class="info-row"><span class="label"><i class="bi bi-flag"></i></span><span id="detail2Status"></span></div>
+        <div class="info-row"><span class="label"><i class="bi bi-person-check"></i></span><strong id="detail2AssignedName"></strong></div>
+      </div>
+      <h6 class="section-title"><i class="bi bi-file-text"></i> Descrição</h6>
+      <div class="description-box" id="detail2Description"></div>
+      <h6 class="section-title mt-3"><i class="bi bi-chat-dots"></i> Histórico</h6>
+      <div id="detail2CommentsList" class="comments-list"></div>
+    </div>
+  </div>
+
+  <!-- ========================================
+       MODAL — Chamado Antigo (somente leitura)
+       ======================================== -->
+  <div class="modal fade" id="chamadoAntigoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" id="chamadoAntigoDialog">
+      <div class="modal-content">
+        <div class="ticket-detail-header">
+          <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2 ticket-header-title">
+              <i class="bi bi-archive"></i>
+              <span id="antigoTitulo"></span>
+              <small id="antigoTrackid"></small>
+            </div>
+            <div class="ticket-window-controls">
+              <button type="button" class="win-btn win-btn-min"
+                onclick="minimizeChamadoAntigoModal()" title="Minimizar">
+                <i class="bi bi-dash-lg"></i>
+              </button>
+              <button type="button" class="win-btn win-btn-max"
+                onclick="toggleChamadoAntigoFullscreen()" title="Maximizar/Restaurar">
+                <i class="bi bi-arrows-fullscreen" id="iconChamadoAntigoFullscreen"></i>
+              </button>
+              <button type="button" class="win-btn win-btn-close" data-bs-dismiss="modal" title="Fechar">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="ticket-quick-info mb-3">
+            <div class="info-row"><span class="label"><i class="bi bi-person"></i></span><strong id="antigoSolicitante"></strong></div>
+            <div class="info-row"><span class="label"><i class="bi bi-envelope"></i></span><span id="antigoEmail"></span></div>
+            <div class="info-row"><span class="label"><i class="bi bi-flag"></i></span><span id="antigoStatus"></span></div>
+            <div class="info-row"><span class="label"><i class="bi bi-folder"></i></span><span id="antigoCategoria"></span></div>
+            <div class="info-row"><span class="label"><i class="bi bi-person-check"></i></span><span id="antigoAtribuido"></span></div>
+          </div>
+
+          <h6 class="section-title"><i class="bi bi-calendar"></i> Datas</h6>
+          <div class="row g-2 mb-3 small">
+            <div class="col-md-4"><strong>Aberto:</strong> <span id="antigoAberto"></span></div>
+            <div class="col-md-4"><strong>1ª resposta:</strong> <span id="antigoPrimeiraResp"></span></div>
+            <div class="col-md-4"><strong>Fechado:</strong> <span id="antigoFechado"></span></div>
+          </div>
+
+          <h6 class="section-title"><i class="bi bi-file-text"></i> Mensagem do solicitante</h6>
+          <div class="description-box" id="antigoMensagem"></div>
+
+          <h6 class="section-title mt-3"><i class="bi bi-chat-square-text"></i> Resposta</h6>
+          <div class="mb-2 small">
+            <strong>Respondido por:</strong> <span id="antigoRespondidoPor"></span>
+            &nbsp;·&nbsp; <span id="antigoDhResposta"></span>
+          </div>
+          <div class="description-box" id="antigoResposta"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-sm btn-dark" data-bs-dismiss="modal">
+            <i class="bi bi-x-lg"></i> Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div><!-- /chamadoAntigoModal -->
+
+  <!-- ========================================
+       DOCK DE TICKETS MINIMIZADOS (taskbar)
+       ======================================== -->
+  <div id="ticketDock" class="ticket-dock"></div>
 
   <!-- ========================================
        SCRIPTS

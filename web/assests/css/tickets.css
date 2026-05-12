@@ -364,29 +364,267 @@
      TICKET DETAIL MODAL - HEADER
      ======================================== */
   
+  /* Header tipo "title bar" de janela Windows — compacto */
   .ticket-detail-header {
-    background: #fff;
-    border-radius: 0;
-    font-size: 11px;
+    background: #1A1A1A;
+    color: #fff;
+    border-bottom: 2px solid #FFC107;
+    padding: 0;                /* o conteúdo controla padding interno */
+    font-family: inherit;
+    text-align: left !important;
+    text-transform: none;
+    line-height: 1.2;
+    font-weight: 400;
+    flex-shrink: 0;
+  }
+
+  .ticket-detail-header > div {
+    padding: 6px 8px 6px 14px;
+    min-height: 36px;
+  }
+
+  .ticket-header-title {
+    font-size: 0.85rem;
+    color: #fff;
     text-transform: uppercase;
-    line-height: 15px;
-    font-weight: 300;
-    padding: 12px;
-    color: #000000;
-    border-bottom: solid 1px #000;
-    text-align: center !important;
-    font-family: Droid Sans, sans-serif, Arial;
-  }
-  
-  .ticket-detail-header h4 {
-    margin: 0;
+    letter-spacing: 0.4px;
     font-weight: 600;
-    font-size: 1.5rem;
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  
-  .ticket-detail-header small {
-    color: rgba(255, 255, 255, 0.9);
+  .ticket-header-title i.bi-ticket-detailed { color: #FFC107; font-size: 0.95rem; }
+  .ticket-header-title #detailTitle {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ticket-header-title #detailId {
+    color: rgba(255,193,7,0.85) !important;
     font-weight: 500;
+    font-size: 0.7rem;
+    margin-left: 4px;
+  }
+
+  /* Botões estilo janela do Windows */
+  .ticket-window-controls {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin-right: -8px;       /* encosta na borda direita */
+    height: 100%;
+  }
+  .win-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    width: 44px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color .15s;
+    padding: 0;
+    line-height: 1;
+  }
+  .win-btn i { font-size: 0.95rem; }
+  .win-btn:hover         { background: rgba(255,255,255,0.10); }
+  .win-btn-close:hover   { background: #dc3545; color: #fff; }
+  .win-btn-max:hover     { background: rgba(255,255,255,0.16); }
+  .win-btn-min:hover     { background: rgba(255,193,7,0.20); color: #FFC107; }
+
+  /* ========================================
+     MODAL REDIMENSIONÁVEL POR ARRASTAR BORDAS
+     ======================================== */
+  /* O dialog precisa permitir overflow para os handles ficarem visíveis. */
+  #ticketDetailDialog { overflow: visible; }
+  #ticketDetailDialog .modal-content { position: relative; overflow: visible; }
+
+  /* Fullscreen REAL — 100vw × 100vh, sem borders/shadow que causam corte */
+  #ticketDetailModal.show,
+  #chamadoAntigoModal.show { padding: 0 !important; padding-right: 0 !important; }
+  #ticketDetailDialog.modal-fullscreen,
+  #chamadoAntigoDialog.modal-fullscreen {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    margin: 0 !important;
+  }
+  #ticketDetailDialog.modal-fullscreen .modal-content,
+  #chamadoAntigoDialog.modal-fullscreen .modal-content {
+    width: 100% !important;
+    height: 100% !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  /* Em modo fullscreen ou split, o resize não faz sentido (some os handles). */
+  #ticketDetailDialog.modal-fullscreen .resize-handle,
+  .ticket-split-mode .resize-handle { display: none; }
+
+  .resize-handle {
+    position: absolute;
+    z-index: 9999;
+    background: transparent;
+    user-select: none;
+    touch-action: none;
+    pointer-events: auto !important;
+  }
+  /* Handles ficam no MODAL-DIALOG (não no content) para evitar stacking context
+     interno do .modal-content e a scrollbar do .modal-body interceptarem o clique. */
+  .resize-handle.rh-n  { top:-6px;    left:24px;  right:24px; height:12px; cursor:ns-resize; }
+  .resize-handle.rh-s  { bottom:-6px; left:24px;  right:24px; height:12px; cursor:ns-resize; }
+  .resize-handle.rh-e  { top:24px;    right:-6px; bottom:24px; width:12px; cursor:ew-resize; }
+  .resize-handle.rh-w  { top:24px;    left:-6px;  bottom:24px; width:12px; cursor:ew-resize; }
+  .resize-handle.rh-ne { top:-6px;    right:-6px; width:18px;  height:18px; cursor:nesw-resize; }
+  .resize-handle.rh-nw { top:-6px;    left:-6px;  width:18px;  height:18px; cursor:nwse-resize; }
+  .resize-handle.rh-se { bottom:-6px; right:-6px; width:18px;  height:18px; cursor:nwse-resize; }
+  .resize-handle.rh-sw { bottom:-6px; left:-6px;  width:18px;  height:18px; cursor:nesw-resize; }
+
+  /* ========================================
+     TICKET DOCK (taskbar de minimizados)
+     ======================================== */
+  .ticket-dock {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    /* Acima do .modal-backdrop (1050) E do .modal (1055) para receber cliques */
+    z-index: 1070;
+    display: flex;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(26,26,26,0.95);
+    border-top: 2px solid #FFC107;
+    pointer-events: auto;
+  }
+  .ticket-dock:empty { display: none; }
+  .ticket-dock-item {
+    pointer-events: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 320px;
+    padding: 6px 10px;
+    background: #2a2a2a;
+    border: 1px solid #FFC107;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: background-color .15s;
+  }
+  .ticket-dock-item:hover { background: #3a3a3a; }
+  .ticket-dock-item i.bi-ticket-detailed { color: #FFC107; }
+  /* Chip de chamado antigo — borda + ícone laranja para distinguir visualmente */
+  .ticket-dock-item--antigo { border-color: #f97316; }
+  .ticket-dock-item--antigo i.bi-archive { color: #f97316; }
+  .ticket-dock-item .dock-title {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px;
+  }
+  .ticket-dock-item .dock-close {
+    background: transparent;
+    border: none;
+    color: #ccc;
+    padding: 0 2px;
+    line-height: 1;
+    font-size: 0.85rem;
+  }
+  .ticket-dock-item .dock-close:hover { color: #dc3545; }
+  .ticket-dock-item .dock-split {
+    background: transparent;
+    border: none;
+    color: #ccc;
+    padding: 0 2px;
+    line-height: 1;
+    font-size: 0.85rem;
+  }
+  .ticket-dock-item .dock-split:hover { color: #FFC107; }
+
+  /* ========================================
+     SPLIT VIEW — 2 tickets lado a lado
+     ======================================== */
+  body.ticket-split-mode #ticketDetailModal.show { padding: 0 !important; }
+  body.ticket-split-mode #ticketDetailDialog {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    width: 50vw !important;
+    max-width: 50vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+  }
+  body.ticket-split-mode #ticketDetailDialog .modal-content {
+    height: 100vh !important;
+    width: 100% !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+    border-right: 2px solid #FFC107 !important;
+    box-shadow: none !important;
+  }
+  /* Modal secundário (split à direita) — fora do system Bootstrap */
+  #ticketDetailModal2 {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 50vw;
+    height: 100vh;
+    background: #fff;
+    z-index: 1060;
+    display: none;
+    flex-direction: column;
+    border-left: 2px solid #FFC107;
+    box-shadow: -4px 0 12px rgba(0,0,0,0.2);
+  }
+  body.ticket-split-mode #ticketDetailModal2 { display: flex !important; }
+  #ticketDetailModal2 .modal-body { overflow-y: auto; flex: 1; }
+
+  /* Quando o painel ESQUERDO é um CHAMADO ANTIGO (não um ticket) — mesmas regras */
+  body.ticket-split-mode #chamadoAntigoModal.show {
+    padding: 0 !important;
+    padding-right: 0 !important;
+  }
+  body.ticket-split-mode #chamadoAntigoDialog {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    width: 50vw !important;
+    max-width: 50vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+  }
+  body.ticket-split-mode #chamadoAntigoDialog .modal-content {
+    height: 100vh !important;
+    width: 100% !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+    border-right: 2px solid #6b7280 !important;
+    box-shadow: none !important;
+  }
+
+  /* Variante CINZA quando o painel direito mostra um CHAMADO ANTIGO
+     — ajuda o usuário a distinguir do ticket novo (amarelo). */
+  #ticketDetailModal2.is-antigo {
+    border-left: 2px solid #6b7280 !important;
+  }
+  #ticketDetailModal2.is-antigo .ticket-detail-header {
+    border-bottom: 2px solid #6b7280;
+  }
+  #ticketDetailModal2.is-antigo .ticket-header-title { color: #6b7280; }
+  #ticketDetailModal2.is-antigo .ticket-header-title i { color: #6b7280; }
+  #ticketDetailModal2.is-antigo .ticket-header-title #detailId2 {
+    color: rgba(107,114,128,0.85) !important;
+  }
+  #ticketDetailModal2.is-antigo .description-box {
+    border-left-color: #6b7280;
+  }
+  /* Modal principal de ticket normal em split — mantém amarelo do tema */
+  body.ticket-split-mode #ticketDetailDialog .modal-content {
+    border-right: 2px solid #FFC107 !important;
   }
   
   /* ========================================
@@ -474,8 +712,10 @@
   
   .description-section,
   .comments-section {
-    flex: 1;
+    flex: 0 0 auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
   
   .section-title {
@@ -497,9 +737,19 @@
     border-left: 4px solid #667eea;
     line-height: 1.8;
     color: #495057;
-    word-wrap: break-word;
     font-size: 0.95rem;
+    /* Conter texto longo dentro do container, com scroll vertical próprio */
+    max-height: 380px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
+  .description-box::-webkit-scrollbar       { width: 6px; }
+  .description-box::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
+  .description-box::-webkit-scrollbar-thumb { background: #667eea; border-radius: 3px; }
+  .description-box::-webkit-scrollbar-thumb:hover { background: #764ba2; }
   
   .comments-list {
     display: flex;
@@ -507,7 +757,7 @@
     gap: 1rem;
     overflow-y: auto;
     padding-right: 0.5rem;
-    max-height: 100%;
+    max-height: 320px;
   }
   
   .comments-list::-webkit-scrollbar {
@@ -529,44 +779,83 @@
   }
   
   /* ========================================
-     QUICK INFO BOX
+     QUICK INFO BOX (compacto — 1 linha horizontal)
      ======================================== */
-  
+
   .ticket-quick-info {
     background: #f8f9fa;
-    padding: 1.5rem;
+    padding: 0.5rem 0.75rem;
     border-radius: 8px;
     border: 1px solid #dee2e6;
     border-left: 4px solid #667eea;
-  }
-  
-  .info-row {
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    column-gap: 1rem;
+    row-gap: 0.35rem;
+    font-size: 0.78rem;
+    line-height: 1.2;
+  }
+
+  .info-row {
+    display: inline-flex;
     align-items: center;
-    padding: 0.75rem 0;
-    border-bottom: 1px solid #dee2e6;
-  }
-  
-  .info-row:last-child {
+    gap: 0.4rem;
+    padding: 0;
     border-bottom: none;
+    min-width: 0;
   }
-  
+
   .info-row .label {
-    font-weight: 600;
-    color: #6c757d;
-    font-size: 0.85rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    color: #667eea;
+    font-size: 0.9rem;
+    flex-shrink: 0;
   }
-  
-  .info-row strong {
+  .info-row .label i { vertical-align: middle; }
+
+  .info-row strong,
+  .info-row span {
     color: #212529;
-    font-weight: 600;
+    font-weight: 500;
+    font-size: 0.78rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 220px;
   }
-  
+
   .info-row .badge {
     margin: 0;
+    font-size: 0.7rem;
+    padding: 0.25rem 0.45rem;
+  }
+
+  /* ========================================
+     SECTION TITLE com toggle (clicável)
+     ======================================== */
+  .section-title.section-title--toggle {
+    cursor: pointer;
+    user-select: none;
+    transition: color .15s;
+  }
+  .section-title.section-title--toggle:hover { color: #667eea; }
+  .section-title.section-title--toggle .bi-chevron-up,
+  .section-title.section-title--toggle .bi-chevron-down {
+    font-size: 0.85rem;
+    transition: transform .2s;
+    margin-left: auto;
+  }
+  .comments-section.is-collapsed .comments-list { display: none; }
+  .comments-section.is-collapsed .section-title .bi-chevron-up { transform: rotate(180deg); }
+
+  /* ========================================
+     REPLY BLOCK — form de resposta centralizado vertical
+     ======================================== */
+  .reply-block {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin: auto 0;     /* centraliza no espaço restante da coluna direita */
+    width: 100%;
   }
   
   /* ========================================
@@ -866,11 +1155,12 @@
   }
   
   .ticket-form-header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-bottom: none;
+    background: #ffff;
+    color: #0f0f0f;
+    border-bottom: 2px solid #FFC107;
     padding: 1.25rem;
   }
+  .ticket-form-header .modal-title { color: #FFC107; }
   
   .ticket-form-header .modal-title {
     font-weight: 600;
@@ -1217,15 +1507,20 @@
     }
   
     .ticket-quick-info {
-      padding: 1rem;
+      padding: 0.5rem 0.75rem;
+      column-gap: 0.75rem;
     }
-  
+
     .info-row {
-      padding: 0.5rem 0;
+      padding: 0;
     }
-  
+
     .info-row .label {
-      font-size: 0.8rem;
+      font-size: 0.85rem;
+    }
+    .info-row strong,
+    .info-row span {
+      max-width: 160px;
     }
   
     .reply-mode textarea {
@@ -1371,13 +1666,12 @@
     }
   
     .info-row {
-      flex-direction: column;
-      align-items: flex-start;
-      padding: 0.5rem 0;
+      padding: 0;
     }
-  
-    .info-row .label {
-      margin-bottom: 0.25rem;
+
+    .info-row strong,
+    .info-row span {
+      max-width: 140px;
     }
   
     .description-box {
@@ -1717,4 +2011,127 @@
 .ticket-encerrado #sectionReabrirChamado {
   position: relative;
   z-index: 2;
+}
+
+/* ========================================
+   ABAS DE VISTA (Meus / Pra mim / Todos)
+   ======================================== */
+.tickets-view-tabs {
+  border-bottom: 1px solid #e5e7eb;
+  gap: 4px;
+}
+.tickets-view-tabs .nav-link {
+  color: #6b7280;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 6px 6px 0 0;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: transparent;
+  transition: all 0.15s;
+}
+.tickets-view-tabs .nav-link:hover {
+  color: #1f2937;
+  background: #f3f4f6;
+}
+.tickets-view-tabs .nav-link.active {
+    color: #000000;
+    background: #ffffff;
+    border-color: #000000;
+    box-shadow: inset 0px 2px 4px #dddddd;
+}
+.tickets-view-tabs .nav-link.active .badge {
+  background: rgba(255,255,255,0.25) !important;
+  color: #000000;
+}
+.tickets-view-tabs .nav-link .badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* Realce visual nas linhas da tabela conforme a vista */
+.ticket-row-mine td:first-child {
+  border-left: 3px solid #3b82f6;
+}
+.ticket-row-assigned td:first-child {
+  border-left: 3px solid #f59e0b;
+}
+
+/* ========================================
+   ANEXOS DE IMAGEM (preview + thumbs)
+   ======================================== */
+#ticketAttachPreview,
+#replyAttachPreview,
+#internalAttachPreview {
+  max-width: 100%;
+  overflow: hidden;
+}
+.attach-thumb {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  cursor: zoom-in;
+  flex: 0 0 auto;
+}
+.attach-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.attach-thumb .attach-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(220, 38, 38, 0.9);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+.attach-thumb .attach-size {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 9px;
+  text-align: center;
+  padding: 1px 0;
+}
+
+/* Thumbs no histórico (read-only) */
+.comment-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.comment-attachments a {
+  display: block;
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  cursor: zoom-in;
+}
+.comment-attachments img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }

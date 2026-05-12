@@ -775,7 +775,7 @@
     width: 90%;
     box-shadow: var(--shadow-xl);
     animation: slideIn 0.3s ease;
-    border: 2px solid var(--border-color);
+    
   }
   /* =========================================
    MODAL CATEGORIAS - REFATORADO

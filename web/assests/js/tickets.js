@@ -233,6 +233,17 @@ let viewingTicketId  = null;
 let isLoadingTickets = false;
 let isLoadingUsers   = false;
 
+// Vista atual: 'todos' | 'meus' | 'para_mim'
+let currentVista = 'todos';
+
+// Buffers de anexos pendentes (antes do envio)
+//   pendingAttachments.create   → imagens para o novo ticket
+//   pendingAttachments.reply    → imagens para a resposta pública
+//   pendingAttachments.internal → imagens para o comentário interno
+const pendingAttachments = { create: [], reply: [], internal: [] };
+const ATTACH_MAX_BYTES   = 250 * 1024;
+const ATTACH_MIMES_OK    = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
 const API_BASE    = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`) + '/api';
 const API_TIMEOUT = 10000;
 
@@ -888,7 +899,15 @@ function applyFilters() {
   const status   = document.getElementById("statusFilter")?.value || "";
   const priority = document.getElementById("priorityFilter")?.value || "";
 
+  const userId = getCurrentUserId();
+  const matchVista = (t) => {
+    if (currentVista === 'meus')     return t.solicitante_id === userId;
+    if (currentVista === 'para_mim') return t.assignedTo === userId;
+    return true; // 'todos'
+  };
+
   filteredTickets = tickets.filter(t =>
+    matchVista(t) &&
     (!status   || t.status   === status)   &&
     (!priority || t.priority === priority) &&
     (!search   || t.title.toLowerCase().includes(search) ||
@@ -896,6 +915,7 @@ function applyFilters() {
                   t.numero.toLowerCase().includes(search))
   );
 
+  updateVistaCounts();
   currentPage = 1;
   renderTable();
 }
@@ -1115,6 +1135,24 @@ async function openTicketDetail(id) {
     return;
   }
 
+  // Se um chamado ANTIGO está aberto, fecha-o e move para split (à direita)
+  const antigoEl = document.getElementById('chamadoAntigoModal');
+  const antigoAberto = _viewingAntigoId && antigoEl?.classList.contains('show');
+  const antigoParaSplit = antigoAberto ? _viewingAntigoId : null;
+  if (antigoAberto) {
+    // Fecha o modal antigo manualmente (sem deixar backdrop preso)
+    antigoEl.classList.remove('show');
+    antigoEl.style.display = 'none';
+    antigoEl.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('modal-open');
+    document.body.style.overflow     = '';
+    document.body.style.paddingRight = '';
+    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+    const inst = bootstrap.Modal.getInstance(antigoEl);
+    if (inst) { try { inst.dispose(); } catch(e){} }
+    _viewingAntigoId = null;
+  }
+
   viewingTicketId = id;
   console.log(`[DETAIL] 📖 Abrindo ticket #${id}...`);
 
@@ -1146,7 +1184,23 @@ async function openTicketDetail(id) {
   // ✅ Passa usuario_id para filtrar comentários internos no backend
   await loadTicketComments(id);
 
-  new bootstrap.Modal(document.getElementById("ticketDetailModal")).show();
+  // Limpa estado fantasma deixado por um minimize anterior
+  const _ticketModalEl = document.getElementById("ticketDetailModal");
+  if (_ticketModalEl) {
+    _ticketModalEl.style.display = '';
+    _ticketModalEl.removeAttribute('aria-hidden');
+  }
+  new bootstrap.Modal(_ticketModalEl).show();
+
+  // Se havia um chamado antigo aberto, ativa SPLIT com ele à direita
+  if (antigoParaSplit) {
+    setTimeout(async () => {
+      _splitAntigoId = antigoParaSplit;
+      _splitTicketId = null;
+      await _renderSplitPanelAntigo(antigoParaSplit);
+      document.body.classList.add('ticket-split-mode');
+    }, 200);
+  }
 }
 
 function editTicketRow(id) {
@@ -1210,6 +1264,7 @@ function openNewTicketModal() {
 
   // ✅ Limpa categoria e subcategoria do form anterior
   resetCategoriaSubcategoria();
+  _clearPendingSlot('create');
 
   // ✅ Popula o select de grupos e pré-seleciona o grupo do usuário
   populateGroupDropdown();
@@ -1269,6 +1324,11 @@ async function handleFormSubmit(e) {
   }
 
   if (result) {
+    // Faz upload das imagens pendentes (somente na criação)
+    const novoTicketId = (!selectedTicketId && result && result.id) ? result.id : null;
+    if (novoTicketId) {
+      await _uploadPendingAttachments('create', novoTicketId, null);
+    }
     showSuccess(`✅ Ticket ${selectedTicketId ? 'atualizado' : 'criado'} com sucesso!`);
     bootstrap.Modal.getInstance(document.getElementById("ticketModal"))?.hide();
     selectedTicketId = null;
@@ -1288,10 +1348,39 @@ async function loadTicketComments(ticketId) {
   const userId = getCurrentUserId();
   const admin = isAdmin();  // ✅ Verificar se é admin
 
-  const data = await apiRequest(
-    'GET',
-    `/ticket-interacoes/${ticketId}?usuario_id=${userId}`
-  );
+  // Carrega comentários e anexos em paralelo.
+  // Para anexos usamos fetch direto (sem showError) — assim, se a tabela
+  // ainda não existir ou houver falha de rede, a UI segue funcionando.
+  const fetchAttachments = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/tickets/${ticketId}/attachments`);
+      if (!res.ok) return [];
+      return await res.json();
+    } catch {
+      return [];
+    }
+  };
+  const [data, attachments] = await Promise.all([
+    apiRequest('GET', `/ticket-interacoes/${ticketId}?usuario_id=${userId}`),
+    fetchAttachments(),
+  ]);
+
+  // Agrupa anexos por interacao_id (null = anexo da descrição inicial)
+  const anexosPorInteracao = {};
+  const anexosDescricao = [];
+  (attachments || []).forEach(a => {
+    if (a.interacao_id) {
+      (anexosPorInteracao[a.interacao_id] ||= []).push(a);
+    } else {
+      anexosDescricao.push(a);
+    }
+  });
+
+  // Anexos da descrição inicial aparecem logo abaixo da descrição
+  const descAttachBox = document.getElementById('detailDescriptionAttachments');
+  if (descAttachBox) {
+    descAttachBox.innerHTML = anexosDescricao.length ? _renderAttachGallery(anexosDescricao) : '';
+  }
 
   const container = document.getElementById("detailCommentsList");
   if (!container) return;
@@ -1312,7 +1401,9 @@ async function loadTicketComments(ticketId) {
     return;
   }
 
-  container.innerHTML = comentariosFiltrados.map(c => `
+  container.innerHTML = comentariosFiltrados.map(c => {
+    const anexos = anexosPorInteracao[c.id] || [];
+    return `
     <div class="comment-item p-3 mb-2 rounded bg-light">
       <div class="d-flex justify-content-between align-items-center mb-2">
         <span class="fw-bold">${c.usuario_nome || 'Desconhecido'}</span>
@@ -1324,8 +1415,39 @@ async function loadTicketComments(ticketId) {
         </div>
       </div>
       <p class="mb-0">${c.mensagem || '[Sem conteúdo]'}</p>
+      ${anexos.length ? _renderAttachGallery(anexos) : ''}
+    </div>`;
+  }).join("");
+}
+
+/** HTML de galeria de thumbs para anexos já gravados (clique abre o modal flutuante). */
+function _renderAttachGallery(anexos) {
+  if (!anexos || !anexos.length) return '';
+  const base = API_BASE; // já inclui /api
+  return `
+    <div class="comment-attachments">
+      ${anexos.map(a => {
+        const url = `${base}/tickets/attachments/${a.id}`;
+        const safeName = (a.filename || 'imagem').replace(/"/g, '&quot;');
+        return `
+          <a href="${url}" onclick="event.preventDefault(); openImageViewer('${url}', '${safeName}');"
+             title="${safeName} (${(a.size_bytes/1024).toFixed(0)} KB)">
+            <img src="${url}" alt="${safeName}">
+          </a>`;
+      }).join('')}
     </div>
-  `).join("");
+  `;
+}
+
+/** Abre o modal flutuante exibindo a imagem em tamanho ampliado. */
+function openImageViewer(url, filename) {
+  const img    = document.getElementById('imageViewerImg');
+  const label  = document.getElementById('imageViewerFilename');
+  const openA  = document.getElementById('imageViewerOpen');
+  if (img)   img.src = url;
+  if (label) label.textContent = filename || 'imagem';
+  if (openA) openA.href = url;
+  new bootstrap.Modal(document.getElementById('imageViewerModal')).show();
 }
 
 async function submitComment(form, isPublic) {
@@ -1348,8 +1470,15 @@ async function submitComment(form, isPublic) {
 
   const result = await apiRequest('POST', '/ticket-interacoes', payload);
   if (result) {
+    // Upload de anexos vinculados a esta interação
+    const slot = isPublic ? 'reply' : 'internal';
+    const interacaoId = result && result.id ? result.id : null;
+    if (interacaoId) {
+      await _uploadPendingAttachments(slot, viewingTicketId, interacaoId);
+    }
     showSuccess(`✅ ${isPublic ? 'Resposta enviada' : 'Comentário salvo'}!`);
     form.reset();
+    _clearPendingSlot(slot);
     await loadTicketComments(viewingTicketId);
   }
 }
@@ -1439,6 +1568,455 @@ function switchReplyMode(event, mode) {
   document.getElementById(`reply-${mode}`)?.classList.add('active');
 }
 
+/** Mostra/oculta o histórico de comentários do modal de detalhe. */
+function toggleCommentsSection() {
+  const section = document.querySelector('#ticketDetailModal .comments-section');
+  if (!section) return;
+  section.classList.toggle('is-collapsed');
+}
+
+// =========================================
+// DOCK DE TICKETS MINIMIZADOS + SPLIT VIEW
+// =========================================
+
+/** Tickets minimizados em memória — { [id]: {id, numero, title, status} } */
+const _minimizedTickets = {};
+/** Chamados antigos minimizados — { [trackid]: {trackid, assunto, status} } */
+const _minimizedAntigos = {};
+let   _splitTicketId    = null;   // ID do ticket NORMAL no painel da direita
+let   _splitAntigoId    = null;   // trackid do CHAMADO ANTIGO no painel da direita
+let   _viewingAntigoId  = null;   // trackid do chamado antigo atualmente aberto no modal
+
+/** Limite de chips no dock — evita poluir a barra do rodapé. */
+const DOCK_MAX = 6;
+function _dockCount() {
+  return Object.keys(_minimizedTickets).length + Object.keys(_minimizedAntigos).length;
+}
+function _dockHasRoom(idAlvo) {
+  // Permite minimizar se já existe (caso de regravar) OU se há espaço
+  if (_minimizedTickets[idAlvo] != null || _minimizedAntigos[idAlvo] != null) return true;
+  if (_dockCount() < DOCK_MAX) return true;
+  showError(`⚠️ Limite de ${DOCK_MAX} chamados minimizados atingido. Feche um chip do dock antes de minimizar outro.`);
+  return false;
+}
+
+/** Minimiza o modal de detalhe atual e cria um chip no dock. */
+function minimizeTicketModal() {
+  const id = viewingTicketId;
+  if (!id) return;
+  const t = tickets.find(x => x.id === id);
+  if (!t) return;
+  if (!_dockHasRoom(id)) return;
+
+  _minimizedTickets[id] = { id, numero: t.numero, title: t.title, status: t.status };
+  _renderTicketDock();
+
+  // Esconde manualmente — Modal.hide() do Bootstrap deixa o backdrop preso
+  // quando o modal foi aberto com data-bs-backdrop="static".
+  const modalEl = document.getElementById('ticketDetailModal');
+  if (modalEl) {
+    modalEl.classList.remove('show');
+    modalEl.style.display = 'none';
+    modalEl.setAttribute('aria-hidden', 'true');
+  }
+  document.body.classList.remove('modal-open');
+  document.body.style.overflow      = '';
+  document.body.style.paddingRight  = '';
+  document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+
+  // Descarta a instância Bootstrap — `openTicketDetail` cria uma nova ao restaurar.
+  const inst = bootstrap.Modal.getInstance(modalEl);
+  if (inst) { try { inst.dispose(); } catch (e) { /* ignore */ } }
+}
+
+/** Re-renderiza o dock combinando tickets normais e chamados antigos. */
+function _renderTicketDock() {
+  const dock = document.getElementById('ticketDock');
+  if (!dock) return;
+  const tickets   = Object.values(_minimizedTickets);
+  const antigos   = Object.values(_minimizedAntigos);
+  if (!tickets.length && !antigos.length) { dock.innerHTML = ''; return; }
+
+  const chipTicket = (t) => `
+    <div class="ticket-dock-item" onclick="handleDockClick(${t.id})"
+         title="Clique para abrir (ou abrir lado a lado, se já houver outro)">
+      <i class="bi bi-ticket-detailed"></i>
+      <span class="dock-title">${t.numero} — ${(t.title || '').replace(/</g,'&lt;')}</span>
+      <button class="dock-close" title="Descartar"
+              onclick="event.stopPropagation(); closeFromDock(${t.id})">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>`;
+  const chipAntigo = (a) => {
+    const tid = a.trackid.replace(/'/g, "\\'");
+    return `
+    <div class="ticket-dock-item ticket-dock-item--antigo"
+         onclick="handleDockClickAntigo('${tid}')"
+         title="Chamado antigo — clique para abrir ou dividir tela com um ticket">
+      <i class="bi bi-archive"></i>
+      <span class="dock-title">${a.trackid} — ${(a.assunto || '').replace(/</g,'&lt;')}</span>
+      <button class="dock-close" title="Descartar"
+              onclick="event.stopPropagation(); closeAntigoFromDock('${tid}')">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>`;
+  };
+
+  dock.innerHTML =
+    tickets.map(chipTicket).join('') +
+    antigos.map(chipAntigo).join('');
+}
+
+/**
+ * Clique no chip de TICKET NORMAL:
+ *  - Modal aberto com outro ticket → split
+ *  - Caso contrário → restaura
+ */
+function handleDockClick(id) {
+  const modalEl = document.getElementById('ticketDetailModal');
+  const modalVisible = modalEl?.classList.contains('show');
+  if (modalVisible && viewingTicketId && viewingTicketId !== id) {
+    openInSplit(id);
+  } else {
+    restoreFromDock(id);
+  }
+}
+
+/**
+ * Clique no chip de CHAMADO ANTIGO:
+ *  - Modal de ticket NORMAL aberto → abre o antigo em SPLIT (à direita)
+ *  - Caso contrário → restaura no modal de chamado antigo
+ */
+function handleDockClickAntigo(trackid) {
+  const modalEl = document.getElementById('ticketDetailModal');
+  const modalVisible = modalEl?.classList.contains('show');
+  if (modalVisible && viewingTicketId) {
+    openAntigoInSplit(trackid);
+  } else {
+    restoreAntigoFromDock(trackid);
+  }
+}
+
+/** Restaura um ticket do dock (volta a abrir o modal). */
+function restoreFromDock(id) {
+  delete _minimizedTickets[id];
+  _renderTicketDock();
+  openTicketDetail(id);
+}
+
+/** Remove o chip do dock sem reabrir. */
+function closeFromDock(id) {
+  delete _minimizedTickets[id];
+  _renderTicketDock();
+}
+
+/** Ativa split view: mantém o modal atual à esquerda, mostra outro ticket à direita. */
+async function openInSplit(id) {
+  const modalEl = document.getElementById('ticketDetailModal');
+  const modalVisible = modalEl?.classList.contains('show');
+
+  // Sem outro ticket aberto no modal → split não faz sentido, só restaura
+  if (!modalVisible || !viewingTicketId || id === viewingTicketId) {
+    restoreFromDock(id);
+    return;
+  }
+
+  delete _minimizedTickets[id];
+  _renderTicketDock();
+  _splitTicketId = id;
+  await _renderSplitPanel(id);
+  document.body.classList.add('ticket-split-mode');
+  console.log(`[SPLIT] Ativo: esquerda=#${viewingTicketId} | direita=#${id}`);
+}
+
+// Quando o modal principal fechar, limpa o split automaticamente.
+document.addEventListener('DOMContentLoaded', () => {
+  const modal = document.getElementById('ticketDetailModal');
+  if (!modal) return;
+  modal.addEventListener('hidden.bs.modal', () => {
+    if (document.body.classList.contains('ticket-split-mode')) {
+      document.body.classList.remove('ticket-split-mode');
+      _splitTicketId = null;
+    }
+  });
+});
+
+/** Renderiza o conteúdo do painel direito (somente leitura). */
+async function _renderSplitPanel(id) {
+  const t = tickets.find(x => x.id === id);
+  if (!t) return;
+
+  // Garante visual de TICKET NOVO (amarelo + ícone de ticket)
+  const sidePanel = document.getElementById('ticketDetailModal2');
+  if (sidePanel) sidePanel.classList.remove('is-antigo');
+  const icon = document.getElementById('iconDetailHeader2');
+  if (icon) icon.className = 'bi bi-ticket-detailed';
+
+  document.getElementById('detailTitle2').textContent      = t.title;
+  document.getElementById('detailId2').textContent         = ' · ' + t.numero;
+  document.getElementById('detail2UserName').textContent   = t.userName;
+  document.getElementById('detail2Status').innerHTML       = getStatusBadge(t.status);
+  document.getElementById('detail2AssignedName').textContent = t.assignedName;
+  document.getElementById('detail2Description').textContent = t.description;
+
+  // Comentários
+  try {
+    const userId = getCurrentUserId();
+    const data = await apiRequest('GET', `/ticket-interacoes/${id}?usuario_id=${userId}`);
+    const admin = isAdmin();
+    const list = (data || []).filter(c => admin || c.publico === 1);
+    const box  = document.getElementById('detail2CommentsList');
+    if (!list.length) {
+      box.innerHTML = '<p class="text-muted text-center py-3">Sem comentários</p>';
+    } else {
+      box.innerHTML = list.map(c => `
+        <div class="comment-item p-2 mb-2 rounded bg-light">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <strong>${c.usuario_nome || '—'}</strong>
+            <small class="text-muted">${formatDateTime(c.created_at)}</small>
+          </div>
+          <div style="white-space:pre-wrap;">${(c.mensagem||'').replace(/</g,'&lt;')}</div>
+        </div>
+      `).join('');
+    }
+  } catch (e) { console.warn('[SPLIT] erro:', e); }
+}
+
+/** Fecha o split view (volta o modal principal ao tamanho normal). */
+function closeSplitView() {
+  document.body.classList.remove('ticket-split-mode');
+  _splitTicketId = null;
+  _splitAntigoId = null;
+}
+
+/** Minimiza o painel direito do split (ticket OU chamado antigo) para o dock. */
+function minimizeSplitPanel() {
+  if (_splitTicketId) {
+    if (!_dockHasRoom(_splitTicketId)) return;
+    const t = tickets.find(x => x.id === _splitTicketId);
+    if (t) {
+      _minimizedTickets[t.id] = { id: t.id, numero: t.numero, title: t.title, status: t.status };
+    }
+  } else if (_splitAntigoId) {
+    if (!_dockHasRoom(_splitAntigoId)) return;
+    const titulo = document.getElementById('detailTitle2')?.textContent || _splitAntigoId;
+    _minimizedAntigos[_splitAntigoId] = { trackid: _splitAntigoId, assunto: titulo };
+  }
+  _splitTicketId = null;
+  _splitAntigoId = null;
+  document.body.classList.remove('ticket-split-mode');
+  _renderTicketDock();
+}
+
+/** Troca os 2 itens entre esquerda e direita do split (qualquer combinação). */
+async function swapSplitTickets() {
+  // Caso A — esquerda TICKET, direita TICKET
+  if (viewingTicketId && _splitTicketId) {
+    const left  = viewingTicketId;
+    const right = _splitTicketId;
+    await openTicketDetail(right);
+    _splitTicketId = left;
+    await _renderSplitPanel(left);
+    return;
+  }
+  // Caso B — esquerda TICKET, direita ANTIGO  → swap inverte (esquerda vira antigo)
+  if (viewingTicketId && _splitAntigoId) {
+    const oldTicket = viewingTicketId;
+    const oldAntigo = _splitAntigoId;
+    // Fecha modal de ticket, abre modal de antigo (que vira esquerda) e coloca ticket à direita
+    closeSplitView();
+    bootstrap.Modal.getInstance(document.getElementById('ticketDetailModal'))?.hide();
+    await abrirChamadoAntigo(oldAntigo);
+    // Agora simulamos: modal antigo aberto → adiciona ticket no painel direito
+    _splitTicketId = oldTicket;
+    _splitAntigoId = null;
+    await _renderSplitPanel(oldTicket);
+    document.body.classList.add('ticket-split-mode');
+    return;
+  }
+  // Caso C — esquerda ANTIGO, direita ANTIGO
+  if (_viewingAntigoId && _splitAntigoId) {
+    const oldLeft  = _viewingAntigoId;
+    const oldRight = _splitAntigoId;
+    // Repopula o modal principal de antigo com oldRight
+    const r = await fetch(`${API_BASE}/chamados-antigos/${encodeURIComponent(oldRight)}`);
+    if (r.ok) {
+      const c = await r.json();
+      const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v || '—'; };
+      const fmt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
+      setText('antigoTitulo',         c.assunto);
+      setText('antigoTrackid',        ' · ' + c.trackid);
+      setText('antigoSolicitante',    c.solicitante);
+      setText('antigoEmail',          c.email);
+      setText('antigoStatus',         c.nome_status);
+      setText('antigoCategoria',      c.categoria);
+      setText('antigoAtribuido',      c.atribuido_a);
+      setText('antigoAberto',         fmt(c.aberto_em));
+      setText('antigoPrimeiraResp',   fmt(c.primeira_resp));
+      setText('antigoFechado',        fmt(c.fechado_em));
+      setText('antigoMensagem',       c.mensagem);
+      setText('antigoRespondidoPor',  c.respondido_por);
+      setText('antigoDhResposta',     fmt(c.dh_resposta));
+      setText('antigoResposta',       c.resposta);
+      _viewingAntigoId = oldRight;
+    }
+    _splitAntigoId = oldLeft;
+    await _renderSplitPanelAntigo(oldLeft);
+    return;
+  }
+  // Caso D — esquerda ANTIGO, direita TICKET (raro mas válido)
+  if (_viewingAntigoId && _splitTicketId) {
+    const oldAntigo = _viewingAntigoId;
+    const oldTicket = _splitTicketId;
+    closeSplitView();
+    bootstrap.Modal.getInstance(document.getElementById('chamadoAntigoModal'))?.hide();
+    await openTicketDetail(oldTicket);
+    _splitAntigoId = oldAntigo;
+    _splitTicketId = null;
+    await _renderSplitPanelAntigo(oldAntigo);
+    document.body.classList.add('ticket-split-mode');
+    return;
+  }
+}
+
+/** Expande / recolhe o modal de detalhe do ticket (modal-xl ↔ tela cheia). */
+function toggleDetailFullscreen() {
+  const dialog = document.getElementById('ticketDetailDialog');
+  const icon   = document.getElementById('iconDetailFullscreen');
+  const modalEl = document.getElementById('ticketDetailModal');
+  if (!dialog) return;
+  const expandido = dialog.classList.toggle('modal-fullscreen');
+
+  // Em fullscreen, limpa dimensões custom de resize e tira o padding-right
+  // que o Bootstrap injeta inline para compensar a scrollbar do body.
+  const content = dialog.querySelector('.modal-content');
+  if (expandido) {
+    if (content) {
+      content.dataset._savedW = content.style.width  || '';
+      content.dataset._savedH = content.style.height || '';
+      content.style.width = ''; content.style.height = '';
+    }
+    dialog.dataset._savedW    = dialog.style.width      || '';
+    dialog.dataset._savedML   = dialog.style.marginLeft || '';
+    dialog.dataset._savedMT   = dialog.style.marginTop  || '';
+    dialog.style.width = ''; dialog.style.marginLeft = ''; dialog.style.marginTop = '';
+    if (modalEl) modalEl.style.paddingRight = '0';
+    dialog.classList.remove('modal-xl', 'modal-dialog-centered');
+    if (icon) icon.className = 'bi bi-arrows-angle-contract';
+  } else {
+    if (content) {
+      content.style.width  = content.dataset._savedW || '';
+      content.style.height = content.dataset._savedH || '';
+    }
+    dialog.style.width      = dialog.dataset._savedW  || '';
+    dialog.style.marginLeft = dialog.dataset._savedML || '';
+    dialog.style.marginTop  = dialog.dataset._savedMT || '';
+    if (modalEl) modalEl.style.paddingRight = '';
+    dialog.classList.add('modal-xl', 'modal-dialog-centered');
+    if (icon) icon.className = 'bi bi-arrows-fullscreen';
+  }
+}
+
+/**
+ * Anexa 8 handles invisíveis nas bordas/cantos do .modal-dialog para
+ * permitir redimensionar arrastando — comportamento de janela Windows.
+ * Idempotente.
+ */
+function _attachDetailResizeHandles() {
+  const dialog = document.getElementById('ticketDetailDialog');
+  if (!dialog) return;
+  if (dialog.dataset.resizeReady === '1') return;
+  dialog.dataset.resizeReady = '1';
+
+  // .modal-dialog tem pointer-events:none por padrão; precisa de position:relative
+  // para os handles (absolute) ficarem posicionados em relação a ele.
+  dialog.style.position = 'relative';
+
+  const dirs = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+  dirs.forEach(dir => {
+    const h = document.createElement('div');
+    h.className = `resize-handle rh-${dir}`;
+    h.dataset.dir = dir;
+    h.addEventListener('mousedown',  e => _startResize(e, dialog, dir));
+    h.addEventListener('touchstart', e => _startResize(e.touches[0], dialog, dir, e), {passive:false});
+    dialog.appendChild(h);
+  });
+}
+
+function _startResize(evt, dialog, dir, originalEvent) {
+  if (originalEvent && originalEvent.preventDefault) originalEvent.preventDefault();
+  if (evt.preventDefault) evt.preventDefault?.();
+
+  // Em modo fullscreen ou split, não permitir resize
+  if (dialog.classList.contains('modal-fullscreen')) return;
+  if (document.body.classList.contains('ticket-split-mode')) return;
+
+  const content = dialog.querySelector('.modal-content');
+  const rect = content.getBoundingClientRect();
+  const startX = evt.clientX;
+  const startY = evt.clientY;
+  const startW = rect.width;
+  const startH = rect.height;
+
+  const MIN_W = 480;
+  const MIN_H = 320;
+  const MAX_W = window.innerWidth  - 24;
+  const MAX_H = window.innerHeight - 24;
+
+  // Trava as dimensões atuais
+  dialog.style.width  = startW + 'px';
+  dialog.style.maxWidth  = 'none';
+  content.style.width  = '100%';
+  content.style.height = startH + 'px';
+  content.style.maxHeight = 'none';
+
+  const startMarginL = parseFloat(getComputedStyle(dialog).marginLeft) || 0;
+  const startMarginT = parseFloat(getComputedStyle(dialog).marginTop)  || 0;
+
+  const onMove = (e) => {
+    const ev = e.touches ? e.touches[0] : e;
+    const dx = ev.clientX - startX;
+    const dy = ev.clientY - startY;
+    let newW = startW, newH = startH, newML = startMarginL, newMT = startMarginT;
+
+    if (dir.includes('e')) newW = Math.min(MAX_W, Math.max(MIN_W, startW + dx));
+    if (dir.includes('w')) {
+      newW  = Math.min(MAX_W, Math.max(MIN_W, startW - dx));
+      newML = startMarginL + (startW - newW);
+    }
+    if (dir.includes('s')) newH = Math.min(MAX_H, Math.max(MIN_H, startH + dy));
+    if (dir.includes('n')) {
+      newH  = Math.min(MAX_H, Math.max(MIN_H, startH - dy));
+      newMT = startMarginT + (startH - newH);
+    }
+    dialog.style.width      = newW + 'px';
+    content.style.height    = newH + 'px';
+    dialog.style.marginLeft = newML + 'px';
+    dialog.style.marginTop  = newMT + 'px';
+  };
+
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup',   onUp);
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend',  onUp);
+    document.body.style.userSelect = '';
+  };
+
+  document.body.style.userSelect = 'none';
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
+  document.addEventListener('touchmove', onMove, {passive:false});
+  document.addEventListener('touchend',  onUp);
+}
+
+// Anexa os handles assim que o modal de detalhe abre.
+document.addEventListener('DOMContentLoaded', () => {
+  const modal = document.getElementById('ticketDetailModal');
+  if (!modal) return;
+  modal.addEventListener('shown.bs.modal', _attachDetailResizeHandles);
+});
+
 // =========================================
 // 21. AÇÕES DO MODAL DE DETALHE
 // =========================================
@@ -1446,31 +2024,59 @@ function switchReplyMode(event, mode) {
 // Mantido como alias para compatibilidade de chamadas antigas
 async function resolveTicket() { await finalizarTicket(); }
 
-async function finalizarTicket() {
+/** Abre o modal de finalização para o atendente preencher a solução. */
+function finalizarTicket() {
   if (!viewingTicketId) return;
-  const userId = getCurrentUserId();
+  const ta  = document.getElementById('finalizarSolucao');
+  const err = document.getElementById('finalizarError');
+  if (ta)  ta.value = '';
+  if (err) err.classList.add('d-none');
+  new bootstrap.Modal(document.getElementById('finalizarModal')).show();
+}
+
+/** Envia POST /finalizar com a solução preenchida no modal. */
+async function submitFinalizarTicket() {
+  if (!viewingTicketId) return;
+  const userId  = getCurrentUserId();
+  const solucao = document.getElementById('finalizarSolucao')?.value?.trim() || '';
+  const errorEl = document.getElementById('finalizarError');
+
+  if (solucao.length < 5) {
+    if (errorEl) {
+      errorEl.textContent = 'Descreva a solução com pelo menos 5 caracteres.';
+      errorEl.classList.remove('d-none');
+    }
+    return;
+  }
 
   try {
     const token = localStorage.getItem('cpe_token') || '';
     const res = await fetch(`${API_BASE}/tickets/${viewingTicketId}/finalizar`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body:    JSON.stringify({ usuario_id: userId })
+      body:    JSON.stringify({ usuario_id: userId, solucao })
     });
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      showError(err.detail || 'Erro ao finalizar o chamado.');
+      if (errorEl) {
+        errorEl.textContent = err.detail || 'Erro ao finalizar o chamado.';
+        errorEl.classList.remove('d-none');
+      }
       return;
     }
 
-    showSuccess('✅ Chamado finalizado com sucesso!');
+    bootstrap.Modal.getInstance(document.getElementById('finalizarModal'))?.hide();
     bootstrap.Modal.getInstance(document.getElementById('ticketDetailModal'))?.hide();
+    showSuccess('✅ Chamado finalizado! O solicitante foi notificado por e-mail.');
     await loadTickets();
 
   } catch (e) {
     console.error('[FINALIZAR] Erro:', e);
-    showError('Erro de conexão ao finalizar o chamado.');
+    if (errorEl) {
+      errorEl.textContent = 'Erro de conexão ao finalizar o chamado.';
+      errorEl.classList.remove('d-none');
+    }
   }
 }
 
@@ -2017,4 +2623,512 @@ async function submitAvaliacao() {
 function pularAvaliacao() {
   bootstrap.Modal.getInstance(document.getElementById('avaliacaoModal'))?.hide();
   _avaliacaoPendente = null;
+}
+
+// =========================================
+// VISTA DE TICKETS (abas: Todos / Meus / Para mim)
+// =========================================
+
+/** Troca a aba ativa e re-renderiza a lista (ou abre o painel de antigos). */
+function setTicketsVista(vista) {
+  if (!['todos', 'meus', 'para_mim', 'antigos'].includes(vista)) vista = 'todos';
+  currentVista = vista;
+  document.querySelectorAll('.tickets-view-tabs .nav-link').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.vista === vista);
+  });
+
+  // Toggle entre painel normal de tickets e painel de chamados antigos
+  const painelAntigos = document.getElementById('painelChamadosAntigos');
+  // Pega APENAS os elementos da tabela normal — não os de dentro do painel de antigos
+  const tabelaNormal     = document.getElementById('ticketsBody')?.closest('.table-responsive');
+  const paginacaoNormal  = document.querySelector('.content > .pagination-bar')
+                        || (tabelaNormal && tabelaNormal.nextElementSibling?.classList?.contains('pagination-bar')
+                              ? tabelaNormal.nextElementSibling : null);
+  const elementosNormais = [
+    document.querySelector('.advanced-filters'),
+    document.querySelector('.stats-bar'),
+    document.querySelector('.dashboard-sla-container'),
+    tabelaNormal,
+    paginacaoNormal,
+  ].filter(Boolean);
+
+  if (vista === 'antigos') {
+    elementosNormais.forEach(el => el.classList.add('d-none'));
+    if (painelAntigos) painelAntigos.classList.remove('d-none');
+    carregarCategoriasAntigas();
+    carregarTotalChamadosAntigos();
+    buscarChamadosAntigos(1);
+  } else {
+    elementosNormais.forEach(el => el.classList.remove('d-none'));
+    if (painelAntigos) painelAntigos.classList.add('d-none');
+    applyFilters();
+  }
+}
+
+// =========================================
+// CHAMADOS ANTIGOS (somente consulta)
+// =========================================
+
+let _antigosPagina = 1;
+let _antigosTotalPags = 1;
+
+async function carregarTotalChamadosAntigos() {
+  try {
+    const r = await fetch(`${API_BASE}/chamados-antigos/stats`);
+    if (!r.ok) return;
+    const j = await r.json();
+    const el = document.getElementById('vistaCountAntigos');
+    if (el) el.textContent = j.total ?? 0;
+    // Exibe data/hora da última importação no alerta
+    const imp = document.getElementById('antigosUltimoImport');
+    if (imp) {
+      if (j.ultimo_import) {
+        const d = new Date(j.ultimo_import);
+        imp.innerHTML = `<i class="bi bi-clock-history"></i> Importado em <strong>${d.toLocaleString('pt-BR')}</strong>`;
+      } else {
+        imp.textContent = '';
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+/** Popula o select de categorias com os valores distintos da base. Cacheado por sessão. */
+let _antigosCategoriasCarregadas = false;
+async function carregarCategoriasAntigas() {
+  if (_antigosCategoriasCarregadas) return;
+  try {
+    const r = await fetch(`${API_BASE}/chamados-antigos/categorias`);
+    if (!r.ok) return;
+    const cats = await r.json();
+    const sel = document.getElementById('antigosCategoria');
+    if (!sel) return;
+    const valorAtual = sel.value;
+    sel.innerHTML = '<option value="">Todas categorias</option>' +
+      cats.map(c => {
+        const nome = (c.categoria || '').replace(/</g,'&lt;');
+        return `<option value="${nome}">${nome} (${c.total})</option>`;
+      }).join('');
+    sel.value = valorAtual;
+    _antigosCategoriasCarregadas = true;
+  } catch (e) { console.warn('[ANTIGOS] erro categorias:', e); }
+}
+
+async function buscarChamadosAntigos(pagina = 1) {
+  _antigosPagina = pagina;
+  const q        = document.getElementById('antigosSearch')?.value?.trim() || '';
+  const status   = document.getElementById('antigosStatus')?.value || '';
+  const categoria = document.getElementById('antigosCategoria')?.value || '';
+  const dataIni  = document.getElementById('antigosDataIni')?.value || '';
+  const dataFim  = document.getElementById('antigosDataFim')?.value || '';
+
+  const params = new URLSearchParams({ pagina, por_pagina: 25 });
+  if (q)         params.set('q', q);
+  if (status)    params.set('status', status);
+  if (categoria) params.set('categoria', categoria);
+  if (dataIni)   params.set('data_ini', dataIni);
+  if (dataFim)   params.set('data_fim', dataFim);
+
+  const tbody = document.getElementById('antigosBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Carregando...</td></tr>';
+
+  try {
+    const r = await fetch(`${API_BASE}/chamados-antigos?${params}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    _renderChamadosAntigosTabela(j);
+  } catch (e) {
+    console.error('[ANTIGOS] erro:', e);
+    if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-3">Erro ao consultar chamados antigos. Verifique se a tabela foi populada.</td></tr>';
+  }
+}
+
+function _renderChamadosAntigosTabela(data) {
+  const tbody = document.getElementById('antigosBody');
+  if (!tbody) return;
+  _antigosTotalPags = data.total_paginas || 1;
+
+  document.getElementById('antigosPagAtual').textContent  = data.pagina;
+  document.getElementById('antigosTotalPags').textContent = _antigosTotalPags;
+  document.getElementById('antigosResumo').textContent =
+    `${data.total} chamado(s) — mostrando ${data.itens.length}`;
+
+  if (!data.itens.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-4">Nenhum chamado encontrado.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = data.itens.map(c => {
+    const aberto = c.aberto_em  ? new Date(c.aberto_em).toLocaleDateString('pt-BR') : '—';
+    const fech   = c.fechado_em ? new Date(c.fechado_em).toLocaleDateString('pt-BR') : '—';
+    const status = c.nome_status || '—';
+    return `
+      <tr style="cursor:pointer;" onclick="abrirChamadoAntigo('${c.trackid}')">
+        <td><code class="text-primary">${c.trackid}</code></td>
+        <td>${(c.assunto || '').replace(/</g,'&lt;')}</td>
+        <td>${(c.solicitante || '').replace(/</g,'&lt;')}</td>
+        <td><span class="badge bg-secondary">${(c.categoria || '—').replace(/</g,'&lt;')}</span></td>
+        <td>${_renderStatusAntigo(status)}</td>
+        <td>${(c.atribuido_a || '—').replace(/</g,'&lt;')}</td>
+        <td class="small">${aberto}</td>
+        <td class="small">${fech}</td>
+      </tr>`;
+  }).join('');
+}
+
+function _renderStatusAntigo(s) {
+  const map = {
+    'Resolvido':    'bg-success',
+    'Fechado':      'bg-secondary',
+    'Em andamento': 'bg-info text-dark',
+    'Aberto':       'bg-warning text-dark',
+  };
+  return `<span class="badge ${map[s] || 'bg-light text-dark'}">${s}</span>`;
+}
+
+function antigosPagAnt() {
+  if (_antigosPagina > 1) buscarChamadosAntigos(_antigosPagina - 1);
+}
+function antigosPagProx() {
+  if (_antigosPagina < _antigosTotalPags) buscarChamadosAntigos(_antigosPagina + 1);
+}
+
+async function abrirChamadoAntigo(trackid) {
+  try {
+    // Caso 1: TICKET NORMAL já aberto → split (antigo à direita)
+    const ticketEl = document.getElementById('ticketDetailModal');
+    if (ticketEl?.classList.contains('show') && viewingTicketId) {
+      _splitAntigoId = trackid;
+      _splitTicketId = null;
+      await _renderSplitPanelAntigo(trackid);
+      document.body.classList.add('ticket-split-mode');
+      return;
+    }
+
+    // Caso 2: OUTRO CHAMADO ANTIGO já aberto → split entre 2 antigos
+    //   - O antigo atual fica à esquerda (modal principal `chamadoAntigoModal`)
+    //   - O novo trackid vai para o painel direito `#ticketDetailModal2` (read-only)
+    const modalEl = document.getElementById('chamadoAntigoModal');
+    const antigoAberto = modalEl?.classList.contains('show') && _viewingAntigoId;
+    if (antigoAberto && _viewingAntigoId !== trackid) {
+      _splitAntigoId = trackid;
+      _splitTicketId = null;
+      await _renderSplitPanelAntigo(trackid);
+      document.body.classList.add('ticket-split-mode');
+      return;
+    }
+
+    // Caso 3: nenhum modal aberto (ou clicou no mesmo antigo já aberto) → abre normal
+    const r = await fetch(`${API_BASE}/chamados-antigos/${encodeURIComponent(trackid)}`);
+    if (!r.ok) { showError('Chamado não encontrado'); return; }
+    const c = await r.json();
+
+    const jaVisivel = modalEl?.classList.contains('show');
+    _viewingAntigoId = trackid;
+
+    const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v || '—'; };
+    const fmt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
+
+    setText('antigoTitulo',         c.assunto);
+    setText('antigoTrackid',        ' · ' + c.trackid);
+    setText('antigoSolicitante',    c.solicitante);
+    setText('antigoEmail',          c.email);
+    setText('antigoStatus',         c.nome_status);
+    setText('antigoCategoria',      c.categoria);
+    setText('antigoAtribuido',      c.atribuido_a);
+    setText('antigoAberto',         fmt(c.aberto_em));
+    setText('antigoPrimeiraResp',   fmt(c.primeira_resp));
+    setText('antigoFechado',        fmt(c.fechado_em));
+    setText('antigoMensagem',       c.mensagem);
+    setText('antigoRespondidoPor',  c.respondido_por);
+    setText('antigoDhResposta',     fmt(c.dh_resposta));
+    setText('antigoResposta',       c.resposta);
+
+    if (jaVisivel) {
+      // Modal já aberto — só atualizamos os dados, sem reabrir
+      return;
+    }
+    // Limpa estado fantasma deixado por um minimize anterior
+    if (modalEl) {
+      modalEl.style.display = '';
+      modalEl.removeAttribute('aria-hidden');
+    }
+    new bootstrap.Modal(modalEl).show();
+  } catch (e) {
+    console.error('[ANTIGOS] detalhe:', e);
+    showError('Erro ao carregar chamado.');
+  }
+}
+
+// Carrega a contagem inicial quando a página inicializar
+document.addEventListener('DOMContentLoaded', () => { carregarTotalChamadosAntigos(); });
+
+// =========================================
+// CHAMADO ANTIGO — minimizar, fullscreen, split
+// =========================================
+
+/** Minimiza o modal de chamado antigo e cria um chip no dock. */
+function minimizeChamadoAntigoModal() {
+  const trackid = _viewingAntigoId;
+  if (!trackid) return;
+  if (!_dockHasRoom(trackid)) return;
+  const tituloEl = document.getElementById('antigoTitulo');
+  const titulo   = tituloEl?.textContent || trackid;
+
+  _minimizedAntigos[trackid] = { trackid, assunto: titulo };
+  _renderTicketDock();
+
+  // Fecha manualmente (mesmo padrão do ticket normal)
+  const modalEl = document.getElementById('chamadoAntigoModal');
+  if (modalEl) {
+    modalEl.classList.remove('show');
+    modalEl.style.display = 'none';
+    modalEl.setAttribute('aria-hidden', 'true');
+  }
+  document.body.classList.remove('modal-open');
+  document.body.style.overflow     = '';
+  document.body.style.paddingRight = '';
+  document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+  const inst = bootstrap.Modal.getInstance(modalEl);
+  if (inst) { try { inst.dispose(); } catch(e){} }
+}
+
+/** Alterna fullscreen do modal de chamado antigo. */
+function toggleChamadoAntigoFullscreen() {
+  const dialog = document.getElementById('chamadoAntigoDialog');
+  const icon   = document.getElementById('iconChamadoAntigoFullscreen');
+  const modalEl = document.getElementById('chamadoAntigoModal');
+  if (!dialog) return;
+  const expandido = dialog.classList.toggle('modal-fullscreen');
+  if (expandido) {
+    dialog.classList.remove('modal-lg', 'modal-dialog-centered');
+    if (icon) icon.className = 'bi bi-arrows-angle-contract';
+    if (modalEl) modalEl.style.paddingRight = '0';
+  } else {
+    dialog.classList.add('modal-lg', 'modal-dialog-centered');
+    if (icon) icon.className = 'bi bi-arrows-fullscreen';
+    if (modalEl) modalEl.style.paddingRight = '';
+  }
+}
+
+/** Restaura um chamado antigo do dock. */
+function restoreAntigoFromDock(trackid) {
+  delete _minimizedAntigos[trackid];
+  _renderTicketDock();
+  abrirChamadoAntigo(trackid);
+}
+
+/** Descarta um chamado antigo do dock sem reabrir. */
+function closeAntigoFromDock(trackid) {
+  delete _minimizedAntigos[trackid];
+  _renderTicketDock();
+}
+
+/** Ativa split com chamado antigo à direita (modal de ticket normal precisa estar aberto). */
+async function openAntigoInSplit(trackid) {
+  const modalEl = document.getElementById('ticketDetailModal');
+  const modalVisible = modalEl?.classList.contains('show');
+  if (!modalVisible || !viewingTicketId) {
+    restoreAntigoFromDock(trackid);
+    return;
+  }
+  delete _minimizedAntigos[trackid];
+  _renderTicketDock();
+  _splitAntigoId = trackid;
+  _splitTicketId = null;
+  await _renderSplitPanelAntigo(trackid);
+  document.body.classList.add('ticket-split-mode');
+}
+
+/** Popula o painel direito com dados de um chamado antigo (somente leitura). */
+async function _renderSplitPanelAntigo(trackid) {
+  try {
+    const r = await fetch(`${API_BASE}/chamados-antigos/${encodeURIComponent(trackid)}`);
+    if (!r.ok) return;
+    const c = await r.json();
+    const fmt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '—';
+
+    // Aplica variante CINZA (chamado antigo) + ícone de arquivo
+    const sidePanel = document.getElementById('ticketDetailModal2');
+    if (sidePanel) sidePanel.classList.add('is-antigo');
+    const icon = document.getElementById('iconDetailHeader2');
+    if (icon) icon.className = 'bi bi-archive';
+
+    document.getElementById('detailTitle2').textContent       = c.assunto || '';
+    document.getElementById('detailId2').textContent          = ' · ' + c.trackid;
+    document.getElementById('detail2UserName').textContent    = c.solicitante || '';
+    document.getElementById('detail2Status').innerHTML        =
+      `<span class="badge bg-light text-dark">${c.nome_status || '—'}</span>`;
+    document.getElementById('detail2AssignedName').textContent = c.atribuido_a || '—';
+    document.getElementById('detail2Description').textContent  = c.mensagem || '';
+
+    const box = document.getElementById('detail2CommentsList');
+    if (c.resposta) {
+      box.innerHTML = `
+        <div class="comment-item p-2 mb-2 rounded bg-light">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <strong>${(c.respondido_por||'—').replace(/</g,'&lt;')}</strong>
+            <small class="text-muted">${fmt(c.dh_resposta)}</small>
+          </div>
+          <div style="white-space:pre-wrap;">${(c.resposta||'').replace(/</g,'&lt;')}</div>
+        </div>`;
+    } else {
+      box.innerHTML = '<p class="text-muted text-center py-3">Sem resposta registrada</p>';
+    }
+  } catch (e) { console.warn('[SPLIT-ANTIGO] erro:', e); }
+}
+
+// Limpa _viewingAntigoId quando o modal antigo for fechado
+document.addEventListener('DOMContentLoaded', () => {
+  const m = document.getElementById('chamadoAntigoModal');
+  if (m) m.addEventListener('hidden.bs.modal', () => { _viewingAntigoId = null; });
+});
+
+/** Atualiza os contadores das abas a partir da lista carregada. */
+function updateVistaCounts() {
+  const userId = getCurrentUserId();
+  const total    = tickets.length;
+  const meus     = tickets.filter(t => t.solicitante_id === userId).length;
+  const paraMim  = tickets.filter(t => t.assignedTo === userId).length;
+
+  const setCount = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+  setCount('vistaCountTodos',  total);
+  setCount('vistaCountMeus',   meus);
+  setCount('vistaCountParaMim', paraMim);
+
+  // USER nunca recebe atribuição → esconde a aba "Para mim"
+  const item = document.getElementById('vistaParaMimItem');
+  if (item) {
+    const podeReceber = isGestor() || paraMim > 0;
+    item.style.display = podeReceber ? '' : 'none';
+  }
+}
+
+// =========================================
+// ANEXOS DE IMAGEM (≤250 KB)
+// =========================================
+
+function _humanSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function _validateAttachFile(file) {
+  if (!ATTACH_MIMES_OK.includes(file.type)) {
+    return `Tipo não permitido (${file.type || 'desconhecido'}). Use JPG/PNG/WEBP/GIF.`;
+  }
+  if (file.size > ATTACH_MAX_BYTES) {
+    return `"${file.name}" tem ${_humanSize(file.size)} (limite 250 KB).`;
+  }
+  return null;
+}
+
+function _renderAttachPreview(slot, container) {
+  if (!container) return;
+  const files = pendingAttachments[slot];
+  if (!files.length) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = files.map((f, idx) => {
+    const safeName = (f.name || 'imagem').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+    return `
+      <div class="attach-thumb"
+           onclick="openImageViewer('${f._previewUrl}', '${safeName}')">
+        <img src="${f._previewUrl}" alt="${f.name}">
+        <button type="button" class="attach-remove" title="Remover"
+          onclick="event.stopPropagation(); removePendingAttach('${slot}', ${idx})">×</button>
+        <span class="attach-size">${_humanSize(f.size)}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function removePendingAttach(slot, idx) {
+  const arr = pendingAttachments[slot] || [];
+  const f = arr[idx];
+  if (f && f._previewUrl) URL.revokeObjectURL(f._previewUrl);
+  arr.splice(idx, 1);
+  const containerId = slot === 'create' ? 'ticketAttachPreview'
+                    : slot === 'reply'  ? 'replyAttachPreview'
+                    : 'internalAttachPreview';
+  _renderAttachPreview(slot, document.getElementById(containerId));
+}
+
+function _addPendingFiles(slot, fileList, previewContainerId) {
+  const errors = [];
+  for (const f of fileList) {
+    const err = _validateAttachFile(f);
+    if (err) { errors.push(err); continue; }
+    f._previewUrl = URL.createObjectURL(f);
+    pendingAttachments[slot].push(f);
+  }
+  _renderAttachPreview(slot, document.getElementById(previewContainerId));
+  if (errors.length) showError(errors.join('\n'));
+}
+
+/** Handler do input de anexos no modal Novo Ticket. */
+function onTicketAttachChange(e) {
+  _addPendingFiles('create', e.target.files, 'ticketAttachPreview');
+  e.target.value = ''; // permite re-selecionar mesmo arquivo
+}
+
+/** Handler dos inputs de anexos nos forms de resposta/comentário. */
+function onReplyAttachChange(e, slot) {
+  const previewId = slot === 'reply' ? 'replyAttachPreview' : 'internalAttachPreview';
+  _addPendingFiles(slot, e.target.files, previewId);
+  e.target.value = '';
+}
+
+/** Limpa um slot e revoga as URLs de preview. */
+function _clearPendingSlot(slot) {
+  (pendingAttachments[slot] || []).forEach(f => {
+    if (f._previewUrl) URL.revokeObjectURL(f._previewUrl);
+  });
+  pendingAttachments[slot] = [];
+  const containerId = slot === 'create' ? 'ticketAttachPreview'
+                    : slot === 'reply'  ? 'replyAttachPreview'
+                    : 'internalAttachPreview';
+  const el = document.getElementById(containerId);
+  if (el) el.innerHTML = '';
+}
+
+/**
+ * Envia os arquivos pendentes para o backend após criar o ticket/interação.
+ * Em caso de erro num arquivo, segue tentando os outros.
+ */
+async function _uploadPendingAttachments(slot, ticketId, interacaoId = null) {
+  const files = pendingAttachments[slot] || [];
+  if (!files.length) return [];
+
+  const userId = getCurrentUserId();
+  const enviados = [];
+  for (const f of files) {
+    const form = new FormData();
+    form.append('usuario_id', userId);
+    if (interacaoId) form.append('interacao_id', interacaoId);
+    form.append('file', f, f.name);
+    try {
+      const token = localStorage.getItem('cpe_token') || '';
+      const res = await fetch(`${API_BASE}/tickets/${ticketId}/attachments`, {
+        method: 'POST',
+        headers: token ? { 'X-Auth-Token': token } : {},
+        body: form,
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        console.warn(`[ATTACH] Falha ao enviar "${f.name}": ${res.status} ${txt}`);
+        showError(`Falha ao enviar "${f.name}"`);
+        continue;
+      }
+      enviados.push(await res.json());
+    } catch (err) {
+      console.error('[ATTACH] erro:', err);
+    }
+  }
+  _clearPendingSlot(slot);
+  return enviados;
 }
