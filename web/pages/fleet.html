@@ -1697,8 +1697,9 @@ async function loadDashboard() {
 /* ============================================================
    VEÍCULOS
    ============================================================ */
-async function loadVehicles() {
-  const data = await apiFetch('/vehicles');
+async function loadVehicles(includeInativos = false) {
+  const qs = includeInativos ? '?include_inativos=1' : '';
+  const data = await apiFetch('/vehicles' + qs);
   allVehicles = data?.vehicles || [];
   renderVehicles(allVehicles);
 
@@ -1776,7 +1777,12 @@ function renderVehicles(vehicles) {
             <i class="bi ${ic}"></i> ${lbl}
           </button>`;
         })() : ''}
-        ${canDeleteVehicle() && v.status !== 'em_viagem' ? `
+        ${v.status === 'inativo' && canManageFleet() ? `
+          <button class="btn-fleet btn-fleet-sm" style="margin-top:8px;width:100%;background:#DCFCE7;color:#16A34A;border:1px solid #BBF7D0;font-size:11px"
+                  onclick="event.stopPropagation();reativarVeiculo(${v.id}, '${(v.placa || '').replace(/'/g, '&#39;')}')">
+            <i class="bi bi-arrow-counterclockwise"></i> Reativar veículo
+          </button>` : ''}
+        ${canDeleteVehicle() && v.status !== 'em_viagem' && v.status !== 'inativo' ? `
           <button class="btn-fleet btn-fleet-sm" style="margin-top:8px;width:100%;background:#FEE2E2;color:#B91C1C;border:1px solid #FCA5A5;font-size:11px"
                   onclick="event.stopPropagation();deleteVehicle(${v.id}, '${(v.placa || '').replace(/'/g, '&#39;')}')">
             <i class="bi bi-trash"></i> Excluir veículo
@@ -1827,9 +1833,44 @@ async function deleteVehicle(vehicleId, placa) {
   }
 }
 
-function filterVehicles() {
-  const q = document.getElementById('vehicleSearch').value.toLowerCase();
+/* ============================================================
+   REATIVAR VEÍCULO — desfaz o soft-delete (volta status pra 'ativo')
+   ============================================================ */
+async function reativarVeiculo(vehicleId, placa) {
+  if (!canManageFleet()) {
+    showToast('Você não tem permissão para reativar veículos.', 'error');
+    return;
+  }
+  if (!confirm(`Reativar o veículo "${placa}"? Ele voltará a aparecer como Ativo na frota.`)) return;
+  try {
+    const res = await apiFetch(`/vehicles/${vehicleId}/reativar`, { method: 'POST' });
+    if (!res?.success) {
+      showToast(res?.detail || 'Erro ao reativar', 'error');
+      return;
+    }
+    showToast(res.message || `Veículo ${placa} reativado!`, 'success');
+    // Recarrega ainda com inativos (caso o filtro esteja em 'Inativo')
+    const st = document.getElementById('vehicleStatusFilter')?.value;
+    await loadVehicles(st === 'inativo');
+  } catch (err) {
+    showToast('Erro de conexão: ' + err.message, 'error');
+  }
+}
+
+async function filterVehicles() {
+  const q  = document.getElementById('vehicleSearch').value.toLowerCase();
   const st = document.getElementById('vehicleStatusFilter').value;
+
+  // "Inativo" requer recarregar do backend com include_inativos=1
+  // (veículos inativos ficam ocultos por padrão na resposta da API)
+  const precisaIncluirInativos = (st === 'inativo');
+  const jaTemInativosNoCache   = allVehicles.some(v => v.status === 'inativo');
+  if (precisaIncluirInativos && !jaTemInativosNoCache) {
+    await loadVehicles(true);
+  } else if (!precisaIncluirInativos && jaTemInativosNoCache) {
+    await loadVehicles(false);
+  }
+
   renderVehicles(allVehicles.filter(v =>
     (!q || v.placa.toLowerCase().includes(q) || v.modelo.toLowerCase().includes(q)) &&
     (!st || v.status === st)
