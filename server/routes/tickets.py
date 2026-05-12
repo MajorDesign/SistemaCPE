@@ -17,7 +17,8 @@ Alterações v3.3:
 - Notificação de atribuição agora notifica o novo responsável corretamente
  """
 
-from fastapi import APIRouter, HTTPException, status, Query, Path
+from fastapi import APIRouter, HTTPException, status, Query, Path, UploadFile, File, Form
+from fastapi.responses import Response
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
@@ -66,6 +67,20 @@ except Exception:
             return True
         def usuario_pode_comentar_interno(self, **kwargs):
             return True
+
+# E-mails transacionais (SMTP). Fallback no-op se faltar config.
+try:
+    from services.email_service import (
+        enviar_email,
+        email_ticket_criado,
+        email_resposta_publica,
+        email_ticket_finalizado,
+    )
+except Exception:
+    def enviar_email(*a, **kw): pass
+    def email_ticket_criado(**kw):     return ("", "")
+    def email_resposta_publica(**kw):  return ("", "")
+    def email_ticket_finalizado(**kw): return ("", "")
 
 logger = logging.getLogger(__name__)
 LOG_SEPARADOR = "=" * 100
@@ -455,6 +470,7 @@ async def obter_tickets(
     prioridade_id: Optional[int] = Query(None, gt=0),
     data_inicio: Optional[str] = Query(None, description="Filtro de data inicial (YYYY-MM-DD)"),
     data_fim: Optional[str] = Query(None, description="Filtro de data final (YYYY-MM-DD)"),
+    vista: Optional[str] = Query(None, description="Aba: 'meus' (eu sou solicitante), 'para_mim' (eu sou responsavel), ou None=todos"),
     pular: int = Query(0, ge=0),
     limite: int = Query(LIMITE_PADRAO, ge=1, le=500)
 ):
@@ -525,6 +541,16 @@ async def obter_tickets(
         if data_fim:
             filtros.append("DATE(t.created_at) <= %s")
             params.append(data_fim)
+
+        # ✅ FILTRO DE VISTA (abas no front: 'Para mim' / 'Abertos por mim' / 'Todos')
+        if vista == "meus":
+            filtros.append("t.solicitante_id = %s")
+            params.append(usuario_id)
+            logger.info(f"  ✓ Vista=meus → filtrando solicitante_id={usuario_id}")
+        elif vista == "para_mim":
+            filtros.append("t.responsavel_id = %s")
+            params.append(usuario_id)
+            logger.info(f"  ✓ Vista=para_mim → filtrando responsavel_id={usuario_id}")
 
         where = ("WHERE " + " AND ".join(filtros)) if filtros else ""
         
@@ -1458,6 +1484,8 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
 
 class FinalizarPayload(BaseModel):
     usuario_id: int = Field(..., gt=0)
+    solucao:    Optional[str] = Field(None, max_length=2000,
+                                      description="Resumo da solução / motivo do fechamento")
 
 @tickets_router.post("/{ticket_id}/finalizar")
 async def finalizar_ticket(ticket_id: int, payload: FinalizarPayload):
@@ -1532,16 +1560,19 @@ async def finalizar_ticket(ticket_id: int, payload: FinalizarPayload):
         SLAService.concluir_sla(conexao, ticket_id)
         conexao.commit()
 
-        # Registrar interação de resolução
+        # Registrar interação de resolução (com motivo/solução, se informado)
         nome_usuario = usuario.get("name") or f"Usuário #{payload.usuario_id}"
+        solucao_texto = (payload.solucao or "").strip()
+        mensagem_resol = f"✅ Chamado finalizado por {nome_usuario}."
+        if solucao_texto:
+            mensagem_resol += f"\n\nSolução aplicada:\n{solucao_texto}"
         cursor.execute(
             """
             INSERT INTO ticket_interacoes
                 (ticket_id, usuario_id, tipo, mensagem, publico, created_at)
             VALUES (%s, %s, 'resolucao', %s, 1, NOW())
             """,
-            (ticket_id, payload.usuario_id,
-             f"✅ Chamado finalizado por {nome_usuario}.")
+            (ticket_id, payload.usuario_id, mensagem_resol)
         )
         conexao.commit()
 
@@ -1576,6 +1607,27 @@ async def finalizar_ticket(ticket_id: int, payload: FinalizarPayload):
             )
         except Exception as e_aval:
             logger.warning(f"  ⚠️ Não foi possível criar avaliação pendente: {e_aval}")
+
+        # ── E-mail de finalização para o solicitante ──
+        try:
+            cursor.execute(
+                "SELECT u.email AS email, u.name AS nome, t.id_alfanumerica, t.assunto "
+                "FROM users u JOIN tickets t ON t.solicitante_id = u.id "
+                "WHERE t.id = %s",
+                (ticket_id,)
+            )
+            sol = cursor.fetchone()
+            if sol and sol.get("email"):
+                subj, html = email_ticket_finalizado(
+                    ticket_numero=sol.get("id_alfanumerica") or str(ticket_id),
+                    assunto=sol.get("assunto") or "",
+                    solicitante_nome=sol.get("nome") or "",
+                    finalizador_nome=nome_usuario,
+                    solucao=solucao_texto,
+                )
+                enviar_email(sol["email"], subj, html)
+        except Exception as e_mail:
+            logger.warning(f"[EMAIL] falha ao agendar e-mail de finalização: {e_mail}")
 
         logger.info(f"  ✅ Ticket #{ticket_id} finalizado por {nome_usuario}")
         return {"success": True, "message": "Chamado finalizado com sucesso."}
@@ -1862,6 +1914,34 @@ async def criar_ticket(payload: TicketCriar):
 
         cursor.execute("SELECT * FROM tickets WHERE id = %s", (ticket_id,))
         ticket = convert_datetime_to_string(cursor.fetchone())
+
+        # ── E-mail de confirmação para o solicitante ──
+        try:
+            cursor.execute(
+                "SELECT u.email AS email, u.name AS nome, g.name AS grupo_nome "
+                "FROM users u LEFT JOIN cpe_grupo g ON g.id = u.group_id "
+                "WHERE u.id = %s",
+                (payload.solicitante_id,)
+            )
+            sol = cursor.fetchone()
+            if sol and sol.get("email"):
+                cursor.execute("SELECT name FROM cpe_grupo WHERE id = %s", (payload.group_id,))
+                gd = cursor.fetchone()
+                grupo_destino = (gd or {}).get("name") or "—"
+
+                prio_map = {1: "Baixa", 2: "Média", 3: "Alta", 4: "Urgente"}
+                subj, html = email_ticket_criado(
+                    para=sol["email"],
+                    ticket_numero=id_alfanumerica or str(ticket_id),
+                    assunto=payload.assunto,
+                    descricao=payload.descricao_inicial,
+                    grupo=grupo_destino,
+                    prioridade=prio_map.get(payload.prioridade_id, "Média"),
+                    solicitante_nome=sol.get("nome") or "",
+                )
+                enviar_email(sol["email"], subj, html)
+        except Exception as e_mail:
+            logger.warning(f"[EMAIL] falha ao agendar e-mail de criação: {e_mail}")
 
         log_fim("sucesso", ticket_id=ticket_id, numero=numero, id_alfanumerica=id_alfanumerica)
         return ticket
@@ -2445,6 +2525,45 @@ async def criar_interacao(payload: InteracaoCriar):
             "created_at":   registro["created_at"].isoformat() if registro["created_at"] else None
         }
 
+        # ── E-mail de nova resposta pública para solicitante e/ou responsável ──
+        if publico_final == 1:
+            try:
+                cursor.execute(
+                    """
+                    SELECT t.id_alfanumerica, t.assunto,
+                           sol.email AS sol_email, sol.name AS sol_nome,
+                           resp.email AS resp_email, resp.name AS resp_nome
+                      FROM tickets t
+                      LEFT JOIN users sol  ON sol.id  = t.solicitante_id
+                      LEFT JOIN users resp ON resp.id = t.responsavel_id
+                     WHERE t.id = %s
+                    """,
+                    (payload.ticket_id,)
+                )
+                tk = cursor.fetchone() or {}
+                ticket_numero = tk.get("id_alfanumerica") or str(payload.ticket_id)
+                autor_nome    = registro.get("usuario_nome") or ""
+
+                destinatarios = []
+                # Notifica todos os envolvidos exceto o autor da mensagem
+                if tk.get("sol_email") and ticket_db.get("solicitante_id") != payload.usuario_id:
+                    destinatarios.append((tk["sol_email"], tk.get("sol_nome") or ""))
+                if tk.get("resp_email") and ticket_db.get("responsavel_id") and \
+                   ticket_db.get("responsavel_id") != payload.usuario_id:
+                    destinatarios.append((tk["resp_email"], tk.get("resp_nome") or ""))
+
+                for em, nm in destinatarios:
+                    subj, html = email_resposta_publica(
+                        ticket_numero=ticket_numero,
+                        assunto=tk.get("assunto") or "",
+                        autor_nome=autor_nome,
+                        mensagem=payload.mensagem,
+                        destinatario_nome=nm,
+                    )
+                    enviar_email(em, subj, html)
+            except Exception as e_mail:
+                logger.warning(f"[EMAIL] falha ao agendar e-mail de resposta: {e_mail}")
+
         log_fim("sucesso", interacao_id=interacao_id, notificacoes_enviadas=len(usuarios_para_notificar))
         return resposta
 
@@ -2465,4 +2584,195 @@ async def criar_interacao(payload: InteracaoCriar):
 # ========================================
 # FIM DA FUNÇÃO - 31/03/2026 15:30
 # ========================================
+
+
+# =====================================================================
+# 📎 ANEXOS DE IMAGEM
+# =====================================================================
+# Tabela: ticket_attachments (migration 032)
+#   - Aceita JPG/PNG/WEBP/GIF até 250 KB
+#   - Vincula ao ticket; opcionalmente a uma interação (resposta)
+# =====================================================================
+
+ATTACH_MAX_BYTES   = 250 * 1024  # 250 KB
+ATTACH_MIME_VALIDOS = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+
+
+@tickets_router.post("/{ticket_id}/attachments")
+async def upload_attachment(
+    ticket_id: int = Path(..., gt=0),
+    usuario_id: int = Form(..., gt=0),
+    interacao_id: Optional[int] = Form(None, gt=0),
+    file: UploadFile = File(...),
+):
+    """
+    Faz upload de uma imagem anexada ao ticket (ou a uma interação dele).
+    Limite: 250 KB. Tipos: jpeg/png/webp/gif.
+    """
+    log_inicio("upload_attachment", ticket_id=ticket_id, usuario_id=usuario_id, interacao_id=interacao_id)
+
+    # ── Validação de tipo ──
+    if file.content_type not in ATTACH_MIME_VALIDOS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Tipo não permitido: {file.content_type}. Use JPG, PNG, WEBP ou GIF."
+        )
+
+    # ── Lê conteúdo e valida tamanho ──
+    conteudo = await file.read()
+    tamanho = len(conteudo)
+    if tamanho == 0:
+        raise HTTPException(status_code=400, detail="Arquivo vazio")
+    if tamanho > ATTACH_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Arquivo excede 250 KB (recebido {tamanho // 1024} KB)"
+        )
+
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+
+        # Valida ticket
+        cursor.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"Ticket {ticket_id} não encontrado")
+
+        # Valida interação (se fornecida)
+        if interacao_id:
+            cursor.execute(
+                "SELECT id FROM ticket_interacoes WHERE id = %s AND ticket_id = %s",
+                (interacao_id, ticket_id)
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail=f"Interação {interacao_id} não pertence ao ticket {ticket_id}")
+
+        # Insere
+        cursor.execute(
+            """
+            INSERT INTO ticket_attachments
+                (ticket_id, interacao_id, filename, mime_type, size_bytes, content, uploaded_by, uploaded_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            """,
+            (ticket_id, interacao_id, file.filename or "imagem", file.content_type, tamanho, conteudo, usuario_id)
+        )
+        conexao.commit()
+        attach_id = cursor.lastrowid
+        log_fim("sucesso", attach_id=attach_id, size_bytes=tamanho)
+        return {
+            "id": attach_id,
+            "ticket_id": ticket_id,
+            "interacao_id": interacao_id,
+            "filename": file.filename,
+            "mime_type": file.content_type,
+            "size_bytes": tamanho,
+            "url": f"/api/tickets/attachments/{attach_id}",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_fim("erro", erro=str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor: cursor.close()
+        if conexao: conexao.close()
+
+
+@tickets_router.get("/{ticket_id}/attachments")
+async def listar_attachments(ticket_id: int = Path(..., gt=0)):
+    """Lista metadados (sem o binário) dos anexos de um ticket.
+
+    Se a tabela ticket_attachments não existir ainda (migration não aplicada),
+    devolve lista vazia em vez de 500 — assim o front não quebra antes do deploy.
+    """
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT a.id, a.ticket_id, a.interacao_id, a.filename, a.mime_type,
+                   a.size_bytes, a.uploaded_by, a.uploaded_at, u.name AS uploaded_by_name
+              FROM ticket_attachments a
+              LEFT JOIN users u ON u.id = a.uploaded_by
+             WHERE a.ticket_id = %s
+             ORDER BY a.uploaded_at ASC
+            """,
+            (ticket_id,)
+        )
+        rows = cursor.fetchall()
+        for r in rows:
+            if r.get("uploaded_at"):
+                r["uploaded_at"] = r["uploaded_at"].isoformat()
+            r["url"] = f"/api/tickets/attachments/{r['id']}"
+        return rows
+    except Exception as e:
+        # Tabela ainda não criada → não derruba a UI
+        msg = str(e).lower()
+        if "doesn't exist" in msg or "ticket_attachments" in msg:
+            logger.warning(f"[ATTACH] Tabela ticket_attachments ausente — rode a migration 032")
+            return []
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cursor: cursor.close()
+        if conexao: conexao.close()
+
+
+@tickets_router.get("/attachments/{attach_id}")
+async def baixar_attachment(attach_id: int = Path(..., gt=0)):
+    """Serve o binário da imagem (inline)."""
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT filename, mime_type, content FROM ticket_attachments WHERE id = %s",
+            (attach_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Anexo não encontrado")
+        return Response(
+            content=row["content"],
+            media_type=row["mime_type"],
+            headers={
+                "Content-Disposition": f'inline; filename="{row["filename"]}"',
+                "Cache-Control": "private, max-age=86400",
+            }
+        )
+    finally:
+        if cursor: cursor.close()
+        if conexao: conexao.close()
+
+
+@tickets_router.delete("/attachments/{attach_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def deletar_attachment(
+    attach_id: int = Path(..., gt=0),
+    usuario_id: int = Query(..., gt=0),
+):
+    """Remove um anexo. Permitido para quem subiu ou para ADMIN/TI/MANAGER."""
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT uploaded_by FROM ticket_attachments WHERE id = %s",
+            (attach_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Anexo não encontrado")
+
+        usuario = validar_usuario_existe(cursor, usuario_id)
+        if row["uploaded_by"] != usuario_id and (usuario.get("role") or "USER") not in ROLES_ADMIN:
+            raise HTTPException(status_code=403, detail="Sem permissão para excluir este anexo")
+
+        cursor.execute("DELETE FROM ticket_attachments WHERE id = %s", (attach_id,))
+        conexao.commit()
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    finally:
+        if cursor: cursor.close()
+        if conexao: conexao.close()
 

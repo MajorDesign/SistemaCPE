@@ -1101,6 +1101,14 @@ try:
     app.include_router(interacoes_router)
     logger.info("✅ Router de Tickets registrado: /api/tickets")
     logger.info("✅ Router de Interações registrado: /api/ticket-interacoes")
+
+    # Router de Chamados Antigos (somente consulta)
+    try:
+        from routes.chamados_antigos import router as chamados_antigos_router
+        app.include_router(chamados_antigos_router)
+        logger.info("✅ Router de Chamados Antigos registrado: /api/chamados-antigos")
+    except Exception as _e:
+        logger.warning(f"⚠️ Router de Chamados Antigos NÃO registrado: {_e}")
 except ModuleNotFoundError as err:
     logger.error(f"❌ Erro ao importar routes.tickets: Modulo nao encontrado")
     logger.error(f"   Arquivo esperado: server/routes/tickets.py")
