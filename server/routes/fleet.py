@@ -98,14 +98,23 @@ def _can_delete_vehicle(user: dict) -> bool:
 # ============================================================
 
 @router.get("/vehicles")
-def list_vehicles(request: Request):
+def list_vehicles(request: Request, include_inativos: int = 0):
+    """Lista veículos. `include_inativos=1` retorna também os inativos
+    (apenas Frotas/ADMIN/TI pode usar; usuários comuns sempre veem só ativos)."""
     user = _get_user_role(request)
     user_id = user["id"]
     is_fleet_mgr = _can_manage_fleet(user)
+
+    # Só Frotas/ADMIN/TI pode ver inativos (eles fazem reativação)
+    if include_inativos and not is_fleet_mgr:
+        include_inativos = 0
+
+    where_status = "" if include_inativos else "WHERE v.status != 'inativo'"
+
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT v.*,
                    p.foto_path AS foto_referencia,
                    u.name AS created_by_name,
@@ -141,8 +150,8 @@ def list_vehicles(request: Request):
             LEFT JOIN fleet_vehicle_photos p
                    ON p.vehicle_id = v.id AND p.is_current = 1 AND p.angulo = 'frente'
             LEFT JOIN users u ON u.id = v.created_by
-            WHERE v.status != 'inativo'
-            ORDER BY FIELD(v.status,'ativo','em_viagem','manutencao','revisao'), v.modelo
+            {where_status}
+            ORDER BY FIELD(v.status,'ativo','em_viagem','manutencao','revisao','inativo'), v.modelo
         """, (user_id,))
         vehicles = cursor.fetchall()
         # Aluguel mensal é confidencial — só Frotas/ADMIN/TI vê.
@@ -1426,6 +1435,43 @@ def liberar_veiculo(vehicle_id: int, request: Request):
                              v["status"], "ativo", user["id"])
         conn.commit()
         return {"success": True, "message": "Veiculo liberado para uso!"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/vehicles/{vehicle_id}/reativar")
+def reativar_veiculo(vehicle_id: int, request: Request):
+    """Reativa um veículo que estava inativo (soft-deleted).
+    Só ADMIN ou Responsável do grupo Frotas."""
+    user = _get_user_role(request)
+    if not _can_manage_fleet(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas Administrador, T.I. ou Responsável do grupo Frotas podem reativar veículos."
+        )
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT id, placa, status FROM fleet_vehicles WHERE id=%s", (vehicle_id,))
+        v = cursor.fetchone()
+        if not v:
+            raise HTTPException(status_code=404, detail="Veiculo nao encontrado")
+        if v["status"] != "inativo":
+            raise HTTPException(status_code=400, detail=f"Veiculo nao esta inativo (status atual: {v['status']})")
+
+        cursor.execute("UPDATE fleet_vehicles SET status='ativo' WHERE id=%s", (vehicle_id,))
+        _log_vehicle_history(cursor, vehicle_id, "Reativado",
+                             "Veiculo reativado pelo painel",
+                             "inativo", "ativo", user["id"])
+        conn.commit()
+        logger.info(f"[FLEET] Veiculo {v['placa']} (id={vehicle_id}) reativado por user {user['id']}")
+        return {"success": True, "message": f"Veiculo {v['placa']} reativado!"}
     except HTTPException:
         raise
     except Exception as e:
