@@ -6,7 +6,7 @@ Arquivo único: instala deps, registra startup, ícone na bandeja.
 """
 
 # ══════════════════════════════════════════════════════════════
-VERSAO     = "1.4.0"
+VERSAO     = "1.5.0"
 # Servidor de inventário T.I. da CPE (intranet). Sobrescrevível
 # pela variável de ambiente CPE_AGENT_API_URL pra ambientes de teste.
 API_URL    = "http://172.16.0.11:8000"
@@ -422,31 +422,43 @@ def _update(skip=False):
     except Exception as e: log.warning(f"Update: {e}")
 
 # ══════════════════════════════════════════════════════════════
-#  Coleta de hardware
+#  Coleta de hardware — SEM PowerShell
 # ══════════════════════════════════════════════════════════════
-# No Windows, usar STARTUPINFO + CREATE_NO_WINDOW para evitar que
-# o console do PowerShell pisque na tela do usuário a cada coleta.
-# Sem isso, executar o agente com pythonw.exe ainda mostra a janela
-# do PowerShell brevemente (problema relatado em produção).
-if platform.system() == "Windows":
-    _SI = subprocess.STARTUPINFO()
-    _SI.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    _SI.wShowWindow = 0  # SW_HIDE
-    _NO_WINDOW_FLAGS = subprocess.CREATE_NO_WINDOW
-else:
-    _SI = None
-    _NO_WINDOW_FLAGS = 0
+# powershell.exe sempre cria um conhost.exe que pisca na tela mesmo com
+# CREATE_NO_WINDOW. A solução definitiva é usar winreg (embutido no Python)
+# para CPU/marca/modelo e wmic.exe (sem janela) apenas para o serial.
 
-
-def _ps(cmd):
-    if platform.system() != "Windows": return ""
+def _reg(path, key, hive=None):
+    """Lê um valor do registro do Windows sem spawnar nenhum processo."""
+    if platform.system() != "Windows":
+        return ""
     try:
-        r = subprocess.run(["powershell","-NoProfile","-NonInteractive",
-                            "-OutputFormat","Text","-Command",cmd],
-                           capture_output=True, timeout=10,
-                           startupinfo=_SI, creationflags=_NO_WINDOW_FLAGS)
-        return r.stdout.decode("utf-8-sig", errors="ignore").strip()
-    except: return ""
+        import winreg
+        h = hive or winreg.HKEY_LOCAL_MACHINE
+        with winreg.OpenKey(h, path) as k:
+            val, _ = winreg.QueryValueEx(k, key)
+            return (val or "").strip()
+    except Exception:
+        return ""
+
+_WMIC_FLAGS = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+
+def _wmic(wmi_path, field):
+    """Consulta wmic.exe sem abrir janela — usado apenas para serial (não disponível no registro)."""
+    try:
+        r = subprocess.run(
+            ["wmic"] + wmi_path.split() + ["get", field, "/value"],
+            capture_output=True, timeout=10, creationflags=_WMIC_FLAGS,
+        )
+        for line in r.stdout.decode("latin-1", errors="ignore").splitlines():
+            if "=" in line:
+                k, v = line.split("=", 1)
+                if k.strip().lower() == field.lower():
+                    return v.strip()
+    except Exception:
+        pass
+    return ""
+
 
 def get_hostname():
     if platform.system()=="Windows":
@@ -462,7 +474,7 @@ def get_arquitetura():
 
 def get_serial():
     if platform.system()=="Windows":
-        v = _ps("(Get-WmiObject Win32_BIOS).SerialNumber")
+        v = _wmic("bios", "SerialNumber")
         if v and v not in ("","None","Default string","To Be Filled By O.E.M."): return v
         return ""
     try: return subprocess.check_output(["dmidecode","-s","system-serial-number"],stderr=subprocess.DEVNULL,timeout=5,encoding="utf-8").strip()
@@ -470,12 +482,13 @@ def get_serial():
 
 def get_marca_modelo():
     if platform.system()=="Windows":
-        m = _ps("(Get-WmiObject Win32_ComputerSystem).Manufacturer")
-        mo= _ps("(Get-WmiObject Win32_ComputerSystem).Model")
-        for p in ("System manufacturer","System Product Name","To Be Filled By O.E.M.","Default string","None"):
-            if m==p: m=""
-            if mo==p: mo=""
-        return m,mo
+        _BIOS = r"HARDWARE\DESCRIPTION\System\BIOS"
+        _JUNK = {"System manufacturer","System Product Name","To Be Filled By O.E.M.","Default string","None",""}
+        m  = _reg(_BIOS, "SystemManufacturer")
+        mo = _reg(_BIOS, "SystemProductName")
+        if m  in _JUNK: m  = ""
+        if mo in _JUNK: mo = ""
+        return m, mo
     try:
         m  = subprocess.check_output(["dmidecode","-s","system-manufacturer"],stderr=subprocess.DEVNULL,timeout=5,encoding="utf-8").strip()
         mo = subprocess.check_output(["dmidecode","-s","system-product-name"],stderr=subprocess.DEVNULL,timeout=5,encoding="utf-8").strip()
@@ -484,8 +497,8 @@ def get_marca_modelo():
 
 def get_cpu_modelo():
     if platform.system()=="Windows":
-        v = _ps("(Get-WmiObject Win32_Processor).Name")
-        if v: return v
+        v = _reg(r"HARDWARE\DESCRIPTION\System\CentralProcessor\0", "ProcessorNameString")
+        if v: return v.strip()
     return platform.processor() or "Desconhecido"
 
 def get_tipo():
