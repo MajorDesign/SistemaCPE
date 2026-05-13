@@ -95,11 +95,11 @@ def list_passwords(
                 for p in results
             ]
 
-            print(f"[VAULT/LIST] ✓ {len(passwords)} senhas carregadas")
+            print(f"[VAULT/LIST] OK {len(passwords)} senhas carregadas")
             return passwords
 
     except Exception as e:
-        print(f"[VAULT/LIST] ✗ Erro: {e}")
+        print(f"[VAULT/LIST] ERRO Erro: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao listar senhas: {str(e)}")
 
 
@@ -181,13 +181,13 @@ def create_password(
                 "allowed_group_id": allowed_group_id,
             })
 
-        print("[VAULT/CREATE] ✓ Senha criada")
+        print("[VAULT/CREATE] OK Senha criada")
         return {"success": True, "message": "Senha salva com sucesso!"}
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[VAULT/CREATE] ✗ Erro: {e}")
+        print(f"[VAULT/CREATE] ERRO Erro: {e}")
         raise HTTPException(status_code=500, detail=f"Erro ao criar senha: {str(e)}")
 
 
@@ -259,7 +259,7 @@ def get_password(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[VAULT/GET] ✗ Erro: {e}")
+        print(f"[VAULT/GET] ERRO Erro: {e}")
         raise HTTPException(status_code=500, detail=f"Erro: {str(e)}")
 
 
@@ -327,13 +327,13 @@ def update_password(
                 "id": password_id,
             })
 
-        print("[VAULT/UPDATE] ✓ Senha atualizada")
+        print("[VAULT/UPDATE] OK Senha atualizada")
         return {"success": True, "message": "Senha atualizada com sucesso!"}
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[VAULT/UPDATE] ✗ Erro: {e}")
+        print(f"[VAULT/UPDATE] ERRO Erro: {e}")
         raise HTTPException(status_code=500, detail=f"Erro: {str(e)}")
 
 
@@ -375,13 +375,13 @@ def delete_password(
             if result.rowcount == 0:
                 raise HTTPException(status_code=404, detail="Senha não encontrada")
 
-        print("[VAULT/DELETE] ✓ Senha deletada")
+        print("[VAULT/DELETE] OK Senha deletada")
         return {"success": True, "message": "Senha deletada com sucesso!"}
 
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[VAULT/DELETE] ✗ Erro: {e}")
+        print(f"[VAULT/DELETE] ERRO Erro: {e}")
         raise HTTPException(status_code=500, detail=f"Erro: {str(e)}")
 
 
@@ -427,11 +427,11 @@ def list_groups(
                 for g in results
             ]
 
-            print(f"[VAULT/GROUPS/LIST] ✓ {len(groups)} grupos")
+            print(f"[VAULT/GROUPS/LIST] OK {len(groups)} grupos")
             return groups
 
     except Exception as e:
-        print(f"[VAULT/GROUPS/LIST] ✗ Erro: {e}")
+        print(f"[VAULT/GROUPS/LIST] ERRO Erro: {e}")
         return []
 
 
@@ -565,6 +565,110 @@ def vault_pin_users_status(current_user: Dict[str, Any] = Depends(get_current_us
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =========================================
+# IMPORT PASSWORDS (bulk from Excel/CSV)
+# =========================================
+
+@router.post("/import")
+def import_passwords(
+    data: dict,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Importa múltiplas senhas em lote (vindas de planilha Excel/CSV).
+    Payload: { passwords: [{client, email, description, password, link, observation}],
+               is_exclusive: bool, group_id: int|null }
+    """
+    print(f"[VAULT/IMPORT] Importando senhas para user_id={current_user['id']}")
+
+    try:
+        is_admin = current_user.get("is_admin") or current_user.get("role") in ("ADMIN", "TI")
+        items     = data.get("passwords") or []
+        is_exclusive = bool(data.get("is_exclusive", False))
+
+        if not items:
+            raise HTTPException(status_code=400, detail="Nenhuma senha enviada para importação.")
+
+        if len(items) > 2000:
+            raise HTTPException(status_code=400, detail="Máximo 2 000 senhas por importação.")
+
+        # Determina group_id
+        if is_admin:
+            group_id = data.get("group_id") or None
+        else:
+            group_id = current_user.get("group_id")
+            if not group_id and not is_exclusive:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Você não pertence a nenhum grupo. Importe como senhas privadas.",
+                )
+
+        allowed_group_id = None if is_admin else current_user.get("group_id")
+
+        inserted = 0
+        skipped  = 0
+        errors   = []
+
+        with engine.begin() as conn:
+            for idx, item in enumerate(items, start=1):
+                client      = (item.get("client") or "").strip()
+                password    = (item.get("password") or "").strip()
+                description = (item.get("description") or client or "Importado").strip()
+                email       = (item.get("email") or "").strip() or None
+                link        = (item.get("link") or "").strip() or None
+                observation = (item.get("observation") or "").strip() or None
+
+                # Fallback: se cliente vazio, usa descrição ou índice
+                if not client:
+                    client = description or f"Importado #{idx}"
+                    description = description or ""
+
+                if not password:
+                    skipped += 1
+                    errors.append(f"Linha {idx}: campo senha vazio — ignorada.")
+                    continue
+
+                conn.execute(text("""
+                    INSERT INTO cofre_senhas (
+                        cofre_user_id, cofre_client, cofre_email, cofre_description,
+                        cofre_password, cofre_link, cofre_observation, cofre_group_id,
+                        cofre_is_public, cofre_is_exclusive, cofre_allowed_group_id
+                    ) VALUES (
+                        :user_id, :client, :email, :description,
+                        :password, :link, :observation, :group_id,
+                        :is_public, :is_exclusive, :allowed_group_id
+                    )
+                """), {
+                    "user_id":         current_user["id"],
+                    "client":          client,
+                    "email":           email,
+                    "description":     description,
+                    "password":        password,
+                    "link":            link,
+                    "observation":     observation,
+                    "group_id":        group_id,
+                    "is_public":       0,
+                    "is_exclusive":    1 if is_exclusive else 0,
+                    "allowed_group_id": allowed_group_id,
+                })
+                inserted += 1
+
+        print(f"[VAULT/IMPORT] OK {inserted} importadas, {skipped} ignoradas")
+        return {
+            "success":  True,
+            "inserted": inserted,
+            "skipped":  skipped,
+            "errors":   errors[:20],   # retorna no máx. 20 erros para o frontend exibir
+            "message":  f"{inserted} senha(s) importada(s) com sucesso!",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[VAULT/IMPORT] ERRO Erro: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao importar senhas: {str(e)}")
 
 
 # =========================================

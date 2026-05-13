@@ -31,6 +31,14 @@ import os
 # =========================================
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Garante que stdout/stderr aceitem UTF-8 (emojis nos print() das rotas)
+# necessário no Windows onde o terminal padrão usa CP1252
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    pass
+
 # =========================================
 # 3. IMPORTAR DE DATABASE.PY
 # =========================================
