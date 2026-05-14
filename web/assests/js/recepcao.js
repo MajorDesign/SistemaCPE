@@ -30,6 +30,7 @@ let usuariosAtivos = [];   // para multi-select de convidados
 let calendar     = null;
 let editandoSala     = null;
 let editandoEnvio    = null;
+let showCanceladas   = false;  // oculta canceladas/expiradas por padrão
 
 // Helpers para trabalhar com escritórios por unidade
 function escritoriosDaUnidade(unitId) {
@@ -566,7 +567,9 @@ function initCalendar() {
     nowIndicator: true,
     slotMinTime: '07:00:00',
     slotMaxTime: '22:00:00',
+    slotDuration: '00:30:00',
     allDaySlot: false,
+    eventMaxStack: 3,
     selectable: true,
     selectMirror: true,
     select(info) {
@@ -575,6 +578,29 @@ function initCalendar() {
       const f = new Date(info.end);
       $('resvInicio').value = toDtLocalInput(i);
       $('resvFim').value    = toDtLocalInput(f);
+    },
+    eventContent(arg) {
+      const rv     = arg.event.extendedProps?.reserva || {};
+      const status = rv.status || 'pendente';
+      const ICONS  = { pendente: '⏳', confirmada: '✔', concluida: '●', cancelada: '✗', expirada: '⚠' };
+      const icon   = ICONS[status] || '';
+      const titulo = escHtml(rv.titulo || arg.event.title || '');
+      const sala   = escHtml(rv.sala_nome || '');
+      return {
+        html: `<div class="recep-ev-inner">
+                 <div class="recep-ev-head">
+                   <span class="recep-ev-icon">${icon}</span>
+                   <span class="recep-ev-title">${titulo}</span>
+                 </div>
+                 ${sala ? `<div class="recep-ev-sala">${sala}</div>` : ''}
+               </div>`,
+      };
+    },
+    eventDidMount(info) {
+      const status = info.event.extendedProps?.reserva?.status;
+      if (status === 'cancelada' || status === 'expirada') {
+        info.el.style.opacity = '0.45';
+      }
     },
     eventClick(info) {
       openReservaDetalhe(info.event.extendedProps.reserva);
@@ -603,22 +629,42 @@ async function fetchEventos(fetchInfo, success, failure) {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const lista = await r.json();
 
-    const events = lista.map(rv => ({
-      id: String(rv.id),
-      title: `${rv.titulo} — ${rv.sala_nome}`,
-      start: rv.inicio,
-      end:   rv.fim,
-      backgroundColor: statusToColor(rv.status),
-      borderColor: statusToColor(rv.status),
-      textColor: '#fff',
-      classNames: ['recep-event-' + rv.status],
-      extendedProps: { reserva: rv },
-    }));
+    const STATUS_CANCELADO = ['cancelada', 'expirada'];
+    const events = lista
+      .filter(rv => showCanceladas || !STATUS_CANCELADO.includes(rv.status))
+      .map(rv => ({
+        id: String(rv.id),
+        title: rv.titulo,
+        start: rv.inicio,
+        end:   rv.fim,
+        backgroundColor: statusToColor(rv.status),
+        borderColor:     statusToColor(rv.status),
+        textColor: '#fff',
+        classNames: ['recep-event-' + rv.status],
+        extendedProps: { reserva: rv },
+      }));
     success(events);
   } catch (err) {
     console.error('[RECEP/EVENTOS]', err);
     failure(err);
   }
+}
+
+function toggleCanceladas() {
+  showCanceladas = !showCanceladas;
+  const btn  = $('btnToggleCanceladas');
+  const lbl  = $('lblToggleCanceladas');
+  const icon = btn.querySelector('i');
+  if (showCanceladas) {
+    icon.className = 'bi bi-eye';
+    lbl.textContent = 'Ocultar canceladas';
+    btn.classList.add('active');
+  } else {
+    icon.className = 'bi bi-eye-slash';
+    lbl.textContent = 'Exibir canceladas';
+    btn.classList.remove('active');
+  }
+  if (calendar) calendar.refetchEvents();
 }
 
 function onFilterCalendar() {

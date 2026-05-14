@@ -106,6 +106,9 @@
           <select class="recep-select" id="filterSalaCal" onchange="onFilterCalendar()" style="max-width:220px">
             <option value="">Todas as salas</option>
           </select>
+          <button class="btn-recep btn-recep-ghost" id="btnToggleCanceladas" onclick="toggleCanceladas()" title="Mostrar/ocultar reservas canceladas e expiradas">
+            <i class="bi bi-eye-slash"></i> <span id="lblToggleCanceladas">Exibir canceladas</span>
+          </button>
           <button class="btn-recep btn-recep-primary" onclick="openReservaModal()">
             <i class="bi bi-plus-lg"></i> Nova Reserva
           </button>
