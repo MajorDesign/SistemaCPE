@@ -23,9 +23,5 @@ CREATE TABLE IF NOT EXISTS `ticket_attachments` (
   `uploaded_at`   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_ticket`    (`ticket_id`),
-  KEY `idx_interacao` (`interacao_id`),
-  CONSTRAINT `fk_attach_ticket`
-    FOREIGN KEY (`ticket_id`) REFERENCES `tickets`(`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_attach_user`
-    FOREIGN KEY (`uploaded_by`) REFERENCES `users`(`id`) ON DELETE CASCADE
+  KEY `idx_interacao` (`interacao_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
