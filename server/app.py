@@ -1064,8 +1064,28 @@ async def delete_user(user_id: int):
             conn.close()
 
 # =========================================
-# 12. HEALTH CHECK
+# 12. ROTA RAIZ + HEALTH CHECK
 # =========================================
+
+@app.get("/")
+async def root():
+    """Informacoes basicas da API"""
+    db_ok = True
+    try:
+        conn = get_db_connection()
+        conn.close()
+    except Exception:
+        db_ok = False
+
+    return {
+        "api": "CPE Control API",
+        "version": "2.0.0",
+        "status": "online",
+        "database": "ok" if db_ok else "erro",
+        "docs": "/docs",
+        "health": "/health",
+        "timestamp": datetime.now().isoformat(),
+    }
 
 @app.get("/health", response_model=HealthCheckResponse)
 async def health():

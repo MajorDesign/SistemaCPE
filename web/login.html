@@ -392,9 +392,84 @@
     </div>
   </div>
 
+  <!-- ✅ SELETOR DE AMBIENTE (só localhost) -->
+  <div id="envSwitcher" style="
+    position: fixed; bottom: 16px; right: 16px;
+    display: none;
+    align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(8px);
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 8px 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.10);
+    font-size: 12px;
+    z-index: 9998;
+  ">
+    <span style="color:#6B7280;font-weight:600;white-space:nowrap;">
+      <i class="bi bi-database"></i> Banco:
+    </span>
+    <div id="envBtns" style="display:flex;gap:4px;"></div>
+  </div>
+
   <!-- ✅ SCRIPTS -->
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/login.js"></script>
+
+  <!-- ============================================================ -->
+  <!-- SELETOR DE AMBIENTE DEV                                       -->
+  <!-- ============================================================ -->
+  <script>
+  (function () {
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (!isLocal) return;
+
+    const switcher = document.getElementById('envSwitcher');
+    const btnsEl   = document.getElementById('envBtns');
+    if (!switcher || !btnsEl) return;
+
+    switcher.style.display = 'flex';
+
+    const envs = window._API_ENVS || { dev: { port: 8000, label: 'Dev' }, staging: { port: 8001, label: 'Staging' } };
+    const cur  = window.API_ENV || 'dev';
+
+    const COLORS = {
+      dev:     { bg: '#FFF8E1', border: '#FFC107', text: '#92400E', active: '#FFC107' },
+      staging: { bg: '#EFF6FF', border: '#3B82F6', text: '#1E40AF', active: '#3B82F6' },
+    };
+
+    function render() {
+      btnsEl.innerHTML = '';
+      Object.entries(envs).forEach(([key, cfg]) => {
+        const isActive = (window.API_ENV === key);
+        const c = COLORS[key] || COLORS.dev;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = cfg.label;
+        btn.title = `Porta ${cfg.port} — ${cfg.db || ''}`;
+        btn.style.cssText = `
+          padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: 600;
+          cursor: pointer; border: 1.5px solid ${isActive ? c.active : '#E5E7EB'};
+          background: ${isActive ? c.bg : '#F9FAFB'};
+          color: ${isActive ? c.text : '#6B7280'};
+          transition: all .15s;
+        `;
+        if (!isActive) {
+          btn.onmouseenter = () => { btn.style.borderColor = c.active; btn.style.color = c.text; };
+          btn.onmouseleave = () => { btn.style.borderColor = '#E5E7EB'; btn.style.color = '#6B7280'; };
+        }
+        btn.addEventListener('click', () => {
+          if (window.API_ENV === key) return;
+          localStorage.setItem('cpe_env', key);
+          location.reload();
+        });
+        btnsEl.appendChild(btn);
+      });
+    }
+
+    render();
+  })();
+  </script>
 
   <!-- ============================================================ -->
   <!-- LÓGICA DO PRIMEIRO ACESSO                                     -->

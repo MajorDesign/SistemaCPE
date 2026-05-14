@@ -536,14 +536,21 @@ body.recep-body video { height: auto; }
   border-radius: 6px !important;
 }
 
-/* Conteúdo customizado dos eventos */
+/* Conteúdo customizado dos eventos — grade de horários */
 .recep-ev-inner {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 2px 4px;
+  padding: 2px 5px;
   min-height: 100%;
   overflow: hidden;
+}
+.recep-ev-inner.recep-ev-compact {
+  /* slots de 30min: só mostra título, sem sala */
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  padding: 0 4px;
 }
 .recep-ev-head {
   display: flex;
@@ -574,6 +581,32 @@ body.recep-body video { height: auto; }
   padding-left: 14px;
   line-height: 1.2;
 }
+
+/* Eventos multi-dia — faixa allDay no topo */
+.recep-ev-allday {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.recep-ev-allday-sala {
+  font-weight: 400;
+  opacity: .85;
+  font-size: 10px;
+}
+.fc-event.recep-event-multidia {
+  border-radius: 4px;
+}
+/* Linha allDay mais visível */
+.fc-daygrid-day-events,
+.fc-timegrid-event-harness-inset { z-index: 1; }
+.fc .fc-daygrid-body-natural .fc-daygrid-day-events { min-height: 0; }
 
 /* Canceladas / expiradas — discretas quando visíveis (opacity via JS) */
 .fc-event.recep-event-cancelada,
