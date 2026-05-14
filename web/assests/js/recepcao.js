@@ -568,8 +568,10 @@ function initCalendar() {
     slotMinTime: '07:00:00',
     slotMaxTime: '22:00:00',
     slotDuration: '00:30:00',
-    allDaySlot: false,
+    allDaySlot: true,
+    allDayText: 'Multi-dia',
     eventMaxStack: 3,
+    dayMaxEvents: true,
     selectable: true,
     selectMirror: true,
     select(info) {
@@ -586,20 +588,47 @@ function initCalendar() {
       const icon   = ICONS[status] || '';
       const titulo = escHtml(rv.titulo || arg.event.title || '');
       const sala   = escHtml(rv.sala_nome || '');
+
+      // Eventos multi-dia ficam na faixa allDay — layout compacto horizontal
+      if (arg.event.allDay) {
+        return {
+          html: `<div class="recep-ev-allday">
+                   <span class="recep-ev-icon">${icon}</span>
+                   <span class="recep-ev-title">${titulo}</span>
+                   ${sala ? `<span class="recep-ev-allday-sala"> · ${sala}</span>` : ''}
+                 </div>`,
+        };
+      }
+
+      // Calcula duração em minutos para layout adaptativo
+      const durMin = arg.event.end
+        ? (arg.event.end - arg.event.start) / 60000
+        : 60;
+      const compacto = durMin <= 30;
+
       return {
-        html: `<div class="recep-ev-inner">
+        html: `<div class="recep-ev-inner${compacto ? ' recep-ev-compact' : ''}">
                  <div class="recep-ev-head">
                    <span class="recep-ev-icon">${icon}</span>
                    <span class="recep-ev-title">${titulo}</span>
                  </div>
-                 ${sala ? `<div class="recep-ev-sala">${sala}</div>` : ''}
+                 ${sala && !compacto ? `<div class="recep-ev-sala">${sala}</div>` : ''}
                </div>`,
       };
     },
     eventDidMount(info) {
-      const status = info.event.extendedProps?.reserva?.status;
+      const rv     = info.event.extendedProps?.reserva || {};
+      const status = rv.status;
       if (status === 'cancelada' || status === 'expirada') {
         info.el.style.opacity = '0.45';
+      }
+      // Tooltip com detalhes ao passar o mouse
+      const sala = rv.sala_nome || '';
+      const inicio = rv.inicio ? new Date(rv.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      const fim    = rv.fim    ? new Date(rv.fim).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+      if (rv.titulo) {
+        info.el.title = [rv.titulo, sala, inicio && fim ? `${inicio} – ${fim}` : '']
+          .filter(Boolean).join('\n');
       }
     },
     eventClick(info) {
@@ -632,17 +661,24 @@ async function fetchEventos(fetchInfo, success, failure) {
     const STATUS_CANCELADO = ['cancelada', 'expirada'];
     const events = lista
       .filter(rv => showCanceladas || !STATUS_CANCELADO.includes(rv.status))
-      .map(rv => ({
-        id: String(rv.id),
-        title: rv.titulo,
-        start: rv.inicio,
-        end:   rv.fim,
-        backgroundColor: statusToColor(rv.status),
-        borderColor:     statusToColor(rv.status),
-        textColor: '#fff',
-        classNames: ['recep-event-' + rv.status],
-        extendedProps: { reserva: rv },
-      }));
+      .map(rv => {
+        const start = new Date(rv.inicio);
+        const end   = new Date(rv.fim);
+        // Evento multi-dia: datas diferentes (ignora hora)
+        const multiDia = start.toDateString() !== end.toDateString();
+        return {
+          id: String(rv.id),
+          title: rv.titulo,
+          start: rv.inicio,
+          end:   rv.fim,
+          allDay: multiDia,
+          backgroundColor: statusToColor(rv.status),
+          borderColor:     statusToColor(rv.status),
+          textColor: '#fff',
+          classNames: ['recep-event-' + rv.status, multiDia ? 'recep-event-multidia' : ''],
+          extendedProps: { reserva: rv },
+        };
+      });
     success(events);
   } catch (err) {
     console.error('[RECEP/EVENTOS]', err);
