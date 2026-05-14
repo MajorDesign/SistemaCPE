@@ -528,35 +528,89 @@ body.recep-body video { height: auto; }
 }
 
 /* ============================================================
-   FULLCALENDAR overrides (mantém tema amarelo)
+   FULLCALENDAR overrides
    ============================================================ */
-.fc-event { cursor: pointer; border: none !important; }
-.fc-event-title { font-weight: 600; }
+.fc-event {
+  cursor: pointer;
+  border: none !important;
+  border-radius: 6px !important;
+}
 
-/* Reservas canceladas / expiradas — visual distinto mas continuam clicáveis.
-   Mesmo se a reunião for curta, o evento mantém altura mínima para não
-   virar um traço fininho. */
+/* Conteúdo customizado dos eventos */
+.recep-ev-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 4px;
+  min-height: 100%;
+  overflow: hidden;
+}
+.recep-ev-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.recep-ev-icon {
+  font-size: 10px;
+  flex-shrink: 0;
+  opacity: .9;
+}
+.recep-ev-title {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.recep-ev-sala {
+  font-size: 10px;
+  opacity: .85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 14px;
+  line-height: 1.2;
+}
+
+/* Canceladas / expiradas — discretas quando visíveis (opacity via JS) */
 .fc-event.recep-event-cancelada,
 .fc-event.recep-event-expirada {
-  background-image: repeating-linear-gradient(
-    45deg, transparent, transparent 6px,
-    rgba(255,255,255,.22) 6px, rgba(255,255,255,.22) 12px
-  );
-  opacity: .85;
-  min-height: 22px;
+  min-height: 20px;
 }
-.fc-event.recep-event-cancelada .fc-event-title,
-.fc-event.recep-event-expirada .fc-event-title {
+.fc-event.recep-event-cancelada .recep-ev-title,
+.fc-event.recep-event-expirada  .recep-ev-title {
   text-decoration: line-through;
-  text-decoration-thickness: 2px;
   font-style: italic;
 }
-.fc-event.recep-event-cancelada::before,
-.fc-event.recep-event-expirada::before {
-  content: '\F623';   /* bi-x-circle-fill */
-  font-family: 'bootstrap-icons';
-  margin-right: 4px;
-  opacity: .9;
+
+/* Botão toggle canceladas */
+.btn-recep-ghost {
+  background: transparent;
+  color: var(--recep-muted);
+  border: 1.5px solid var(--recep-border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all .18s;
+  white-space: nowrap;
+}
+.btn-recep-ghost:hover {
+  background: #f3f4f6;
+  color: var(--recep-text);
+  border-color: #9ca3af;
+}
+.btn-recep-ghost.active {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: var(--recep-warning);
 }
 .fc-toolbar-title { font-size: 18px !important; }
 .fc-button-primary {
