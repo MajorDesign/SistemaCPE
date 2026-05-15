@@ -29,10 +29,11 @@ const _curHost = (typeof window !== 'undefined' && window.location && window.loc
   ? window.location.hostname
   : '127.0.0.1';
 
-// Quando rodando atrás de domínio público (Cloudflare Tunnel),
-// a API fica em api.<dominio> via HTTPS — sem porta explícita.
-// Em dev/staging local, segue a regra de host+porta.
-const _isPublicDomain = /^(?:www\.)?[\w-]+\.[\w]{2,}/.test(_curHost) && _curHost !== 'localhost';
+// Detecta se é IP (IPv4) — nesse caso a API é sempre host:porta.
+// Só usar api.<dominio> quando for um domínio real (tem letras + ponto).
+const _isIp = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(_curHost);
+const _isLocalhost = _curHost === 'localhost' || _curHost === '127.0.0.1';
+const _isPublicDomain = !_isIp && !_isLocalhost && /[a-z]/i.test(_curHost) && _curHost.includes('.');
 
 const API_BASE_URL = _isPublicDomain
   ? `${window.location.protocol}//api.${_curHost.replace(/^www\./, '')}`
