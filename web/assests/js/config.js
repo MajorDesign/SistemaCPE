@@ -25,11 +25,18 @@ const _savedEnv = _isLocalhost
 const API_ENV  = _savedEnv in _API_ENVS ? _savedEnv : 'dev';
 const API_PORT = _API_ENVS[API_ENV].port;
 
-const _apiHost = (typeof window !== 'undefined' && window.location && window.location.hostname)
+const _curHost = (typeof window !== 'undefined' && window.location && window.location.hostname)
   ? window.location.hostname
   : '127.0.0.1';
 
-const API_BASE_URL = `http://${_apiHost}:${API_PORT}`;
+// Quando rodando atrás de domínio público (Cloudflare Tunnel),
+// a API fica em api.<dominio> via HTTPS — sem porta explícita.
+// Em dev/staging local, segue a regra de host+porta.
+const _isPublicDomain = /^(?:www\.)?[\w-]+\.[\w]{2,}/.test(_curHost) && _curHost !== 'localhost';
+
+const API_BASE_URL = _isPublicDomain
+  ? `${window.location.protocol}//api.${_curHost.replace(/^www\./, '')}`
+  : `http://${_curHost}:${API_PORT}`;
 
 if (typeof window !== 'undefined') {
   window.API_BASE_URL = API_BASE_URL;
