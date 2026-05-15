@@ -520,3 +520,241 @@ def omada_topology(request: Request, site_id: Optional[str] = Query(None)):
         raise HTTPException(502, f"Omada: {exc}")
     except Exception as exc:
         raise HTTPException(502, f"Omada inalcançável: {exc}")
+
+
+# =====================================================================
+# CELULARES CORPORATIVOS — CRUD + termo de responsabilidade
+# =====================================================================
+
+from pydantic import BaseModel, Field
+from typing import List
+
+
+class CelularBase(BaseModel):
+    marca: str = Field(..., min_length=1, max_length=50)
+    modelo: str = Field(..., min_length=1, max_length=100)
+    imei1: str = Field(..., min_length=8, max_length=20)
+    imei2: Optional[str] = Field(None, max_length=20)
+    numero_chip: Optional[str] = Field(None, max_length=30)
+    operadora: Optional[str] = Field(None, max_length=30)
+    numero_telefone: Optional[str] = Field(None, max_length=20)
+    patrimonio: Optional[str] = Field(None, max_length=50)
+    acessorios: Optional[str] = Field("bateria e carregador", max_length=255)
+    cor: Optional[str] = Field(None, max_length=30)
+    status: Optional[str] = Field("disponivel", pattern="^(em_uso|disponivel|manutencao|inativo)$")
+    responsavel_id: Optional[int] = None
+    data_entrega: Optional[str] = None  # YYYY-MM-DD
+    observacoes: Optional[str] = None
+
+
+class CelularUpdate(BaseModel):
+    marca: Optional[str] = Field(None, max_length=50)
+    modelo: Optional[str] = Field(None, max_length=100)
+    imei1: Optional[str] = Field(None, max_length=20)
+    imei2: Optional[str] = Field(None, max_length=20)
+    numero_chip: Optional[str] = Field(None, max_length=30)
+    operadora: Optional[str] = Field(None, max_length=30)
+    numero_telefone: Optional[str] = Field(None, max_length=20)
+    patrimonio: Optional[str] = Field(None, max_length=50)
+    acessorios: Optional[str] = Field(None, max_length=255)
+    cor: Optional[str] = Field(None, max_length=30)
+    status: Optional[str] = Field(None, pattern="^(em_uso|disponivel|manutencao|inativo)$")
+    responsavel_id: Optional[int] = None
+    data_entrega: Optional[str] = None
+    observacoes: Optional[str] = None
+
+
+def _row_to_celular(row: dict) -> dict:
+    """Converte linha do banco em dict serializável."""
+    for k in ("criado_em", "atualizado_em", "data_entrega"):
+        if row.get(k):
+            row[k] = row[k].isoformat() if hasattr(row[k], "isoformat") else str(row[k])
+    return row
+
+
+@router.get("/celulares")
+def listar_celulares(
+    status: Optional[str] = Query(None),
+    responsavel_id: Optional[int] = Query(None),
+    q: Optional[str] = Query(None, description="Busca em marca/modelo/IMEI/patrimônio"),
+):
+    """Lista todos os celulares, com filtros opcionais."""
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        sql = """
+            SELECT c.*, u.name AS responsavel_nome, u.email AS responsavel_email, u.cpf AS responsavel_cpf
+            FROM inventario_celulares c
+            LEFT JOIN users u ON u.id = c.responsavel_id
+            WHERE 1=1
+        """
+        params: List = []
+        if status:
+            sql += " AND c.status = %s"; params.append(status)
+        if responsavel_id:
+            sql += " AND c.responsavel_id = %s"; params.append(responsavel_id)
+        if q:
+            sql += " AND (c.marca LIKE %s OR c.modelo LIKE %s OR c.imei1 LIKE %s OR c.imei2 LIKE %s OR c.patrimonio LIKE %s)"
+            like = f"%{q}%"
+            params += [like, like, like, like, like]
+        sql += " ORDER BY c.criado_em DESC"
+        cur.execute(sql, params)
+        return [_row_to_celular(r) for r in cur.fetchall()]
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/celulares/{cel_id}")
+def detalhe_celular(cel_id: int):
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT c.*, u.name AS responsavel_nome, u.email AS responsavel_email, u.cpf AS responsavel_cpf
+            FROM inventario_celulares c
+            LEFT JOIN users u ON u.id = c.responsavel_id
+            WHERE c.id = %s
+        """, (cel_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Celular não encontrado")
+        return _row_to_celular(row)
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/celulares", status_code=201)
+def criar_celular(payload: CelularBase):
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT id FROM inventario_celulares WHERE imei1 = %s", (payload.imei1,))
+        if cur.fetchone():
+            raise HTTPException(400, "Já existe celular com este IMEI1")
+        cur.execute("""
+            INSERT INTO inventario_celulares
+              (marca, modelo, imei1, imei2, numero_chip, operadora, numero_telefone,
+               patrimonio, acessorios, cor, status, responsavel_id, data_entrega, observacoes)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            payload.marca, payload.modelo, payload.imei1, payload.imei2,
+            payload.numero_chip, payload.operadora, payload.numero_telefone,
+            payload.patrimonio, payload.acessorios, payload.cor,
+            payload.status, payload.responsavel_id, payload.data_entrega, payload.observacoes,
+        ))
+        new_id = cur.lastrowid
+        if payload.responsavel_id and payload.data_entrega:
+            cur.execute("""
+                INSERT INTO inventario_celulares_historico
+                  (celular_id, responsavel_id, data_entrega, observacoes)
+                VALUES (%s,%s,%s,%s)
+            """, (new_id, payload.responsavel_id, payload.data_entrega, payload.observacoes))
+        conn.commit()
+        cur.execute("SELECT * FROM inventario_celulares WHERE id = %s", (new_id,))
+        return _row_to_celular(cur.fetchone())
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[CELULARES] erro ao criar: {e}")
+        raise HTTPException(500, f"Erro ao criar celular: {e}")
+    finally:
+        cur.close(); conn.close()
+
+
+@router.put("/celulares/{cel_id}")
+def atualizar_celular(cel_id: int, payload: CelularUpdate):
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT * FROM inventario_celulares WHERE id = %s", (cel_id,))
+        atual = cur.fetchone()
+        if not atual:
+            raise HTTPException(404, "Celular não encontrado")
+
+        fields, vals = [], []
+        for k, v in payload.model_dump(exclude_none=True).items():
+            fields.append(f"`{k}` = %s"); vals.append(v)
+        if not fields:
+            raise HTTPException(400, "Nenhum campo para atualizar")
+        vals.append(cel_id)
+        cur.execute(f"UPDATE inventario_celulares SET {', '.join(fields)} WHERE id = %s", vals)
+
+        novo_resp = payload.responsavel_id
+        nova_data = payload.data_entrega
+        if novo_resp is not None and novo_resp != atual.get("responsavel_id"):
+            cur.execute("""
+                UPDATE inventario_celulares_historico
+                SET data_devolucao = CURDATE()
+                WHERE celular_id = %s AND data_devolucao IS NULL
+            """, (cel_id,))
+            if novo_resp:
+                cur.execute("""
+                    INSERT INTO inventario_celulares_historico
+                      (celular_id, responsavel_id, data_entrega, observacoes)
+                    VALUES (%s, %s, %s, %s)
+                """, (cel_id, novo_resp, nova_data or str(datetime.now().date()), payload.observacoes))
+
+        conn.commit()
+        cur.execute("""
+            SELECT c.*, u.name AS responsavel_nome, u.email AS responsavel_email, u.cpf AS responsavel_cpf
+            FROM inventario_celulares c
+            LEFT JOIN users u ON u.id = c.responsavel_id
+            WHERE c.id = %s
+        """, (cel_id,))
+        return _row_to_celular(cur.fetchone())
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"[CELULARES] erro ao atualizar: {e}")
+        raise HTTPException(500, f"Erro ao atualizar celular: {e}")
+    finally:
+        cur.close(); conn.close()
+
+
+@router.delete("/celulares/{cel_id}", status_code=204)
+def deletar_celular(cel_id: int):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM inventario_celulares_historico WHERE celular_id = %s", (cel_id,))
+        cur.execute("DELETE FROM inventario_celulares WHERE id = %s", (cel_id,))
+        conn.commit()
+        if cur.rowcount == 0:
+            raise HTTPException(404, "Celular não encontrado")
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/celulares/{cel_id}/termo")
+def dados_termo_celular(cel_id: int):
+    """Retorna dados necessários para gerar o termo de responsabilidade.
+    O frontend monta o HTML e usa window.print() para gerar o PDF."""
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT c.*, u.name AS responsavel_nome, u.email AS responsavel_email, u.cpf AS responsavel_cpf
+            FROM inventario_celulares c
+            LEFT JOIN users u ON u.id = c.responsavel_id
+            WHERE c.id = %s
+        """, (cel_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Celular não encontrado")
+        if not row.get("responsavel_id"):
+            raise HTTPException(400, "Atribua um responsável antes de gerar o termo")
+        if not row.get("responsavel_cpf"):
+            raise HTTPException(400,
+                f"O usuário {row.get('responsavel_nome')} não tem CPF cadastrado. "
+                f"Edite o perfil dele antes de gerar o termo.")
+        cur.execute("""
+            UPDATE inventario_celulares_historico
+            SET termo_gerado_em = NOW()
+            WHERE celular_id = %s AND data_devolucao IS NULL
+        """, (cel_id,))
+        conn.commit()
+        return _row_to_celular(row)
+    finally:
+        cur.close(); conn.close()

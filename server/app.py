@@ -85,6 +85,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
+    cpf: Optional[str] = Field(None, max_length=14)
 
 class UserUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=3, max_length=255)
@@ -94,6 +95,7 @@ class UserUpdate(BaseModel):
     group_id: Optional[int] = None
     unit_id: Optional[int] = None
     is_active: Optional[bool] = None
+    cpf: Optional[str] = Field(None, max_length=14)
 
 # ✅ CORRIGIDO: adicionado group_name para o frontend preencher o modal de ticket
 # ✅ NOVO (2026-04-30): unit_id e unit_nome para vincular usuário a uma unidade CPE
@@ -107,6 +109,7 @@ class UserResponse(BaseModel):
     group_name: Optional[str] = None   # nome do grupo/setor do usuário
     unit_id: Optional[int] = None
     unit_nome: Optional[str] = None    # nome da unidade física (ex.: CPE Belo Horizonte)
+    cpf: Optional[str] = None          # CPF (11 dígitos, sem máscara) — usado em termos
     is_active: bool
     created_at: Optional[str] = None
 
@@ -312,7 +315,7 @@ def login(login_data: LoginRequest, response: Response):
             query = """
                  SELECT
                     u.id, u.name, u.email, u.username, u.role,
-                    u.group_id, u.unit_id, u.is_active, u.created_at, u.password_hash,
+                    u.group_id, u.unit_id, u.cpf, u.is_active, u.created_at, u.password_hash,
                     `cpe_grupo`.`name` AS group_name,
                     unidades_cpe.nome AS unit_nome
                 FROM users u
@@ -324,7 +327,7 @@ def login(login_data: LoginRequest, response: Response):
             query = """
                 SELECT
                     u.id, u.name, u.email, u.username, u.role,
-                    u.group_id, u.unit_id, u.is_active, u.created_at, u.password_hash,
+                    u.group_id, u.unit_id, u.cpf, u.is_active, u.created_at, u.password_hash,
                     `cpe_grupo`.`name` AS group_name,
                     unidades_cpe.nome AS unit_nome
                 FROM users u
@@ -776,7 +779,7 @@ async def get_users():
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, "
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, u.cpf, "
             "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
             "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
             "ORDER BY u.created_at DESC"
@@ -807,7 +810,7 @@ async def get_user(user_id: int):
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, "
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, u.cpf, "
             "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
             "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
             "WHERE u.id = %s",
@@ -869,11 +872,12 @@ async def create_user(user: UserCreate):
         except Exception as hash_err:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao processar senha")
 
+        cpf_clean = ''.join(filter(str.isdigit, (user.cpf or ''))) or None
         cursor.execute(
-            "INSERT INTO users (name, email, username, password_hash, role, group_id, unit_id, is_active) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+            "INSERT INTO users (name, email, username, password_hash, role, group_id, unit_id, cpf, is_active) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (user.name, user.email, user.username, password_hash, user.role,
-             user.group_id, user.unit_id, user.is_active)
+             user.group_id, user.unit_id, cpf_clean, user.is_active)
         )
 
         conn.commit()
@@ -881,7 +885,7 @@ async def create_user(user: UserCreate):
         logger.info(f"[USERS]   ✅ Usuario criado com ID: {new_user_id}")
 
         cursor.execute(
-            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, "
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, u.cpf, "
             "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
             "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
             "WHERE u.id = %s",
@@ -960,6 +964,11 @@ async def update_user(user_id: int, user: UserUpdate):
             updates.append("is_active = %s")
             params.append(user.is_active)
 
+        if user.cpf is not None:
+            cpf_clean = ''.join(filter(str.isdigit, user.cpf)) or None
+            updates.append("cpf = %s")
+            params.append(cpf_clean)
+
         if not updates:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
 
@@ -968,7 +977,7 @@ async def update_user(user_id: int, user: UserUpdate):
         conn.commit()
 
         cursor.execute(
-            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, "
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, u.cpf, "
             "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
             "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
             "WHERE u.id = %s",

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Celulares Corporativos - CPE Control</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
+
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
+  <script>pageGuard('INVENTORY_TI');</script>
+
+  <style>
+    .cel-kpi-bar { display:flex; gap:14px; margin-bottom:22px; flex-wrap:wrap; }
+    .cel-kpi {
+      background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+      padding:14px 20px; display:flex; align-items:center; gap:12px;
+      min-width:140px; box-shadow:0 1px 4px rgba(0,0,0,.04);
+    }
+    .cel-kpi-icon {
+      font-size:20px; width:38px; height:38px; border-radius:8px;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    }
+    .cel-kpi-icon.total      { background:#ede9fe; color:#6d28d9; }
+    .cel-kpi-icon.em_uso     { background:#d1fae5; color:#065f46; }
+    .cel-kpi-icon.disponivel { background:#dbeafe; color:#1e40af; }
+    .cel-kpi-icon.manutencao { background:#fef3c7; color:#92400e; }
+    .cel-kpi-val { font-size:22px; font-weight:700; color:#111827; line-height:1; }
+    .cel-kpi-lbl { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; }
+
+    .cel-toolbar {
+      display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;
+    }
+    .cel-toolbar input, .cel-toolbar select {
+      padding:8px 12px; border:1px solid #e5e7eb; border-radius:8px;
+      font-size:13px; min-width:180px;
+    }
+    .cel-toolbar .btn-primary {
+      background:#ffc107; border:none; color:#1a1a1a; font-weight:600;
+      padding:8px 16px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;
+    }
+    .cel-toolbar .btn-primary:hover { background:#e6ac00; }
+
+    .cel-table {
+      width:100%; background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+      border-collapse:separate; border-spacing:0; overflow:hidden;
+    }
+    .cel-table th {
+      background:#f9fafb; padding:10px 12px; text-align:left;
+      font-size:11px; text-transform:uppercase; color:#6b7280;
+      font-weight:700; border-bottom:1px solid #e5e7eb;
+    }
+    .cel-table td {
+      padding:11px 12px; border-bottom:1px solid #f3f4f6; font-size:13px; color:#1f2937;
+    }
+    .cel-table tr:last-child td { border-bottom:none; }
+    .cel-table tr:hover td { background:#fafafa; }
+
+    .status-pill {
+      display:inline-block; padding:3px 9px; border-radius:99px;
+      font-size:11px; font-weight:600; text-transform:uppercase;
+    }
+    .status-em_uso     { background:#d1fae5; color:#065f46; }
+    .status-disponivel { background:#dbeafe; color:#1e40af; }
+    .status-manutencao { background:#fef3c7; color:#92400e; }
+    .status-inativo    { background:#f3f4f6; color:#6b7280; }
+
+    .cel-action {
+      background:none; border:none; cursor:pointer; padding:4px 6px;
+      color:#6b7280; border-radius:4px;
+    }
+    .cel-action:hover { background:#f3f4f6; color:#1f2937; }
+    .cel-action.danger:hover { color:#dc2626; background:#fee2e2; }
+    .cel-action.primary { color:#1e40af; }
+    .cel-action.primary:hover { background:#dbeafe; color:#1e3a8a; }
+
+    /* ====== MODAL FORMULÁRIO ====== */
+    .cel-modal-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:1000;
+      display:none; align-items:center; justify-content:center; padding:20px;
+    }
+    .cel-modal-overlay.active { display:flex; }
+    .cel-modal {
+      background:#fff; border-radius:12px; width:100%; max-width:680px;
+      max-height:92vh; overflow:hidden; display:flex; flex-direction:column;
+    }
+    .cel-modal-header {
+      padding:18px 24px; border-bottom:1px solid #e5e7eb;
+      display:flex; align-items:center; justify-content:space-between;
+      background:linear-gradient(135deg,#ffc107 0%,#ffa500 100%); color:#1a1a1a;
+    }
+    .cel-modal-header h3 { margin:0; font-size:17px; font-weight:700; }
+    .cel-modal-close {
+      background:rgba(0,0,0,.1); border:none; width:30px; height:30px;
+      border-radius:50%; cursor:pointer; font-size:14px;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .cel-modal-body { padding:22px 24px; overflow-y:auto; flex:1; }
+    .cel-modal-footer {
+      padding:14px 24px; border-top:1px solid #e5e7eb;
+      display:flex; gap:10px; justify-content:flex-end; background:#f9fafb;
+    }
+    .cel-form-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:12px; }
+    .cel-form-row.full { grid-template-columns:1fr; }
+    .cel-form-field label {
+      display:block; font-size:12px; font-weight:600; color:#374151; margin-bottom:5px;
+    }
+    .cel-form-field input,
+    .cel-form-field select,
+    .cel-form-field textarea {
+      width:100%; padding:8px 12px; border:1.5px solid #e5e7eb; border-radius:8px;
+      font-size:13px; font-family:inherit;
+    }
+    .cel-form-field input:focus,
+    .cel-form-field select:focus,
+    .cel-form-field textarea:focus {
+      outline:none; border-color:#ffc107; box-shadow:0 0 0 3px rgba(255,193,7,.15);
+    }
+    .cel-form-field textarea { resize:vertical; min-height:60px; }
+    .cel-hint { font-size:11px; color:#9ca3af; margin-top:3px; }
+
+    .btn-cancel {
+      background:#fff; border:1.5px solid #e5e7eb; color:#374151;
+      padding:8px 18px; border-radius:8px; font-weight:600; cursor:pointer; font-size:13px;
+    }
+    .btn-save {
+      background:linear-gradient(135deg,#ffc107 0%,#ffa500 100%);
+      border:none; color:#1a1a1a; padding:8px 22px; border-radius:8px;
+      font-weight:700; cursor:pointer; font-size:13px;
+      display:inline-flex; align-items:center; gap:6px;
+    }
+    .btn-save:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(255,165,0,.3); }
+
+    /* ====== AVISO MOBILE ====== */
+    .device-hint {
+      background:#eff6ff; border:1px solid #bfdbfe; color:#1e40af;
+      padding:10px 14px; border-radius:8px; font-size:12px;
+      margin-bottom:10px; display:flex; gap:8px; align-items:flex-start;
+    }
+  </style>
+</head>
+<body>
+  <nav id="navbar-container"></nav>
+
+  <div class="container-main">
+    <div id="sidebar-container"></div>
+
+    <div class="main-content">
+      <div class="top-bar">
+        <h1><i class="bi bi-phone"></i> Celulares Corporativos</h1>
+        <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
+      </div>
+
+      <div class="content">
+
+        <!-- KPIs -->
+        <div class="cel-kpi-bar">
+          <div class="cel-kpi">
+            <div class="cel-kpi-icon total"><i class="bi bi-phone"></i></div>
+            <div><div class="cel-kpi-val" id="kpiTotal">—</div><div class="cel-kpi-lbl">Total</div></div>
+          </div>
+          <div class="cel-kpi">
+            <div class="cel-kpi-icon em_uso"><i class="bi bi-person-check"></i></div>
+            <div><div class="cel-kpi-val" id="kpiEmUso">—</div><div class="cel-kpi-lbl">Em uso</div></div>
+          </div>
+          <div class="cel-kpi">
+            <div class="cel-kpi-icon disponivel"><i class="bi bi-box-seam"></i></div>
+            <div><div class="cel-kpi-val" id="kpiDisp">—</div><div class="cel-kpi-lbl">Disponíveis</div></div>
+          </div>
+          <div class="cel-kpi">
+            <div class="cel-kpi-icon manutencao"><i class="bi bi-tools"></i></div>
+            <div><div class="cel-kpi-val" id="kpiMan">—</div><div class="cel-kpi-lbl">Manutenção</div></div>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="cel-toolbar">
+          <input type="text" id="filtroBusca" placeholder="Buscar marca, modelo, IMEI, patrimônio...">
+          <select id="filtroStatus">
+            <option value="">Todos os status</option>
+            <option value="em_uso">Em uso</option>
+            <option value="disponivel">Disponível</option>
+            <option value="manutencao">Manutenção</option>
+            <option value="inativo">Inativo</option>
+          </select>
+          <button class="btn-primary" onclick="abrirModalCadastro()">
+            <i class="bi bi-plus-circle"></i> Novo celular
+          </button>
+        </div>
+
+        <!-- Tabela -->
+        <table class="cel-table">
+          <thead>
+            <tr>
+              <th>Marca / Modelo</th>
+              <th>IMEI 1</th>
+              <th>Telefone</th>
+              <th>Responsável</th>
+              <th>Status</th>
+              <th>Patrimônio</th>
+              <th style="text-align:right;">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="celTBody">
+            <tr><td colspan="7" style="text-align:center;padding:20px;color:#9ca3af;">Carregando...</td></tr>
+          </tbody>
+        </table>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== MODAL CADASTRO/EDIÇÃO ====== -->
+  <div class="cel-modal-overlay" id="modalCelular">
+    <div class="cel-modal">
+      <div class="cel-modal-header">
+        <h3 id="modalTitulo"><i class="bi bi-phone-fill"></i> Novo Celular</h3>
+        <button class="cel-modal-close" onclick="fecharModal()"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="cel-modal-body">
+        <div class="device-hint" id="deviceHint" style="display:none;">
+          <i class="bi bi-info-circle-fill"></i>
+          <span id="deviceHintText"></span>
+        </div>
+
+        <div class="cel-form-row">
+          <div class="cel-form-field">
+            <label>Marca *</label>
+            <input type="text" id="fMarca" placeholder="Samsung, Apple, Motorola...">
+          </div>
+          <div class="cel-form-field">
+            <label>Modelo *</label>
+            <input type="text" id="fModelo" placeholder="Galaxy M10, iPhone 13...">
+          </div>
+        </div>
+
+        <div class="cel-form-row">
+          <div class="cel-form-field">
+            <label>IMEI 1 *</label>
+            <input type="text" id="fImei1" placeholder="15 dígitos" maxlength="20">
+          </div>
+          <div class="cel-form-field">
+            <label>IMEI 2</label>
+            <input type="text" id="fImei2" placeholder="se for dual-chip" maxlength="20">
+          </div>
+        </div>
+
+        <div class="cel-form-row">
+          <div class="cel-form-field">
+            <label>Número do telefone</label>
+            <input type="text" id="fNumero" placeholder="(31) 9XXXX-XXXX">
+          </div>
+          <div class="cel-form-field">
+            <label>Operadora</label>
+            <select id="fOperadora">
+              <option value="">—</option>
+              <option>Vivo</option><option>Claro</option><option>TIM</option><option>Oi</option>
+              <option>Algar</option><option>Outra</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="cel-form-row">
+          <div class="cel-form-field">
+            <label>Número do chip (ICCID)</label>
+            <input type="text" id="fChip" placeholder="Opcional">
+          </div>
+          <div class="cel-form-field">
+            <label>Cor</label>
+            <input type="text" id="fCor" placeholder="Preto, Branco, Azul...">
+          </div>
+        </div>
+
+        <div class="cel-form-row">
+          <div class="cel-form-field">
+            <label>Patrimônio</label>
+            <input type="text" id="fPatrimonio" placeholder="Código interno">
+          </div>
+          <div class="cel-form-field">
+            <label>Status</label>
+            <select id="fStatus">
+              <option value="disponivel">Disponível</option>
+              <option value="em_uso">Em uso</option>
+              <option value="manutencao">Manutenção</option>
+              <option value="inativo">Inativo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="cel-form-row">
+          <div class="cel-form-field">
+            <label>Responsável</label>
+            <select id="fResponsavel">
+              <option value="">— Sem responsável —</option>
+            </select>
+            <div class="cel-hint">Usuário do sistema que receberá o aparelho</div>
+          </div>
+          <div class="cel-form-field">
+            <label>Data de entrega</label>
+            <input type="date" id="fDataEntrega">
+          </div>
+        </div>
+
+        <div class="cel-form-row full">
+          <div class="cel-form-field">
+            <label>Acessórios</label>
+            <input type="text" id="fAcessorios" value="bateria e carregador">
+            <div class="cel-hint">Itens que acompanham o aparelho (aparece no termo)</div>
+          </div>
+        </div>
+
+        <div class="cel-form-row full">
+          <div class="cel-form-field">
+            <label>Observações</label>
+            <textarea id="fObs" placeholder="Avarias, observações de entrega, etc."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="cel-modal-footer">
+        <button class="btn-cancel" onclick="fecharModal()">Cancelar</button>
+        <button class="btn-save" onclick="salvarCelular()">
+          <i class="bi bi-check-lg"></i> Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/celulares.js"></script>
+</body>
+</html>

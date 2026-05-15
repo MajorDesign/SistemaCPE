@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Termo de Responsabilidade — Celular Corporativo</title>
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      background: #e5e7eb;
+      color: #111;
+      padding: 24px;
+    }
+
+    /* Barra de ações (não aparece na impressão) */
+    .actions-bar {
+      max-width: 800px; margin: 0 auto 16px;
+      display: flex; gap: 10px; justify-content: flex-end;
+    }
+    .actions-bar button {
+      background: #ffc107; color: #1a1a1a; border: none;
+      padding: 10px 18px; border-radius: 8px; font-weight: 600;
+      cursor: pointer; font-family: 'Inter', sans-serif; font-size: 13px;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .actions-bar button:hover { background: #e6ac00; }
+    .actions-bar .btn-back { background: #fff; border: 1.5px solid #d1d5db; color: #374151; }
+
+    /* ============== TERMO ============== */
+    .termo {
+      background: #fff;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 60px 70px;
+      min-height: 1100px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+      font-size: 13px;
+      line-height: 1.6;
+      color: #000;
+    }
+
+    /* Cabeçalho — logo + título lado a lado */
+    .termo-header {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      border: 1.5px solid #000;
+      margin-bottom: 28px;
+    }
+    .termo-logo {
+      padding: 16px;
+      border-right: 1.5px solid #000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .termo-logo img { max-width: 180px; max-height: 70px; }
+    .termo-titulo {
+      padding: 16px;
+      text-align: center;
+      display: flex; flex-direction: column; justify-content: center;
+      font-weight: bold; font-size: 14px;
+      letter-spacing: 1px;
+    }
+    .termo-titulo div { margin: 3px 0; }
+
+    /* Corpo do termo */
+    .termo-corpo p {
+      text-align: justify;
+      margin-bottom: 16px;
+    }
+    .termo-corpo strong { font-weight: bold; }
+
+    /* Data + assinatura */
+    .termo-data {
+      text-align: center;
+      margin-top: 60px;
+    }
+    .termo-assinatura {
+      margin-top: 80px;
+      text-align: center;
+    }
+    .termo-assinatura .linha {
+      width: 60%;
+      margin: 0 auto;
+      border-top: 1px solid #000;
+      padding-top: 8px;
+    }
+    .termo-assinatura .nome {
+      font-size: 16px;
+      font-weight: normal;
+      letter-spacing: 1px;
+    }
+
+    /* ============== IMPRESSÃO ============== */
+    @media print {
+      body { background: #fff; padding: 0; }
+      .actions-bar { display: none !important; }
+      .termo {
+        box-shadow: none;
+        margin: 0;
+        max-width: 100%;
+        padding: 40mm 25mm;
+      }
+      @page {
+        size: A4;
+        margin: 0;
+      }
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center; padding: 60px; color: #6b7280;
+      font-family: 'Inter', sans-serif;
+    }
+    .erro {
+      text-align: center; padding: 40px; color: #991b1b;
+      font-family: 'Inter', sans-serif;
+      background: #fee2e2; border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="actions-bar">
+    <button class="btn-back" onclick="window.close()">
+      <i>←</i> Fechar
+    </button>
+    <button onclick="window.print()">
+      🖨️ Imprimir / Salvar PDF
+    </button>
+  </div>
+
+  <div class="termo" id="termo">
+    <div class="loading">Carregando dados do termo...</div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const celId  = parseInt(params.get('id'));
+
+    function escHtml(s) {
+      return (s || '').toString().replace(/[&<>"']/g, c =>
+        ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+    }
+
+    function formatCPF(cpf) {
+      if (!cpf) return '';
+      const c = cpf.replace(/\D/g, '');
+      if (c.length !== 11) return cpf;
+      return `${c.slice(0,3)}.${c.slice(3,6)}.${c.slice(6,9)}-${c.slice(9,11)}`;
+    }
+
+    function formatDataExtenso(d) {
+      if (!d) d = new Date();
+      else if (typeof d === 'string') d = new Date(d + 'T12:00:00');
+      const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
+                     'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+      return `Belo Horizonte, ${d.getDate()} de ${meses[d.getMonth()]} de ${d.getFullYear()}`;
+    }
+
+    async function carregar() {
+      if (!celId) {
+        document.getElementById('termo').innerHTML =
+          '<div class="erro">ID do celular não informado.</div>';
+        return;
+      }
+      try {
+        const r = await fetch(`${API_BASE_URL}/api/inventario/celulares/${celId}/termo`);
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.detail || `HTTP ${r.status}`);
+        }
+        const c = await r.json();
+        renderTermo(c);
+      } catch (err) {
+        document.getElementById('termo').innerHTML =
+          `<div class="erro">Erro ao gerar termo: ${escHtml(err.message)}</div>`;
+      }
+    }
+
+    function renderTermo(c) {
+      const nome  = (c.responsavel_nome || '').toUpperCase();
+      const cpf   = formatCPF(c.responsavel_cpf);
+      const modelo = `${c.marca} ${c.modelo}`.trim().toUpperCase();
+      const imei1 = c.imei1 || '—';
+      const imei2 = c.imei2 ? ` e IMEI2 <strong>${escHtml(c.imei2)}</strong>` : '';
+      const acessorios = c.acessorios || 'bateria e carregador';
+      const dataTermo  = formatDataExtenso(c.data_entrega);
+
+      document.title = `Termo — ${nome}`;
+
+      document.getElementById('termo').innerHTML = `
+        <div class="termo-header">
+          <div class="termo-logo">
+            <img src="/SistemaCPE/web/assests/images/logocpe.png" alt="CPE" onerror="this.style.display='none';this.parentElement.innerHTML='<div style=&quot;font-weight:bold;font-size:32px;color:#FFA500;&quot;>cpe<div style=&quot;font-size:10px;color:#666;font-weight:normal;letter-spacing:2px;&quot;>tecnologia</div></div>'">
+          </div>
+          <div class="termo-titulo">
+            <div>TERMO DE RESPONSABILIDADE</div>
+            <div>CELULAR CORPORATIVO</div>
+          </div>
+        </div>
+
+        <div class="termo-corpo">
+          <p>
+            Eu, <strong>${escHtml(nome)}</strong>, brasileiro(a), inscrito(a) no CPF de nº <strong>${escHtml(cpf)}</strong>,
+            mediante este instrumento de aceitação, responsabilizo-me pelo uso e conservação do
+            smatphone <strong>${escHtml(modelo)}</strong>, nº de IMEI1 <strong>${escHtml(imei1)}</strong>${imei2}
+            com <strong>${escHtml(acessorios)}</strong>, de propriedade da <strong>CPE Equipamentos
+            Topográficos Ltda</strong>, CNPJ 18.323.709/0001-93 endereço na av. Barão Homem de Melo,
+            4282 4º e 5º andares - Estoril, CEP 30494-270, Belo Horizonte/MG.
+          </p>
+
+          <p>
+            Comprometo-me em caso de extravio e/ou dano, total ou parcial do aparelho citado acima,
+            a ressarcir o proprietário dos prejuízos decorrentes. O valor do prejuízo poderá ser divido e
+            será descontado nos valores recebidos de comissão.
+          </p>
+
+          <p>
+            Comprometo-me ainda, a utilizá-lo de forma estritamente para minhas atividades
+            profissionais, no período em que exercer vínculo com a empresa CPE Equipamentos
+            Topográficos, a contar desta data.
+          </p>
+
+          <p>
+            Pastas, arquivos, documentos e programas disponibilizados/salvos neste são de direito da
+            empresa e não podem ser repassados para fins que não sejam corporativos. Podendo o autor
+            responder com desligamento com justa causa.
+          </p>
+
+          <p>
+            Nestes termos, e após conferir e achar de acordo, declaro que recebi o bem relacionado e
+            que o mesmo se encontra em perfeita condição de uso.
+          </p>
+
+          <div class="termo-data">${escHtml(dataTermo)}.</div>
+
+          <div class="termo-assinatura">
+            <div class="linha">
+              <div class="nome">${escHtml(nome)}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    carregar();
+  </script>
+</body>
+</html>
