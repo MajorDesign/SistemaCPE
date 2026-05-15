@@ -266,7 +266,112 @@ app.add_middleware(
 logger.info("✅ CORS CONFIGURADO COM SUCESSO!\n")
 
 # =========================================
-# 8.1 MIDDLEWARE: Headers de segurança
+# 8.1 MIDDLEWARE: Defesas contra abuso/DDoS de aplicação
+# =========================================
+# Estratégia em 3 camadas:
+#   (a) Limite de tamanho de body: bloqueia uploads abusivos
+#   (b) Rate-limit por IP: 120 req/min em rotas /api/*
+#   (c) Auto-ban fail2ban-like: 10 erros 401/403 em 5min → ban 30min
+#
+# Combinado com o rate-limit específico de /api/auth/login (5/5min)
+# isso cobre: brute-force, scraping, scanning automatizado, slow attacks.
+# DDoS volumétrico (gigabits) NÃO é defensável aqui — só upstream/CDN resolve.
+
+from collections import deque
+from fastapi.responses import JSONResponse
+
+# --- Limites configuráveis via env ---
+_MAX_BODY_BYTES   = int(os.getenv("MAX_BODY_MB", "50")) * 1024 * 1024
+_REQ_PER_MIN      = int(os.getenv("RATE_LIMIT_PER_MIN", "120"))
+_REQ_WINDOW_SEC   = 60
+_AUTH_FAIL_MAX    = int(os.getenv("AUTH_FAIL_MAX", "10"))
+_AUTH_FAIL_WINDOW = int(os.getenv("AUTH_FAIL_WINDOW_SEC", "300"))   # 5 min
+_AUTH_BAN_SEC     = int(os.getenv("AUTH_BAN_SEC", "1800"))          # 30 min
+
+# Caminhos isentos do rate-limit (healthcheck, docs, static)
+_RATE_EXEMPT_PREFIXES = ("/health", "/uploads/", "/docs", "/redoc", "/openapi.json")
+
+_REQ_LOG       = {}   # ip -> deque[timestamps]
+_AUTH_FAILURES = {}   # ip -> deque[timestamps]
+_AUTH_BANNED   = {}   # ip -> unban_timestamp
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("X-Forwarded-For", "")
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+def _cors_response(request: Request, status_code: int, detail: str) -> JSONResponse:
+    """JSONResponse com CORS headers manuais — para erros que escapam do CORSMiddleware."""
+    origin = request.headers.get("origin", "")
+    headers = {}
+    if origin and (
+        origin.startswith(("http://localhost", "http://127.0.0.1")) or
+        any(net in origin for net in ("172.16.", "172.17.", "10.", "192.168."))
+    ):
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"] = "Origin"
+    return JSONResponse(status_code=status_code, content={"detail": detail}, headers=headers)
+
+
+@app.middleware("http")
+async def abuse_protection(request: Request, call_next):
+    path = request.url.path
+    ip   = _client_ip(request)
+    now  = time.time()
+
+    # (1) IP banido?
+    ban_until = _AUTH_BANNED.get(ip, 0)
+    if ban_until > now:
+        wait = int(ban_until - now)
+        return _cors_response(request, 429,
+            f"IP temporariamente bloqueado por suspeita de ataque. Aguarde {wait}s.")
+    if ban_until and ban_until <= now:
+        _AUTH_BANNED.pop(ip, None)
+
+    # (2) Body grande demais?
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit():
+        if int(content_length) > _MAX_BODY_BYTES:
+            mb = _MAX_BODY_BYTES // (1024 * 1024)
+            return _cors_response(request, 413, f"Request acima de {mb}MB rejeitada.")
+
+    # (3) Rate-limit por IP (só em rotas reais, não em static/docs)
+    if not path.startswith(_RATE_EXEMPT_PREFIXES):
+        log = _REQ_LOG.setdefault(ip, deque())
+        while log and now - log[0] > _REQ_WINDOW_SEC:
+            log.popleft()
+        if len(log) >= _REQ_PER_MIN:
+            return _cors_response(request, 429,
+                f"Limite de {_REQ_PER_MIN} requisições por minuto excedido.")
+        log.append(now)
+
+    # Processa a request
+    response = await call_next(request)
+
+    # (4) Fail2ban: registra erros de auth para banir IPs abusivos
+    if response.status_code in (401, 403) and path.startswith("/api/"):
+        fails = _AUTH_FAILURES.setdefault(ip, deque())
+        while fails and now - fails[0] > _AUTH_FAIL_WINDOW:
+            fails.popleft()
+        fails.append(now)
+        if len(fails) >= _AUTH_FAIL_MAX:
+            _AUTH_BANNED[ip] = now + _AUTH_BAN_SEC
+            fails.clear()
+            logger.warning(
+                f"[SEC] 🚫 IP {ip} BANIDO por {_AUTH_BAN_SEC // 60}min — "
+                f"{_AUTH_FAIL_MAX} erros 401/403 em {_AUTH_FAIL_WINDOW}s"
+            )
+
+    return response
+
+logger.info(f"✅ Anti-abuso ativo: {_REQ_PER_MIN} req/min, body max {_MAX_BODY_BYTES // 1024 // 1024}MB, "
+            f"ban após {_AUTH_FAIL_MAX} erros auth\n")
+
+
+# =========================================
+# 8.2 MIDDLEWARE: Headers de segurança
 # =========================================
 @app.middleware("http")
 async def security_headers(request, call_next):
