@@ -316,6 +316,16 @@
             </div>
             <!-- [FIM] Campo Username -->
 
+            <!-- [INICIO] Campo CPF (opcional — necessário para termos de responsabilidade) -->
+            <div class="mb-3">
+              <label for="inputCpf" class="form-label">
+                <i class="bi bi-credit-card-2-front"></i> CPF
+              </label>
+              <input type="text" class="form-control" id="inputCpf" placeholder="000.000.000-00" maxlength="14" />
+              <div class="help-text">Opcional. Usado para gerar termos de responsabilidade (celular, notebook).</div>
+            </div>
+            <!-- [FIM] Campo CPF -->
+
             <!-- [INICIO] Campo Senha -->
             <div class="mb-3" id="passwordField">
               <label for="inputPassword" class="form-label">
@@ -970,6 +980,7 @@ function renderUsers(list = users) {
       document.getElementById("inputName").value = user.name || '';
       document.getElementById("inputEmail").value = user.email || '';
       document.getElementById("inputUsername").value = user.username || '';
+      document.getElementById("inputCpf").value = user.cpf || '';
       document.getElementById("inputGroup").value = user.group_id || '';
       document.getElementById("inputUnit").value = user.unit_id || '';
       document.getElementById("inputRole").value = user.role || 'USER';
@@ -1122,6 +1133,8 @@ function renderUsers(list = users) {
       const email = document.getElementById("inputEmail")?.value?.trim();
       const username = document.getElementById("inputUsername")?.value?.trim();
       const password = document.getElementById("inputPassword")?.value?.trim();
+      const cpfRaw = document.getElementById("inputCpf")?.value?.trim() || '';
+      const cpf = cpfRaw.replace(/\D/g, '') || null;
       const role = document.getElementById("inputRole")?.value;
       const status = document.getElementById("inputStatus")?.value;
       const groupIdValue = document.getElementById("inputGroup")?.value;
@@ -1178,6 +1191,7 @@ function renderUsers(list = users) {
             name,
             email,
             username,
+            cpf,
             role,
             is_active: status === "true",
             group_id: groupId,
@@ -1195,6 +1209,7 @@ function renderUsers(list = users) {
             email,
             username,
             password,
+            cpf,
             role,
             is_active: status === "true",
             group_id: groupId,

@@ -43,6 +43,7 @@ const globalMenu = [
     submenu: [
       { path: "/SistemaCPE/web/pages/inventory.html",    label: "Equipamentos",         icon: "bi-pc-display",     requiredRoles: ["ADMIN", "TI", "MANAGER"] },
       { path: "/SistemaCPE/web/pages/inventory-ti.html", label: "Inventário T.I.",       icon: "bi-laptop",         requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+      { path: "/SistemaCPE/web/pages/celulares.html",    label: "Celulares Corporativos", icon: "bi-phone",         requiredRoles: ["ADMIN", "TI", "MANAGER"] },
       { path: "/SistemaCPE/web/pages/network.html",      label: "Monitoramento de Rede", icon: "bi-broadcast-pin",  requiredRoles: ["ADMIN", "TI"] }
     ]
   },
