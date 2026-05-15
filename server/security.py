@@ -40,10 +40,7 @@ def make_session_token(user_id: int) -> str:
     payload = f"{user_id}.{ts}.{rnd}"
     sig = _sign(payload)
     token = f"{payload}.{sig}"
-    
-    print(f"[SESSION] Token criado para user_id={user_id}")
-    print(f"[SESSION] Token: {token[:50]}...")
-    
+    # Não logar o token (mesmo truncado): expõe estrutura e prefixo do user_id.
     return token
 
 
@@ -55,35 +52,29 @@ def parse_session_token(token: str) -> Optional[int]:
     try:
         parts = token.split(".")
         if len(parts) != 4:
-            print(f"[SESSION] INVALIDO (partes: {len(parts)})")
             return None
 
         user_id, ts, rnd, sig = parts
         payload = f"{user_id}.{ts}.{rnd}"
 
-        # Verifica a assinatura
         expected_sig = _sign(payload)
         if not hmac.compare_digest(expected_sig, sig):
-            print("[SESSION] FALHA: assinatura invalida")
             return None
 
-        # Verifica a expiração
         ts_i = int(ts)
         age = int(time.time()) - ts_i
-
         if age > SESSION_MAX_AGE_SECONDS:
-            print(f"[SESSION] EXPIRADO (idade: {age}s, max: {SESSION_MAX_AGE_SECONDS}s)")
             return None
 
-        user_id_int = int(user_id)
-        print(f"[SESSION] OK user_id={user_id_int} (idade: {age}s)")
+        return int(user_id)
 
-        return user_id_int
-
-    except Exception as e:
-        print(f"[SESSION] ERRO parse: {e}")
+    except Exception:
         return None
 
+
+import os as _os
+# secure=True quando rodando atrás de HTTPS. Controlado por env: COOKIE_SECURE=1
+_COOKIE_SECURE = _os.getenv("COOKIE_SECURE", "0").lower() in ("1", "true", "yes")
 
 def set_session_cookie(response, token: str) -> None:
     """Define o cookie de sessão na resposta"""
@@ -91,18 +82,16 @@ def set_session_cookie(response, token: str) -> None:
         key=COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=False,
+        secure=_COOKIE_SECURE,
         samesite="lax",
         max_age=SESSION_MAX_AGE_SECONDS,
         path="/",
     )
-    print("[SESSION] Cookie 'cpe_session' definido no response")
 
 
 def clear_session_cookie(response) -> None:
     """Remove o cookie de sessão"""
     response.delete_cookie(COOKIE_NAME, path="/")
-    print("[SESSION] Cookie 'cpe_session' removido")
 
 
 # =========================================

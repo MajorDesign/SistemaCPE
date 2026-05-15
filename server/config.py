@@ -32,7 +32,18 @@ DATABASE_URL = (
 # =========================================
 APP_TITLE = "CPE Control API"
 APP_VERSION = "0.2"
-APP_SECRET = os.getenv("APP_SECRET", "change_me")
+APP_SECRET = os.getenv("APP_SECRET", "").strip()
+
+# Segurança: APP_SECRET é a chave HMAC dos tokens de sessão.
+# Se não estiver definida ou estiver com valor default, qualquer um pode forjar
+# tokens válidos. Abortamos o startup para evitar rodar em modo inseguro.
+_WEAK_SECRETS = {"", "change_me", "change_me_to_a_random_secret", "secret", "dev"}
+if APP_SECRET in _WEAK_SECRETS or len(APP_SECRET) < 32:
+    raise RuntimeError(
+        "APP_SECRET ausente ou muito fraco em server/.env\n"
+        "Defina uma chave com pelo menos 32 caracteres aleatórios.\n"
+        "Gere com: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+    )
 
 # =========================================
 # CORS
@@ -55,7 +66,8 @@ CORS_DEFAULT_ORIGINS = [
 # SESSÃO
 # =========================================
 COOKIE_NAME = "cpe_session"
-SESSION_MAX_AGE_SECONDS = 7 * 24 * 3600  # 7 dias
+# Sessão expira em 12h. Era 7 dias — risco alto se token vazasse em rede pública.
+SESSION_MAX_AGE_SECONDS = int(os.getenv("SESSION_MAX_AGE_SECONDS", str(12 * 3600)))
 
 # =========================================
 # DEV

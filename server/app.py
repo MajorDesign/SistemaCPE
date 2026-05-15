@@ -11,7 +11,7 @@ Gerenciamento de Usuarios, Grupos, Tickets e Notificacoes com Autenticacao Bcryp
 # =========================================
 # 1. IMPORTACOES BASE
 # =========================================
-from fastapi import FastAPI, HTTPException, APIRouter, status, Query, Response
+from fastapi import FastAPI, HTTPException, APIRouter, status, Query, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field, validator
@@ -266,19 +266,77 @@ app.add_middleware(
 logger.info("✅ CORS CONFIGURADO COM SUCESSO!\n")
 
 # =========================================
+# 8.1 MIDDLEWARE: Headers de segurança
+# =========================================
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    # Anti-clickjacking
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    # Anti-MIME-sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    # Não vazar URL referenciadora em links externos
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # Bloqueia features que a aplicação não usa
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    return response
+
+logger.info("✅ Security headers middleware ativo\n")
+
+# =========================================
 # 9. ROUTER DE AUTENTICACAO
 # =========================================
 
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-# ================================================== 
-# LOGIN - FUNÇÃO COMPLETA CORRIGIDA
-# Data: 06/04/2026 19:45
 # ==================================================
+# Rate-limit de login: bloqueia força bruta por IP
+# 5 tentativas falhas em 5min → 15min de bloqueio
+# ==================================================
+from collections import defaultdict
+
+_LOGIN_ATTEMPTS = defaultdict(list)   # ip -> [timestamp, ...]
+_LOGIN_BLOCKED  = {}                  # ip -> timestamp_unblock
+_MAX_ATTEMPTS   = 5
+_WINDOW_SEC     = 300                 # 5 min
+_BLOCK_SEC      = 900                 # 15 min
+
+def _check_rate_limit(ip: str) -> None:
+    """Levanta 429 se IP estiver bloqueado por brute-force."""
+    now = time.time()
+    unblock = _LOGIN_BLOCKED.get(ip, 0)
+    if unblock > now:
+        wait = int(unblock - now)
+        raise HTTPException(
+            status_code=429,
+            detail=f"Muitas tentativas de login. Tente novamente em {wait}s."
+        )
+    # Limpa tentativas fora da janela
+    _LOGIN_ATTEMPTS[ip] = [t for t in _LOGIN_ATTEMPTS[ip] if now - t < _WINDOW_SEC]
+
+def _register_failure(ip: str) -> None:
+    now = time.time()
+    _LOGIN_ATTEMPTS[ip].append(now)
+    if len(_LOGIN_ATTEMPTS[ip]) >= _MAX_ATTEMPTS:
+        _LOGIN_BLOCKED[ip] = now + _BLOCK_SEC
+        _LOGIN_ATTEMPTS[ip].clear()
+        logger.warning(f"[AUTH] 🚫 IP {ip} bloqueado por {_BLOCK_SEC}s (brute-force)")
+
+def _register_success(ip: str) -> None:
+    _LOGIN_ATTEMPTS.pop(ip, None)
+    _LOGIN_BLOCKED.pop(ip, None)
+
 
 @auth_router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
-def login(login_data: LoginRequest, response: Response):
+def login(login_data: LoginRequest, response: Response, request: Request = None):
     """Realiza login do usuario"""
+    # Identifica IP (respeita X-Forwarded-For se vier de proxy/NAT)
+    client_ip = "unknown"
+    if request:
+        fwd = request.headers.get("X-Forwarded-For", "")
+        client_ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
+    _check_rate_limit(client_ip)
+
     logger.info("\n" + "=" * 100)
     logger.info("[AUTH] 🔐 TENTATIVA DE LOGIN")
     logger.info("=" * 100)
@@ -428,6 +486,7 @@ def login(login_data: LoginRequest, response: Response):
 
         logger.info("[AUTH] ✅ LOGIN BEM-SUCEDIDO!")
         logger.info("=" * 100 + "\n")
+        _register_success(client_ip)
 
         return LoginResponse(
             success=True,
@@ -437,7 +496,10 @@ def login(login_data: LoginRequest, response: Response):
             token_type="bearer"
         )
 
-    except HTTPException:
+    except HTTPException as he:
+        # Marca falha de auth (401) no rate-limit. Erros 400 (campos vazios) não contam.
+        if he.status_code == status.HTTP_401_UNAUTHORIZED:
+            _register_failure(client_ip)
         raise
     except Exception as err:
         logger.error(f"[AUTH] ❌ ERRO INESPERADO: {str(err)}")
