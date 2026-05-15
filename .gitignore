@@ -238,11 +238,36 @@ tools/**/config.ini
 *.log
 server/*.log
 
-# Variaveis de ambiente sensiveis
+# Variaveis de ambiente sensiveis — TODO arquivo .env*
+# EXCETO: .env.example (template versionado, sem credenciais)
 .env
-.env.local
-.env.production
+.env.*
+**/.env
+**/.env.*
 server/.env
+server/.env.*
+!.env.example
+!**/.env.example
+!server/.env.example
+
+# Scripts utilitarios com credenciais (DEV ONLY — usar variaveis de ambiente)
+gerar_hash_admin.py
+server/generate_hash*.py
+server/create_admin.py
+server/test_login.ps1
+
+# Chaves e certificados
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Backups de banco com dados reais
+*.sql.bak
+*.dump
+backups/
+"Chamados antigos/"
 
 # CPE Inventory Agent — builds locais (cada ambiente builda o seu)
 tools/inventory_agent/release/

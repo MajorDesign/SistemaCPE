@@ -7,11 +7,24 @@
 # =============================================================
 
 MYSQL="/e/xampp/mysql/bin/mysql"
-DB="cpe_plus"
-USER="root"
-PASS="Cpe@7482"
 REPO="/e/xampp/htdocs/SistemaCPE"
 MIGRATIONS_DIR="$REPO/server/migrations"
+
+# Carrega credenciais do .env do servidor (mesmo arquivo usado pela API)
+ENV_FILE="$REPO/server/.env"
+if [ ! -f "$ENV_FILE" ]; then
+  echo "ERRO: $ENV_FILE nao encontrado. Crie o arquivo .env antes de rodar o deploy."
+  exit 1
+fi
+
+DB=$(grep -E "^MYSQL_DB=" "$ENV_FILE" | head -1 | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+USER=$(grep -E "^MYSQL_USER=" "$ENV_FILE" | head -1 | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+PASS=$(grep -E "^MYSQL_PASSWORD=" "$ENV_FILE" | head -1 | cut -d'=' -f2 | tr -d '"' | tr -d "'")
+
+if [ -z "$DB" ] || [ -z "$USER" ] || [ -z "$PASS" ]; then
+  echo "ERRO: MYSQL_DB / MYSQL_USER / MYSQL_PASSWORD precisam estar em $ENV_FILE"
+  exit 1
+fi
 
 # Cores
 GREEN='\033[0;32m'
