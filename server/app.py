@@ -287,9 +287,15 @@ from fastapi.responses import JSONResponse
 _MAX_BODY_BYTES   = int(os.getenv("MAX_BODY_MB", "50")) * 1024 * 1024
 _REQ_PER_MIN      = int(os.getenv("RATE_LIMIT_PER_MIN", "120"))
 _REQ_WINDOW_SEC   = 60
-_AUTH_FAIL_MAX    = int(os.getenv("AUTH_FAIL_MAX", "10"))
-_AUTH_FAIL_WINDOW = int(os.getenv("AUTH_FAIL_WINDOW_SEC", "300"))   # 5 min
-_AUTH_BAN_SEC     = int(os.getenv("AUTH_BAN_SEC", "1800"))          # 30 min
+_AUTH_FAIL_MAX    = int(os.getenv("AUTH_FAIL_MAX", "30"))
+_AUTH_FAIL_WINDOW = int(os.getenv("AUTH_FAIL_WINDOW_SEC", "600"))   # 10 min
+_AUTH_BAN_SEC     = int(os.getenv("AUTH_BAN_SEC", "900"))           # 15 min
+
+# IPs internos/confiáveis nunca são banidos (LAN + loopback)
+_TRUSTED_IP_PREFIXES = ("127.", "10.", "192.168.", "172.16.", "172.17.", "172.18.",
+                        "172.19.", "172.20.", "172.21.", "172.22.", "172.23.",
+                        "172.24.", "172.25.", "172.26.", "172.27.", "172.28.",
+                        "172.29.", "172.30.", "172.31.", "::1")
 
 # Caminhos isentos do rate-limit (healthcheck, docs, static)
 _RATE_EXEMPT_PREFIXES = ("/health", "/uploads/", "/docs", "/redoc", "/openapi.json")
@@ -353,8 +359,18 @@ async def abuse_protection(request: Request, call_next):
     # Processa a request
     response = await call_next(request)
 
-    # (4) Fail2ban: registra erros de auth para banir IPs abusivos
-    if response.status_code in (401, 403) and path.startswith("/api/"):
+    # (4) Fail2ban: registra erros de AUTH para banir IPs externos abusivos.
+    #     Regras (afinadas para evitar banir usuários legítimos):
+    #       - Só conta 401 (token inválido/expirado) — não 403 (autorização de role)
+    #       - Ignora /api/auth/login (já tem rate-limit dedicado)
+    #       - Ignora IPs da rede interna confiável
+    is_trusted = ip.startswith(_TRUSTED_IP_PREFIXES)
+    is_auth_failure = (
+        response.status_code == 401
+        and path.startswith("/api/")
+        and not path.startswith("/api/auth/login")
+    )
+    if is_auth_failure and not is_trusted:
         fails = _AUTH_FAILURES.setdefault(ip, deque())
         while fails and now - fails[0] > _AUTH_FAIL_WINDOW:
             fails.popleft()
@@ -364,13 +380,38 @@ async def abuse_protection(request: Request, call_next):
             fails.clear()
             logger.warning(
                 f"[SEC] 🚫 IP {ip} BANIDO por {_AUTH_BAN_SEC // 60}min — "
-                f"{_AUTH_FAIL_MAX} erros 401/403 em {_AUTH_FAIL_WINDOW}s"
+                f"{_AUTH_FAIL_MAX} erros 401 em {_AUTH_FAIL_WINDOW}s"
             )
 
     return response
 
 logger.info(f"✅ Anti-abuso ativo: {_REQ_PER_MIN} req/min, body max {_MAX_BODY_BYTES // 1024 // 1024}MB, "
-            f"ban após {_AUTH_FAIL_MAX} erros auth\n")
+            f"ban após {_AUTH_FAIL_MAX} erros 401 em {_AUTH_FAIL_WINDOW}s\n")
+
+
+# Endpoints administrativos para gerenciar bloqueios em runtime
+@app.get("/api/security/banned", tags=["security"])
+def listar_banidos():
+    """Lista IPs atualmente banidos com tempo restante."""
+    now = time.time()
+    return {
+        "banned": [
+            {"ip": ip, "wait_s": int(until - now)}
+            for ip, until in _AUTH_BANNED.items() if until > now
+        ],
+        "rate_limited_ips": [
+            {"ip": ip, "requests_in_window": len(dq)}
+            for ip, dq in _REQ_LOG.items() if dq
+        ],
+    }
+
+@app.post("/api/security/unban/{ip}", tags=["security"])
+def desbanir(ip: str):
+    """Remove o ban de um IP e zera contadores. Útil quando o fail2ban pega um usuário legítimo."""
+    removed = bool(_AUTH_BANNED.pop(ip, None))
+    _AUTH_FAILURES.pop(ip, None)
+    _REQ_LOG.pop(ip, None)
+    return {"ok": True, "ip": ip, "estava_banido": removed}
 
 
 # =========================================
