@@ -1,53 +1,64 @@
 // ===== INÍCIO: config.js (Configuração Global) =====
-
-// =========================================
-// Configuração Base da API
-// =========================================
 //
 // Em produção: API na porta 8000 (cpe_plus).
 // Em dev local: pode alternar entre porta 8000 (dev) e 8001 (staging)
 // via seletor na tela de login. A escolha é salva em localStorage.
-// =========================================
+//
+// IMPORTANTE: usamos `var` (não `const`/`let`) para as globais de
+// compatibilidade. Se algum HTML incluir config.js duas vezes (acontece
+// em algumas páginas), `var` permite re-declarar sem SyntaxError.
+// E o IIFE abaixo evita recalcular tudo na segunda execução.
 
-const _API_ENVS = {
-  dev:     { port: 8000, label: 'Dev',     db: 'cpe_plus' },
-  staging: { port: 8001, label: 'Staging', db: 'cpe_plus_staging' },
-};
+var API_BASE_URL;
+var API_ENV;
+var SESSION_COOKIE_NAME;
+var COOKIE_NAME;
 
-const _isLocalhost = typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+(function () {
+  if (typeof window !== 'undefined' && window.__CPE_CONFIG_LOADED__) return;
+  if (typeof window !== 'undefined') window.__CPE_CONFIG_LOADED__ = true;
 
-// Em produção força sempre dev (porta 8000)
-const _savedEnv = _isLocalhost
-  ? ((typeof localStorage !== 'undefined' && localStorage.getItem('cpe_env')) || 'dev')
-  : 'dev';
+  const API_ENVS = {
+    dev:     { port: 8000, label: 'Dev',     db: 'cpe_plus' },
+    staging: { port: 8001, label: 'Staging', db: 'cpe_plus_staging' },
+  };
 
-const API_ENV  = _savedEnv in _API_ENVS ? _savedEnv : 'dev';
-const API_PORT = _API_ENVS[API_ENV].port;
+  const curHost = (typeof window !== 'undefined' && window.location && window.location.hostname)
+    ? window.location.hostname
+    : '127.0.0.1';
 
-const _curHost = (typeof window !== 'undefined' && window.location && window.location.hostname)
-  ? window.location.hostname
-  : '127.0.0.1';
+  const isLocalhost    = curHost === 'localhost' || curHost === '127.0.0.1';
+  const isIp           = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(curHost);
+  const isPublicDomain = !isIp && !isLocalhost && /[a-z]/i.test(curHost) && curHost.includes('.');
 
-// Detecta se é IP (IPv4) — nesse caso a API é sempre host:porta.
-// Só usar api.<dominio> quando for um domínio real (tem letras + ponto).
-const _isIp = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(_curHost);
-const _isLocalhost = _curHost === 'localhost' || _curHost === '127.0.0.1';
-const _isPublicDomain = !_isIp && !_isLocalhost && /[a-z]/i.test(_curHost) && _curHost.includes('.');
+  // Seletor Dev/Staging só vale em localhost. Fora disso, sempre dev (porta 8000).
+  const savedEnv = isLocalhost
+    ? ((typeof localStorage !== 'undefined' && localStorage.getItem('cpe_env')) || 'dev')
+    : 'dev';
 
-const API_BASE_URL = _isPublicDomain
-  ? `${window.location.protocol}//api.${_curHost.replace(/^www\./, '')}`
-  : `http://${_curHost}:${API_PORT}`;
+  const apiEnv  = (savedEnv in API_ENVS) ? savedEnv : 'dev';
+  const apiPort = API_ENVS[apiEnv].port;
 
-if (typeof window !== 'undefined') {
-  window.API_BASE_URL = API_BASE_URL;
-  window.API_ENV      = API_ENV;
-  window._API_ENVS    = _API_ENVS;
-}
+  const apiBaseUrl = isPublicDomain
+    ? `${window.location.protocol}//api.${curHost.replace(/^www\./, '')}`
+    : `http://${curHost}:${apiPort}`;
 
-const SESSION_COOKIE_NAME = "cpe_session";
-const COOKIE_NAME = "cpe_session";
+  // Globais (var no escopo global)
+  API_BASE_URL        = apiBaseUrl;
+  API_ENV             = apiEnv;
+  SESSION_COOKIE_NAME = 'cpe_session';
+  COOKIE_NAME         = 'cpe_session';
 
-console.log(`[CONFIG] Ambiente: ${API_ENV} | API: ${API_BASE_URL}`);
+  // Espelho em window.* para módulos que preferem essa forma
+  if (typeof window !== 'undefined') {
+    window.API_BASE_URL        = API_BASE_URL;
+    window.API_ENV             = API_ENV;
+    window._API_ENVS           = API_ENVS;
+    window.SESSION_COOKIE_NAME = SESSION_COOKIE_NAME;
+    window.COOKIE_NAME         = COOKIE_NAME;
+  }
+
+  console.log(`[CONFIG] Ambiente: ${apiEnv} | API: ${apiBaseUrl}`);
+})();
 
 // ===== FIM: config.js (Configuração Global) =====
