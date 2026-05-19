@@ -8,12 +8,15 @@ Endpoints:
     POST /api/inventario/agent/report              → agente envia relatório (upsert)
     GET  /api/inventario/agent/version             → versão atual do agente (para auto-update)
     GET  /api/inventario/agent/download            → baixa CPEAgente.py atualizado
-    PATCH /api/inventario/dispositivos/{id}/apelido → editar apelido/patrimônio
-    DELETE /api/inventario/dispositivos/{id}       → remover registro
+    PATCH /api/inventario/dispositivos/{id}/apelido    → editar apelido/patrimônio
+    PATCH /api/inventario/dispositivos/{id}/estoque    → mover para/de estoque
+    PATCH /api/inventario/dispositivos/{id}/info       → atualizar responsável/setor/localização
+    DELETE /api/inventario/dispositivos/{id}           → remover registro
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -22,7 +25,7 @@ import re
 from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request
+from fastapi import APIRouter, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from database import get_db_connection
@@ -91,16 +94,20 @@ def _count_alerts(row: dict) -> int:
 
 @router.get("/dispositivos")
 def listar_dispositivos(
-    search: Optional[str] = Query(None),
-    tipo:   Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
-    estado: Optional[str] = Query(None),
+    search:     Optional[str]  = Query(None),
+    tipo:       Optional[str]  = Query(None),
+    status:     Optional[str]  = Query(None),
+    estado:     Optional[str]  = Query(None),
+    em_estoque: Optional[bool] = Query(None,
+        description="None=todos, False=ativos, True=apenas estoque"),
 ):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
         sql = """
-            SELECT id, hostname, apelido, usuario_logado, ip_interno, ip_externo,
+            SELECT id, hostname, apelido, em_estoque, em_manutencao, manutencao_atual_id,
+                   nome_responsavel, setor, localizacao_cpe,
+                   usuario_logado, ip_interno, ip_externo,
                    tipo, marca, modelo, numero_serie, sistema_operacional, versao_os,
                    arquitetura, memoria_total_gb, memoria_uso_pct,
                    disco_total_gb, disco_livre_gb, disco_livre_pct,
@@ -115,9 +122,11 @@ def listar_dispositivos(
         if search:
             sql += """ AND (hostname LIKE %s OR usuario_logado LIKE %s
                            OR marca LIKE %s OR modelo LIKE %s OR apelido LIKE %s
-                           OR cidade LIKE %s OR estado_br LIKE %s)"""
+                           OR cidade LIKE %s OR estado_br LIKE %s
+                           OR nome_responsavel LIKE %s OR setor LIKE %s
+                           OR localizacao_cpe LIKE %s)"""
             s = f"%{search}%"
-            params.extend([s, s, s, s, s, s, s])
+            params.extend([s] * 10)
 
         if tipo:
             sql += " AND tipo = %s"
@@ -126,6 +135,10 @@ def listar_dispositivos(
         if estado:
             sql += " AND estado_br = %s"
             params.append(estado)
+
+        if em_estoque is not None:
+            sql += " AND em_estoque = %s"
+            params.append(1 if em_estoque else 0)
 
         sql += " ORDER BY ultimo_heartbeat DESC, hostname"
         cursor.execute(sql, params)
@@ -178,6 +191,9 @@ def estatisticas():
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        # Stats consideram apenas equipamentos ATIVOS (em_estoque=0 E em_manutencao=0).
+        # Estoque e manutenção são contados separadamente — equipamentos
+        # parados/em reparo não devem poluir KPIs operacionais (online/offline).
         cursor.execute("""
             SELECT
                 COUNT(*)                                                      AS total,
@@ -191,16 +207,35 @@ def estatisticas():
                 SUM(disco_livre_pct IS NOT NULL AND disco_livre_pct < 15)    AS disco_critico,
                 SUM(memoria_uso_pct IS NOT NULL AND memoria_uso_pct > 90)    AS ram_critica
             FROM inventario_dispositivos
+            WHERE em_estoque = 0 AND em_manutencao = 0
         """)
         stats = cursor.fetchone() or {}
 
-        cursor.execute("SELECT ultimo_heartbeat FROM inventario_dispositivos")
+        cursor.execute(
+            "SELECT COUNT(*) AS n FROM inventario_dispositivos WHERE em_estoque = 1"
+        )
+        estoque = int((cursor.fetchone() or {}).get("n") or 0)
+
+        # Manutenção: conta tanto pelo flag no dispositivo quanto pelas
+        # manutenções em aberto (status != concluida/cancelada).
+        cursor.execute("""
+            SELECT COUNT(*) AS n
+              FROM inventario_manutencoes
+             WHERE status NOT IN ('concluida','cancelada')
+        """)
+        manutencao = int((cursor.fetchone() or {}).get("n") or 0)
+
+        cursor.execute(
+            "SELECT ultimo_heartbeat FROM inventario_dispositivos "
+            "WHERE em_estoque = 0 AND em_manutencao = 0"
+        )
         devs = cursor.fetchall()
         online  = sum(1 for d in devs if not _is_offline(d.get("ultimo_heartbeat")))
         total   = int(stats.get("total") or 0)
         offline = total - online
 
-        return {**stats, "online": online, "offline": offline}
+        return {**stats, "online": online, "offline": offline,
+                "estoque": estoque, "manutencao": manutencao}
     finally:
         cursor.close()
         conn.close()
@@ -385,6 +420,86 @@ def atualizar_apelido(device_id: int, payload: dict):
             raise HTTPException(404, "Dispositivo não encontrado")
         conn.commit()
         return {"ok": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ─── Mover para/de estoque ────────────────────────────────────────────────────
+
+@router.patch("/dispositivos/{device_id}/estoque")
+def atualizar_estoque(device_id: int, payload: dict):
+    """Move o equipamento para o estoque (em_estoque=1) ou tira (=0).
+
+    Quando vai para estoque, limpa nome_responsavel e setor — o equipamento
+    está parado aguardando reutilização. Mantém localizacao_cpe (onde está
+    fisicamente guardado).
+    """
+    em_estoque = bool(payload.get("em_estoque", True))
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        if em_estoque:
+            cursor.execute(
+                "UPDATE inventario_dispositivos "
+                "SET em_estoque = 1, nome_responsavel = NULL, setor = NULL "
+                "WHERE id = %s",
+                (device_id,),
+            )
+        else:
+            cursor.execute(
+                "UPDATE inventario_dispositivos SET em_estoque = 0 WHERE id = %s",
+                (device_id,),
+            )
+        if cursor.rowcount == 0:
+            raise HTTPException(404, "Dispositivo não encontrado")
+        conn.commit()
+        return {"ok": True, "em_estoque": em_estoque}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ─── Atualizar responsável / setor / localização ──────────────────────────────
+
+@router.patch("/dispositivos/{device_id}/info")
+def atualizar_info(device_id: int, payload: dict):
+    """Atualiza nome_responsavel, setor e localizacao_cpe.
+
+    Aceita os 3 campos opcionais. Strings vazias viram NULL.
+    """
+    def _norm(v):
+        v = (v or "").strip()
+        return v or None
+
+    nome  = _norm(payload.get("nome_responsavel"))
+    setor = _norm(payload.get("setor"))
+    local = _norm(payload.get("localizacao_cpe"))
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE inventario_dispositivos "
+            "SET nome_responsavel = %s, setor = %s, localizacao_cpe = %s "
+            "WHERE id = %s",
+            (nome, setor, local, device_id),
+        )
+        if cursor.rowcount == 0:
+            # rowcount=0 também acontece quando nada mudou; checa se existe
+            cursor.execute(
+                "SELECT 1 FROM inventario_dispositivos WHERE id = %s",
+                (device_id,),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(404, "Dispositivo não encontrado")
+        conn.commit()
+        return {
+            "ok": True,
+            "nome_responsavel": nome,
+            "setor": setor,
+            "localizacao_cpe": local,
+        }
     finally:
         cursor.close()
         conn.close()
@@ -756,5 +871,727 @@ def dados_termo_celular(cel_id: int):
         """, (cel_id,))
         conn.commit()
         return _row_to_celular(row)
+    finally:
+        cur.close(); conn.close()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# FORNECEDORES DE TI — assistencia tecnica, lojas de pecas, etc
+# ═════════════════════════════════════════════════════════════════════════════
+
+@router.get("/fornecedores")
+def fornecedores_listar(ativo: Optional[bool] = Query(None)):
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        sql = "SELECT * FROM fornecedores_ti WHERE 1=1"
+        params: list = []
+        if ativo is not None:
+            sql += " AND ativo = %s"
+            params.append(1 if ativo else 0)
+        sql += " ORDER BY nome"
+        cur.execute(sql, params)
+        return {"fornecedores": cur.fetchall()}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/fornecedores", status_code=201)
+def fornecedores_criar(payload: dict):
+    nome = (payload.get("nome") or "").strip()
+    if not nome:
+        raise HTTPException(400, "Nome do fornecedor é obrigatório")
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO fornecedores_ti
+                (nome, cnpj, endereco, responsavel, telefone, ativo)
+            VALUES (%s, %s, %s, %s, %s, 1)
+        """, (
+            nome,
+            (payload.get("cnpj") or "").strip() or None,
+            (payload.get("endereco") or "").strip() or None,
+            (payload.get("responsavel") or "").strip() or None,
+            (payload.get("telefone") or "").strip() or None,
+        ))
+        conn.commit()
+        return {"id": cur.lastrowid, "nome": nome}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.put("/fornecedores/{forn_id}")
+def fornecedores_atualizar(forn_id: int, payload: dict):
+    nome = (payload.get("nome") or "").strip()
+    if not nome:
+        raise HTTPException(400, "Nome do fornecedor é obrigatório")
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE fornecedores_ti SET
+                nome = %s, cnpj = %s, endereco = %s,
+                responsavel = %s, telefone = %s,
+                ativo = %s
+            WHERE id = %s
+        """, (
+            nome,
+            (payload.get("cnpj") or "").strip() or None,
+            (payload.get("endereco") or "").strip() or None,
+            (payload.get("responsavel") or "").strip() or None,
+            (payload.get("telefone") or "").strip() or None,
+            1 if payload.get("ativo", True) else 0,
+            forn_id,
+        ))
+        if cur.rowcount == 0:
+            cur.execute("SELECT 1 FROM fornecedores_ti WHERE id = %s", (forn_id,))
+            if not cur.fetchone():
+                raise HTTPException(404, "Fornecedor não encontrado")
+        conn.commit()
+        return {"ok": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.delete("/fornecedores/{forn_id}", status_code=204)
+def fornecedores_excluir(forn_id: int):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        # Não deleta se há manutenções vinculadas — desativa em vez disso
+        cur.execute(
+            "SELECT COUNT(*) FROM inventario_manutencoes WHERE fornecedor_id = %s",
+            (forn_id,),
+        )
+        if (cur.fetchone() or [0])[0] > 0:
+            cur.execute(
+                "UPDATE fornecedores_ti SET ativo = 0 WHERE id = %s", (forn_id,)
+            )
+            conn.commit()
+            return
+        cur.execute("DELETE FROM fornecedores_ti WHERE id = %s", (forn_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "Fornecedor não encontrado")
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MANUTENCOES DE TI — historico + upload PDF de orcamento
+# ═════════════════════════════════════════════════════════════════════════════
+
+# Pasta de upload dos PDFs de orcamento (criada sob demanda)
+_MANUT_UPLOAD_DIR = pathlib.Path(__file__).resolve().parent.parent.parent \
+    / "web" / "uploads" / "manutencoes"
+_MANUT_MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+def _row_to_manutencao(r: dict) -> dict:
+    """Normaliza linha do JOIN manutencoes + fornecedores + dispositivos."""
+    if r.get("valor") is not None:
+        r["valor"] = float(r["valor"])
+    for k in ("data_envio", "data_retorno", "criado_em", "atualizado_em"):
+        if r.get(k) and hasattr(r[k], "strftime"):
+            r[k] = r[k].strftime("%Y-%m-%d %H:%M:%S")
+    return r
+
+
+@router.get("/manutencoes")
+def manutencoes_listar(status: Optional[str] = Query(None)):
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        sql = """
+            SELECT m.*,
+                   f.nome AS fornecedor_nome,
+                   d.hostname AS dispositivo_hostname,
+                   d.apelido  AS dispositivo_apelido
+              FROM inventario_manutencoes m
+              LEFT JOIN fornecedores_ti      f ON f.id = m.fornecedor_id
+              LEFT JOIN inventario_dispositivos d ON d.id = m.dispositivo_id
+             WHERE 1=1
+        """
+        params: list = []
+        if status:
+            sql += " AND m.status = %s"
+            params.append(status)
+        sql += " ORDER BY m.data_envio DESC, m.id DESC"
+        cur.execute(sql, params)
+        rows = [_row_to_manutencao(r) for r in cur.fetchall()]
+        return {"manutencoes": rows, "total": len(rows)}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/manutencoes/{manut_id}")
+def manutencao_detalhe(manut_id: int):
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT m.*,
+                   f.nome AS fornecedor_nome,
+                   d.hostname AS dispositivo_hostname,
+                   d.apelido  AS dispositivo_apelido
+              FROM inventario_manutencoes m
+              LEFT JOIN fornecedores_ti      f ON f.id = m.fornecedor_id
+              LEFT JOIN inventario_dispositivos d ON d.id = m.dispositivo_id
+             WHERE m.id = %s
+        """, (manut_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Manutenção não encontrada")
+        return _row_to_manutencao(row)
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/manutencoes", status_code=201)
+async def manutencao_criar(
+    problema:            str            = Form(...),
+    dispositivo_id:      Optional[int]  = Form(None),
+    marca:               Optional[str]  = Form(None),
+    modelo:              Optional[str]  = Form(None),
+    usuario_responsavel: Optional[str]  = Form(None),
+    valor:               Optional[float] = Form(None),
+    fornecedor_id:       Optional[int]  = Form(None),
+    status:              str            = Form("orcamento"),
+    observacoes:         Optional[str]  = Form(None),
+    orcamento:           Optional[UploadFile] = File(None),
+):
+    """Cria registro de manutenção e marca o dispositivo como em_manutencao."""
+    problema = (problema or "").strip()
+    if not problema:
+        raise HTTPException(400, "Descrição do problema é obrigatória")
+
+    # Se vinculado a dispositivo, copia marca/modelo dele caso não venha no form
+    if dispositivo_id and (not marca or not modelo):
+        conn0 = get_db_connection()
+        cur0 = conn0.cursor(dictionary=True)
+        try:
+            cur0.execute(
+                "SELECT marca, modelo FROM inventario_dispositivos WHERE id = %s",
+                (dispositivo_id,),
+            )
+            d = cur0.fetchone()
+            if d:
+                marca  = marca  or d.get("marca")
+                modelo = modelo or d.get("modelo")
+        finally:
+            cur0.close(); conn0.close()
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO inventario_manutencoes
+                (dispositivo_id, marca, modelo, usuario_responsavel,
+                 problema, valor, fornecedor_id, status, observacoes)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            dispositivo_id, marca, modelo,
+            (usuario_responsavel or "").strip() or None,
+            problema, valor, fornecedor_id, status,
+            (observacoes or "").strip() or None,
+        ))
+        new_id = cur.lastrowid
+
+        # Salva PDF do orçamento se enviado
+        if orcamento and orcamento.filename:
+            ext = pathlib.Path(orcamento.filename).suffix.lower() or ".pdf"
+            if ext not in (".pdf", ".jpg", ".jpeg", ".png"):
+                raise HTTPException(400, "Anexo deve ser PDF ou imagem")
+            content = await orcamento.read()
+            if len(content) > _MANUT_MAX_BYTES:
+                raise HTTPException(413, "Arquivo maior que 10 MB")
+            _MANUT_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            fname = f"m{new_id}_{hashlib.md5(content).hexdigest()[:8]}{ext}"
+            (_MANUT_UPLOAD_DIR / fname).write_bytes(content)
+            rel_path = f"/SistemaCPE/web/uploads/manutencoes/{fname}"
+            cur.execute(
+                "UPDATE inventario_manutencoes SET orcamento_path = %s WHERE id = %s",
+                (rel_path, new_id),
+            )
+
+        # Marca dispositivo como em manutenção
+        if dispositivo_id:
+            cur.execute("""
+                UPDATE inventario_dispositivos
+                   SET em_manutencao = 1, manutencao_atual_id = %s
+                 WHERE id = %s
+            """, (new_id, dispositivo_id))
+
+        conn.commit()
+        return {"id": new_id, "ok": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.put("/manutencoes/{manut_id}")
+def manutencao_atualizar(manut_id: int, payload: dict):
+    """Atualiza campos textuais e status. Para trocar PDF, recriar.
+
+    Se status mudar pra 'concluida' ou 'cancelada' e havia um dispositivo
+    vinculado em em_manutencao, libera o flag e seta data_retorno.
+    """
+    allowed_status = {"orcamento", "aprovada", "em_andamento", "concluida", "cancelada"}
+    new_status = payload.get("status")
+    if new_status is not None and new_status not in allowed_status:
+        raise HTTPException(400, f"Status inválido: {new_status}")
+
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute(
+            "SELECT id, dispositivo_id, status FROM inventario_manutencoes WHERE id = %s",
+            (manut_id,),
+        )
+        atual = cur.fetchone()
+        if not atual:
+            raise HTTPException(404, "Manutenção não encontrada")
+
+        fields, params = [], []
+        for k in ("marca", "modelo", "usuario_responsavel", "problema",
+                  "observacoes"):
+            if k in payload:
+                fields.append(f"{k} = %s")
+                v = payload.get(k)
+                params.append((v or "").strip() or None if isinstance(v, str) else v)
+        if "valor" in payload:
+            fields.append("valor = %s"); params.append(payload.get("valor"))
+        if "fornecedor_id" in payload:
+            fields.append("fornecedor_id = %s"); params.append(payload.get("fornecedor_id"))
+        if new_status:
+            fields.append("status = %s"); params.append(new_status)
+            if new_status in ("concluida", "cancelada"):
+                fields.append("data_retorno = COALESCE(data_retorno, NOW())")
+        if not fields:
+            return {"ok": True, "noop": True}
+        params.append(manut_id)
+        cur.execute(
+            f"UPDATE inventario_manutencoes SET {', '.join(fields)} WHERE id = %s",
+            params,
+        )
+
+        # Se fechou a manutenção do dispositivo, libera o flag
+        if new_status in ("concluida", "cancelada") and atual.get("dispositivo_id"):
+            cur.execute("""
+                UPDATE inventario_dispositivos
+                   SET em_manutencao = 0, manutencao_atual_id = NULL
+                 WHERE id = %s AND manutencao_atual_id = %s
+            """, (atual["dispositivo_id"], manut_id))
+
+        conn.commit()
+        return {"ok": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.delete("/manutencoes/{manut_id}", status_code=204)
+def manutencao_excluir(manut_id: int):
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute(
+            "SELECT id, dispositivo_id, orcamento_path FROM inventario_manutencoes WHERE id = %s",
+            (manut_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Manutenção não encontrada")
+
+        # Apaga PDF do disco
+        if row.get("orcamento_path"):
+            fname = pathlib.Path(row["orcamento_path"]).name
+            try:
+                (_MANUT_UPLOAD_DIR / fname).unlink(missing_ok=True)
+            except Exception as e:
+                logger.warning(f"Falha ao apagar PDF {fname}: {e}")
+
+        cur.execute("DELETE FROM inventario_manutencoes WHERE id = %s", (manut_id,))
+
+        # Se era a manutenção ativa do dispositivo, libera o flag
+        if row.get("dispositivo_id"):
+            cur.execute("""
+                UPDATE inventario_dispositivos
+                   SET em_manutencao = 0, manutencao_atual_id = NULL
+                 WHERE id = %s AND manutencao_atual_id = %s
+            """, (row["dispositivo_id"], manut_id))
+
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/manutencoes/{manut_id}/orcamento")
+def manutencao_baixar_orcamento(manut_id: int):
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute(
+            "SELECT orcamento_path FROM inventario_manutencoes WHERE id = %s",
+            (manut_id,),
+        )
+        row = cur.fetchone()
+        if not row or not row.get("orcamento_path"):
+            raise HTTPException(404, "Orçamento não encontrado")
+        fname = pathlib.Path(row["orcamento_path"]).name
+        path  = _MANUT_UPLOAD_DIR / fname
+        if not path.exists():
+            raise HTTPException(404, "Arquivo do orçamento não está no disco")
+        return FileResponse(path, filename=fname)
+    finally:
+        cur.close(); conn.close()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# CONTROLE FINANCEIRO DO ESTOQUE T.I. (inventario_itens)
+# Quem usa, quanto vale, onde está, estoque baixo, perda por inativação.
+# ═════════════════════════════════════════════════════════════════════════════
+
+_ITEM_CATEGORIAS = {"hardware", "periferico", "suprimento",
+                    "software", "mobiliario", "outro"}
+
+
+def _row_to_item(r: dict) -> dict:
+    """Converte tipos não-JSON e calcula valor_total."""
+    if r.get("valor_unitario") is not None:
+        r["valor_unitario"] = float(r["valor_unitario"])
+    qtd = r.get("quantidade") or 0
+    val = r.get("valor_unitario") or 0
+    r["valor_total"] = round(qtd * val, 2)
+    r["baixo_estoque"] = bool(
+        r.get("estoque_minimo") and qtd < r.get("estoque_minimo")
+    )
+    for k in ("inativado_em", "criado_em", "atualizado_em"):
+        if r.get(k) and hasattr(r[k], "strftime"):
+            r[k] = r[k].strftime("%Y-%m-%d %H:%M:%S")
+    return r
+
+
+@router.get("/itens")
+def itens_listar(
+    ativo:       Optional[bool] = Query(None),
+    categoria:   Optional[str]  = Query(None),
+    grupo_id:    Optional[int]  = Query(None),
+    unidade_cpe: Optional[str]  = Query(None),
+    search:      Optional[str]  = Query(None),
+):
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        sql = """
+            SELECT i.*,
+                   g.name      AS grupo_nome,
+                   d.hostname  AS dispositivo_hostname,
+                   d.apelido   AS dispositivo_apelido,
+                   u.name      AS inativado_por_nome
+              FROM inventario_itens i
+              LEFT JOIN cpe_grupo                g ON g.id = i.grupo_id
+              LEFT JOIN inventario_dispositivos  d ON d.id = i.dispositivo_id
+              LEFT JOIN users                    u ON u.id = i.inativado_por_user_id
+             WHERE 1=1
+        """
+        params: list = []
+        if ativo is not None:
+            sql += " AND i.ativo = %s"
+            params.append(1 if ativo else 0)
+        if categoria:
+            sql += " AND i.categoria = %s"
+            params.append(categoria)
+        if grupo_id:
+            sql += " AND i.grupo_id = %s"
+            params.append(grupo_id)
+        if unidade_cpe:
+            sql += " AND i.unidade_cpe = %s"
+            params.append(unidade_cpe)
+        if search:
+            sql += """ AND (i.nome LIKE %s OR i.codigo LIKE %s
+                            OR i.descricao LIKE %s OR i.localizacao_detalhe LIKE %s)"""
+            s = f"%{search}%"
+            params.extend([s, s, s, s])
+        sql += " ORDER BY i.ativo DESC, i.nome"
+        cur.execute(sql, params)
+        rows = [_row_to_item(r) for r in cur.fetchall()]
+        return {"itens": rows, "total": len(rows)}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/itens/stats")
+def itens_stats():
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT
+                COUNT(*)                                            AS total,
+                SUM(ativo = 1)                                      AS ativos,
+                SUM(ativo = 0)                                      AS inativos,
+                ROUND(COALESCE(SUM(
+                    CASE WHEN ativo=1 THEN quantidade * valor_unitario END
+                ), 0), 2)                                           AS valor_ativo,
+                ROUND(COALESCE(SUM(
+                    CASE WHEN ativo=0 THEN quantidade * valor_unitario END
+                ), 0), 2)                                           AS valor_inativo,
+                SUM(ativo = 1 AND estoque_minimo > 0
+                    AND quantidade < estoque_minimo)                AS baixo_estoque
+            FROM inventario_itens
+        """)
+        s = cur.fetchone() or {}
+        # MySQL devolve Decimal para SUM — converte pra float
+        for k in ("valor_ativo", "valor_inativo"):
+            if s.get(k) is not None:
+                s[k] = float(s[k])
+        return s
+    finally:
+        cur.close(); conn.close()
+
+
+def _checar_duplicatas(cur, dispositivo_id, numero_serie, ignore_id=None):
+    """Valida que nao existe outro item financeiro com mesmo dispositivo OU
+    mesmo numero de serie (quando preenchido).
+    Lanca HTTPException 409 com mensagem clara."""
+    if dispositivo_id:
+        sql = "SELECT id, nome FROM inventario_itens WHERE dispositivo_id = %s"
+        params = [dispositivo_id]
+        if ignore_id:
+            sql += " AND id <> %s"; params.append(ignore_id)
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        if row:
+            other_id, other_nome = (row["id"], row["nome"]) if isinstance(row, dict) else row
+            raise HTTPException(
+                409,
+                f"Este equipamento já está vinculado ao item #{other_id} "
+                f"({other_nome}). Edite o item existente em vez de criar outro."
+            )
+    if numero_serie:
+        sql = "SELECT id, nome FROM inventario_itens WHERE numero_serie = %s"
+        params = [numero_serie]
+        if ignore_id:
+            sql += " AND id <> %s"; params.append(ignore_id)
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        if row:
+            other_id, other_nome = (row["id"], row["nome"]) if isinstance(row, dict) else row
+            raise HTTPException(
+                409,
+                f"Já existe um item com este número de série: #{other_id} ({other_nome})."
+            )
+
+
+@router.post("/itens", status_code=201)
+def itens_criar(payload: dict):
+    nome = (payload.get("nome") or "").strip()
+    if not nome:
+        raise HTTPException(400, "Nome do item é obrigatório")
+    categoria = (payload.get("categoria") or "outro").strip()
+    if categoria not in _ITEM_CATEGORIAS:
+        raise HTTPException(400, f"Categoria inválida: {categoria}")
+
+    qtd = int(payload.get("quantidade") or 0)
+    val = float(payload.get("valor_unitario") or 0)
+    if qtd < 0 or val < 0:
+        raise HTTPException(400, "Quantidade/valor não podem ser negativos")
+
+    dispositivo_id = payload.get("dispositivo_id") or None
+    numero_serie   = (payload.get("numero_serie") or "").strip() or None
+
+    completo = 1 if payload.get("completo", True) else 0
+    justif   = (payload.get("justificativa_incompleto") or "").strip() or None
+    if completo == 0 and not justif:
+        raise HTTPException(400, "Equipamento marcado como incompleto exige justificativa")
+
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        _checar_duplicatas(cur, dispositivo_id, numero_serie)
+        cur.execute("""
+            INSERT INTO inventario_itens
+                (nome, codigo, numero_serie, categoria, descricao,
+                 completo, justificativa_incompleto,
+                 quantidade, valor_unitario, estoque_minimo,
+                 unidade_cpe, grupo_id, localizacao_detalhe, dispositivo_id,
+                 ativo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1)
+        """, (
+            nome,
+            (payload.get("codigo") or "").strip() or None,
+            numero_serie,
+            categoria,
+            (payload.get("descricao") or "").strip() or None,
+            completo,
+            justif if completo == 0 else None,
+            qtd, val,
+            int(payload.get("estoque_minimo") or 0),
+            (payload.get("unidade_cpe") or "").strip() or None,
+            payload.get("grupo_id") or None,
+            (payload.get("localizacao_detalhe") or "").strip() or None,
+            dispositivo_id,
+        ))
+        conn.commit()
+        return {"id": cur.lastrowid, "ok": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.put("/itens/{item_id}")
+def itens_atualizar(item_id: int, payload: dict):
+    """Atualiza campos textuais e financeiros. Status muda via /inativar."""
+    if "categoria" in payload and payload["categoria"] not in _ITEM_CATEGORIAS:
+        raise HTTPException(400, f"Categoria inválida")
+
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # Valida duplicatas (dispositivo / numero_serie) — ignorando o próprio
+        dispositivo_id = payload.get("dispositivo_id") if "dispositivo_id" in payload else None
+        numero_serie   = (payload.get("numero_serie") or "").strip() if "numero_serie" in payload else None
+        if "dispositivo_id" in payload or "numero_serie" in payload:
+            _checar_duplicatas(cur, dispositivo_id or None,
+                               numero_serie or None, ignore_id=item_id)
+
+        fields, params = [], []
+        for k in ("nome", "codigo", "numero_serie", "categoria", "descricao",
+                  "unidade_cpe", "localizacao_detalhe", "justificativa_incompleto"):
+            if k in payload:
+                v = payload.get(k)
+                fields.append(f"{k} = %s")
+                params.append((v or "").strip() or None if isinstance(v, str) else v)
+        for k in ("quantidade", "estoque_minimo"):
+            if k in payload:
+                fields.append(f"{k} = %s")
+                params.append(int(payload.get(k) or 0))
+        if "completo" in payload:
+            completo_val = 1 if payload.get("completo") else 0
+            if completo_val == 0:
+                justif = (payload.get("justificativa_incompleto") or "").strip()
+                if not justif:
+                    # Se PUT marca incompleto sem mandar justificativa, busca
+                    # a já existente; se também não existe, exige no payload.
+                    cur.execute(
+                        "SELECT justificativa_incompleto FROM inventario_itens WHERE id = %s",
+                        (item_id,)
+                    )
+                    row = cur.fetchone()
+                    if not row or not (row.get("justificativa_incompleto") or "").strip():
+                        raise HTTPException(400, "Equipamento incompleto exige justificativa")
+            fields.append("completo = %s")
+            params.append(completo_val)
+        if "valor_unitario" in payload:
+            fields.append("valor_unitario = %s")
+            params.append(float(payload.get("valor_unitario") or 0))
+        if "grupo_id" in payload:
+            fields.append("grupo_id = %s")
+            params.append(payload.get("grupo_id") or None)
+        if "dispositivo_id" in payload:
+            fields.append("dispositivo_id = %s")
+            params.append(payload.get("dispositivo_id") or None)
+        if not fields:
+            return {"ok": True, "noop": True}
+        params.append(item_id)
+        cur.execute(
+            f"UPDATE inventario_itens SET {', '.join(fields)} WHERE id = %s",
+            params,
+        )
+        if cur.rowcount == 0:
+            cur.execute("SELECT 1 FROM inventario_itens WHERE id = %s", (item_id,))
+            if not cur.fetchone():
+                raise HTTPException(404, "Item não encontrado")
+        conn.commit()
+        return {"ok": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.delete("/itens/{item_id}", status_code=204)
+def itens_excluir(item_id: int):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM inventario_itens WHERE id = %s", (item_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "Item não encontrado")
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+
+@router.patch("/itens/{item_id}/inativar")
+def itens_inativar(item_id: int, payload: dict):
+    """Marca item como inativo. Motivo obrigatório.
+
+    Inativar não deleta — o item continua no banco para o relatório
+    de "valor parado / perda" no KPI Valor Inativo.
+    """
+    motivo = (payload.get("motivo") or "").strip()
+    if not motivo:
+        raise HTTPException(400, "Motivo da inativação é obrigatório")
+    user_id = payload.get("inativado_por_user_id") or None
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE inventario_itens
+               SET ativo = 0,
+                   motivo_inativacao = %s,
+                   inativado_em = NOW(),
+                   inativado_por_user_id = %s
+             WHERE id = %s
+        """, (motivo, user_id, item_id))
+        if cur.rowcount == 0:
+            cur.execute("SELECT 1 FROM inventario_itens WHERE id = %s", (item_id,))
+            if not cur.fetchone():
+                raise HTTPException(404, "Item não encontrado")
+        conn.commit()
+        return {"ok": True, "ativo": False}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.patch("/itens/{item_id}/reativar")
+def itens_reativar(item_id: int):
+    """Reativa item (limpa motivo de inativação)."""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE inventario_itens
+               SET ativo = 1,
+                   motivo_inativacao = NULL,
+                   inativado_em = NULL,
+                   inativado_por_user_id = NULL
+             WHERE id = %s
+        """, (item_id,))
+        if cur.rowcount == 0:
+            cur.execute("SELECT 1 FROM inventario_itens WHERE id = %s", (item_id,))
+            if not cur.fetchone():
+                raise HTTPException(404, "Item não encontrado")
+        conn.commit()
+        return {"ok": True, "ativo": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/itens/dispositivos-disponiveis")
+def itens_dispositivos_disponiveis():
+    """Lista dispositivos do agente que ainda NÃO estão vinculados a um item
+    financeiro. Usado no modal de cadastro pra pré-popular notebook."""
+    conn = get_db_connection()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT d.id, d.hostname, d.apelido, d.marca, d.modelo, d.tipo,
+                   d.numero_serie, d.nome_responsavel, d.localizacao_cpe
+              FROM inventario_dispositivos d
+              LEFT JOIN inventario_itens i ON i.dispositivo_id = d.id
+             WHERE i.id IS NULL
+             ORDER BY d.hostname
+        """)
+        return {"dispositivos": cur.fetchall()}
     finally:
         cur.close(); conn.close()
