@@ -1,1020 +1,765 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inventário - CPE Control</title>
+  <title>Inventário Financeiro - CPE Control</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
-    rel="stylesheet">
-
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/style.css">
 
-  <style>
-    .page-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 2rem;
-      padding-bottom: 1.5rem;
-      border-bottom: 2px solid #e5e7eb;
-      flex-wrap: wrap;
-      gap: 1rem;
-    }
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
 
-    .page-title {
-      font-size: 1.75rem;
-      font-weight: 700;
-      color: #1f2937;
-      margin: 0;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 20px;
-      margin-bottom: 2rem;
-    }
-
-    .stat-card {
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-      transition: all 0.3s ease;
-    }
-
-    .stat-card:hover {
-      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
-      transform: translateY(-2px);
-    }
-
-    .stat-label {
-      font-size: 13px;
-      color: #6b7280;
-      font-weight: 600;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-
-    .stat-value {
-      font-size: 32px;
-      font-weight: 700;
-      color: #1f2937;
-      margin-bottom: 8px;
-    }
-
-    .stat-change {
-      font-size: 13px;
-      color: #6b7280;
-    }
-
-    .inventory-table {
-      background: white;
-      border: 1px solid #e5e7eb;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-      margin-bottom: 2rem;
-    }
-
-    .table {
-      margin: 0;
-    }
-
-    .table thead {
-      background-color: #f9fafb;
-      border-bottom: 2px solid #e5e7eb;
-    }
-
-    .table thead th {
-      font-weight: 600;
-      color: #1f2937;
-      padding: 16px;
-      border: none;
-      vertical-align: middle;
-    }
-
-    .table tbody td {
-      padding: 16px;
-      vertical-align: middle;
-      border-color: #f3f4f6;
-    }
-
-    .table tbody tr {
-      transition: all 0.2s ease;
-    }
-
-    .table tbody tr:hover {
-      background-color: #f9fafb;
-    }
-
-    .item-name {
-      font-weight: 600;
-      color: #1f2937;
-    }
-
-    .item-code {
-      font-size: 12px;
-      color: #6b7280;
-    }
-
-    .status-badge {
-      display: inline-block;
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-    }
-
-    .status-active {
-      background-color: rgba(16, 185, 129, 0.1);
-      color: #065f46;
-    }
-
-    .status-inactive {
-      background-color: rgba(107, 114, 128, 0.1);
-      color: #374151;
-    }
-
-    .status-warning {
-      background-color: rgba(245, 158, 11, 0.1);
-      color: #92400e;
-    }
-
-    .quantity-low {
-      color: #dc2626;
-      font-weight: 600;
-    }
-
-    .quantity-normal {
-      color: #059669;
-      font-weight: 600;
-    }
-
-    .btn-action {
-      padding: 6px 12px;
-      border-radius: 6px;
-      border: 1px solid #e5e7eb;
-      background: white;
-      color: #1f2937;
-      font-size: 12px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      margin-right: 4px;
-    }
-
-    .btn-action:hover {
-      background-color: #f3f4f6;
-      border-color: #667eea;
-      color: #667eea;
-    }
-
-    .btn-action.danger:hover {
-      background-color: rgba(239, 68, 68, 0.1);
-      border-color: #ef4444;
-      color: #ef4444;
-    }
-
-    .btn-new-item {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-      padding: 0.75rem 1.5rem;
-      border-radius: 8px;
-      font-weight: 600;
-      white-space: nowrap;
-      transition: all 0.3s ease;
-      cursor: pointer;
-    }
-
-    .btn-new-item:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
-      color: white;
-      text-decoration: none;
-    }
-
-    .search-filter {
-      display: flex;
-      gap: 16px;
-      margin-bottom: 24px;
-      flex-wrap: wrap;
-    }
-
-    .search-filter input,
-    .search-filter select {
-      padding: 0.75rem 1rem;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      font-size: 14px;
-    }
-
-    .search-filter input:focus,
-    .search-filter select:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-      outline: none;
-    }
-
-    .empty-state {
-      text-align: center;
-      padding: 3rem 2rem;
-      color: #6b7280;
-    }
-
-    .empty-state-icon {
-      font-size: 3rem;
-      color: #d1d5db;
-      margin-bottom: 1rem;
-    }
-
-    .alert {
-      border: none;
-      border-radius: 8px;
-      margin-bottom: 1.5rem;
-    }
-
-    .alert-danger {
-      background-color: rgba(220, 38, 38, 0.1);
-      color: #991b1b;
-    }
-
-    .alert-success {
-      background-color: rgba(16, 185, 129, 0.1);
-      color: #065f46;
-    }
-
-    .modal-header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      border: none;
-    }
-
-    .modal-header .btn-close {
-      filter: brightness(0) invert(1);
-    }
-
-    .form-control:focus,
-    .form-select:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .d-none {
-      display: none;
-    }
-
-    @media (max-width: 768px) {
-      .search-filter {
-        flex-direction: column;
-      }
-
-      .search-filter input,
-      .search-filter select {
-        width: 100%;
-      }
-
-      .table-responsive {
-        font-size: 12px;
-      }
-
-      .btn-action {
-        padding: 4px 8px;
-        font-size: 11px;
-      }
-    }
-  </style>
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
   <script>pageGuard('INVENTORY');</script>
+
+  <style>
+    /* ── Objetivo da página (banner) ──────────────────────────── */
+    .obj-banner {
+      background:#eef2ff; border:1px solid #c7d2fe; border-radius:10px;
+      padding:14px 18px; margin-bottom:20px;
+      display:flex; gap:14px; align-items:flex-start;
+    }
+    .obj-banner i { font-size:22px; color:#4338ca; flex-shrink:0; }
+    .obj-banner-body { font-size:13px; color:#3730a3; line-height:1.5; }
+    .obj-banner-body strong { color:#1e1b4b; }
+
+    /* ── KPIs ────────────────────────────────────────────────── */
+    .kpi-bar { display:flex; gap:14px; margin-bottom:22px; flex-wrap:wrap; }
+    .kpi {
+      background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+      padding:14px 20px; display:flex; align-items:center; gap:12px;
+      min-width:200px; flex:1; box-shadow:0 1px 4px rgba(0,0,0,.04);
+    }
+    .kpi-icon {
+      font-size:20px; width:42px; height:42px; border-radius:8px;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    }
+    .kpi-icon.ativo    { background:#d1fae5; color:#065f46; }
+    .kpi-icon.inativo  { background:#fee2e2; color:#991b1b; }
+    .kpi-icon.baixo    { background:#fef3c7; color:#92400e; }
+    .kpi-icon.total    { background:#ede9fe; color:#6d28d9; }
+    .kpi-val { font-size:22px; font-weight:700; color:#111827; line-height:1; }
+    .kpi-lbl { font-size:11px; color:#6b7280; font-weight:600; text-transform:uppercase; margin-top:4px; }
+
+    /* ── Toolbar ────────────────────────────────────────────── */
+    .inv-toolbar {
+      display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;
+    }
+    .inv-toolbar input, .inv-toolbar select {
+      padding:8px 12px; border:1px solid #e5e7eb; border-radius:8px;
+      font-size:13px; min-width:160px;
+    }
+    .inv-toolbar .btn-novo {
+      background:#ffc107; border:none; color:#1a1a1a; font-weight:600;
+      padding:9px 16px; border-radius:8px; display:inline-flex; align-items:center; gap:6px;
+      cursor:pointer;
+    }
+    .inv-toolbar .btn-novo:hover { background:#e6ac00; }
+
+    /* ── Tabela ─────────────────────────────────────────────── */
+    .inv-table {
+      width:100%; background:#fff; border:1px solid #e5e7eb; border-radius:10px;
+      border-collapse:separate; border-spacing:0; overflow:hidden;
+    }
+    .inv-table th {
+      background:#f9fafb; padding:10px 12px; text-align:left;
+      font-size:11px; text-transform:uppercase; color:#6b7280;
+      font-weight:700; border-bottom:1px solid #e5e7eb;
+    }
+    .inv-table td {
+      padding:11px 12px; border-bottom:1px solid #f3f4f6;
+      font-size:13px; color:#1f2937; vertical-align:middle;
+    }
+    .inv-table tr:last-child td { border-bottom:none; }
+    .inv-table tr:hover td { background:#fafafa; }
+    .inv-table tr.inativo td { opacity:.55; }
+
+    .item-name { font-weight:600; color:#1f2937; }
+    .item-code { font-size:11px; color:#9ca3af; margin-top:2px; }
+
+    .badge-cat {
+      display:inline-block; padding:2px 8px; border-radius:99px;
+      font-size:11px; font-weight:600;
+    }
+    .badge-cat.hardware    { background:#dbeafe; color:#1e40af; }
+    .badge-cat.periferico  { background:#e0e7ff; color:#3730a3; }
+    .badge-cat.suprimento  { background:#fef3c7; color:#92400e; }
+    .badge-cat.software    { background:#dcfce7; color:#166534; }
+    .badge-cat.mobiliario  { background:#ffedd5; color:#9a3412; }
+    .badge-cat.outro       { background:#f3f4f6; color:#374151; }
+
+    .status-pill {
+      display:inline-block; padding:3px 9px; border-radius:99px;
+      font-size:11px; font-weight:600;
+    }
+    .status-pill.ativo   { background:#d1fae5; color:#065f46; }
+    .status-pill.inativo { background:#fee2e2; color:#991b1b; }
+
+    .loc-badge {
+      display:inline-flex; align-items:center; gap:4px;
+      background:#eef2ff; color:#4338ca;
+      padding:2px 8px; border-radius:99px; font-size:11px; font-weight:600;
+    }
+
+    .qtd-low { color:#dc2626; font-weight:700; }
+    .qtd-low::after { content:" ⚠"; }
+
+    .row-actions { display:flex; gap:4px; justify-content:flex-end; }
+    .btn-act {
+      background:none; border:1px solid #e5e7eb; cursor:pointer; padding:4px 8px;
+      color:#6b7280; border-radius:6px; font-size:12px;
+    }
+    .btn-act:hover { background:#f3f4f6; color:#1f2937; }
+    .btn-act.danger:hover { background:#fee2e2; color:#991b1b; border-color:#fca5a5; }
+
+    .empty-state {
+      text-align:center; padding:60px 20px; color:#9ca3af;
+    }
+    .empty-state i { font-size:42px; opacity:.4; display:block; margin-bottom:10px; }
+
+    /* ── Modal cleanup (reuso bootstrap default) ─────────────── */
+    .modal-header { border-bottom:1px solid #e5e7eb; padding:14px 20px; }
+    .modal-footer { border-top:1px solid #e5e7eb; padding:12px 20px; }
+    .form-label { font-size:13px; font-weight:600; color:#374151; margin-bottom:4px; }
+    .form-text  { font-size:11px; color:#9ca3af; }
+  </style>
 </head>
-
 <body>
-  <!-- ============================================================ -->
-  <!-- 🔒 LOADING PAGE -->
-  <!-- ============================================================ -->
-  <div id="loadingPage"
-    style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); z-index: 9999;">
-    <div style="text-align: center; color: white;">
-      <div class="spinner-border" role="status"
-        style="width: 3rem; height: 3rem; border: 0.3em solid rgba(255,255,255,.3); border-radius: 50%; border-top-color: white;">
-        <span class="visually-hidden">Carregando...</span>
-      </div>
-      <p style="margin-top: 1rem;">Inicializando página...</p>
-    </div>
-  </div>
-  <!-- ============================================================ -->
+  <nav id="navbar-container"></nav>
 
-  <div class="container-main" style="display: none;">
-    <!-- SIDEBAR -->
-    <div class="sidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">CPE</div>
-        <div class="sidebar-title">CONTROL</div>
-      </div>
+  <div class="container-main">
+    <div id="sidebar-container"></div>
 
-      <div class="search-box">
-        <input type="text" placeholder="Buscar">
-      </div>
-
-      <ul class="sidebar-menu"></ul>
-    </div>
-
-    <!-- MAIN CONTENT -->
     <div class="main-content">
       <div class="top-bar">
-        <button class="menu-toggle">☰</button>
-        <h1><i class="bi bi-box-seam"></i> Inventário</h1>
+        <h1><i class="bi bi-cash-stack"></i> Inventário Financeiro</h1>
+        <button class="menu-toggle" id="menuToggle"><i class="bi bi-list"></i></button>
       </div>
 
       <div class="content">
-        <!-- ALERTS -->
-        <div class="alert alert-danger d-none" id="alertBox" role="alert">
-          <i class="bi bi-exclamation-circle"></i>
-          <span id="alertMessage"></span>
+
+        <!-- Objetivo -->
+        <div class="obj-banner">
+          <i class="bi bi-info-circle"></i>
+          <div class="obj-banner-body">
+            <strong>Objetivo desta página:</strong> controlar o valor total do estoque de T.I. — quanto vale o que temos, em qual unidade CPE está, qual setor usa e o que está parado por defeito.
+            Complementa o <a href="/SistemaCPE/web/pages/inventory-ti.html" style="color:#4338ca;font-weight:600">Inventário T.I.</a> (monitoramento técnico via agente). Notebooks já monitorados aparecem aqui ao serem vinculados pelo botão "Novo item".
+          </div>
         </div>
 
-        <div class="alert alert-success d-none" id="successBox" role="alert">
-          <i class="bi bi-check-circle"></i>
-          <span id="successMessage">Operação realizada com sucesso!</span>
+        <!-- KPIs -->
+        <div class="kpi-bar">
+          <div class="kpi">
+            <div class="kpi-icon ativo"><i class="bi bi-cash"></i></div>
+            <div><div class="kpi-val" id="kpiValorAtivo">R$ 0,00</div><div class="kpi-lbl">Valor ativo</div></div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-icon inativo"><i class="bi bi-x-octagon"></i></div>
+            <div><div class="kpi-val" id="kpiValorInativo">R$ 0,00</div><div class="kpi-lbl">Valor inativo / perdas</div></div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-icon baixo"><i class="bi bi-exclamation-triangle"></i></div>
+            <div><div class="kpi-val" id="kpiBaixo">0</div><div class="kpi-lbl">Itens em estoque baixo</div></div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-icon total"><i class="bi bi-boxes"></i></div>
+            <div><div class="kpi-val" id="kpiTotal">0</div><div class="kpi-lbl">Total de itens</div></div>
+          </div>
         </div>
 
-        <!-- PAGE HEADER -->
-        <div class="page-header">
-          <h2 class="page-title">
-            <i class="bi bi-boxes"></i> Gestão de Inventário
-          </h2>
-          <button class="btn-new-item" id="btnNewItem" data-bs-toggle="modal" data-bs-target="#itemModal">
-            <i class="bi bi-plus-lg"></i> Novo Item
+        <!-- Toolbar -->
+        <div class="inv-toolbar">
+          <input type="text" id="filtroBusca" placeholder="🔍 Buscar nome, código, local..." style="flex:1;min-width:240px;">
+          <select id="filtroCategoria">
+            <option value="">Todas categorias</option>
+            <option value="hardware">Hardware</option>
+            <option value="periferico">Periférico</option>
+            <option value="suprimento">Suprimento</option>
+            <option value="software">Software</option>
+            <option value="mobiliario">Mobiliário</option>
+            <option value="outro">Outro</option>
+          </select>
+          <select id="filtroUnidade">
+            <option value="">Todas unidades CPE</option>
+          </select>
+          <select id="filtroGrupo">
+            <option value="">Todos setores</option>
+          </select>
+          <select id="filtroStatus">
+            <option value="">Ativos + Inativos</option>
+            <option value="true">Só ativos</option>
+            <option value="false">Só inativos</option>
+          </select>
+          <button class="btn-novo" onclick="openItemModal()">
+            <i class="bi bi-plus-lg"></i> Novo item
           </button>
         </div>
 
-        <!-- STATISTICS -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-label">Total de Itens</div>
-            <div class="stat-value" id="totalItems">0</div>
-            <div class="stat-change">Itens no inventário</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-label">Ativos</div>
-            <div class="stat-value" id="activeItems">0</div>
-            <div class="stat-change">Produtos em estoque</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-label">Estoque Baixo</div>
-            <div class="stat-value" id="lowStockItems">0</div>
-            <div class="stat-change">Itens com aviso</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-label">Valor Total</div>
-            <div class="stat-value" id="totalValue">R$ 0,00</div>
-            <div class="stat-change">Valor em estoque</div>
-          </div>
+        <!-- Tabela -->
+        <div style="overflow-x:auto">
+          <table class="inv-table" id="tblItens">
+            <thead>
+              <tr>
+                <th>Nome / Código</th>
+                <th>Categoria</th>
+                <th>Qtd</th>
+                <th>Valor unit.</th>
+                <th>Valor total</th>
+                <th>Unidade CPE</th>
+                <th>Setor</th>
+                <th>Localização</th>
+                <th>Status</th>
+                <th style="text-align:right">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tblItensBody">
+              <tr><td colspan="10" class="empty-state">
+                <i class="bi bi-hourglass-split"></i> Carregando...
+              </td></tr>
+            </tbody>
+          </table>
         </div>
 
-        <!-- SEARCH AND FILTER -->
-        <div class="search-filter">
-          <input type="text" id="searchInput" placeholder="Buscar item..." style="flex: 1; min-width: 250px;">
-          <select id="statusFilter" style="width: 200px;">
-            <option value="">Todos os Status</option>
-            <option value="active">Ativo</option>
-            <option value="inactive">Inativo</option>
-          </select>
-          <select id="categoryFilter" style="width: 200px;">
-            <option value="">Todas as Categorias</option>
-            <option value="hardware">Hardware</option>
-            <option value="software">Software</option>
-            <option value="supplies">Suprimentos</option>
-            <option value="other">Outros</option>
-          </select>
-        </div>
-
-        <!-- INVENTORY TABLE -->
-        <div class="inventory-table">
-          <div class="table-responsive">
-            <table class="table" id="inventoryTable">
-              <thead>
-                <tr>
-                  <th style="width: 30%;"><i class="bi bi-box-seam"></i> Nome do Item</th>
-                  <th style="width: 15%;"><i class="bi bi-list-ul"></i> Código</th>
-                  <th style="width: 12%;"><i class="bi bi-stack"></i> Quantidade</th>
-                  <th style="width: 12%;"><i class="bi bi-cash-coin"></i> Valor Unit.</th>
-                  <th style="width: 12%;"><i class="bi bi-tag"></i> Categoria</th>
-                  <th style="width: 12%;"><i class="bi bi-info-circle"></i> Status</th>
-                  <th style="width: 17%; text-align: center;">Ações</th>
-                </tr>
-              </thead>
-              <tbody id="inventoryBody">
-                <tr>
-                  <td colspan="7">
-                    <div class="empty-state" style="padding: 2rem;">
-                      <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
-                      <p>Carregando inventário...</p>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
       </div>
     </div>
   </div>
 
-  <!-- ============================================================ -->
-  <!-- MODAL: Novo/Editar Item -->
-  <!-- ============================================================ -->
-  <div class="modal fade" id="itemModal" tabindex="-1" aria-labelledby="itemModalLabel" aria-hidden="true">
+  <!-- ═══════════════════════════════════════════════════════════
+       MODAL: Cadastrar / Editar item
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="modal fade" id="itemModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="itemModalLabel">
-            <i class="bi bi-plus-square"></i> Novo Item de Inventário
-          </h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          <h6 class="modal-title">
+            <i class="bi bi-box-seam"></i>
+            <span id="itemModalTitle">Novo item</span>
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
+        <form id="itemForm" onsubmit="event.preventDefault(); saveItem();">
+          <input type="hidden" id="itemId">
+          <div class="modal-body" style="padding:1.25rem;">
+            <div class="row g-3">
 
-        <div class="modal-body" style="padding: 2rem;">
-          <!-- Alert de Erro -->
-          <div class="alert alert-danger d-none" id="modalAlertBox" role="alert">
-            <i class="bi bi-exclamation-circle"></i>
-            <span id="modalAlertMessage"></span>
-          </div>
-
-          <!-- Formulário -->
-          <form id="itemForm" novalidate>
-            <div class="mb-3">
-              <label for="itemName" class="form-label">
-                <i class="bi bi-input-cursor"></i> Nome do Item <span style="color: #dc2626;">*</span>
-              </label>
-              <input type="text" class="form-control" id="itemName"
-                placeholder="Ex: Notebook Dell Latitude" required />
-            </div>
-
-            <div class="row">
-              <div class="col-md-6 mb-3">
-                <label for="itemCode" class="form-label">
-                  <i class="bi bi-barcode"></i> Código <span style="color: #dc2626;">*</span>
-                </label>
-                <input type="text" class="form-control" id="itemCode"
-                  placeholder="Ex: SKU-001" required />
+              <div class="col-md-12">
+                <label class="form-label">Vincular a equipamento monitorado (opcional)</label>
+                <select class="form-select" id="itemDispositivo" onchange="onDispositivoChange()">
+                  <option value="">Nenhum (item avulso)</option>
+                </select>
+                <small class="form-text">Notebooks/desktops já cadastrados pelo agente. Ao vincular, nome/marca/localização auto-preenchem.</small>
               </div>
 
-              <div class="col-md-6 mb-3">
-                <label for="itemCategory" class="form-label">
-                  <i class="bi bi-tag"></i> Categoria <span style="color: #dc2626;">*</span>
-                </label>
-                <select class="form-select" id="itemCategory" required>
-                  <option value="">Selecione a categoria...</option>
+              <div class="col-md-6">
+                <label class="form-label">Nome do item <span style="color:#dc2626">*</span></label>
+                <input type="text" class="form-control" id="itemNome" required
+                       placeholder="Ex: Notebook Dell Latitude 5440">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Código / SKU</label>
+                <div class="input-group">
+                  <input type="text" class="form-control" id="itemCodigo"
+                         placeholder="Ex: HW-001">
+                  <button type="button" class="btn btn-outline-secondary"
+                          onclick="gerarSku()" title="Gerar SKU aleatório">
+                    <i class="bi bi-shuffle"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Número de série</label>
+                <input type="text" class="form-control" id="itemSerie"
+                       placeholder="Auto-preenchido se vincular agente">
+                <small class="form-text" id="itemSerieHint"></small>
+              </div>
+
+              <div class="col-md-4">
+                <label class="form-label">Categoria <span style="color:#dc2626">*</span></label>
+                <select class="form-select" id="itemCategoria" required>
                   <option value="hardware">Hardware</option>
+                  <option value="periferico">Periférico</option>
+                  <option value="suprimento">Suprimento</option>
                   <option value="software">Software</option>
-                  <option value="supplies">Suprimentos</option>
-                  <option value="other">Outros</option>
+                  <option value="mobiliario">Mobiliário</option>
+                  <option value="outro">Outro</option>
                 </select>
               </div>
-            </div>
-
-            <div class="row">
-              <div class="col-md-6 mb-3">
-                <label for="itemQuantity" class="form-label">
-                  <i class="bi bi-stack"></i> Quantidade <span style="color: #dc2626;">*</span>
-                </label>
-                <input type="number" class="form-control" id="itemQuantity"
-                  placeholder="0" min="0" required />
+              <div class="col-md-3">
+                <label class="form-label">Quantidade <span style="color:#dc2626">*</span></label>
+                <input type="number" class="form-control" id="itemQuantidade"
+                       min="0" value="1" required>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Valor unit. (R$) <span style="color:#dc2626">*</span></label>
+                <input type="number" class="form-control" id="itemValor"
+                       step="0.01" min="0" value="0.00" required>
+              </div>
+              <div class="col-md-2">
+                <label class="form-label">Estoque mín.</label>
+                <input type="number" class="form-control" id="itemEstMin"
+                       min="0" value="0">
               </div>
 
-              <div class="col-md-6 mb-3">
-                <label for="itemValue" class="form-label">
-                  <i class="bi bi-cash-coin"></i> Valor Unitário <span style="color: #dc2626;">*</span>
+              <div class="col-md-4">
+                <label class="form-label">Unidade CPE</label>
+                <select class="form-select" id="itemUnidade">
+                  <option value="">Sem unidade definida</option>
+                </select>
+                <small class="form-text">Cadastre novas em Recepção → Unidades.</small>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Setor responsável</label>
+                <select class="form-select" id="itemGrupo">
+                  <option value="">Sem setor definido</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label">Localização (detalhe)</label>
+                <input type="text" class="form-control" id="itemLocal"
+                       placeholder="Ex: Sala 3, Armário 12">
+              </div>
+
+              <div class="col-md-12">
+                <div class="form-check" style="background:#f9fafb;padding:10px 14px;border-radius:8px;border:1px solid #e5e7eb;">
+                  <input class="form-check-input" type="checkbox"
+                         id="itemCompleto" checked
+                         onchange="onCompletoChange()">
+                  <label class="form-check-label" for="itemCompleto" style="font-weight:600;">
+                    <i class="bi bi-check2-square"></i> Equipamento está completo
+                  </label>
+                  <small class="d-block form-text">
+                    Desmarque se chegou faltando peça (memória, HD, fonte, cabo, etc).
+                  </small>
+                </div>
+              </div>
+
+              <div class="col-md-12" id="itemJustifWrap" style="display:none;">
+                <label class="form-label" style="color:#92400e;">
+                  <i class="bi bi-exclamation-triangle"></i>
+                  Justificativa do faltante <span style="color:#dc2626">*</span>
                 </label>
-                <input type="number" class="form-control" id="itemValue"
-                  placeholder="0.00" min="0" step="0.01" required />
+                <textarea class="form-control" id="itemJustif" rows="2"
+                          placeholder="Ex: Veio sem o pente de memória DDR4 16GB. Sem HD secundário."></textarea>
+              </div>
+
+              <div class="col-md-12">
+                <label class="form-label">Descrição</label>
+                <textarea class="form-control" id="itemDesc" rows="2"
+                          placeholder="Detalhes adicionais"></textarea>
               </div>
             </div>
+          </div>
+          <div class="modal-footer">
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="bi bi-check-lg"></i> Salvar
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
-            <div class="mb-3">
-              <label for="itemDescription" class="form-label">
-                <i class="bi bi-file-text"></i> Descrição
-              </label>
-              <textarea class="form-control" id="itemDescription" rows="3"
-                placeholder="Descreva o item..."></textarea>
-              <small class="form-text text-muted">Opcional</small>
-            </div>
-
-            <div class="mb-3">
-              <label for="itemMinStock" class="form-label">
-                <i class="bi bi-exclamation-triangle"></i> Estoque Mínimo
-              </label>
-              <input type="number" class="form-control" id="itemMinStock"
-                placeholder="Quantidade mínima para alerta" min="0" />
-              <small class="form-text text-muted">Opcional</small>
-            </div>
-
-            <div class="d-flex gap-2">
-              <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
-                <i class="bi bi-check-lg"></i> Criar Item
-              </button>
-              <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">
-                <i class="bi bi-x-lg"></i> Cancelar
-              </button>
-            </div>
-          </form>
+  <!-- ═══════════════════════════════════════════════════════════
+       MODAL: Inativar item
+       ═══════════════════════════════════════════════════════════ -->
+  <div class="modal fade" id="inativarModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#fef3c7;">
+          <h6 class="modal-title" style="color:#92400e;">
+            <i class="bi bi-x-octagon"></i> Inativar item
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="padding:1.25rem;">
+          <p style="font-size:14px;margin-bottom:14px;">
+            <strong id="inativarItemNome">—</strong><br>
+            <small style="color:#6b7280;">O item ficará marcado como inativo e o valor vai pra "Valor inativo / perdas". Pode reativar depois.</small>
+          </p>
+          <label class="form-label">Motivo da inativação <span style="color:#dc2626">*</span></label>
+          <textarea class="form-control" id="inativarMotivo" rows="3" required
+                    placeholder="Ex: Tela quebrada irreparável, perda total por queda, equipamento sumiu, etc"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-warning btn-sm" onclick="confirmarInativar()">
+            <i class="bi bi-x-octagon"></i> Inativar
+          </button>
+          <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- ============================================================ -->
-  <!-- 📦 SCRIPTS -->
-  <!-- ============================================================ -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
-  <!-- ============================================================ -->
-  <!-- 🔧 INICIALIZAÇÃO DA PÁGINA -->
-  <!-- ============================================================ -->
   <script>
-    console.log("\n" + "=".repeat(80));
-    console.log("[INVENTORY/PAGE] 📄 Inicializando página de Inventário");
-    console.log("[INVENTORY/PAGE] ℹ️  Modo: SEM AUTENTICAÇÃO - Acesso público");
-    console.log("=".repeat(80) + "\n");
+  /* ── Estado ─────────────────────────────────────────────── */
+  const API = (typeof API_BASE_URL !== 'undefined'
+                 ? API_BASE_URL
+                 : `http://${location.hostname||'127.0.0.1'}:8000`);
+  function _tok() { return localStorage.getItem('cpe_token') || ''; }
+  function _user() {
+    try { return JSON.parse(localStorage.getItem('cpe_user') || '{}'); }
+    catch (e) { return {}; }
+  }
+  const _hdr = () => ({ 'X-Auth-Token': _tok() });
 
-    document.addEventListener("DOMContentLoaded", async () => {
-      console.log("[INVENTORY/INIT] 📋 DOM Carregado");
+  let _itens     = [];
+  let _grupos    = [];
+  let _disps     = [];
+  let _unidades  = [];   // unidades cadastradas (de /api/unidades)
+  let _inativarId = null;
 
-      try {
-        // ===== Mostrar Conteúdo =====
-        const loadingPage = document.getElementById("loadingPage");
-        const containerMain = document.querySelector(".container-main");
-        
-        loadingPage.style.display = "none";
-        containerMain.style.display = "flex";
-        
-        console.log("[INVENTORY/INIT] ✅ Página inicializada com sucesso");
-        console.log("=".repeat(80) + "\n");
+  const esc = s => String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 
-        // ===== Carregar Inventário =====
-        await loadInventory();
+  const fmtBRL = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR',
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-      } catch (err) {
-        console.error("[INVENTORY/INIT] ❌ ERRO NA INICIALIZAÇÃO");
-        console.error("[INVENTORY/INIT] 📍 Mensagem:", err.message);
-        console.error("[INVENTORY/INIT] 🔗 Stack:", err.stack);
-        console.error("=".repeat(80) + "\n");
-        
-        showError("Erro ao inicializar página: " + err.message);
+  const _catLbl = {
+    hardware:'Hardware', periferico:'Periférico', suprimento:'Suprimento',
+    software:'Software', mobiliario:'Mobiliário', outro:'Outro'
+  };
+
+  /* ── Helpers do modal ───────────────────────────────────── */
+  function gerarSku() {
+    // INV-XXXX-NNNN  (4 letras maiúsculas + 4 dígitos)
+    const letras = Array.from({length:4}, () =>
+      String.fromCharCode(65 + Math.floor(Math.random()*26))).join('');
+    const nums = String(Math.floor(Math.random()*10000)).padStart(4,'0');
+    document.getElementById('itemCodigo').value = `INV-${letras}-${nums}`;
+  }
+
+  function onCompletoChange() {
+    const completo = document.getElementById('itemCompleto').checked;
+    document.getElementById('itemJustifWrap').style.display = completo ? 'none' : '';
+  }
+
+  /* ── Carregamento inicial ───────────────────────────────── */
+  async function loadAll() {
+    try {
+      const [itens, stats, grupos, disps, unidades] = await Promise.all([
+        fetch(`${API}/api/inventario/itens`,           {headers:_hdr()}).then(r=>r.json()),
+        fetch(`${API}/api/inventario/itens/stats`,     {headers:_hdr()}).then(r=>r.json()),
+        fetch(`${API}/api/groups`,                     {headers:_hdr()}).then(r=>r.json()).catch(()=>({groups:[]})),
+        fetch(`${API}/api/inventario/itens/dispositivos-disponiveis`, {headers:_hdr()}).then(r=>r.json()).catch(()=>({dispositivos:[]})),
+        fetch(`${API}/api/unidades`,                   {headers:_hdr()}).then(r=>r.json()).catch(()=>[]),
+      ]);
+      _itens     = itens.itens || [];
+      _grupos    = grupos.groups || grupos || [];
+      _disps     = disps.dispositivos || [];
+      // /api/unidades pode retornar lista direta ou {unidades:[...]}
+      _unidades  = Array.isArray(unidades) ? unidades : (unidades.unidades || []);
+      // Só ativas
+      _unidades  = _unidades.filter(u => u.ativo === undefined || u.ativo);
+
+      paintKpis(stats);
+      populaFiltros();
+      render();
+    } catch (err) {
+      document.getElementById('tblItensBody').innerHTML =
+        `<tr><td colspan="10" class="empty-state">
+           <i class="bi bi-exclamation-triangle"></i>
+           Erro ao carregar: ${esc(err.message)}
+         </td></tr>`;
+    }
+  }
+
+  function paintKpis(s) {
+    document.getElementById('kpiValorAtivo').textContent   = fmtBRL(s.valor_ativo);
+    document.getElementById('kpiValorInativo').textContent = fmtBRL(s.valor_inativo);
+    document.getElementById('kpiBaixo').textContent        = s.baixo_estoque || 0;
+    document.getElementById('kpiTotal').textContent        = s.total || 0;
+  }
+
+  function populaFiltros() {
+    // Setor (grupo)
+    const selG = document.getElementById('filtroGrupo');
+    selG.innerHTML = '<option value="">Todos setores</option>' +
+      _grupos.map(g => `<option value="${g.id}">${esc(g.name || g.nome)}</option>`).join('');
+    // Unidade — usa as cadastradas em /api/unidades
+    const selU = document.getElementById('filtroUnidade');
+    selU.innerHTML = '<option value="">Todas unidades CPE</option>' +
+      _unidades.map(u => `<option value="${esc(u.nome)}">${esc(u.nome)}${u.sigla ? ' ('+esc(u.sigla)+')' : ''}</option>`).join('');
+  }
+
+  /* ── Render tabela ──────────────────────────────────────── */
+  function render() {
+    const q   = (document.getElementById('filtroBusca').value || '').toLowerCase();
+    const cat = document.getElementById('filtroCategoria').value;
+    const uni = document.getElementById('filtroUnidade').value;
+    const grp = document.getElementById('filtroGrupo').value;
+    const st  = document.getElementById('filtroStatus').value;
+
+    const filt = _itens.filter(i => {
+      if (cat && i.categoria !== cat) return false;
+      if (uni && i.unidade_cpe !== uni) return false;
+      if (grp && String(i.grupo_id || '') !== grp) return false;
+      if (st !== '' && String(!!i.ativo) !== st) return false;
+      if (q) {
+        const blob = `${i.nome||''} ${i.codigo||''} ${i.descricao||''} ${i.localizacao_detalhe||''} ${i.dispositivo_hostname||''}`.toLowerCase();
+        if (!blob.includes(q)) return false;
       }
+      return true;
     });
-  </script>
 
-  <!-- ============================================================ -->
-  <!-- 🔧 FUNÇÕES DA PÁGINA -->
-  <!-- ============================================================ -->
-  <script>
-    let inventory = [];
-    let selectedItemId = null;
+    const body = document.getElementById('tblItensBody');
+    if (!filt.length) {
+      body.innerHTML = `<tr><td colspan="10" class="empty-state">
+        <i class="bi bi-inbox"></i>
+        ${_itens.length ? 'Nenhum item para o filtro.' : 'Nenhum item cadastrado. Clique em "Novo item" pra começar.'}
+      </td></tr>`;
+      return;
+    }
 
-    /**
-     * ✅ Carrega o inventário
-     */
-    async function loadInventory() {
-      console.log("\n[INVENTORY/LOAD] 📥 Carregando inventário...");
+    body.innerHTML = filt.map(i => {
+      const catCls = i.categoria || 'outro';
+      const qtdCls = i.baixo_estoque ? 'qtd-low' : '';
+      const acoes = i.ativo
+        ? `<button class="btn-act" onclick="openItemModal(${i.id})" title="Editar"><i class="bi bi-pencil"></i></button>
+           <button class="btn-act" onclick="openInativar(${i.id})" title="Inativar"><i class="bi bi-x-octagon"></i></button>
+           <button class="btn-act danger" onclick="excluirItem(${i.id})" title="Excluir"><i class="bi bi-trash"></i></button>`
+        : `<button class="btn-act" onclick="reativar(${i.id})" title="Reativar"><i class="bi bi-arrow-counterclockwise"></i></button>
+           <button class="btn-act danger" onclick="excluirItem(${i.id})" title="Excluir"><i class="bi bi-trash"></i></button>`;
 
-      try {
-        // Simular dados de API - substitua pela chamada real
-        inventory = [
-          {
-            id: 1,
-            name: "Notebook Dell Latitude 5440",
-            code: "HW-001",
-            quantity: 5,
-            minStock: 2,
-            value: 4500.00,
-            category: "hardware",
-            description: "Laptop para desenvolvimento com processador Intel i7",
-            status: "active",
-            created: "2024-01-15"
-          },
-          {
-            id: 2,
-            name: "Mouse Logitech MX Master",
-            code: "HW-002",
-            quantity: 1,
-            minStock: 3,
-            value: 350.00,
-            category: "hardware",
-            description: "Mouse sem fio profissional com múltiplas conexões",
-            status: "active",
-            created: "2024-01-20"
-          },
-          {
-            id: 3,
-            name: "Microsoft Office 365",
-            code: "SW-001",
-            quantity: 10,
-            minStock: 5,
-            value: 250.00,
-            category: "software",
-            description: "Licença anual por usuário com suporte completo",
-            status: "active",
-            created: "2024-02-01"
-          },
-          {
-            id: 4,
-            name: "Cartucho de Toner HP",
-            code: "SUP-001",
-            quantity: 2,
-            minStock: 5,
-            value: 180.00,
-            category: "supplies",
-            description: "Cartucho para impressora HP LaserJet Pro",
-            status: "active",
-            created: "2024-02-10"
-          },
-          {
-            id: 5,
-            name: "Monitor LG 27 polegadas",
-            code: "HW-003",
-            quantity: 8,
-            minStock: 2,
-            value: 1200.00,
-            category: "hardware",
-            description: "Monitor 4K com USB-C e HDR",
-            status: "active",
-            created: "2024-02-15"
-          },
-          {
-            id: 6,
-            name: "Teclado Mecânico Corsair",
-            code: "HW-004",
-            quantity: 0,
-            minStock: 2,
-            value: 800.00,
-            category: "hardware",
-            description: "Teclado RGB com switches Cherry MX Blue",
-            status: "inactive",
-            created: "2024-01-05"
-          }
-        ];
+      return `
+        <tr class="${i.ativo ? '' : 'inativo'}">
+          <td>
+            <div class="item-name">${esc(i.nome)}</div>
+            <div class="item-code">${esc(i.codigo || '—')}${i.dispositivo_hostname ? ` · <i class="bi bi-cpu"></i> ${esc(i.dispositivo_hostname)}` : ''}</div>
+          </td>
+          <td><span class="badge-cat ${catCls}">${_catLbl[i.categoria] || i.categoria}</span></td>
+          <td><span class="${qtdCls}">${i.quantidade}</span></td>
+          <td>${fmtBRL(i.valor_unitario)}</td>
+          <td style="font-weight:600">${fmtBRL(i.valor_total)}</td>
+          <td>${i.unidade_cpe ? `<span class="loc-badge"><i class="bi bi-geo-alt"></i> ${esc(i.unidade_cpe)}</span>` : '<span style="color:#d1d5db">—</span>'}</td>
+          <td>${esc(i.grupo_nome || '—')}</td>
+          <td style="font-size:12px;color:#6b7280">${esc(i.localizacao_detalhe || '—')}</td>
+          <td>
+            ${i.ativo
+              ? `<span class="status-pill ativo">Ativo</span>`
+              : `<span class="status-pill inativo" title="${esc(i.motivo_inativacao || '')}">Inativo</span>`}
+          </td>
+          <td><div class="row-actions">${acoes}</div></td>
+        </tr>`;
+    }).join('');
+  }
 
-        console.log("[INVENTORY/LOAD] ✓", inventory.length, "itens carregados");
-        renderInventory(inventory);
-        updateStatistics();
-        console.log("[INVENTORY/LOAD] ✅ Inventário renderizado\n");
+  ['filtroBusca','filtroCategoria','filtroUnidade','filtroGrupo','filtroStatus']
+    .forEach(id => document.getElementById(id).addEventListener('input', render));
 
-      } catch (err) {
-        console.error("[INVENTORY/LOAD] ✗ Erro:", err.message);
-        showError("Erro ao carregar inventário: " + err.message);
+  /* ── Modal cadastro/edição ──────────────────────────────── */
+  function openItemModal(id) {
+    document.getElementById('itemId').value = id || '';
+    document.getElementById('itemModalTitle').textContent = id ? 'Editar item' : 'Novo item';
+
+    // Popula dropdown de dispositivos (apenas não vinculados, + o atual se editando)
+    const dispSel = document.getElementById('itemDispositivo');
+    dispSel.innerHTML = '<option value="">Nenhum (item avulso)</option>';
+    _disps.forEach(d => {
+      dispSel.insertAdjacentHTML('beforeend',
+        `<option value="${d.id}">${esc(d.hostname)} ${d.apelido ? '('+esc(d.apelido)+')' : ''}</option>`);
+    });
+
+    // Popula dropdown de grupos
+    const grpSel = document.getElementById('itemGrupo');
+    grpSel.innerHTML = '<option value="">Sem setor definido</option>' +
+      _grupos.map(g => `<option value="${g.id}">${esc(g.name || g.nome)}</option>`).join('');
+
+    // Popula dropdown de unidades (cadastradas em /api/unidades)
+    const uniSel = document.getElementById('itemUnidade');
+    uniSel.innerHTML = '<option value="">Sem unidade definida</option>' +
+      _unidades.map(u => `<option value="${esc(u.nome)}">${esc(u.nome)}${u.sigla ? ' ('+esc(u.sigla)+')' : ''}</option>`).join('');
+
+    const serieIn = document.getElementById('itemSerie');
+    const serieHint = document.getElementById('itemSerieHint');
+    serieIn.readOnly = false;
+    serieHint.textContent = '';
+
+    if (id) {
+      const i = _itens.find(x => x.id === id) || {};
+      // Se editando item vinculado, garante que o dispositivo dele apareça
+      if (i.dispositivo_id && !_disps.find(d => d.id === i.dispositivo_id)) {
+        dispSel.insertAdjacentHTML('beforeend',
+          `<option value="${i.dispositivo_id}">${esc(i.dispositivo_hostname || 'dispositivo #'+i.dispositivo_id)}</option>`);
       }
-    }
-
-    /**
-     * ✅ Renderiza o inventário
-     */
-    function renderInventory(list = inventory) {
-      console.log("[INVENTORY/RENDER] 🎨 Renderizando", list.length, "itens");
-      const tbody = document.getElementById("inventoryBody");
-
-      if (!list || list.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="7">
-              <div class="empty-state" style="padding: 2rem;">
-                <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
-                <p>Nenhum item no inventário</p>
-              </div>
-            </td>
-          </tr>
-        `;
-        return;
+      // Se a unidade salva não está mais cadastrada, adiciona como opção legada
+      if (i.unidade_cpe && !_unidades.find(u => u.nome === i.unidade_cpe)) {
+        uniSel.insertAdjacentHTML('beforeend',
+          `<option value="${esc(i.unidade_cpe)}">${esc(i.unidade_cpe)} (legado)</option>`);
       }
-
-      tbody.innerHTML = list.map(item => {
-        const lowStock = item.quantity < item.minStock;
-        const quantityClass = lowStock ? 'quantity-low' : 'quantity-normal';
-
-        return `
-          <tr>
-            <td>
-              <div class="item-name">${item.name}</div>
-              <div class="item-code">${item.code}</div>
-            </td>
-            <td><code>${item.code}</code></td>
-            <td>
-              <span class="${quantityClass}">
-                ${item.quantity}
-                ${lowStock ? ' <i class="bi bi-exclamation-triangle"></i>' : ''}
-              </span>
-            </td>
-            <td>R$ ${item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-            <td>
-              <span class="badge" style="background-color: #667eea;">${getCategoryLabel(item.category)}</span>
-            </td>
-            <td>
-              <span class="status-badge ${item.status === 'active' ? 'status-active' : 'status-inactive'}">
-                ${item.status === 'active' ? '<i class="bi bi-check-circle"></i> Ativo' : '<i class="bi bi-x-circle"></i> Inativo'}
-              </span>
-            </td>
-            <td style="text-align: center;">
-              <button class="btn-action" onclick="editItem(${item.id}, event)" title="Editar">
-                <i class="bi bi-pencil"></i> Editar
-              </button>
-              <button class="btn-action danger" onclick="deleteItem(${item.id}, '${item.name.replace(/'/g, "\\'")}', event)" title="Deletar">
-                <i class="bi bi-trash"></i> Deletar
-              </button>
-            </td>
-          </tr>
-        `;
-      }).join("");
+      dispSel.value                              = i.dispositivo_id || '';
+      document.getElementById('itemNome').value       = i.nome || '';
+      document.getElementById('itemCodigo').value     = i.codigo || '';
+      serieIn.value                                   = i.numero_serie || '';
+      document.getElementById('itemCategoria').value  = i.categoria || 'outro';
+      document.getElementById('itemQuantidade').value = i.quantidade ?? 1;
+      document.getElementById('itemValor').value      = i.valor_unitario ?? 0;
+      document.getElementById('itemEstMin').value     = i.estoque_minimo ?? 0;
+      uniSel.value                                    = i.unidade_cpe || '';
+      grpSel.value                                    = i.grupo_id || '';
+      document.getElementById('itemLocal').value      = i.localizacao_detalhe || '';
+      document.getElementById('itemDesc').value       = i.descricao || '';
+      document.getElementById('itemCompleto').checked = i.completo !== 0;
+      document.getElementById('itemJustif').value     = i.justificativa_incompleto || '';
+      onCompletoChange();
+      // Se item já vinculado a dispositivo, mantém série readonly
+      if (i.dispositivo_id) {
+        serieIn.readOnly = true;
+        serieHint.textContent = 'Auto-preenchido do agente (não editável).';
+      }
+    } else {
+      document.getElementById('itemForm').reset();
+      document.getElementById('itemQuantidade').value = 1;
+      document.getElementById('itemValor').value      = '0.00';
+      document.getElementById('itemEstMin').value     = 0;
+      document.getElementById('itemCategoria').value  = 'hardware';
+      document.getElementById('itemCompleto').checked = true;
+      onCompletoChange();
     }
 
-    /**
-     * ✅ Retorna o label da categoria
-     */
-    function getCategoryLabel(category) {
-      const labels = {
-        hardware: "Hardware",
-        software: "Software",
-        supplies: "Suprimentos",
-        other: "Outros"
-      };
-      return labels[category] || category;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('itemModal')).show();
+  }
+
+  function onDispositivoChange() {
+    const id = parseInt(document.getElementById('itemDispositivo').value);
+    const hint = document.getElementById('itemSerieHint');
+    const serieIn = document.getElementById('itemSerie');
+    if (!id) {
+      hint.textContent = '';
+      serieIn.readOnly = false;
+      return;
     }
+    const d = _disps.find(x => x.id === id);
+    if (!d) return;
+    const nome = document.getElementById('itemNome');
+    if (!nome.value) nome.value = `${d.marca || ''} ${d.modelo || d.hostname}`.trim();
+    const uni = document.getElementById('itemUnidade');
+    if (!uni.value && d.localizacao_cpe) uni.value = d.localizacao_cpe;
+    const cat = document.getElementById('itemCategoria');
+    if (cat.value === 'outro') cat.value = 'hardware';
+    // Auto-preenche e trava o número de série quando vinculado a agente
+    serieIn.value = d.numero_serie || '';
+    serieIn.readOnly = true;
+    hint.textContent = d.numero_serie
+      ? 'Auto-preenchido do agente (não editável).'
+      : 'Agente não reportou número de série pra este equipamento.';
+  }
 
-    /**
-     * ✅ Atualiza as estatísticas
-     */
-    function updateStatistics() {
-      console.log("[INVENTORY/STATS] 📊 Atualizando estatísticas");
-
-      const total = inventory.length;
-      const active = inventory.filter(i => i.status === 'active').length;
-      const lowStock = inventory.filter(i => i.quantity < i.minStock).length;
-      const totalValue = inventory.reduce((sum, item) => sum + (item.quantity * item.value), 0);
-
-      document.getElementById("totalItems").textContent = total;
-      document.getElementById("activeItems").textContent = active;
-      document.getElementById("lowStockItems").textContent = lowStock;
-      document.getElementById("totalValue").textContent = totalValue.toLocaleString('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
+  async function saveItem() {
+    const id = document.getElementById('itemId').value;
+    const completo = document.getElementById('itemCompleto').checked;
+    const justif   = document.getElementById('itemJustif').value.trim();
+    if (!completo && !justif) {
+      alert('Marque o equipamento como incompleto exige uma justificativa.');
+      document.getElementById('itemJustif').focus();
+      return;
+    }
+    const body = {
+      nome:                document.getElementById('itemNome').value.trim(),
+      codigo:              document.getElementById('itemCodigo').value.trim(),
+      numero_serie:        document.getElementById('itemSerie').value.trim(),
+      categoria:           document.getElementById('itemCategoria').value,
+      quantidade:          parseInt(document.getElementById('itemQuantidade').value) || 0,
+      valor_unitario:      parseFloat(document.getElementById('itemValor').value) || 0,
+      estoque_minimo:      parseInt(document.getElementById('itemEstMin').value) || 0,
+      unidade_cpe:         document.getElementById('itemUnidade').value.trim(),
+      grupo_id:            parseInt(document.getElementById('itemGrupo').value) || null,
+      localizacao_detalhe: document.getElementById('itemLocal').value.trim(),
+      dispositivo_id:      parseInt(document.getElementById('itemDispositivo').value) || null,
+      descricao:           document.getElementById('itemDesc').value.trim(),
+      completo:            completo,
+      justificativa_incompleto: completo ? null : justif,
+    };
+    try {
+      const url = id
+        ? `${API}/api/inventario/itens/${id}`
+        : `${API}/api/inventario/itens`;
+      const r = await fetch(url, {
+        method: id ? 'PUT' : 'POST',
+        headers: { ..._hdr(), 'Content-Type':'application/json' },
+        body: JSON.stringify(body),
       });
-
-      console.log("[INVENTORY/STATS] ✓ Estatísticas: Total=", total, "Ativos=", active, "Baixo Estoque=", lowStock);
-    }
-
-    /**
-     * ✅ Mostra mensagem de erro
-     */
-    function showError(message) {
-      const alertBox = document.getElementById("alertBox");
-      const alertMessage = document.getElementById("alertMessage");
-      if (!alertBox || !alertMessage) return;
-
-      alertMessage.textContent = message;
-      alertBox.classList.remove("d-none");
-      setTimeout(() => {
-        alertBox.classList.add("d-none");
-      }, 5000);
-    }
-
-    /**
-     * ✅ Mostra mensagem de sucesso
-     */
-    function showSuccess(message) {
-      const successBox = document.getElementById("successBox");
-      const successMessage = document.getElementById("successMessage");
-      if (!successBox || !successMessage) return;
-
-      successMessage.textContent = message;
-      successBox.classList.remove("d-none");
-      setTimeout(() => {
-        successBox.classList.add("d-none");
-      }, 5000);
-    }
-
-    /**
-     * ✅ Mostra mensagem de erro no modal
-     */
-    function showModalError(message) {
-      const modalAlert = document.getElementById("modalAlertBox");
-      const modalAlertMsg = document.getElementById("modalAlertMessage");
-      if (modalAlert && modalAlertMsg) {
-        modalAlertMsg.textContent = message;
-        modalAlert.classList.remove("d-none");
-      }
-    }
-
-    /**
-     * ✅ Esconde erro no modal
-     */
-    function hideModalError() {
-      const modalAlert = document.getElementById("modalAlertBox");
-      if (modalAlert) {
-        modalAlert.classList.add("d-none");
-      }
-    }
-
-    /**
-     * ✅ Edita um item
-     */
-    function editItem(itemId, event) {
-      event.preventDefault();
-      console.log("[INVENTORY/EDIT] ✏️ Editando item:", itemId);
-
-      const item = inventory.find(i => i.id === itemId);
-      if (!item) {
-        console.error("[INVENTORY/EDIT] ✗ Item não encontrado");
-        return;
-      }
-
-      selectedItemId = itemId;
-      document.getElementById("itemModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Item';
-      document.getElementById("itemName").value = item.name;
-      document.getElementById("itemCode").value = item.code;
-      document.getElementById("itemCategory").value = item.category;
-      document.getElementById("itemQuantity").value = item.quantity;
-      document.getElementById("itemValue").value = item.value;
-      document.getElementById("itemDescription").value = item.description;
-      document.getElementById("itemMinStock").value = item.minStock;
-      document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Item';
-
-      hideModalError();
-      const modal = new bootstrap.Modal(document.getElementById("itemModal"));
-      modal.show();
-    }
-
-    /**
-     * ✅ Deleta um item
-     */
-    async function deleteItem(itemId, itemName, event) {
-      event.preventDefault();
-      console.log("[INVENTORY/DELETE] 🗑️ Deletando item:", itemId);
-
-      if (!confirm(`Tem certeza que deseja deletar o item "${itemName}"?`)) {
-        console.log("[INVENTORY/DELETE] ⏭️ Deleção cancelada pelo usuário");
-        return;
-      }
-
-      try {
-        inventory = inventory.filter(i => i.id !== itemId);
-        console.log("[INVENTORY/DELETE] ✓ Item deletado com sucesso");
-        showSuccess(`Item "${itemName}" deletado com sucesso!`);
-        renderInventory();
-        updateStatistics();
-
-      } catch (err) {
-        console.error("[INVENTORY/DELETE] ✗ Erro:", err.message);
-        showError("Erro ao deletar item: " + err.message);
-      }
-    }
-
-    /**
-     * ✅ Submissão do formulário
-     */
-    document.getElementById("itemForm")?.addEventListener("submit", async (e) => {
-      e.preventDefault();
-
-      const name = document.getElementById("itemName")?.value?.trim();
-      const code = document.getElementById("itemCode")?.value?.trim();
-      const category = document.getElementById("itemCategory")?.value;
-      const quantity = parseInt(document.getElementById("itemQuantity")?.value || 0);
-      const value = parseFloat(document.getElementById("itemValue")?.value || 0);
-      const description = document.getElementById("itemDescription")?.value?.trim();
-      const minStock = parseInt(document.getElementById("itemMinStock")?.value || 0);
-
-      console.log("[INVENTORY/SUBMIT] 📝 Processando item:", { name, code, category, quantity, value });
-
-      if (!name || !code || !category || quantity < 0 || value <= 0) {
-        console.warn("[INVENTORY/SUBMIT] ⚠️ Campos obrigatórios não preenchidos");
-        showModalError("Preencha todos os campos obrigatórios corretamente!");
-        return;
-      }
-
-      try {
-        const submitBtn = document.getElementById("submitBtn");
-        submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Processando...';
-
-        // Simular delay de processamento
-        await new Promise(resolve => setTimeout(resolve, 800));
-
-        if (selectedItemId) {
-          // ===== ATUALIZAR =====
-          console.log("[INVENTORY/SUBMIT] ✏️ Atualizando item:", selectedItemId);
-          const item = inventory.find(i => i.id === selectedItemId);
-          if (item) {
-            item.name = name;
-            item.code = code;
-            item.category = category;
-            item.quantity = quantity;
-            item.value = value;
-            item.description = description;
-            item.minStock = minStock;
-            console.log("[INVENTORY/SUBMIT] ✓ Item atualizado com sucesso");
-          }
-          showSuccess("Item atualizado com sucesso!");
-        } else {
-          // ===== CRIAR =====
-          console.log("[INVENTORY/SUBMIT] ➕ Criando novo item");
-          const newItem = {
-            id: Math.max(...inventory.map(i => i.id), 0) + 1,
-            name,
-            code,
-            category,
-            quantity,
-            value,
-            description,
-            minStock,
-            status: "active",
-            created: new Date().toISOString().split('T')[0]
-          };
-          inventory.push(newItem);
-          console.log("[INVENTORY/SUBMIT] ✓ Item criado com sucesso:", newItem);
-          showSuccess("Item criado com sucesso!");
+      if (!r.ok) {
+        let msg = `HTTP ${r.status}`;
+        try {
+          const j = await r.json();
+          if (j.detail) msg = j.detail;
+        } catch (e) {}
+        // 409 = duplicata (dispositivo já vinculado OU série em uso)
+        if (r.status === 409) {
+          alert(msg);
+          return;
         }
-
-        document.getElementById("itemForm").reset();
-        const modal = bootstrap.Modal.getInstance(document.getElementById("itemModal"));
-        if (modal) modal.hide();
-
-        selectedItemId = null;
-        renderInventory();
-        updateStatistics();
-
-      } catch (err) {
-        console.error("[INVENTORY/SUBMIT] ✗ Erro:", err.message);
-        showModalError(err.message || "Erro ao processar item!");
-      } finally {
-        const submitBtn = document.getElementById("submitBtn");
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="bi bi-check-lg"></i> Criar Item';
+        throw new Error(msg);
       }
-    });
+      bootstrap.Modal.getInstance(document.getElementById('itemModal')).hide();
+      loadAll();
+    } catch (err) { alert('Erro: ' + err.message); }
+  }
 
-    /**
-     * ✅ Filtros de busca
-     */
-    function filterInventory() {
-      console.log("[INVENTORY/FILTER] 🔍 Aplicando filtros");
+  /* ── Inativar / Reativar / Excluir ──────────────────────── */
+  function openInativar(id) {
+    _inativarId = id;
+    const i = _itens.find(x => x.id === id) || {};
+    document.getElementById('inativarItemNome').textContent = i.nome || '—';
+    document.getElementById('inativarMotivo').value = '';
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('inativarModal')).show();
+  }
 
-      const searchTerm = document.getElementById("searchInput")?.value?.toLowerCase() || "";
-      const statusFilter = document.getElementById("statusFilter")?.value || "";
-      const categoryFilter = document.getElementById("categoryFilter")?.value || "";
-
-      const filtered = inventory.filter(item => {
-        const matchesSearch = item.name.toLowerCase().includes(searchTerm) || item.code.toLowerCase().includes(searchTerm);
-        const matchesStatus = !statusFilter || item.status === statusFilter;
-        const matchesCategory = !categoryFilter || item.category === categoryFilter;
-        return matchesSearch && matchesStatus && matchesCategory;
+  async function confirmarInativar() {
+    const motivo = document.getElementById('inativarMotivo').value.trim();
+    if (!motivo) { alert('Motivo é obrigatório'); return; }
+    try {
+      const r = await fetch(`${API}/api/inventario/itens/${_inativarId}/inativar`, {
+        method: 'PATCH',
+        headers: { ..._hdr(), 'Content-Type':'application/json' },
+        body: JSON.stringify({
+          motivo,
+          inativado_por_user_id: _user().id || null,
+        }),
       });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      bootstrap.Modal.getInstance(document.getElementById('inativarModal')).hide();
+      loadAll();
+    } catch (err) { alert('Erro: ' + err.message); }
+  }
 
-      console.log("[INVENTORY/FILTER] ✓ Filtro aplicado - Resultados:", filtered.length);
-      renderInventory(filtered);
-    }
+  async function reativar(id) {
+    if (!confirm('Reativar este item?')) return;
+    try {
+      const r = await fetch(`${API}/api/inventario/itens/${id}/reativar`, {
+        method: 'PATCH', headers: _hdr(),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      loadAll();
+    } catch (err) { alert('Erro: ' + err.message); }
+  }
 
-    /**
-     * ✅ Event listeners para filtros
-     */
-    document.getElementById("searchInput")?.addEventListener("input", filterInventory);
-    document.getElementById("statusFilter")?.addEventListener("change", filterInventory);
-    document.getElementById("categoryFilter")?.addEventListener("change", filterInventory);
+  async function excluirItem(id) {
+    const i = _itens.find(x => x.id === id) || {};
+    if (!confirm(`Excluir definitivamente "${i.nome || 'este item'}"?\n\nEsta ação não pode ser desfeita.`)) return;
+    try {
+      const r = await fetch(`${API}/api/inventario/itens/${id}`, {
+        method: 'DELETE', headers: _hdr(),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      loadAll();
+    } catch (err) { alert('Erro: ' + err.message); }
+  }
 
-    /**
-     * ✅ Reset modal quando abrir
-     */
-    document.getElementById("itemModal")?.addEventListener("show.bs.modal", () => {
-      console.log("[INVENTORY/MODAL] 📂 Modal aberto");
-      if (!selectedItemId) {
-        document.getElementById("itemModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Novo Item de Inventário';
-        document.getElementById("itemForm").reset();
-        document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Item';
-      }
-      hideModalError();
-    });
-
-    /**
-     * ✅ Reset quando fechar
-     */
-    document.getElementById("itemModal")?.addEventListener("hidden.bs.modal", () => {
-      console.log("[INVENTORY/MODAL] 🔒 Modal fechado");
-      selectedItemId = null;
-    });
+  document.addEventListener('DOMContentLoaded', loadAll);
   </script>
-
 </body>
-
 </html>

@@ -22,7 +22,7 @@ ACESSO REMOTO (caso o MySQL do CPEDC22 não aceite conexões externas):
   Depois ajuste PROD_USER/PROD_PASSWORD abaixo (ou via variáveis de ambiente).
 """
 from __future__ import annotations
-import os, sys, time
+import os, sys, time, subprocess, shutil
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -35,7 +35,10 @@ except Exception:
 
 try:
     from dotenv import load_dotenv
+    # Carrega .env primeiro (credenciais locais default), depois
+    # .env.staging que sobrescreve com PROD_* e LOCAL DB de staging.
     load_dotenv(dotenv_path=ROOT / "server" / ".env")
+    load_dotenv(dotenv_path=ROOT / "server" / ".env.staging", override=True)
 except Exception:
     pass
 
@@ -206,15 +209,115 @@ def main():
 
     elapsed = time.time() - t0
     print(f"\n{'=' * 60}")
-    print(f"  Concluido em {elapsed:.1f}s")
+    print(f"  Sync concluido em {elapsed:.1f}s")
     print(f"  Tabelas copiadas : {copiadas}/{len(tabelas)}")
     if falhas:
         print(f"  Falhas           : {len(falhas)}")
         for t, e in falhas:
             print(f"    - {t}: {e}")
+
+    # Aplica migrations no staging — produção pode estar atrasada
+    # em relação ao dev e o sync herda esse estado. Sem isso, schema
+    # do staging fica fora de data e a API quebra com "unknown column".
+    _aplicar_migrations_staging()
+
+    # Copia arquivos de upload (fotos de frota, anexos de contratos, etc).
+    # Sem isso, banco aponta para arquivos que não existem localmente
+    # e o frontend mostra placeholders no lugar das imagens.
+    _sincronizar_uploads()
+
     print(f"\n  Banco staging pronto: {LOCAL_DB}")
-    print(f"  Para usar: server/iniciar_staging.bat")
+    print(f"  Para usar: CPE Control.bat -> opcao [6] Iniciar API Staging")
     print("=" * 60 + "\n")
+
+
+def _sincronizar_uploads() -> None:
+    """Copia pastas de uploads da produção (UNC share) para o local.
+
+    Só copia arquivos novos ou modificados (não sobrescreve arquivos
+    locais mais recentes). Pastas configuráveis via env var
+    UPLOAD_DIRS_TO_SYNC (separadas por vírgula, relativas ao repo).
+    """
+    print(f"\n{'-' * 60}")
+    print("  Sincronizando arquivos de upload da producao...")
+    print("-" * 60)
+
+    prod_share = os.getenv(
+        "PROD_SHARE_PATH",
+        r"\\CPEDC22\e\xampp\htdocs\SistemaCPE",
+    )
+    pastas_csv = os.getenv(
+        "UPLOAD_DIRS_TO_SYNC",
+        "web/uploads,web/assests/uploads",
+    )
+    pastas = [p.strip() for p in pastas_csv.split(",") if p.strip()]
+
+    if not Path(prod_share).exists():
+        print(f"  [AVISO] Share {prod_share} inacessivel — pulando uploads.")
+        print(f"          Defina PROD_SHARE_PATH ou copie manualmente.")
+        return
+
+    total_copiados = 0
+    for pasta_rel in pastas:
+        src = Path(prod_share) / pasta_rel
+        dst = ROOT / pasta_rel
+        if not src.exists():
+            print(f"  {pasta_rel:<30} [pasta nao existe em producao]")
+            continue
+
+        copiados, pulados = 0, 0
+        try:
+            for src_file in src.rglob("*"):
+                if not src_file.is_file():
+                    continue
+                rel = src_file.relative_to(src)
+                dst_file = dst / rel
+                if dst_file.exists():
+                    if src_file.stat().st_mtime <= dst_file.stat().st_mtime \
+                            and src_file.stat().st_size == dst_file.stat().st_size:
+                        pulados += 1
+                        continue
+                dst_file.parent.mkdir(parents=True, exist_ok=True)
+                import shutil as _sh
+                _sh.copy2(src_file, dst_file)
+                copiados += 1
+            print(f"  {pasta_rel:<30} {copiados:>4} copiados, {pulados:>4} ja ok")
+            total_copiados += copiados
+        except Exception as e:
+            print(f"  {pasta_rel:<30} [FALHA] {e}")
+
+    print(f"  Total: {total_copiados} arquivos copiados")
+
+
+def _aplicar_migrations_staging() -> None:
+    """Roda apply_migrations.sh contra .env.staging, via Git Bash."""
+    print(f"\n{'-' * 60}")
+    print("  Aplicando migrations pendentes no staging...")
+    print("-" * 60)
+
+    script = ROOT / "apply_migrations.sh"
+    if not script.exists():
+        print(f"  [AVISO] {script} nao encontrado — pulando migrations.")
+        return
+
+    bash = shutil.which("bash") or r"C:\Program Files\Git\bin\bash.exe"
+    if not Path(bash).exists():
+        print(f"  [AVISO] bash nao encontrado — pulando migrations.")
+        print(f"          Rode manualmente: bash apply_migrations.sh server/.env.staging")
+        return
+
+    try:
+        result = subprocess.run(
+            [bash, str(script), "server/.env.staging"],
+            cwd=str(ROOT),
+            timeout=120,
+        )
+        if result.returncode != 0:
+            print(f"  [AVISO] apply_migrations.sh retornou codigo {result.returncode}")
+    except subprocess.TimeoutExpired:
+        print(f"  [AVISO] apply_migrations.sh travou (>120s) — verifique manualmente.")
+    except Exception as e:
+        print(f"  [AVISO] Falha ao rodar apply_migrations.sh: {e}")
 
 
 if __name__ == "__main__":

@@ -6,3 +6,7 @@ pydantic[email]==2.5.0
 python-multipart==0.0.6
 bcrypt==4.1.1
 python-dotenv==1.0.0
+# Agenda Carbonio: crypto_helper usa Fernet pra cifrar o authToken do usuário
+cryptography>=42.0
+# Agenda Carbonio: carbonio_service faz chamadas REST ao webmail
+requests>=2.31

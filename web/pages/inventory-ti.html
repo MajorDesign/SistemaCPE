@@ -189,6 +189,21 @@
     }
     .apelido-cell:hover .apelido-edit-btn { display:inline; }
 
+    /* Coluna Responsável / Setor (com botão de editar) */
+    .info-cell {
+      display:flex; align-items:center; gap:6px;
+      justify-content:space-between;
+    }
+    .info-cell:hover .apelido-edit-btn { display:inline; }
+
+    /* Badge de localização CPE */
+    .loc-badge {
+      display:inline-flex; align-items:center; gap:4px;
+      background:#eef2ff; color:#4338ca;
+      padding:2px 8px; border-radius:10px;
+      font-size:11px; font-weight:600;
+    }
+
     /* ── Linha expandida ─────────────────────────────────────────── */
     .detail-row { display:none; }
     .detail-row td {
@@ -410,6 +425,14 @@
               <i class="bi bi-laptop"></i> Notebooks
               <span class="inv-filter-badge" id="cnt-notebook">0</span>
             </div>
+            <div class="inv-filter-item" data-tipo="estoque" onclick="setFilter('estoque')">
+              <i class="bi bi-box-seam"></i> Estoque
+              <span class="inv-filter-badge" id="cnt-estoque">0</span>
+            </div>
+            <div class="inv-filter-item" data-tipo="manutencao" onclick="setFilter('manutencao')">
+              <i class="bi bi-tools"></i> Manutenção
+              <span class="inv-filter-badge" id="cnt-manutencao">0</span>
+            </div>
             <div class="inv-filter-item" data-tipo="desktop" onclick="setFilter('desktop')">
               <i class="bi bi-pc-display"></i> Desktops
               <span class="inv-filter-badge" id="cnt-desktop">0</span>
@@ -452,6 +475,29 @@
                 <option value="25">25 / pág.</option>
                 <option value="50">50 / pág.</option>
                 <option value="100">100 / pág.</option>
+              </select>
+            </div>
+
+            <!-- Toolbar Manutenção (só aparece com filtro 'manutencao' ativo) -->
+            <div class="inv-toolbar manut-toolbar" id="manutToolbar"
+                 style="display:none;border-bottom:1px solid #e5e7eb;background:#fafafa">
+              <button class="inv-btn" style="background:#4338ca;color:white;border-color:#4338ca"
+                      onclick="openManutModal()">
+                <i class="bi bi-plus-lg"></i> Nova manutenção
+              </button>
+              <button class="inv-btn" onclick="openFornecedoresModal()">
+                <i class="bi bi-building"></i> Gerenciar fornecedores
+              </button>
+              <span style="flex:1"></span>
+              <select id="manutStatusFilter" class="inv-btn"
+                      onchange="renderTable()"
+                      style="cursor:pointer;padding-right:8px">
+                <option value="">Todos os status</option>
+                <option value="orcamento">Orçamento</option>
+                <option value="aprovada">Aprovada</option>
+                <option value="em_andamento">Em andamento</option>
+                <option value="concluida">Concluída</option>
+                <option value="cancelada">Cancelada</option>
               </select>
             </div>
 
@@ -527,6 +573,8 @@
                     <th>Tipo</th>
                     <th>Hostname</th>
                     <th>IP / Apelido</th>
+                    <th>Responsável / Setor</th>
+                    <th>Localização CPE</th>
                     <th title="Alertas"><i class="bi bi-bell"></i></th>
                     <th title="Status">●</th>
                     <th>Disco</th>
@@ -539,7 +587,7 @@
                 </thead>
                 <tbody id="invBody">
                   <tr class="empty-row">
-                    <td colspan="12">
+                    <td colspan="14">
                       <i class="bi bi-arrow-clockwise"></i>
                       Carregando dispositivos...
                     </td>
@@ -627,6 +675,226 @@
     </div>
   </div>
 
+  <!-- MODAL: Nova / Editar Manutenção -->
+  <div class="modal fade" id="manutModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title">
+            <i class="bi bi-tools"></i>
+            <span id="manutModalTitle">Nova manutenção</span>
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <form id="manutForm" onsubmit="event.preventDefault(); saveManut();">
+          <input type="hidden" id="manutId">
+          <div class="modal-body" style="padding:1.25rem;">
+            <div class="row g-3">
+              <div class="col-md-12">
+                <label class="form-label" style="font-size:13px;font-weight:600;">
+                  Equipamento
+                </label>
+                <select class="form-select" id="manutDispId" onchange="onManutDispChange()">
+                  <option value="">Equipamento não cadastrado (digitar marca/modelo)</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" style="font-size:13px;font-weight:600;">Marca</label>
+                <input type="text" class="form-control" id="manutMarca"
+                       placeholder="Ex: Dell, Lenovo">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" style="font-size:13px;font-weight:600;">Modelo</label>
+                <input type="text" class="form-control" id="manutModelo"
+                       placeholder="Ex: Latitude 7420">
+              </div>
+              <div class="col-md-12">
+                <label class="form-label" style="font-size:13px;font-weight:600;">
+                  Usuário responsável
+                </label>
+                <input type="text" class="form-control" id="manutUsuario"
+                       placeholder="Nome do colaborador dono do equipamento">
+              </div>
+              <div class="col-md-12">
+                <label class="form-label" style="font-size:13px;font-weight:600;">
+                  Problema relatado <span style="color:#dc2626">*</span>
+                </label>
+                <textarea class="form-control" id="manutProblema" rows="3" required
+                          placeholder="Descrição do defeito"></textarea>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" style="font-size:13px;font-weight:600;">
+                  Valor da manutenção (R$)
+                </label>
+                <input type="number" class="form-control" id="manutValor"
+                       step="0.01" min="0" placeholder="0,00">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" style="font-size:13px;font-weight:600;">Status</label>
+                <select class="form-select" id="manutStatus">
+                  <option value="orcamento">Orçamento</option>
+                  <option value="aprovada">Aprovada</option>
+                  <option value="em_andamento">Em andamento</option>
+                  <option value="concluida">Concluída</option>
+                  <option value="cancelada">Cancelada</option>
+                </select>
+              </div>
+              <div class="col-md-12">
+                <label class="form-label" style="font-size:13px;font-weight:600;">
+                  Fornecedor
+                </label>
+                <div style="display:flex;gap:6px">
+                  <select class="form-select" id="manutFornecedor">
+                    <option value="">Sem fornecedor definido</option>
+                  </select>
+                  <button type="button" class="inv-btn" onclick="openFornecedoresModal()"
+                          title="Cadastrar/gerenciar fornecedores">
+                    <i class="bi bi-plus-lg"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="col-md-12">
+                <label class="form-label" style="font-size:13px;font-weight:600;">
+                  Orçamento (PDF ou imagem, máx 10 MB)
+                </label>
+                <input type="file" class="form-control" id="manutOrcamento"
+                       accept="application/pdf,image/*">
+                <small id="manutOrcamentoAtual" style="color:#9ca3af;font-size:11px;"></small>
+              </div>
+              <div class="col-md-12">
+                <label class="form-label" style="font-size:13px;font-weight:600;">Observações</label>
+                <textarea class="form-control" id="manutObs" rows="2"></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="submit" class="btn btn-primary btn-sm">
+              <i class="bi bi-check-lg"></i> Salvar
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Gerenciar Fornecedores de TI -->
+  <div class="modal fade" id="fornModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title">
+            <i class="bi bi-building"></i> Fornecedores de TI
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="padding:1.25rem;">
+          <!-- Linha de cadastro -->
+          <div class="row g-2 align-items-end" style="background:#f9fafb;padding:12px;border-radius:8px;margin-bottom:14px;">
+            <div class="col-md-3">
+              <label class="form-label" style="font-size:12px;font-weight:600;">Nome *</label>
+              <input type="text" class="form-control form-control-sm" id="fornNome">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label" style="font-size:12px;font-weight:600;">CNPJ</label>
+              <input type="text" class="form-control form-control-sm" id="fornCnpj"
+                     placeholder="00.000.000/0000-00">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label" style="font-size:12px;font-weight:600;">Endereço</label>
+              <input type="text" class="form-control form-control-sm" id="fornEnd">
+            </div>
+            <div class="col-md-2">
+              <label class="form-label" style="font-size:12px;font-weight:600;">Responsável</label>
+              <input type="text" class="form-control form-control-sm" id="fornResp">
+            </div>
+            <div class="col-md-1">
+              <label class="form-label" style="font-size:12px;font-weight:600;">Telefone</label>
+              <input type="text" class="form-control form-control-sm" id="fornTel">
+            </div>
+            <div class="col-md-1">
+              <button class="btn btn-primary btn-sm w-100" onclick="saveFornecedor()">
+                <i class="bi bi-plus-lg"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Lista -->
+          <table class="inv-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>CNPJ</th>
+                <th>Endereço</th>
+                <th>Responsável</th>
+                <th>Telefone</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="fornBody">
+              <tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:20px;">
+                Carregando...
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Editar responsável / setor / localização -->
+  <div class="modal fade" id="infoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h6 class="modal-title">
+            <i class="bi bi-person-badge"></i>
+            Responsável / Setor / Localização
+            <span id="infoHostname" style="font-size:12px;color:#9ca3af;font-weight:normal;"></span>
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="padding:1.25rem;">
+          <div class="mb-3">
+            <label class="form-label" style="font-size:13px;font-weight:600;">
+              Nome do responsável
+            </label>
+            <input type="text" class="form-control" id="infoNome"
+                   placeholder="Ex: João Silva">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" style="font-size:13px;font-weight:600;">Setor</label>
+            <input type="text" class="form-control" id="infoSetor"
+                   placeholder="Ex: TI, Comercial, Operações">
+          </div>
+          <div class="mb-2">
+            <label class="form-label" style="font-size:13px;font-weight:600;">
+              Localização CPE
+            </label>
+            <input type="text" class="form-control" id="infoLocal"
+                   placeholder="Ex: CPE BH, CPE SP, Home Office">
+            <small style="color:#9ca3af;font-size:11px;">
+              Em qual unidade CPE o equipamento está fisicamente.
+            </small>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary btn-sm" onclick="saveInfo()">
+            <i class="bi bi-check-lg"></i> Salvar
+          </button>
+          <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
@@ -648,6 +916,9 @@
   let _pageSize    = 25;
   let _expandedId  = null;
   let _apelidoId   = null;
+  let _infoId      = null;
+  let _manutList   = [];   // lista atual de manutenções carregadas
+  let _fornList    = [];   // lista de fornecedores (cache p/ selects)
   let _modalId     = null;
 
   const API = window.API_BASE_URL
@@ -840,14 +1111,25 @@
   async function loadData() {
     try {
       const headers = { "X-Auth-Token": tok() };
-      const [devRes, statsRes] = await Promise.all([
+      const [devRes, statsRes, manutRes, fornRes] = await Promise.all([
         fetch(`${API}/api/inventario/dispositivos`, { headers }),
         fetch(`${API}/api/inventario/stats`,        { headers }),
+        fetch(`${API}/api/inventario/manutencoes`,  { headers }),
+        fetch(`${API}/api/inventario/fornecedores`, { headers }),
       ]);
       if (!devRes.ok) throw new Error(`HTTP ${devRes.status}`);
 
       const devData = await devRes.json();
       _all = devData.dispositivos || [];
+
+      if (manutRes.ok) {
+        const mData = await manutRes.json();
+        _manutList = mData.manutencoes || [];
+      }
+      if (fornRes.ok) {
+        const fData = await fornRes.json();
+        _fornList = fData.fornecedores || [];
+      }
 
       if (statsRes.ok) {
         const s = await statsRes.json();
@@ -857,12 +1139,14 @@
         document.getElementById("kpiAlerts").textContent  =
           _all.filter(d => (d.alerts || 0) > 0).length;
 
-        document.getElementById("cnt-all").textContent      = s.total     ?? 0;
-        document.getElementById("cnt-notebook").textContent = s.notebooks ?? 0;
-        document.getElementById("cnt-desktop").textContent  = s.desktops  ?? 0;
-        document.getElementById("cnt-servidor").textContent = s.servidores?? 0;
-        document.getElementById("cnt-terminal").textContent = s.terminais ?? 0;
-        document.getElementById("cnt-outro").textContent    = s.outros    ?? 0;
+        document.getElementById("cnt-all").textContent        = s.total      ?? 0;
+        document.getElementById("cnt-notebook").textContent   = s.notebooks  ?? 0;
+        document.getElementById("cnt-estoque").textContent    = s.estoque    ?? 0;
+        document.getElementById("cnt-manutencao").textContent = s.manutencao ?? 0;
+        document.getElementById("cnt-desktop").textContent    = s.desktops   ?? 0;
+        document.getElementById("cnt-servidor").textContent   = s.servidores ?? 0;
+        document.getElementById("cnt-terminal").textContent   = s.terminais  ?? 0;
+        document.getElementById("cnt-outro").textContent      = s.outros     ?? 0;
       }
 
       _page = 1;
@@ -881,18 +1165,63 @@
       .forEach(el => el.classList.toggle("active", el.dataset.tipo === tipo));
 
     // Toolbar e categorias do Omada só aparecem na seção Omada
-    const isOmada = tipo === "omada";
+    const isOmada  = tipo === "omada";
+    const isManut  = tipo === "manutencao";
     document.getElementById("omadaToolbar").style.display = isOmada ? "" : "none";
-    if (!isOmada) {
-      document.getElementById("omadaCatBar").style.display = "none";
-      document.getElementById("omadaTopoWrap").style.display = "none";
-      document.getElementById("invTableWrap").style.display = "";
-    } else {
-      // Garante que a aba selecionada controla a visibilidade dos containers
-      setOmadaTab(_omadaTab);
-      return;  // setOmadaTab já chama applyFilters/renderTopology
+    document.getElementById("manutToolbar").style.display = isManut ? "" : "none";
+
+    if (isOmada) {
+      setOmadaTab(_omadaTab);  // já chama applyFilters/renderTopology
+      return;
     }
+    document.getElementById("omadaCatBar").style.display = "none";
+    document.getElementById("omadaTopoWrap").style.display = "none";
+    document.getElementById("invTableWrap").style.display = "";
+    updateTableHeader(tipo);
     applyFilters();
+  }
+
+  /**
+   * Troca o <thead> da tabela conforme o contexto. Manutenção tem
+   * colunas diferentes (problema, valor, fornecedor, status, data envio)
+   * em vez de hardware (disco/ram/uptime/etc).
+   */
+  function updateTableHeader(tipo) {
+    const thead = document.querySelector(".inv-table thead");
+    if (!thead) return;
+    if (tipo === "manutencao") {
+      thead.innerHTML = `
+        <tr>
+          <th style="width:32px;"><input type="checkbox" id="chkAll" onchange="toggleAll(this)"></th>
+          <th>Tipo</th>
+          <th>Equipamento</th>
+          <th>Usuário</th>
+          <th>Problema</th>
+          <th>Valor</th>
+          <th>Fornecedor</th>
+          <th>Status</th>
+          <th>Enviado em</th>
+          <th></th>
+        </tr>`;
+    } else {
+      thead.innerHTML = `
+        <tr>
+          <th style="width:32px;"><input type="checkbox" id="chkAll" onchange="toggleAll(this)"></th>
+          <th>Tipo</th>
+          <th>Hostname</th>
+          <th>IP / Apelido</th>
+          <th>Responsável / Setor</th>
+          <th>Localização CPE</th>
+          <th title="Alertas"><i class="bi bi-bell"></i></th>
+          <th title="Status">●</th>
+          <th>Disco</th>
+          <th>RAM</th>
+          <th>Ligado há</th>
+          <th>Última atualização</th>
+          <th>Agente</th>
+          <th></th>
+        </tr>`;
+    }
   }
 
   function applyFilters() {
@@ -928,12 +1257,32 @@
         return ["hostname","mac","ip","modelo","site_name","firmware"]
           .some(k => (d[k] || "").toString().toLowerCase().includes(q));
       });
-    } else {
-      _filtered = _all.filter(d => {
-        if (_currentTipo && d.tipo !== _currentTipo) return false;
+    } else if (_currentTipo === "manutencao") {
+      // Lista manutenções (registros de inventario_manutencoes), não dispositivos.
+      const statusF = (document.getElementById("manutStatusFilter")?.value || "");
+      _filtered = _manutList.filter(m => {
+        if (statusF && m.status !== statusF) return false;
         if (!q) return true;
-        return ["hostname","usuario_logado","marca","modelo","apelido","estado_br","cidade","ip_interno"]
-          .some(k => (d[k] || "").toLowerCase().includes(q));
+        return ["marca","modelo","problema","usuario_responsavel",
+                "fornecedor_nome","dispositivo_hostname","status"]
+          .some(k => (m[k] || "").toString().toLowerCase().includes(q));
+      });
+    } else {
+      // Estoque/Manutencao = abas dedicadas. Demais filtros escondem ambos.
+      _filtered = _all.filter(d => {
+        const noEstoque = !!d.em_estoque;
+        const noManut   = !!d.em_manutencao;
+        if (_currentTipo === "estoque") {
+          if (!noEstoque) return false;
+        } else {
+          if (noEstoque || noManut) return false;
+          if (_currentTipo && d.tipo !== _currentTipo) return false;
+        }
+        if (!q) return true;
+        return ["hostname","usuario_logado","marca","modelo","apelido",
+                "estado_br","cidade","ip_interno",
+                "nome_responsavel","setor","localizacao_cpe"]
+          .some(k => (d[k] || "").toString().toLowerCase().includes(q));
       });
     }
     renderTable();
@@ -946,6 +1295,10 @@
       const msg = _currentTipo === "omada"
         ? (_omada.length === 0
             ? "Nenhum dispositivo Omada (controller offline?)."
+            : "Nenhum resultado para o filtro.")
+        : _currentTipo === "manutencao"
+        ? (_manutList.length === 0
+            ? "Nenhuma manutenção cadastrada. Clique em 'Nova manutenção' acima."
             : "Nenhum resultado para o filtro.")
         : (_all.length === 0
             ? "Nenhum dispositivo. Instale o agente nas máquinas."
@@ -960,6 +1313,8 @@
     let renderer = renderRow;
     if (_currentTipo === "omada") {
       renderer = _omadaTab === "clients" ? renderRowClient : renderRowOmada;
+    } else if (_currentTipo === "manutencao") {
+      renderer = renderRowManut;
     }
     document.getElementById("invBody").innerHTML = slice.map(renderer).join("");
     updateFooter(total, end - start);
@@ -1272,6 +1627,23 @@
             </button>
           </div>
         </td>
+        <td onclick="event.stopPropagation()">
+          <div class="info-cell">
+            <div>
+              <div style="font-size:12px;color:#374151;">${esc(d.nome_responsavel||'—')}</div>
+              <div style="font-size:11px;color:#9ca3af;">${esc(d.setor||'—')}</div>
+            </div>
+            <button class="apelido-edit-btn" title="Editar responsável / setor / localização"
+              onclick="openInfo(${d.id})">
+              <i class="bi bi-pencil"></i>
+            </button>
+          </div>
+        </td>
+        <td style="font-size:12px;color:#374151;" onclick="event.stopPropagation()">
+          ${d.localizacao_cpe
+            ? `<span class="loc-badge"><i class="bi bi-geo-alt"></i> ${esc(d.localizacao_cpe)}</span>`
+            : '<span style="color:#d1d5db">—</span>'}
+        </td>
         <td>${alertHtml}</td>
         <td>
           <span class="st-dot ${dotCls}" title="${dotTitle}"></span>
@@ -1288,15 +1660,36 @@
         <td style="font-size:12px;color:#6b7280;">${fmtDate(d.ultimo_heartbeat)}</td>
         <td style="font-size:11px;color:#9ca3af;">${esc(d.versao_agente||'—')}</td>
         <td onclick="event.stopPropagation()">
-          <button class="inv-btn" style="padding:4px 8px;font-size:12px;"
-            onclick="openModal(${d.id})">
-            <i class="bi bi-info-circle"></i> Detalhes
-          </button>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            <button class="inv-btn" style="padding:4px 8px;font-size:12px;"
+              onclick="openModal(${d.id})" title="Ver detalhes">
+              <i class="bi bi-info-circle"></i>
+            </button>
+            ${d.em_manutencao
+              ? `<button class="inv-btn" style="padding:4px 8px;font-size:12px;color:#065f46;"
+                   onclick="retornarManutencao(${d.id}, ${d.manutencao_atual_id || 0})"
+                   title="Equipamento retornou da manutenção">
+                   <i class="bi bi-arrow-return-left"></i>
+                 </button>`
+              : (d.em_estoque
+                ? `<button class="inv-btn" style="padding:4px 8px;font-size:12px;color:#065f46;"
+                     onclick="moverEstoque(${d.id}, false)" title="Tirar do estoque (reativar)">
+                     <i class="bi bi-box-arrow-up"></i>
+                   </button>`
+                : `<button class="inv-btn" style="padding:4px 8px;font-size:12px;color:#92400e;"
+                     onclick="moverEstoque(${d.id}, true)" title="Mover para estoque">
+                     <i class="bi bi-box-seam"></i>
+                   </button>
+                   <button class="inv-btn" style="padding:4px 8px;font-size:12px;color:#1d4ed8;"
+                     onclick="enviarParaManutencao(${d.id})" title="Enviar para manutenção">
+                     <i class="bi bi-tools"></i>
+                   </button>`)}
+          </div>
         </td>
       </tr>
       <tr class="detail-row" id="detail-${d.id}"
         ${isExp ? 'style="display:table-row;"' : ''}>
-        <td colspan="12">${renderInlineDetail(d)}</td>
+        <td colspan="14">${renderInlineDetail(d)}</td>
       </tr>`;
   }
 
@@ -1348,7 +1741,7 @@
 
   function renderEmpty(msg) {
     document.getElementById("invBody").innerHTML = `
-      <tr class="empty-row"><td colspan="12">
+      <tr class="empty-row"><td colspan="14">
         <i class="bi bi-laptop"></i>${esc(msg)}
       </td></tr>`;
     document.getElementById("pagBtns").innerHTML = "";
@@ -1491,6 +1884,385 @@
       bootstrap.Modal.getInstance(
         document.getElementById("apelidoModal")).hide();
     } catch (err) { alert("Erro: " + err.message); }
+  }
+
+  /* ── Responsável / Setor / Localização CPE ──────────────── */
+  function openInfo(id) {
+    _infoId = id;
+    const d = _all.find(x => x.id === id) || {};
+    document.getElementById("infoHostname").textContent = d.hostname ? `— ${d.hostname}` : "";
+    document.getElementById("infoNome").value  = d.nome_responsavel || "";
+    document.getElementById("infoSetor").value = d.setor || "";
+    document.getElementById("infoLocal").value = d.localizacao_cpe || "";
+    bootstrap.Modal.getOrCreateInstance(
+      document.getElementById("infoModal")).show();
+  }
+
+  async function saveInfo() {
+    const body = {
+      nome_responsavel: document.getElementById("infoNome").value.trim(),
+      setor:            document.getElementById("infoSetor").value.trim(),
+      localizacao_cpe:  document.getElementById("infoLocal").value.trim(),
+    };
+    try {
+      const r = await fetch(
+        `${API}/api/inventario/dispositivos/${_infoId}/info`,
+        { method:"PATCH",
+          headers:{"X-Auth-Token":tok(),"Content-Type":"application/json"},
+          body: JSON.stringify(body) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = _all.find(x => x.id === _infoId);
+      if (d) {
+        d.nome_responsavel = body.nome_responsavel || null;
+        d.setor            = body.setor            || null;
+        d.localizacao_cpe  = body.localizacao_cpe  || null;
+      }
+      bootstrap.Modal.getInstance(
+        document.getElementById("infoModal")).hide();
+      applyFilters();  // re-render para refletir as novas colunas
+    } catch (err) { alert("Erro: " + err.message); }
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     MANUTENCAO
+     ══════════════════════════════════════════════════════════ */
+
+  const _manutStatusLabel = {
+    orcamento:    {lbl:"Orçamento",     cls:"tipo-outro"},
+    aprovada:     {lbl:"Aprovada",      cls:"tipo-desktop"},
+    em_andamento: {lbl:"Em andamento",  cls:"tipo-notebook"},
+    concluida:    {lbl:"Concluída",     cls:"tipo-servidor"},
+    cancelada:    {lbl:"Cancelada",     cls:"tipo-outro"},
+  };
+
+  function renderRowManut(m) {
+    const s = _manutStatusLabel[m.status] || _manutStatusLabel.orcamento;
+    const equip = m.dispositivo_hostname
+      ? `${esc(m.dispositivo_hostname)}${m.dispositivo_apelido ? ' / ' + esc(m.dispositivo_apelido) : ''}`
+      : `${esc(m.marca || '')} ${esc(m.modelo || '')}`.trim() || '—';
+    const valor = m.valor != null
+      ? 'R$ ' + Number(m.valor).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2})
+      : '—';
+    const data = m.data_envio ? m.data_envio.slice(0, 10).split('-').reverse().join('/') : '—';
+    const pdfBtn = m.orcamento_path
+      ? `<a class="inv-btn" style="padding:3px 8px;font-size:11px;text-decoration:none;"
+            href="${esc(m.orcamento_path)}" target="_blank" title="Abrir orçamento">
+           <i class="bi bi-file-earmark-pdf"></i>
+         </a>`
+      : '';
+
+    return `
+      <tr class="data-row">
+        <td onclick="event.stopPropagation()">
+          <input type="checkbox" class="dev-chk" data-id="${m.id}">
+        </td>
+        <td>
+          <span class="tipo-badge tipo-notebook">
+            <i class="bi bi-laptop"></i> ${esc(m.marca || 'Equipamento')}
+          </span>
+        </td>
+        <td>
+          <div class="inv-hostname">${equip}</div>
+          <div style="font-size:11px;color:#9ca3af;">${esc(m.modelo || '—')}</div>
+        </td>
+        <td>
+          <div style="font-size:12px;color:#374151;">${esc(m.usuario_responsavel || '—')}</div>
+        </td>
+        <td style="max-width:280px;">
+          <div style="font-size:12px;color:#374151;line-height:1.35;
+                      display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;"
+               title="${escA(m.problema || '')}">
+            ${esc(m.problema || '—')}
+          </div>
+        </td>
+        <td style="font-size:12px;color:#374151;font-weight:600;">${valor}</td>
+        <td style="font-size:12px;color:#374151;">${esc(m.fornecedor_nome || '—')}</td>
+        <td>
+          <span class="tipo-badge ${s.cls}">${s.lbl}</span>
+        </td>
+        <td style="font-size:12px;color:#6b7280;">${data}</td>
+        <td onclick="event.stopPropagation()">
+          <div style="display:flex;gap:4px;flex-wrap:wrap;">
+            ${pdfBtn}
+            <button class="inv-btn" style="padding:3px 8px;font-size:11px;"
+                    onclick="openManutModal(${m.id})" title="Editar">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button class="inv-btn" style="padding:3px 8px;font-size:11px;color:#dc2626;"
+                    onclick="deleteManut(${m.id})" title="Excluir">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </td>
+      </tr>`;
+  }
+
+  function openManutModal(id) {
+    document.getElementById("manutId").value = id || "";
+    document.getElementById("manutModalTitle").textContent =
+      id ? "Editar manutenção" : "Nova manutenção";
+
+    // Popula select de dispositivos ativos (não em manutenção, não em estoque)
+    const dispSel = document.getElementById("manutDispId");
+    dispSel.innerHTML = '<option value="">Equipamento não cadastrado (digitar marca/modelo)</option>';
+    _all
+      .filter(d => !d.em_estoque)
+      .sort((a, b) => (a.hostname || '').localeCompare(b.hostname || ''))
+      .forEach(d => {
+        const apelido = d.apelido ? ` (${d.apelido})` : '';
+        dispSel.insertAdjacentHTML("beforeend",
+          `<option value="${d.id}">${esc(d.hostname)}${esc(apelido)}</option>`);
+      });
+
+    // Popula select de fornecedores
+    const fornSel = document.getElementById("manutFornecedor");
+    fornSel.innerHTML = '<option value="">Sem fornecedor definido</option>';
+    _fornList.filter(f => f.ativo).forEach(f => {
+      fornSel.insertAdjacentHTML("beforeend",
+        `<option value="${f.id}">${esc(f.nome)}</option>`);
+    });
+
+    if (id) {
+      const m = _manutList.find(x => x.id === id) || {};
+      dispSel.value                            = m.dispositivo_id || "";
+      document.getElementById("manutMarca").value     = m.marca || "";
+      document.getElementById("manutModelo").value    = m.modelo || "";
+      document.getElementById("manutUsuario").value   = m.usuario_responsavel || "";
+      document.getElementById("manutProblema").value  = m.problema || "";
+      document.getElementById("manutValor").value     = m.valor != null ? m.valor : "";
+      document.getElementById("manutStatus").value    = m.status || "orcamento";
+      fornSel.value                                   = m.fornecedor_id || "";
+      document.getElementById("manutObs").value       = m.observacoes || "";
+      document.getElementById("manutOrcamentoAtual").innerHTML = m.orcamento_path
+        ? `Arquivo atual: <a href="${esc(m.orcamento_path)}" target="_blank">ver</a> — para trocar, selecione novo arquivo.`
+        : '';
+    } else {
+      document.getElementById("manutMarca").value    = "";
+      document.getElementById("manutModelo").value   = "";
+      document.getElementById("manutUsuario").value  = "";
+      document.getElementById("manutProblema").value = "";
+      document.getElementById("manutValor").value    = "";
+      document.getElementById("manutStatus").value   = "orcamento";
+      document.getElementById("manutObs").value      = "";
+      document.getElementById("manutOrcamentoAtual").innerHTML = "";
+    }
+    document.getElementById("manutOrcamento").value = "";
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("manutModal")).show();
+  }
+
+  function onManutDispChange() {
+    const id = parseInt(document.getElementById("manutDispId").value);
+    if (!id) return;
+    const d = _all.find(x => x.id === id);
+    if (!d) return;
+    if (!document.getElementById("manutMarca").value)
+      document.getElementById("manutMarca").value = d.marca || "";
+    if (!document.getElementById("manutModelo").value)
+      document.getElementById("manutModelo").value = d.modelo || "";
+    if (!document.getElementById("manutUsuario").value)
+      document.getElementById("manutUsuario").value = d.nome_responsavel || d.usuario_logado || "";
+  }
+
+  async function saveManut() {
+    const id = document.getElementById("manutId").value;
+    const isEdit = !!id;
+
+    // Update usa JSON (PUT). Create usa multipart (POST com arquivo)
+    if (isEdit) {
+      const body = {
+        marca:               document.getElementById("manutMarca").value.trim(),
+        modelo:              document.getElementById("manutModelo").value.trim(),
+        usuario_responsavel: document.getElementById("manutUsuario").value.trim(),
+        problema:            document.getElementById("manutProblema").value.trim(),
+        valor:               parseFloat(document.getElementById("manutValor").value) || null,
+        fornecedor_id:       parseInt(document.getElementById("manutFornecedor").value) || null,
+        status:              document.getElementById("manutStatus").value,
+        observacoes:         document.getElementById("manutObs").value.trim(),
+      };
+      try {
+        const r = await fetch(`${API}/api/inventario/manutencoes/${id}`, {
+          method: "PUT",
+          headers: { "X-Auth-Token": tok(), "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      } catch (err) { alert("Erro: " + err.message); return; }
+    } else {
+      const fd = new FormData();
+      const dispId = document.getElementById("manutDispId").value;
+      if (dispId) fd.append("dispositivo_id", dispId);
+      fd.append("marca",               document.getElementById("manutMarca").value.trim());
+      fd.append("modelo",              document.getElementById("manutModelo").value.trim());
+      fd.append("usuario_responsavel", document.getElementById("manutUsuario").value.trim());
+      fd.append("problema",            document.getElementById("manutProblema").value.trim());
+      const v = document.getElementById("manutValor").value;
+      if (v) fd.append("valor", v);
+      const f = document.getElementById("manutFornecedor").value;
+      if (f) fd.append("fornecedor_id", f);
+      fd.append("status",      document.getElementById("manutStatus").value);
+      fd.append("observacoes", document.getElementById("manutObs").value.trim());
+
+      const file = document.getElementById("manutOrcamento").files[0];
+      if (file) fd.append("orcamento", file);
+
+      try {
+        const r = await fetch(`${API}/api/inventario/manutencoes`, {
+          method: "POST",
+          headers: { "X-Auth-Token": tok() },
+          body: fd,
+        });
+        if (!r.ok) {
+          const txt = await r.text();
+          throw new Error(`HTTP ${r.status}: ${txt}`);
+        }
+      } catch (err) { alert("Erro: " + err.message); return; }
+    }
+
+    bootstrap.Modal.getInstance(document.getElementById("manutModal")).hide();
+    loadData();
+  }
+
+  async function deleteManut(id) {
+    const m = _manutList.find(x => x.id === id) || {};
+    if (!confirm(`Excluir manutenção #${id}?\n\n${m.problema || ''}\n\nO arquivo de orçamento (se houver) também será removido.`))
+      return;
+    try {
+      const r = await fetch(`${API}/api/inventario/manutencoes/${id}`, {
+        method: "DELETE",
+        headers: { "X-Auth-Token": tok() },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      loadData();
+    } catch (err) { showError("Erro: " + err.message); }
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     FORNECEDORES
+     ══════════════════════════════════════════════════════════ */
+
+  function openFornecedoresModal() {
+    renderFornecedoresList();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById("fornModal")).show();
+  }
+
+  function renderFornecedoresList() {
+    const body = document.getElementById("fornBody");
+    if (!_fornList.length) {
+      body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:20px;">Nenhum fornecedor cadastrado.</td></tr>';
+      return;
+    }
+    body.innerHTML = _fornList.map(f => `
+      <tr ${f.ativo ? '' : 'style="opacity:.55"'}>
+        <td>${esc(f.nome)}${f.ativo ? '' : ' <small style="color:#9ca3af">(inativo)</small>'}</td>
+        <td>${esc(f.cnpj || '—')}</td>
+        <td>${esc(f.endereco || '—')}</td>
+        <td>${esc(f.responsavel || '—')}</td>
+        <td>${esc(f.telefone || '—')}</td>
+        <td>
+          <button class="inv-btn" style="padding:3px 8px;font-size:11px;color:#dc2626;"
+                  onclick="deleteFornecedor(${f.id})" title="Excluir / desativar">
+            <i class="bi bi-trash"></i>
+          </button>
+        </td>
+      </tr>
+    `).join("");
+  }
+
+  async function saveFornecedor() {
+    const nome = document.getElementById("fornNome").value.trim();
+    if (!nome) { alert("Nome é obrigatório"); return; }
+    const body = {
+      nome,
+      cnpj:        document.getElementById("fornCnpj").value.trim(),
+      endereco:    document.getElementById("fornEnd").value.trim(),
+      responsavel: document.getElementById("fornResp").value.trim(),
+      telefone:    document.getElementById("fornTel").value.trim(),
+    };
+    try {
+      const r = await fetch(`${API}/api/inventario/fornecedores`, {
+        method: "POST",
+        headers: { "X-Auth-Token": tok(), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      ["fornNome","fornCnpj","fornEnd","fornResp","fornTel"].forEach(id => {
+        document.getElementById(id).value = "";
+      });
+      await reloadFornecedores();
+    } catch (err) { alert("Erro: " + err.message); }
+  }
+
+  async function deleteFornecedor(id) {
+    const f = _fornList.find(x => x.id === id) || {};
+    if (!confirm(`Remover fornecedor "${f.nome}"?\n\nSe houver manutenções vinculadas, ele será apenas desativado.`))
+      return;
+    try {
+      const r = await fetch(`${API}/api/inventario/fornecedores/${id}`, {
+        method: "DELETE",
+        headers: { "X-Auth-Token": tok() },
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      await reloadFornecedores();
+    } catch (err) { alert("Erro: " + err.message); }
+  }
+
+  async function reloadFornecedores() {
+    try {
+      const r = await fetch(`${API}/api/inventario/fornecedores`,
+        { headers: { "X-Auth-Token": tok() } });
+      if (r.ok) {
+        const d = await r.json();
+        _fornList = d.fornecedores || [];
+      }
+      renderFornecedoresList();
+    } catch (e) { /* silencia */ }
+  }
+
+  /* ── Atalhos: enviar/retornar manutenção a partir da linha ─ */
+  function enviarParaManutencao(deviceId) {
+    // Abre o modal de manutenção já pré-selecionado nesse dispositivo
+    openManutModal();
+    setTimeout(() => {
+      document.getElementById("manutDispId").value = deviceId;
+      onManutDispChange();
+    }, 100);
+  }
+
+  async function retornarManutencao(deviceId, manutId) {
+    const d = _all.find(x => x.id === deviceId) || {};
+    if (!manutId) {
+      alert("Este equipamento não tem manutenção em aberto registrada.");
+      return;
+    }
+    if (!confirm(`Confirmar que "${d.hostname || 'o equipamento'}" RETORNOU da manutenção?\n\nA manutenção será marcada como concluída.`))
+      return;
+    try {
+      const r = await fetch(`${API}/api/inventario/manutencoes/${manutId}`, {
+        method: "PUT",
+        headers: { "X-Auth-Token": tok(), "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "concluida" }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      loadData();
+    } catch (err) { showError("Erro: " + err.message); }
+  }
+
+  /* ── Movimentar para/de estoque ─────────────────────────── */
+  async function moverEstoque(id, paraEstoque) {
+    const d = _all.find(x => x.id === id) || {};
+    const acao = paraEstoque ? "mover para o ESTOQUE" : "TIRAR do estoque (reativar)";
+    if (!confirm(`Confirmar ${acao}\n\n${d.hostname || "este equipamento"}?\n\n${paraEstoque ? "O equipamento sairá da listagem ativa e o responsável/setor serão limpos." : "O equipamento volta para a listagem ativa."}`))
+      return;
+    try {
+      const r = await fetch(
+        `${API}/api/inventario/dispositivos/${id}/estoque`,
+        { method:"PATCH",
+          headers:{"X-Auth-Token":tok(),"Content-Type":"application/json"},
+          body: JSON.stringify({ em_estoque: paraEstoque }) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      // Recarrega tudo para atualizar contadores e KPIs
+      loadData();
+    } catch (err) { showError("Erro: " + err.message); }
   }
 
   /* ── Delete ─────────────────────────────────────────────── */
