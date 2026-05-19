@@ -373,7 +373,10 @@ def receber_relatorio(
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
-        # ── Lookup em 2 níveis: MAC primeiro, hostname como fallback ─────
+        # ── Lookup em 3 níveis: MAC, hostname, numero_serie ──────────────
+        # O 3º nível é crucial pra migração de agentes < 1.6.0 (sem MAC) para
+        # 1.6.0+ (com MAC) quando o hostname mudou no caminho. Sem ele, o
+        # agente novo cria registro duplicado da mesma máquina física.
         existing = None
         match_by = None
         if mac:
@@ -394,6 +397,26 @@ def receber_relatorio(
             if existing:
                 match_by = "hostname"
 
+        # Último recurso: numero_serie único + registro existente sem MAC
+        # (= cadastrado por agente antigo, agora reportando via v1.6.0+
+        # com hostname diferente). Só dispara quando temos série confiável.
+        numero_serie_in = (payload.get("numero_serie") or "").strip()
+        if not existing and mac and numero_serie_in and len(numero_serie_in) >= 6:
+            cursor.execute(
+                "SELECT id, hostname FROM inventario_dispositivos "
+                "WHERE numero_serie = %s AND (mac IS NULL OR mac = '') "
+                "ORDER BY id LIMIT 1",
+                (numero_serie_in,),
+            )
+            existing = cursor.fetchone()
+            if existing:
+                match_by = "numero_serie"
+                logger.info(
+                    f"[INV AGENT] migrando registro #{existing['id']} (sem MAC) — "
+                    f"hostname '{existing['hostname']}' → '{hostname}' "
+                    f"(mac={mac}, serie={numero_serie_in})"
+                )
+
         if existing:
             non_host = {k: v for k, v in fields.items()}
             set_sql  = ", ".join(f"`{k}` = %s" for k in non_host)
@@ -402,9 +425,10 @@ def receber_relatorio(
                 f"UPDATE inventario_dispositivos SET {set_sql} WHERE id = %s",
                 vals,
             )
-            renamed = (match_by == "mac" and existing["hostname"] != hostname)
+            renamed = (match_by in ("mac", "numero_serie")
+                       and existing["hostname"] != hostname)
             action = "renamed" if renamed else "updated"
-            if renamed:
+            if renamed and match_by == "mac":
                 logger.info(
                     f"[INV AGENT] hostname mudou via MAC: "
                     f"'{existing['hostname']}' → '{hostname}' (mac={mac})"
