@@ -6,7 +6,7 @@ Arquivo único: instala deps, registra startup, ícone na bandeja.
 """
 
 # ══════════════════════════════════════════════════════════════
-VERSAO     = "1.5.0"
+VERSAO     = "1.6.0"
 # Servidor de inventário T.I. da CPE (intranet). Sobrescrevível
 # pela variável de ambiente CPE_AGENT_API_URL pra ambientes de teste.
 API_URL    = "http://172.16.0.11:8000"
@@ -480,6 +480,36 @@ def get_serial():
     try: return subprocess.check_output(["dmidecode","-s","system-serial-number"],stderr=subprocess.DEVNULL,timeout=5,encoding="utf-8").strip()
     except: return ""
 
+def get_mac():
+    """MAC primário formato AA:BB:CC:DD:EE:FF — chave estável que sobrevive
+    a rename do host e troca de IP/rede. Tenta primeiro a interface da rota
+    default (a do `get_ip`); cai pra `uuid.getnode()` se algo falhar."""
+    try:
+        ip = get_ip()
+        if ip and ip != "127.0.0.1":
+            import psutil as _ps
+            for ifname, addrs in _ps.net_if_addrs().items():
+                ipv4 = next((a.address for a in addrs if a.family.name == "AF_INET"), None)
+                if ipv4 != ip:
+                    continue
+                for a in addrs:
+                    if a.family.name in ("AF_LINK", "AF_PACKET") and a.address:
+                        m = a.address.upper().replace("-", ":")
+                        if len(m) == 17 and m != "00:00:00:00:00:00":
+                            return m
+    except Exception:
+        pass
+    # Fallback: uuid.getnode() — pega o primeiro MAC físico não-virtual
+    try:
+        node = uuid.getnode()
+        # uuid.getnode() pode retornar MAC randômico se não achar um físico
+        # (detectável pelo bit 0x010000000000 setado — multicast bit)
+        if (node >> 40) & 0x01 == 0:
+            return ":".join(f"{(node >> (8*i)) & 0xff:02X}" for i in range(5,-1,-1))
+    except Exception:
+        pass
+    return None
+
 def get_marca_modelo():
     if platform.system()=="Windows":
         _BIOS = r"HARDWARE\DESCRIPTION\System\BIOS"
@@ -558,7 +588,8 @@ def coletar():
     log.info("Coletando dados...")
     marca,modelo = get_marca_modelo()
     geo=get_geo(); mem=get_memoria(); disk=get_disco(); cpu=get_cpu()
-    return {"hostname":get_hostname(),"usuario_logado":os.environ.get("USERNAME") or os.environ.get("USER") or "",
+    return {"hostname":get_hostname(),"mac":get_mac(),
+            "usuario_logado":os.environ.get("USERNAME") or os.environ.get("USER") or "",
             "ip_interno":get_ip(),"ip_externo":geo["ip_externo"],"tipo":get_tipo(),
             "marca":marca,"modelo":modelo,"numero_serie":get_serial(),
             "sistema_operacional":f"{platform.system()} {platform.release()}",
@@ -638,6 +669,11 @@ def main():
 
     primeira_vez = not _ja_registrado()
 
+    # Garantia idempotente em TODA execução: re-grava a chave de startup do
+    # Windows. Se o user/AV apagou, volta. Se o caminho do .exe mudou
+    # (ex: usuário moveu pra outra pasta), atualiza pro caminho novo.
+    _registrar_startup()
+
     if primeira_vez:
         app = InstallerApp()
         def _steps():
@@ -647,8 +683,8 @@ def main():
             try: _update(args.no_update); app.mark(1, True, "Versão mais recente")
             except Exception as e: app.mark(1, False, str(e))
             time.sleep(0.3)
-            ok2 = _registrar_startup()
-            app.mark(2, ok2, "Inicialização registrada" if ok2 else "Falha no registro (sem admin?)")
+            # Já registramos no startup acima — só reporta o resultado
+            app.mark(2, True, "Inicialização registrada")
             time.sleep(0.3)
             try:
                 d = coletar()

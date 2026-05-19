@@ -334,11 +334,16 @@ def receber_relatorio(
     if not hostname:
         raise HTTPException(400, "hostname é obrigatório")
 
+    # MAC é a chave estável (sobrevive a rename do host e troca de IP/rede).
+    # Agentes antigos (< 1.6.0) não enviam — cai no fallback por hostname.
+    mac = (payload.get("mac") or "").strip().upper() or None
+
     discos_raw = payload.get("discos_json")
     discos_str = json.dumps(discos_raw, ensure_ascii=False) if discos_raw else None
 
     fields = {
         "hostname":            hostname,
+        "mac":                 mac,
         "usuario_logado":      payload.get("usuario_logado"),
         "ip_interno":          payload.get("ip_interno"),
         "ip_externo":          payload.get("ip_externo"),
@@ -366,22 +371,44 @@ def receber_relatorio(
     }
 
     conn = get_db_connection()
-    cursor = conn.cursor()
+    cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute(
-            "SELECT id FROM inventario_dispositivos WHERE hostname = %s", (hostname,)
-        )
-        existing = cursor.fetchone()
+        # ── Lookup em 2 níveis: MAC primeiro, hostname como fallback ─────
+        existing = None
+        match_by = None
+        if mac:
+            cursor.execute(
+                "SELECT id, hostname FROM inventario_dispositivos WHERE mac = %s",
+                (mac,),
+            )
+            existing = cursor.fetchone()
+            if existing:
+                match_by = "mac"
+
+        if not existing:
+            cursor.execute(
+                "SELECT id, hostname FROM inventario_dispositivos WHERE hostname = %s",
+                (hostname,),
+            )
+            existing = cursor.fetchone()
+            if existing:
+                match_by = "hostname"
 
         if existing:
-            non_host = {k: v for k, v in fields.items() if k != "hostname"}
+            non_host = {k: v for k, v in fields.items()}
             set_sql  = ", ".join(f"`{k}` = %s" for k in non_host)
-            vals     = list(non_host.values()) + [hostname]
+            vals     = list(non_host.values()) + [existing["id"]]
             cursor.execute(
-                f"UPDATE inventario_dispositivos SET {set_sql} WHERE hostname = %s",
+                f"UPDATE inventario_dispositivos SET {set_sql} WHERE id = %s",
                 vals,
             )
-            action = "updated"
+            renamed = (match_by == "mac" and existing["hostname"] != hostname)
+            action = "renamed" if renamed else "updated"
+            if renamed:
+                logger.info(
+                    f"[INV AGENT] hostname mudou via MAC: "
+                    f"'{existing['hostname']}' → '{hostname}' (mac={mac})"
+                )
         else:
             cols = ", ".join(f"`{k}`" for k in fields)
             phs  = ", ".join(["%s"] * len(fields))
@@ -392,8 +419,8 @@ def receber_relatorio(
             action = "created"
 
         conn.commit()
-        logger.info(f"[INV AGENT] {action}: hostname={hostname}")
-        return {"ok": True, "action": action, "hostname": hostname}
+        logger.info(f"[INV AGENT] {action}: hostname={hostname} mac={mac or '-'} (matched by {match_by or 'new'})")
+        return {"ok": True, "action": action, "hostname": hostname, "matched_by": match_by}
 
     except Exception as exc:
         conn.rollback()
