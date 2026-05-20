@@ -114,13 +114,13 @@ def list_agents():
     for agent in AGENTS.values():
         exe_path, version = _find_latest_release(agent)
         exe_info = _file_info(exe_path)
-        src_info = _file_info(agent.get("source_file"))
 
-        src_filename = os.path.basename(agent.get("source_file") or "")
         exe_filename = (
             os.path.basename(exe_path) if exe_path
             else (agent.get("exe_glob", "").replace("*", "X") or "Agente.exe")
         )
+        # Só o .exe é exposto — os PCs dos usuários não têm Python instalado,
+        # então o código-fonte (.py) não serve pra instalação.
         files_meta = {
             "exe": {
                 "label":      "Executável Windows (.exe)",
@@ -128,13 +128,6 @@ def list_agents():
                 "available":  exe_info is not None,
                 "size_bytes": exe_info["size_bytes"] if exe_info else 0,
                 "modified":   exe_info["modified"]    if exe_info else None,
-            },
-            "src": {
-                "label":      "Código-fonte (.py)",
-                "filename":   src_filename or "agent.py",
-                "available":  src_info is not None,
-                "size_bytes": src_info["size_bytes"] if src_info else 0,
-                "modified":   src_info["modified"]    if src_info else None,
             },
         }
 
@@ -160,26 +153,27 @@ def list_agents():
 
 @router.get("/{agent_id}/download")
 def download_agent(agent_id: str, request: Request, format: str = "exe"):
-    """Serve o arquivo do agente no formato solicitado (exe|src)."""
+    """Serve o executável (.exe) do agente.
+
+    Só o .exe é distribuível — os PCs dos usuários não têm Python, então
+    o código-fonte (.py) nunca é servido por aqui."""
     agent = AGENTS.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agente nao encontrado")
 
-    if format == "exe":
-        path, _ = _find_latest_release(agent)
-        if not path or not os.path.exists(path):
-            raise HTTPException(
-                status_code=404,
-                detail="Executável ainda não foi gerado. Rode scripts/build.bat."
-            )
-        filename = os.path.basename(path)
-    elif format == "src":
-        path = agent.get("source_file")
-        if not path or not os.path.exists(path):
-            raise HTTPException(status_code=404, detail="Código-fonte não encontrado.")
-        filename = os.path.basename(path)
-    else:
-        raise HTTPException(status_code=400, detail=f"Formato invalido: {format}")
+    if format != "exe":
+        raise HTTPException(
+            status_code=400,
+            detail="Apenas o executável (.exe) está disponível para download."
+        )
+
+    path, _ = _find_latest_release(agent)
+    if not path or not os.path.exists(path):
+        raise HTTPException(
+            status_code=404,
+            detail="Executável ainda não foi gerado. Rode scripts/build.bat."
+        )
+    filename = os.path.basename(path)
 
     logger.info(f"[AGENTS] Download {agent_id}/{format} -> {os.path.basename(path)}")
     return FileResponse(path, filename=filename, media_type="application/octet-stream")
