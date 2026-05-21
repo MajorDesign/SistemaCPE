@@ -1637,7 +1637,8 @@ def itens_dispositivos_disponiveis():
     try:
         cur.execute("""
             SELECT d.id, d.hostname, d.apelido, d.marca, d.modelo, d.tipo,
-                   d.numero_serie, d.nome_responsavel, d.localizacao_cpe
+                   d.numero_serie, d.nome_responsavel, d.localizacao_cpe,
+                   d.usuario_logado
               FROM inventario_dispositivos d
               LEFT JOIN inventario_itens i ON i.dispositivo_id = d.id
              WHERE i.id IS NULL

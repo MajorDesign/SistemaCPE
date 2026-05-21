@@ -564,12 +564,16 @@
     document.getElementById('itemId').value = id || '';
     document.getElementById('itemModalTitle').textContent = id ? 'Editar item' : 'Novo item';
 
-    // Popula dropdown de dispositivos (apenas não vinculados, + o atual se editando)
+    // Popula dropdown de dispositivos (apenas não vinculados, + o atual se editando).
+    // Mostra o usuário logado entre parênteses — ajuda a identificar a máquina
+    // quando o hostname é genérico (DESKTOP-XXXXXX) e não dá pra renomear.
     const dispSel = document.getElementById('itemDispositivo');
     dispSel.innerHTML = '<option value="">Nenhum (item avulso)</option>';
     _disps.forEach(d => {
+      const extra = d.usuario_logado || d.apelido || '';
+      const label = extra ? `${esc(d.hostname)} (${esc(extra)})` : esc(d.hostname);
       dispSel.insertAdjacentHTML('beforeend',
-        `<option value="${d.id}">${esc(d.hostname)} ${d.apelido ? '('+esc(d.apelido)+')' : ''}</option>`);
+        `<option value="${d.id}">${label}</option>`);
     });
 
     // Popula dropdown de grupos

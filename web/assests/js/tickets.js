@@ -380,14 +380,14 @@ function applyDetailPermissions(ticket) {
   if (sectionFinalizar)
     sectionFinalizar.style.display = (isResponsavelDoTicket && !ticketEncerrado) ? '' : 'none';
 
-  // ── Seção "Reabrir": APENAS o solicitante, quando resolvido, até 2 vezes ──
+  // ── Seção "Reabrir": APENAS o solicitante, quando resolvido, até 3 vezes ──
   const sectionReabrir = document.getElementById('sectionReabrirChamado');
   if (sectionReabrir) {
     if (isSolicitante && ticketResolvido) {
       sectionReabrir.style.display = '';
       const esgotado = document.getElementById('reabrirEsgotado');
       const btnReabrir = document.getElementById('btnReopenChamado');
-      if (reopen_count >= 2) {
+      if (reopen_count >= 3) {
         if (esgotado)  esgotado.style.display  = '';
         if (btnReabrir) btnReabrir.style.display = 'none';
       } else {
@@ -740,15 +740,78 @@ async function carregarCategoriasTicket(groupId) {
 
     catDiv.classList.remove('d-none');
 
-    // Ao mudar categoria, popular subcategorias
+    // Ao mudar categoria, popular subcategorias + recarregar campos custom
     catSelect.onchange = () => {
       const opt  = catSelect.options[catSelect.selectedIndex];
       const subs = opt ? JSON.parse(opt.dataset.subs || '[]') : [];
       preencherSubcategorias(subs);
+      carregarCamposTicket();
     };
 
   } catch (e) {
     console.warn('[TICKET] Erro ao carregar categorias:', e);
+  }
+}
+
+/** Mostra/limpa a mensagem de erro no rodapé do modal de novo ticket */
+function setTicketModalErro(msg) {
+  const box = document.getElementById('ticketModalErro');
+  const txt = document.getElementById('ticketModalErroMsg');
+  if (!box || !txt) return;
+  if (msg) { txt.textContent = msg; box.style.display = ''; }
+  else { box.style.display = 'none'; }
+}
+
+/** Busca os campos personalizados da categoria+subcategoria e renderiza no form */
+async function carregarCamposTicket() {
+  const wrap = document.getElementById('ticketCamposCustomWrap');
+  const cont = document.getElementById('ticketCamposCustom');
+  if (!wrap || !cont) return;
+
+  const catId = document.getElementById('ticketCategoria')?.value || '';
+  const subId = document.getElementById('ticketSubcategoria')?.value || '';
+
+  if (!catId && !subId) {
+    wrap.classList.add('d-none');
+    cont.innerHTML = '';
+    return;
+  }
+
+  try {
+    const qs = [];
+    if (catId) qs.push('categoria_id=' + catId);
+    if (subId) qs.push('subcategoria_id=' + subId);
+    const res = await fetch(`${API_BASE}/categoria-campos/do-ticket?` + qs.join('&'));
+    if (!res.ok) { wrap.classList.add('d-none'); return; }
+    const campos = (await res.json()).campos || [];
+
+    if (!campos.length) {
+      wrap.classList.add('d-none');
+      cont.innerHTML = '';
+      return;
+    }
+
+    const tipoInput = { texto: 'text', numero: 'number', data: 'date' };
+    cont.innerHTML = campos.map(c => {
+      const req = c.obrigatorio ? ' <span class="text-danger">*</span>' : '';
+      return `
+        <div class="col-md-6">
+          <label class="form-label mb-1" style="font-size:.8rem;">${escapeHtml(c.label)}${req}</label>
+          <input type="${tipoInput[c.tipo] || 'text'}"
+                 class="form-control form-control-sm ticket-campo-custom"
+                 data-campo-id="${c.id}"
+                 data-obrigatorio="${c.obrigatorio ? 1 : 0}"
+                 data-label="${escapeHtml(c.label)}"
+                 oninput="this.classList.remove('is-invalid'); setTicketModalErro('');">
+          <div class="invalid-feedback" style="font-size:.75rem;">
+            <i class="bi bi-exclamation-circle"></i> Campo obrigatório
+          </div>
+        </div>`;
+    }).join('');
+    wrap.classList.remove('d-none');
+  } catch (e) {
+    console.warn('[TICKET] Erro ao carregar campos personalizados:', e);
+    wrap.classList.add('d-none');
   }
 }
 
@@ -772,6 +835,9 @@ function preencherSubcategorias(subs) {
     subSelect.appendChild(opt);
   });
   subDiv.classList.remove('d-none');
+
+  // Ao trocar a subcategoria, recarrega os campos personalizados
+  subSelect.onchange = () => carregarCamposTicket();
 }
 
 /** Limpa categoria e subcategoria ao mudar de grupo */
@@ -784,6 +850,11 @@ function resetCategoriaSubcategoria() {
   if (subDiv)  subDiv.classList.add('d-none');
   if (catSel)  catSel.innerHTML = '<option value="">Selecione uma categoria...</option>';
   if (subSel)  subSel.innerHTML = '<option value="">Selecione uma subcategoria...</option>';
+  // Esconde os campos personalizados ao trocar de grupo
+  const camposWrap = document.getElementById('ticketCamposCustomWrap');
+  const camposCont = document.getElementById('ticketCamposCustom');
+  if (camposWrap) camposWrap.classList.add('d-none');
+  if (camposCont) camposCont.innerHTML = '';
 }
 
 // =========================================
@@ -1128,6 +1199,32 @@ async function submitAssign(e) {
 // 15. MODAL DE DETALHE DO TICKET
 // =========================================
 
+/** Busca o detalhe do ticket e mostra os campos personalizados preenchidos */
+async function carregarCamposDetalhe(id) {
+  const row  = document.getElementById('detailCamposCustomRow');
+  const cont = document.getElementById('detailCamposCustom');
+  if (!row || !cont) return;
+  row.style.display = 'none';
+  cont.innerHTML = '';
+  try {
+    const res = await fetch(`${API_BASE}/tickets/${id}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const campos = data.campos_personalizados || [];
+    if (!campos.length) return;
+    cont.innerHTML = campos.map(c => {
+      let val = c.valor || '—';
+      if (c.tipo === 'data' && c.valor) {
+        const p = String(c.valor).slice(0, 10).split('-');
+        if (p.length === 3) val = `${p[2]}/${p[1]}/${p[0]}`;
+      }
+      return `<div style="font-size:.85rem;margin-top:2px;">
+        <strong>${escapeHtml(c.label)}:</strong> ${escapeHtml(val)}</div>`;
+    }).join('');
+    row.style.display = '';
+  } catch (e) { /* silencia */ }
+}
+
 async function openTicketDetail(id) {
   const t = tickets.find(x => x.id === id);
   if (!t) {
@@ -1174,6 +1271,9 @@ async function openTicketDetail(id) {
   document.getElementById("detailUpdatedAt").textContent      = formatDateTime(t.updatedAtFull);
   document.getElementById("detailStatusSelect").value         = t.status;
   document.getElementById("detailAssignSelect").value         = t.assignedTo || "";
+
+  // ✅ Campos personalizados preenchidos (busca no detalhe da API)
+  carregarCamposDetalhe(id);
 
   // ✅ Aplica permissões de acordo com o role e se é o solicitante
   applyDetailPermissions(t);
@@ -1256,6 +1356,7 @@ function openNewTicketModal() {
   document.getElementById("ticketForm").reset();
   document.getElementById("ticketModalLabel").innerHTML =
     `<i class="bi bi-plus-square"></i> Novo Ticket`;
+  setTicketModalErro('');  // limpa erro de uma abertura anterior
 
   // ✅ Preenche automaticamente com dados do usuário logado
   const user = getCurrentUser();
@@ -1299,6 +1400,31 @@ async function handleFormSubmit(e) {
   const categoriaId    = parseInt(document.getElementById("ticketCategoria")?.value)    || null;
   const subcategoriaId = parseInt(document.getElementById("ticketSubcategoria")?.value) || null;
 
+  // Coleta valores dos campos personalizados + valida os obrigatórios.
+  // Campos faltantes ficam destacados em vermelho (Bootstrap is-invalid),
+  // a mensagem aparece no rodapé do PRÓPRIO modal e a tela rola até o 1º.
+  setTicketModalErro('');  // limpa erro anterior
+
+  const camposValores = [];
+  const camposInputs  = document.querySelectorAll('.ticket-campo-custom');
+  let primeiroFaltante = null;
+  for (const inp of camposInputs) {
+    inp.classList.remove('is-invalid');
+    const valor = (inp.value || '').trim();
+    if (inp.dataset.obrigatorio === '1' && !valor) {
+      inp.classList.add('is-invalid');
+      if (!primeiroFaltante) primeiroFaltante = inp;
+    } else if (valor) {
+      camposValores.push({ campo_id: parseInt(inp.dataset.campoId), valor });
+    }
+  }
+  if (primeiroFaltante) {
+    setTicketModalErro('Preencha os campos obrigatórios destacados em vermelho.');
+    primeiroFaltante.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    primeiroFaltante.focus();
+    return;
+  }
+
   const payload = {
     assunto:           title,
     descricao_inicial: description,
@@ -1307,7 +1433,8 @@ async function handleFormSubmit(e) {
     solicitante_id:    user.id || user.usuario_id,
     origem:            'web',
     categoria_id:      categoriaId,
-    subcategoria_id:   subcategoriaId
+    subcategoria_id:   subcategoriaId,
+    campos_valores:    camposValores
   };
 
   let result;
