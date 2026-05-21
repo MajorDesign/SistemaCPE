@@ -19,6 +19,9 @@ ROLES_ESCRITA = {"ADMIN", "TI"}
 
 categorias_router    = APIRouter(prefix="/api/categorias",    tags=["categorias"])
 subcategorias_router = APIRouter(prefix="/api/subcategorias", tags=["subcategorias"])
+campos_router        = APIRouter(prefix="/api/categoria-campos", tags=["categoria-campos"])
+
+_TIPOS_CAMPO = {"texto", "numero", "data"}
 
 # Endpoint extra para verificar permissão no frontend
 @categorias_router.get("/check-permissao")
@@ -464,3 +467,158 @@ async def deletar_subcategoria(
     finally:
         cursor.close()
         conn.close()
+
+
+# =====================================================================
+# CAMPOS PERSONALIZADOS DE CATEGORIA / SUBCATEGORIA
+# Cada categoria ou subcategoria pode exigir campos extras que o
+# solicitante preenche ao abrir um ticket (ex: nº de patrimônio).
+# =====================================================================
+
+def _row_campo(r: dict) -> dict:
+    for k in ("created_at", "updated_at"):
+        if r.get(k) and hasattr(r[k], "strftime"):
+            r[k] = r[k].strftime("%Y-%m-%d %H:%M:%S")
+    r["obrigatorio"] = bool(r.get("obrigatorio"))
+    return r
+
+
+@campos_router.get("")
+def listar_campos(
+    categoria_id:    Optional[int] = Query(None),
+    subcategoria_id: Optional[int] = Query(None),
+):
+    """Lista campos de UMA categoria OU de UMA subcategoria."""
+    if not categoria_id and not subcategoria_id:
+        raise HTTPException(400, "Informe categoria_id ou subcategoria_id")
+    conn = get_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        if categoria_id:
+            cur.execute(
+                "SELECT * FROM categoria_campos "
+                "WHERE categoria_id = %s AND ativo = 1 ORDER BY ordem, id",
+                (categoria_id,),
+            )
+        else:
+            cur.execute(
+                "SELECT * FROM categoria_campos "
+                "WHERE subcategoria_id = %s AND ativo = 1 ORDER BY ordem, id",
+                (subcategoria_id,),
+            )
+        return {"campos": [_row_campo(r) for r in cur.fetchall()]}
+    finally:
+        cur.close(); conn.close()
+
+
+@campos_router.get("/do-ticket")
+def campos_do_ticket(
+    categoria_id:    Optional[int] = Query(None),
+    subcategoria_id: Optional[int] = Query(None),
+):
+    """Devolve todos os campos que um ticket deve exibir: os da categoria
+    + os da subcategoria escolhida (somados, categoria primeiro)."""
+    conn = get_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        campos = []
+        if categoria_id:
+            cur.execute(
+                "SELECT * FROM categoria_campos "
+                "WHERE categoria_id = %s AND ativo = 1 ORDER BY ordem, id",
+                (categoria_id,),
+            )
+            campos += [_row_campo(r) for r in cur.fetchall()]
+        if subcategoria_id:
+            cur.execute(
+                "SELECT * FROM categoria_campos "
+                "WHERE subcategoria_id = %s AND ativo = 1 ORDER BY ordem, id",
+                (subcategoria_id,),
+            )
+            campos += [_row_campo(r) for r in cur.fetchall()]
+        return {"campos": campos}
+    finally:
+        cur.close(); conn.close()
+
+
+@campos_router.post("", status_code=201)
+def criar_campo(payload: dict):
+    label = (payload.get("label") or "").strip()
+    if not label:
+        raise HTTPException(400, "Label do campo é obrigatório")
+    tipo = (payload.get("tipo") or "texto").strip()
+    if tipo not in _TIPOS_CAMPO:
+        raise HTTPException(400, f"Tipo inválido: {tipo}")
+    categoria_id    = payload.get("categoria_id") or None
+    subcategoria_id = payload.get("subcategoria_id") or None
+    if not categoria_id and not subcategoria_id:
+        raise HTTPException(400, "Vincule o campo a uma categoria ou subcategoria")
+    if categoria_id and subcategoria_id:
+        raise HTTPException(400, "Campo pertence a categoria OU subcategoria, não ambos")
+
+    conn = get_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO categoria_campos
+                (categoria_id, subcategoria_id, label, tipo, obrigatorio, ordem)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (
+            categoria_id, subcategoria_id, label, tipo,
+            1 if payload.get("obrigatorio", True) else 0,
+            int(payload.get("ordem") or 0),
+        ))
+        conn.commit()
+        return {"id": cur.lastrowid, "ok": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@campos_router.put("/{campo_id}")
+def atualizar_campo(campo_id: int, payload: dict):
+    if "tipo" in payload and payload["tipo"] not in _TIPOS_CAMPO:
+        raise HTTPException(400, "Tipo inválido")
+    conn = get_db_or_404()
+    cur = conn.cursor()
+    try:
+        fields, params = [], []
+        if "label" in payload:
+            label = (payload.get("label") or "").strip()
+            if not label:
+                raise HTTPException(400, "Label não pode ser vazio")
+            fields.append("label = %s"); params.append(label)
+        if "tipo" in payload:
+            fields.append("tipo = %s"); params.append(payload["tipo"])
+        if "obrigatorio" in payload:
+            fields.append("obrigatorio = %s")
+            params.append(1 if payload["obrigatorio"] else 0)
+        if "ordem" in payload:
+            fields.append("ordem = %s"); params.append(int(payload.get("ordem") or 0))
+        if not fields:
+            return {"ok": True, "noop": True}
+        params.append(campo_id)
+        cur.execute(
+            f"UPDATE categoria_campos SET {', '.join(fields)} WHERE id = %s",
+            params,
+        )
+        if cur.rowcount == 0:
+            cur.execute("SELECT 1 FROM categoria_campos WHERE id = %s", (campo_id,))
+            if not cur.fetchone():
+                raise HTTPException(404, "Campo não encontrado")
+        conn.commit()
+        return {"ok": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@campos_router.delete("/{campo_id}", status_code=204)
+def excluir_campo(campo_id: int):
+    conn = get_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM categoria_campos WHERE id = %s", (campo_id,))
+        if cur.rowcount == 0:
+            raise HTTPException(404, "Campo não encontrado")
+        conn.commit()
+    finally:
+        cur.close(); conn.close()

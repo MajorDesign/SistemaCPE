@@ -1324,6 +1324,28 @@
                     <div id="catPrPreview" class="mt-1 small text-success fw-semibold"></div>
                   </div>
 
+                  <!-- Campos personalizados (categoria) -->
+                  <div class="mb-4 p-3 rounded" style="background:#fffbeb; border:1px solid #fde68a;">
+                    <div class="form-check mb-1">
+                      <input class="form-check-input" type="checkbox" id="catTemCampos"
+                             onchange="toggleCampos('cat')">
+                      <label class="form-check-label fw-semibold" for="catTemCampos">
+                        <i class="bi bi-input-cursor-text" style="color:#f59e0b;"></i>
+                        Exige campos personalizados ao abrir ticket
+                      </label>
+                    </div>
+                    <small class="text-muted d-block mb-2" style="margin-left:1.6rem;">
+                      O solicitante terá que preencher esses campos no formulário do ticket.
+                    </small>
+                    <div id="catCamposWrap" class="d-none">
+                      <div id="catCamposLista"></div>
+                      <button type="button" class="btn btn-sm btn-outline-warning"
+                              onclick="addCampo('cat')">
+                        <i class="bi bi-plus-lg"></i> Adicionar campo
+                      </button>
+                    </div>
+                  </div>
+
                   <div class="d-flex gap-2">
                     <button class="btn btn-primary" onclick="salvarCategoria()">
                       <i class="bi bi-check-lg"></i> Salvar Categoria
@@ -1412,6 +1434,28 @@
                       </div>
                     </div>
                     <div id="subPrPreview" class="mt-1 small text-success fw-semibold"></div>
+                  </div>
+
+                  <!-- Campos personalizados (subcategoria) -->
+                  <div class="mb-4 p-3 rounded" style="background:#fffbeb; border:1px solid #fde68a;">
+                    <div class="form-check mb-1">
+                      <input class="form-check-input" type="checkbox" id="subTemCampos"
+                             onchange="toggleCampos('sub')">
+                      <label class="form-check-label fw-semibold" for="subTemCampos">
+                        <i class="bi bi-input-cursor-text" style="color:#f59e0b;"></i>
+                        Exige campos personalizados ao abrir ticket
+                      </label>
+                    </div>
+                    <small class="text-muted d-block mb-2" style="margin-left:1.6rem;">
+                      Somam-se aos campos da categoria pai.
+                    </small>
+                    <div id="subCamposWrap" class="d-none">
+                      <div id="subCamposLista"></div>
+                      <button type="button" class="btn btn-sm btn-outline-warning"
+                              onclick="addCampo('sub')">
+                        <i class="bi bi-plus-lg"></i> Adicionar campo
+                      </button>
+                    </div>
                   </div>
 
                   <div class="d-flex gap-2">
@@ -1595,6 +1639,7 @@
       document.getElementById('catDescricao').value = '';
       preencherInputsMinutos('catSla', 0);
       preencherInputsMinutos('catPr', 0);
+      resetCampos('cat');
       document.getElementById('formCategoriaDiv').classList.remove('d-none');
       document.getElementById('formVazioDiv').classList.add('d-none');
       document.getElementById('catNome').focus();
@@ -1611,6 +1656,7 @@
       document.getElementById('catDescricao').value = cat.descricao || '';
       preencherInputsMinutos('catSla', cat.sla_minutos || 0);
       preencherInputsMinutos('catPr',  cat.sla_primeira_resposta_minutos || 0);
+      carregarCampos('cat', 'categoria_id', catId);
       document.getElementById('formCategoriaDiv').classList.remove('d-none');
       document.getElementById('formVazioDiv').classList.add('d-none');
       document.getElementById('catNome').focus();
@@ -1645,6 +1691,13 @@
           });
         }
         if (!res.ok) { catModalAlert((await res.json().catch(()=>({}))).detail || 'Erro ao salvar.'); return; }
+        // Pega o id da categoria (editId ou o id retornado pelo POST)
+        let catId = editId;
+        if (!catId) {
+          const nova = await res.json().catch(() => ({}));
+          catId = nova.id;
+        }
+        if (catId) await sincronizarCampos('cat', 'categoria_id', catId);
         catModalSuccess(editId ? 'Categoria atualizada!' : 'Categoria criada!');
         fecharFormularios();
         await carregarCategorias();
@@ -1677,6 +1730,7 @@
       document.getElementById('subDescricao').value = '';
       preencherInputsMinutos('subSla', 0);
       preencherInputsMinutos('subPr',  0);
+      resetCampos('sub');
       document.getElementById('formSubcategoriaDiv').classList.remove('d-none');
       document.getElementById('formVazioDiv').classList.add('d-none');
       document.getElementById('subNome').focus();
@@ -1696,6 +1750,7 @@
       document.getElementById('subDescricao').value = sub.descricao || '';
       preencherInputsMinutos('subSla', sub.sla_minutos                   || 0);
       preencherInputsMinutos('subPr',  sub.sla_primeira_resposta_minutos || 0);
+      carregarCampos('sub', 'subcategoria_id', subId);
       document.getElementById('formSubcategoriaDiv').classList.remove('d-none');
       document.getElementById('formVazioDiv').classList.add('d-none');
       document.getElementById('subNome').focus();
@@ -1732,6 +1787,13 @@
           });
         }
         if (!res.ok) { catModalAlert((await res.json().catch(()=>({}))).detail || 'Erro ao salvar.'); return; }
+        // Pega o id da subcategoria (editId ou o id retornado pelo POST)
+        let subId = editId;
+        if (!subId) {
+          const nova = await res.json().catch(() => ({}));
+          subId = nova.id;
+        }
+        if (subId) await sincronizarCampos('sub', 'subcategoria_id', subId);
         catModalSuccess(editId ? 'Subcategoria atualizada!' : 'Subcategoria criada!');
         fecharFormularios();
         await carregarCategorias();
@@ -1750,6 +1812,124 @@
         catModalSuccess('Subcategoria excluída!');
         await carregarCategorias();
       } catch (e) { catModalAlert('Erro de conexão: ' + e.message); }
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // CAMPOS PERSONALIZADOS (categoria / subcategoria)
+    // prefix = 'cat' | 'sub'
+    // ═══════════════════════════════════════════════════════════
+    const _camposRemovidos = { cat: [], sub: [] };
+
+    function toggleCampos(prefix) {
+      const on = document.getElementById(prefix + 'TemCampos').checked;
+      const wrap = document.getElementById(prefix + 'CamposWrap');
+      wrap.classList.toggle('d-none', !on);
+      // Ao ligar com a lista vazia, já adiciona um campo em branco
+      if (on && !document.querySelector(`#${prefix}CamposLista .campo-linha`)) {
+        addCampo(prefix);
+      }
+    }
+
+    function addCampo(prefix, dados) {
+      dados = dados || {};
+      const lista = document.getElementById(prefix + 'CamposLista');
+      const div = document.createElement('div');
+      div.className = 'campo-linha d-flex gap-2 align-items-center mb-2';
+      div.dataset.id = dados.id || '';
+      const t = dados.tipo || 'texto';
+      div.innerHTML =
+        '<input class="form-control form-control-sm campo-label" maxlength="150" '
+        + 'placeholder="Nome do campo (ex: Patrimônio)" value="' + escapeHtml(dados.label || '') + '">'
+        + '<select class="form-select form-select-sm campo-tipo" style="max-width:120px">'
+        + '  <option value="texto"' + (t==='texto'?' selected':'') + '>Texto</option>'
+        + '  <option value="numero"' + (t==='numero'?' selected':'') + '>Número</option>'
+        + '  <option value="data"' + (t==='data'?' selected':'') + '>Data</option>'
+        + '</select>'
+        + '<div class="form-check m-0" title="Campo obrigatório" style="white-space:nowrap">'
+        + '  <input class="form-check-input campo-obrig" type="checkbox"' + (dados.obrigatorio===false?'':' checked') + '>'
+        + '  <label class="form-check-label small">Obrig.</label>'
+        + '</div>'
+        + '<button type="button" class="btn btn-sm btn-link text-danger p-0" '
+        + 'onclick="removeCampo(this,\'' + prefix + '\')" title="Remover campo">'
+        + '<i class="bi bi-trash"></i></button>';
+      lista.appendChild(div);
+    }
+
+    function removeCampo(btn, prefix) {
+      const linha = btn.closest('.campo-linha');
+      if (linha.dataset.id) _camposRemovidos[prefix].push(linha.dataset.id);
+      linha.remove();
+    }
+
+    // Carrega campos de uma categoria/subcategoria existente
+    async function carregarCampos(prefix, ownerKey, ownerId) {
+      document.getElementById(prefix + 'CamposLista').innerHTML = '';
+      _camposRemovidos[prefix] = [];
+      document.getElementById(prefix + 'TemCampos').checked = false;
+      document.getElementById(prefix + 'CamposWrap').classList.add('d-none');
+      try {
+        const res = await fetch(`${API_BASE}/categoria-campos?${ownerKey}=${ownerId}`);
+        if (!res.ok) return;
+        const campos = (await res.json()).campos || [];
+        if (campos.length) {
+          document.getElementById(prefix + 'TemCampos').checked = true;
+          document.getElementById(prefix + 'CamposWrap').classList.remove('d-none');
+          campos.forEach(c => addCampo(prefix, c));
+        }
+      } catch (e) { /* silencia — categoria sem campos */ }
+    }
+
+    function resetCampos(prefix) {
+      document.getElementById(prefix + 'CamposLista').innerHTML = '';
+      _camposRemovidos[prefix] = [];
+      document.getElementById(prefix + 'TemCampos').checked = false;
+      document.getElementById(prefix + 'CamposWrap').classList.add('d-none');
+    }
+
+    // Sincroniza os campos com o backend após salvar a categoria/subcategoria
+    async function sincronizarCampos(prefix, ownerKey, ownerId) {
+      // 1) Deleta os que foram removidos da tela
+      for (const id of _camposRemovidos[prefix]) {
+        await fetch(`${API_BASE}/categoria-campos/${id}`, { method: 'DELETE' });
+      }
+      _camposRemovidos[prefix] = [];
+
+      const temCampos = document.getElementById(prefix + 'TemCampos').checked;
+      const linhas = document.querySelectorAll(`#${prefix}CamposLista .campo-linha`);
+
+      // 2) Checkbox desligado → apaga todos os campos que ainda têm id
+      if (!temCampos) {
+        for (const ln of linhas) {
+          if (ln.dataset.id)
+            await fetch(`${API_BASE}/categoria-campos/${ln.dataset.id}`, { method: 'DELETE' });
+        }
+        return;
+      }
+
+      // 3) Cria/atualiza cada linha
+      let ordem = 0;
+      for (const ln of linhas) {
+        const label = ln.querySelector('.campo-label').value.trim();
+        if (!label) continue;
+        const body = {
+          label,
+          tipo:        ln.querySelector('.campo-tipo').value,
+          obrigatorio: ln.querySelector('.campo-obrig').checked,
+          ordem:       ordem++,
+        };
+        if (ln.dataset.id) {
+          await fetch(`${API_BASE}/categoria-campos/${ln.dataset.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+        } else {
+          body[ownerKey] = ownerId;
+          await fetch(`${API_BASE}/categoria-campos`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          });
+        }
+      }
     }
 
     // ── Helpers de UI ────────────────────────────────────────────

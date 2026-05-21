@@ -572,6 +572,7 @@
                     </th>
                     <th>Tipo</th>
                     <th>Hostname</th>
+                    <th>Usuário logado</th>
                     <th>IP / Apelido</th>
                     <th>Responsável / Setor</th>
                     <th>Localização CPE</th>
@@ -587,7 +588,7 @@
                 </thead>
                 <tbody id="invBody">
                   <tr class="empty-row">
-                    <td colspan="14">
+                    <td colspan="15">
                       <i class="bi bi-arrow-clockwise"></i>
                       Carregando dispositivos...
                     </td>
@@ -1209,6 +1210,7 @@
           <th style="width:32px;"><input type="checkbox" id="chkAll" onchange="toggleAll(this)"></th>
           <th>Tipo</th>
           <th>Hostname</th>
+          <th>Usuário logado</th>
           <th>IP / Apelido</th>
           <th>Responsável / Setor</th>
           <th>Localização CPE</th>
@@ -1616,6 +1618,12 @@
             : ''}
         </td>
         <td>
+          <div style="font-size:12px;color:#374151;">
+            <i class="bi bi-person" style="color:#9ca3af;"></i>
+            ${esc(d.usuario_logado||'—')}
+          </div>
+        </td>
+        <td>
           <div style="font-size:12px;color:#374151;">${esc(d.ip_interno||'—')}</div>
           <div class="apelido-cell" onclick="event.stopPropagation()">
             <span style="font-size:11px;color:#9ca3af;" id="apelido-${d.id}">
@@ -1689,7 +1697,7 @@
       </tr>
       <tr class="detail-row" id="detail-${d.id}"
         ${isExp ? 'style="display:table-row;"' : ''}>
-        <td colspan="14">${renderInlineDetail(d)}</td>
+        <td colspan="15">${renderInlineDetail(d)}</td>
       </tr>`;
   }
 
@@ -1741,7 +1749,7 @@
 
   function renderEmpty(msg) {
     document.getElementById("invBody").innerHTML = `
-      <tr class="empty-row"><td colspan="14">
+      <tr class="empty-row"><td colspan="15">
         <i class="bi bi-laptop"></i>${esc(msg)}
       </td></tr>`;
     document.getElementById("pagBtns").innerHTML = "";

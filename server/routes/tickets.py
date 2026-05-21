@@ -201,6 +201,8 @@ class TicketCriar(BaseModel):
     origem: str = Field(default="portal")
     # ✅ responsavel_id é aceito no payload mas será ignorado para usuário USER
     responsavel_id: Optional[int] = Field(None, gt=0)
+    # Campos personalizados da categoria/subcategoria: [{campo_id, valor}]
+    campos_valores: Optional[list] = Field(default=None)
 
     @field_validator("assunto")
     @classmethod
@@ -1005,6 +1007,19 @@ async def obter_ticket(ticket_id: int = Path(..., gt=0)):
         )
         ticket = convert_datetime_to_string(cursor.fetchone())
 
+        # Campos personalizados preenchidos no ticket (categoria/subcategoria)
+        cursor.execute(
+            """
+            SELECT c.id AS campo_id, c.label, c.tipo, v.valor
+              FROM ticket_campo_valores v
+              JOIN categoria_campos c ON c.id = v.campo_id
+             WHERE v.ticket_id = %s
+             ORDER BY c.ordem, c.id
+            """,
+            (ticket_id,),
+        )
+        ticket["campos_personalizados"] = cursor.fetchall()
+
         log_fim("sucesso", numero=ticket.get("numero"))
         return ticket
 
@@ -1645,7 +1660,9 @@ async def finalizar_ticket(ticket_id: int, payload: FinalizarPayload):
 
 # ==================================================
 # REABRIR TICKET
-# Apenas o solicitante pode reabrir. Máximo 2 vezes.
+# Apenas o solicitante pode reabrir. Duas regras:
+#   1) Máximo de 3 reaberturas por chamado
+#   2) Prazo de 2 meses a partir da última resolução
 # Requer justificativa, que fica no histórico.
 # ==================================================
 
@@ -1655,7 +1672,8 @@ class ReopenPayload(BaseModel):
 
 @tickets_router.post("/{ticket_id}/reabrir")
 async def reabrir_ticket(ticket_id: int, payload: ReopenPayload):
-    """Reabre um chamado resolvido. Apenas o solicitante pode reabrir (máx. 2 vezes)."""
+    """Reabre um chamado resolvido. Só o solicitante pode, dentro de 3
+    reaberturas e até 2 meses da última resolução."""
     log_inicio("reabrir_ticket", ticket_id=ticket_id, usuario_id=payload.usuario_id)
     conexao = get_db_or_404()
     cursor = None
@@ -1678,11 +1696,26 @@ async def reabrir_ticket(ticket_id: int, payload: ReopenPayload):
                 detail="Apenas chamados com status 'Resolvido' podem ser reabertos."
             )
 
+        # Regra 1: máximo de 3 reaberturas por chamado
         reopen_count = ticket_db.get("reopen_count") or 0
-        if reopen_count >= 2:
+        if reopen_count >= 3:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Este chamado já foi reaberto o número máximo de vezes (2). Por favor, abra um novo chamado."
+                detail="Este chamado já foi reaberto o número máximo de vezes (3). Por favor, abra um novo chamado."
+            )
+
+        # Regra 2: prazo de 2 meses a partir da última resolução
+        cursor.execute(
+            "SELECT (resolvido_em IS NOT NULL "
+            "        AND resolvido_em < DATE_SUB(NOW(), INTERVAL 2 MONTH)) AS expirado "
+            "FROM tickets WHERE id = %s",
+            (ticket_id,),
+        )
+        if (cursor.fetchone() or {}).get("expirado"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="O prazo de 2 meses para reabrir este chamado já expirou. "
+                       "Por favor, abra um novo chamado."
             )
 
         # Novo status: Em Andamento se ainda tem responsável, senão Aberto
@@ -1734,7 +1767,7 @@ async def reabrir_ticket(ticket_id: int, payload: ReopenPayload):
             )
 
         novo_reopen = reopen_count + 1
-        logger.info(f"  ✅ Ticket #{ticket_id} reaberto por {nome} ({novo_reopen}/2)")
+        logger.info(f"  ✅ Ticket #{ticket_id} reaberto por {nome} ({novo_reopen}/3)")
         return {
             "success":      True,
             "message":      "Chamado reaberto com sucesso.",
@@ -1792,6 +1825,39 @@ async def criar_ticket(payload: TicketCriar):
         # Data: 31/03/2026 16:00
         # ========================================
         
+        # ── Validar campos personalizados obrigatórios da categoria/subcat ──
+        # Monta {campo_id: valor} do payload e confere os campos obrigatórios.
+        valores_por_campo = {}
+        for cv in (payload.campos_valores or []):
+            try:
+                cid = int(cv.get("campo_id"))
+            except (TypeError, ValueError):
+                continue
+            valores_por_campo[cid] = (cv.get("valor") or "").strip()
+
+        campos_def = []
+        if payload.categoria_id or payload.subcategoria_id:
+            cond, params_c = [], []
+            if payload.categoria_id:
+                cond.append("categoria_id = %s"); params_c.append(payload.categoria_id)
+            if payload.subcategoria_id:
+                cond.append("subcategoria_id = %s"); params_c.append(payload.subcategoria_id)
+            cursor.execute(
+                "SELECT id, label, obrigatorio FROM categoria_campos "
+                f"WHERE ativo = 1 AND ({' OR '.join(cond)})",
+                params_c,
+            )
+            campos_def = cursor.fetchall()
+            faltando = [
+                c["label"] for c in campos_def
+                if c["obrigatorio"] and not valores_por_campo.get(c["id"])
+            ]
+            if faltando:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Preencha os campos obrigatórios: " + ", ".join(faltando),
+                )
+
         logger.info(f"  ▶️ Inserindo ticket no banco...")
         cursor.execute(
             """
@@ -1818,6 +1884,19 @@ async def criar_ticket(payload: TicketCriar):
         conexao.commit()
         ticket_id = cursor.lastrowid
         logger.info(f"  ✓ Ticket inserido no banco com ID: {ticket_id}")
+
+        # ── Gravar valores dos campos personalizados ──
+        if campos_def and valores_por_campo:
+            ids_validos = {c["id"] for c in campos_def}
+            for cid, valor in valores_por_campo.items():
+                if cid in ids_validos and valor:
+                    cursor.execute(
+                        "INSERT INTO ticket_campo_valores (ticket_id, campo_id, valor) "
+                        "VALUES (%s, %s, %s)",
+                        (ticket_id, cid, valor),
+                    )
+            conexao.commit()
+            logger.info(f"  ✓ {len(valores_por_campo)} campo(s) personalizado(s) gravado(s)")
 
         # ── SLA: criar registro se categoria (ou subcategoria) tem SLA definido ──
         if payload.categoria_id:
