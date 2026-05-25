@@ -39,8 +39,10 @@ var COOKIE_NAME;
   const apiEnv  = (savedEnv in API_ENVS) ? savedEnv : 'dev';
   const apiPort = API_ENVS[apiEnv].port;
 
+  // Em dominio publico: usar mesma origem (IIS faz reverse proxy de /api para localhost:8000).
+  // Em IP/localhost: chamar a API direto na porta dela.
   const apiBaseUrl = isPublicDomain
-    ? `${window.location.protocol}//api.${curHost.replace(/^www\./, '')}`
+    ? ''
     : `http://${curHost}:${apiPort}`;
 
   // Globais (var no escopo global)
@@ -58,7 +60,7 @@ var COOKIE_NAME;
     window.COOKIE_NAME         = COOKIE_NAME;
   }
 
-  console.log(`[CONFIG] Ambiente: ${apiEnv} | API: ${apiBaseUrl}`);
+  console.log(`[CONFIG] Ambiente: ${apiEnv} | API: ${apiBaseUrl || '(same-origin)'}`);
 })();
 
 // ===== FIM: config.js (Configuração Global) =====
