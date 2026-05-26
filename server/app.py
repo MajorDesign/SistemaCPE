@@ -1464,6 +1464,16 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ REGISTRAR ROUTER DE EQUIPE DE SUPORTE (agendas de atendimento)
+try:
+    from routes.atendimentos import router as atendimentos_router
+    app.include_router(atendimentos_router)
+    logger.info("✅ Router de Equipe de Suporte registrado: /api/atendimentos")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Equipe de Suporte: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ REGISTRAR ROUTER DE CONTRATOS (EXTERNO)
 try:
     from routes.contratos import router as contratos_router
@@ -1617,5 +1627,7 @@ if __name__ == "__main__":
         host="0.0.0.0",   # aceita conexoes da rede local
         port=8000,
         reload=True,
-        log_level="info"
+        log_level="info",
+        proxy_headers=True,         # confia em X-Forwarded-Proto/For/Host (Caddy/cloudflared)
+        forwarded_allow_ips="*",    # de qualquer IP (estamos atras de tunnel/proxy local)
     )
