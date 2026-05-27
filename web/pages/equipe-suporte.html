@@ -143,7 +143,7 @@
             <span class="sup-spacer"></span>
             <input type="text" class="sup-input" id="buscaAgenda" placeholder="Buscar agenda..."
                    style="max-width:220px" oninput="renderAgendasTabela()">
-            <button class="btn-sup btn-sup-primary" onclick="abrirModalAgenda()">
+            <button class="btn-sup btn-sup-primary" onclick="abrirModalAgenda()" data-need-admin>
               <i class="bi bi-plus-lg"></i> Nova agenda
             </button>
           </div>
@@ -174,7 +174,7 @@
                   title="Abrir página pública em nova aba">
             <i class="bi bi-box-arrow-up-right"></i> Abrir
           </button>
-          <button class="btn-sup btn-sup-primary" onclick="abrirModalAgenda()">
+          <button class="btn-sup btn-sup-primary" onclick="abrirModalAgenda()" data-need-admin>
             <i class="bi bi-plus-lg"></i> Nova agenda
           </button>
         </div>
@@ -194,13 +194,13 @@
           <select class="sup-select" id="calAgendaSel" style="max-width:300px"
                   onchange="onCalAgendaChange()"></select>
           <span class="sup-spacer"></span>
-          <button class="btn-sup btn-sup-primary" onclick="abrirModalAgendamento()">
+          <button class="btn-sup btn-sup-primary" onclick="abrirModalAgendamento()" data-need-op>
             <i class="bi bi-plus-lg"></i> Incluir atendimento
           </button>
-          <button class="btn-sup btn-sup-warning" onclick="abrirModalBloqueio()">
+          <button class="btn-sup btn-sup-warning" onclick="abrirModalBloqueio()" data-need-admin>
             <i class="bi bi-lock"></i> Bloquear horário
           </button>
-          <button class="btn-sup btn-sup-ghost" onclick="abrirConfigHorarios()">
+          <button class="btn-sup btn-sup-ghost" onclick="abrirConfigHorarios()" data-need-admin>
             <i class="bi bi-gear"></i> Configurar horários
           </button>
         </div>
@@ -235,7 +235,7 @@
               <select class="sup-select" id="cursoAgendaSel" onchange="carregarCursos()"></select>
             </div>
             <span class="sup-spacer"></span>
-            <button class="btn-sup btn-sup-primary" id="btnNovoCurso" onclick="novoCurso()">
+            <button class="btn-sup btn-sup-primary" id="btnNovoCurso" onclick="novoCurso()" data-need-admin>
               <i class="bi bi-plus-lg"></i> Novo curso
             </button>
           </div>
@@ -275,7 +275,7 @@
             Os equipamentos cadastrados aqui aparecem para o cliente quando ele
             escolhe este curso no agendamento.
           </p>
-          <div style="display:flex;gap:8px;margin-bottom:12px;max-width:520px">
+          <div style="display:flex;gap:8px;margin-bottom:12px;max-width:520px" data-need-admin>
             <input type="text" class="sup-input" id="equipNovoNome"
                    placeholder="Nome do equipamento (ex: GNSS i80)" maxlength="150">
             <button class="btn-sup btn-sup-primary" id="btnAddEquip" onclick="addEquipamento()"
@@ -297,7 +297,7 @@
         <div class="sup-page-header">
           <span class="sup-page-title">Feriados</span>
           <span class="sup-spacer"></span>
-          <button class="btn-sup btn-sup-primary" onclick="abrirModalFeriado()">
+          <button class="btn-sup btn-sup-primary" onclick="abrirModalFeriado()" data-need-admin>
             <i class="bi bi-plus-lg"></i> Adicionar feriado
           </button>
         </div>
