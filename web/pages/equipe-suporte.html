@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Equipe de Suporte — CPE</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/equipe-suporte.css">
+
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
+  <script>pageGuard('EQUIPE_SUPORTE');</script>
+</head>
+<body class="sup-body">
+
+  <!-- LOADING -->
+  <div id="supLoading">
+    <div class="sup-spinner"></div>
+    <p>Carregando módulo de atendimento...</p>
+  </div>
+
+  <!-- TOAST -->
+  <div id="supToast"></div>
+
+  <div class="sup-wrapper">
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sup-sidebar" id="supSidebar">
+      <div class="sup-sidebar-logo">
+        <img src="/SistemaCPE/web/assests/images/logocpe.png" alt="CPE">
+        <span class="sup-sidebar-logo-text">Suporte</span>
+      </div>
+      <a href="/SistemaCPE/index.html" class="sup-back-link">
+        <i class="bi bi-arrow-left-circle"></i><span>Voltar ao Sistema</span>
+      </a>
+      <nav class="sup-nav">
+        <div class="sup-nav-item active" data-section="dashboard" onclick="showSection('dashboard')">
+          <i class="bi bi-speedometer2"></i><span class="sup-nav-label">Dashboard</span>
+        </div>
+        <div class="sup-nav-item" data-section="agendas" onclick="showSection('agendas')">
+          <i class="bi bi-collection"></i><span class="sup-nav-label">Agendas</span>
+        </div>
+        <div class="sup-nav-item" data-section="calendario" onclick="showSection('calendario')">
+          <i class="bi bi-calendar3"></i><span class="sup-nav-label">Calendário</span>
+        </div>
+        <div class="sup-nav-item" data-section="cursos" onclick="showSection('cursos')">
+          <i class="bi bi-mortarboard"></i><span class="sup-nav-label">Cursos</span>
+        </div>
+        <div class="sup-nav-item" data-section="equipamentos" onclick="showSection('equipamentos')">
+          <i class="bi bi-pc-display"></i><span class="sup-nav-label">Equipamentos</span>
+        </div>
+        <div class="sup-nav-item" data-section="feriados" onclick="showSection('feriados')">
+          <i class="bi bi-calendar-x"></i><span class="sup-nav-label">Feriados</span>
+        </div>
+      </nav>
+      <button class="sup-sidebar-toggle" onclick="document.getElementById('supSidebar').classList.toggle('collapsed')">
+        <i class="bi bi-list"></i>
+      </button>
+    </aside>
+
+    <!-- ============ CONTEÚDO ============ -->
+    <div class="sup-content">
+      <div class="sup-topbar">
+        <button class="sup-burger" onclick="document.getElementById('supSidebar').classList.toggle('show')">
+          <i class="bi bi-list"></i>
+        </button>
+        <span class="sup-topbar-title" id="topbarTitle">Dashboard</span>
+        <span class="sup-badge-mod"><i class="bi bi-headset"></i> EQUIPE DE SUPORTE</span>
+        <div class="sup-topbar-actions">
+          <div class="sup-notif-wrap" id="supNotifWrap" onclick="toggleNotifPanel()"
+               title="Notificações">
+            <i class="bi bi-bell-fill"></i>
+            <span class="sup-notif-badge" id="supNotifBadge">0</span>
+          </div>
+          <span class="sup-topbar-user" id="topbarUser"></span>
+        </div>
+        <!-- Painel de notificacoes -->
+        <div class="sup-notif-panel" id="supNotifPanel">
+          <div class="sup-notif-header">
+            <i class="bi bi-bell-fill"></i> Notificações
+            <span class="sup-notif-count" id="supNotifCount"></span>
+          </div>
+          <div class="sup-notif-list" id="supNotifList">
+            <div class="sup-notif-empty">
+              <i class="bi bi-inbox"></i>
+              Nenhuma notificação no momento.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ====== DASHBOARD ====== -->
+      <section class="sup-page active" id="page-dashboard">
+        <div class="sup-stats">
+          <div class="sup-stat-card c1" style="cursor:pointer"
+               onclick="abrirAgendamentosDia('hoje')"
+               title="Clique para ver os agendamentos de hoje">
+            <div><div class="sup-stat-value" id="stHoje">0</div>
+              <div class="sup-stat-label">Agendamentos para Hoje
+                <i class="bi bi-arrow-right-circle"></i></div></div>
+            <i class="bi bi-calendar-check"></i>
+          </div>
+          <div class="sup-stat-card c2" style="cursor:pointer"
+               onclick="abrirAgendamentosDia('amanha')"
+               title="Clique para ver os agendamentos de amanhã">
+            <div><div class="sup-stat-value" id="stAmanha">0</div>
+              <div class="sup-stat-label">Agendamentos para Amanhã
+                <i class="bi bi-arrow-right-circle"></i></div></div>
+            <i class="bi bi-calendar-event"></i>
+          </div>
+          <div class="sup-stat-card c3" style="cursor:pointer"
+               onclick="abrirListaAgendas()"
+               title="Clique para ver as agendas e seus cursos">
+            <div><div class="sup-stat-value" id="stAgendas">0</div>
+              <div class="sup-stat-label">Agendas de Atendimento
+                <i class="bi bi-arrow-right-circle"></i></div></div>
+            <i class="bi bi-collection"></i>
+          </div>
+          <div class="sup-stat-card c4" style="cursor:pointer" onclick="abrirPendentes()"
+               title="Clique para ver e confirmar">
+            <div><div class="sup-stat-value" id="stPendentes">0</div>
+              <div class="sup-stat-label">Aguardando confirmação <i class="bi bi-arrow-right-circle"></i></div></div>
+            <i class="bi bi-hourglass-split"></i>
+          </div>
+        </div>
+
+        <div class="sup-charts">
+          <div class="sup-card">
+            <div class="sup-card-title"><i class="bi bi-graph-up"></i> Agendamentos por mês</div>
+            <div class="sup-chart-box"><canvas id="chartAgendamentos"></canvas></div>
+          </div>
+          <div class="sup-card">
+            <div class="sup-card-title"><i class="bi bi-bar-chart"></i> Atendidos por mês</div>
+            <div class="sup-chart-box"><canvas id="chartAtendidos"></canvas></div>
+          </div>
+        </div>
+
+        <div class="sup-card">
+          <div class="sup-page-header" style="margin-bottom:12px">
+            <span class="sup-card-title" style="margin:0"><i class="bi bi-list-task"></i> Minhas agendas de atendimento</span>
+            <span class="sup-spacer"></span>
+            <input type="text" class="sup-input" id="buscaAgenda" placeholder="Buscar agenda..."
+                   style="max-width:220px" oninput="renderAgendasTabela()">
+            <button class="btn-sup btn-sup-primary" onclick="abrirModalAgenda()">
+              <i class="bi bi-plus-lg"></i> Nova agenda
+            </button>
+          </div>
+          <div class="sup-table-wrap">
+            <table class="sup-table">
+              <thead><tr>
+                <th>Agenda</th><th>Unidade</th><th>Hoje</th><th>Amanhã</th>
+                <th>Próx. 7 dias</th><th>Ocupação 7 dias</th><th>Status</th><th></th>
+              </tr></thead>
+              <tbody id="tbodyAgendas">
+                <tr><td colspan="8" class="sup-empty">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====== AGENDAS (config por unidade) ====== -->
+      <section class="sup-page" id="page-agendas">
+        <div class="sup-page-header">
+          <span class="sup-page-title">Agendas por unidade</span>
+          <span class="sup-spacer"></span>
+          <button class="btn-sup btn-sup-ghost" onclick="copiarLinkPublico()"
+                  title="Link único para clientes agendarem (escolhem online ou presencial)">
+            <i class="bi bi-link-45deg"></i> Copiar link público
+          </button>
+          <button class="btn-sup btn-sup-ghost" onclick="abrirLinkPublico()"
+                  title="Abrir página pública em nova aba">
+            <i class="bi bi-box-arrow-up-right"></i> Abrir
+          </button>
+          <button class="btn-sup btn-sup-primary" onclick="abrirModalAgenda()">
+            <i class="bi bi-plus-lg"></i> Nova agenda
+          </button>
+        </div>
+        <p class="sup-help" style="margin-bottom:14px">
+          Cada agenda representa uma unidade CPE. Configure horários, bloqueie
+          dias e cadastre os cursos de cada uma de forma independente.
+        </p>
+        <div class="sup-agendas-grid" id="gridAgendas">
+          <div class="sup-empty">Carregando...</div>
+        </div>
+      </section>
+
+      <!-- ====== CALENDÁRIO ====== -->
+      <section class="sup-page" id="page-calendario">
+        <div class="sup-page-header">
+          <span class="sup-page-title">Calendário</span>
+          <select class="sup-select" id="calAgendaSel" style="max-width:300px"
+                  onchange="onCalAgendaChange()"></select>
+          <span class="sup-spacer"></span>
+          <button class="btn-sup btn-sup-primary" onclick="abrirModalAgendamento()">
+            <i class="bi bi-plus-lg"></i> Incluir atendimento
+          </button>
+          <button class="btn-sup btn-sup-warning" onclick="abrirModalBloqueio()">
+            <i class="bi bi-lock"></i> Bloquear horário
+          </button>
+          <button class="btn-sup btn-sup-ghost" onclick="abrirConfigHorarios()">
+            <i class="bi bi-gear"></i> Configurar horários
+          </button>
+        </div>
+
+        <div class="sup-cal-toolbar">
+          <div class="sup-cal-views">
+            <button data-view="dia"     onclick="mudarView('dia')">Dia</button>
+            <button data-view="semana"  class="active" onclick="mudarView('semana')">Semana</button>
+            <button data-view="mes"     onclick="mudarView('mes')">Mês</button>
+            <button data-view="lista"   onclick="mudarView('lista')">Lista do dia</button>
+          </div>
+          <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="navPeriodo(-1)">
+            <i class="bi bi-chevron-left"></i></button>
+          <span class="sup-cal-period" id="calPeriodo">—</span>
+          <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="navPeriodo(1)">
+            <i class="bi bi-chevron-right"></i></button>
+          <button class="btn-sup btn-sup-secondary btn-sup-sm" onclick="hojePeriodo()">Hoje</button>
+        </div>
+
+        <div id="calContainer"></div>
+      </section>
+
+      <!-- ====== CURSOS ====== -->
+      <section class="sup-page" id="page-cursos">
+        <div class="sup-page-header">
+          <span class="sup-page-title">Cursos por unidade</span>
+        </div>
+        <div class="sup-card">
+          <div class="sup-page-header" style="margin-bottom:14px">
+            <div class="sup-field" style="margin:0;min-width:280px">
+              <label>Unidade / Agenda</label>
+              <select class="sup-select" id="cursoAgendaSel" onchange="carregarCursos()"></select>
+            </div>
+            <span class="sup-spacer"></span>
+            <button class="btn-sup btn-sup-primary" id="btnNovoCurso" onclick="novoCurso()">
+              <i class="bi bi-plus-lg"></i> Novo curso
+            </button>
+          </div>
+          <div class="sup-table-wrap">
+            <table class="sup-table">
+              <thead><tr>
+                <th>Curso</th><th>Instrutor</th><th>Duração</th><th>Capacidade</th>
+                <th>Equipamentos</th><th>Status</th><th></th>
+              </tr></thead>
+              <tbody id="tbodyCursos">
+                <tr><td colspan="7" class="sup-empty">Selecione uma agenda.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====== EQUIPAMENTOS ====== -->
+      <section class="sup-page" id="page-equipamentos">
+        <div class="sup-page-header">
+          <span class="sup-page-title">Equipamentos por curso</span>
+        </div>
+        <div class="sup-card">
+          <div class="sup-grid-2" style="max-width:680px;margin-bottom:8px">
+            <div class="sup-field">
+              <label>Unidade / Agenda</label>
+              <select class="sup-select" id="equipAgendaSel" onchange="carregarCursosDoEquip()"></select>
+            </div>
+            <div class="sup-field">
+              <label>Curso</label>
+              <select class="sup-select" id="equipCursoSel" onchange="carregarEquipamentos()">
+                <option value="">— Escolha um curso —</option>
+              </select>
+            </div>
+          </div>
+          <p class="sup-help" style="margin-bottom:10px">
+            Os equipamentos cadastrados aqui aparecem para o cliente quando ele
+            escolhe este curso no agendamento.
+          </p>
+          <div style="display:flex;gap:8px;margin-bottom:12px;max-width:520px">
+            <input type="text" class="sup-input" id="equipNovoNome"
+                   placeholder="Nome do equipamento (ex: GNSS i80)" maxlength="150">
+            <button class="btn-sup btn-sup-primary" id="btnAddEquip" onclick="addEquipamento()"
+                    style="white-space:nowrap"><i class="bi bi-plus-lg"></i> Adicionar</button>
+          </div>
+          <div class="sup-table-wrap">
+            <table class="sup-table">
+              <thead><tr><th>Equipamento</th><th>Status</th><th></th></tr></thead>
+              <tbody id="tbodyEquipamentos">
+                <tr><td colspan="3" class="sup-empty">Selecione um curso.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====== FERIADOS ====== -->
+      <section class="sup-page" id="page-feriados">
+        <div class="sup-page-header">
+          <span class="sup-page-title">Feriados</span>
+          <span class="sup-spacer"></span>
+          <button class="btn-sup btn-sup-primary" onclick="abrirModalFeriado()">
+            <i class="bi bi-plus-lg"></i> Adicionar feriado
+          </button>
+        </div>
+        <div class="sup-card">
+          <div class="sup-field" style="max-width:320px;margin-bottom:6px">
+            <label>Unidade / Agenda</label>
+            <select class="sup-select" id="feriadoAgendaSel" onchange="carregarFeriados()"></select>
+          </div>
+          <p class="sup-help" style="margin-bottom:12px">
+            Feriados <b>nacionais</b> valem para todas as unidades. Os
+            <b>estaduais/municipais</b> você adiciona por unidade. Em qualquer
+            feriado a agenda fica travada — sem horários para agendar.
+          </p>
+          <div class="sup-table-wrap">
+            <table class="sup-table">
+              <thead><tr><th>Data</th><th>Feriado</th><th>Abrangência</th><th></th></tr></thead>
+              <tbody id="tbodyFeriados">
+                <tr><td colspan="4" class="sup-empty">Selecione uma unidade.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: AGENDA ============ -->
+  <div class="sup-modal-overlay" id="modalAgenda">
+    <div class="sup-modal">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-collection"></i> <span id="modalAgendaTitulo">Nova agenda</span></span>
+        <button class="sup-modal-close" onclick="fecharModal('modalAgenda')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroAgenda"></div>
+        <input type="hidden" id="agendaId">
+        <div class="sup-field">
+          <label>Nome da agenda *</label>
+          <input type="text" class="sup-input" id="agNome" placeholder="Ex: CPETecnologia BA" maxlength="150">
+        </div>
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>Tipo de agenda *</label>
+            <select class="sup-select" id="agTipo" onchange="onAgTipoChange()">
+              <option value="fisica">Física (unidade CPE)</option>
+              <option value="online">Online (atendimento remoto)</option>
+            </select>
+            <div class="sup-help">Online: aparece para clientes que escolherem "Online" no agendamento público.</div>
+          </div>
+          <div class="sup-field">
+            <label>Unidade CPE <small style="color:#6b7280">(só para tipo Física)</small></label>
+            <select class="sup-select" id="agUnidade"><option value="">— Nenhuma —</option></select>
+          </div>
+        </div>
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>Duração do slot (min) *</label>
+            <input type="number" class="sup-input" id="agDuracao" value="30" min="5" max="480" step="5">
+          </div>
+          <div class="sup-field">
+            <label>&nbsp;</label>
+            <div class="sup-help">Granularidade dos horários gerados.</div>
+          </div>
+        </div>
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>Cor no calendário</label>
+            <input type="color" class="sup-input" id="agCor" value="#0d9488" style="height:40px;padding:3px">
+          </div>
+          <div class="sup-field">
+            <label>Status</label>
+            <select class="sup-select" id="agAtivo">
+              <option value="1">Ativa</option><option value="0">Inativa</option>
+            </select>
+          </div>
+        </div>
+        <div class="sup-field">
+          <label>Descrição <small style="color:#6b7280">(resumo curto, aparece no card público)</small></label>
+          <textarea class="sup-textarea" id="agDescricao" maxlength="500"></textarea>
+        </div>
+        <div class="sup-field">
+          <label>Instruções para Agendamento <small style="color:#6b7280">(caixa azul no formulário do cliente)</small></label>
+          <textarea class="sup-textarea" id="agInstrucoes" maxlength="1000"
+            placeholder="Ex: Caso o treinamento seja de venda GNSS ou Laser Scanner, agende o horário da manhã e o da tarde."></textarea>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-danger" id="btnExcluirAgenda" onclick="excluirAgenda()"
+                style="margin-right:auto;display:none"><i class="bi bi-trash"></i> Excluir</button>
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalAgenda')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarAgenda()"><i class="bi bi-check-lg"></i> Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: CONFIGURAR HORÁRIOS ============ -->
+  <div class="sup-modal-overlay" id="modalConfig">
+    <div class="sup-modal lg">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-calendar-week"></i> Configurar Horários por Dia da Semana</span>
+        <button class="sup-modal-close" onclick="fecharModal('modalConfig')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroConfig"></div>
+        <p class="sup-help" style="margin-bottom:12px">
+          Configure as faixas de funcionamento. Os horários disponíveis são gerados
+          conforme a duração do slot da agenda (<span id="cfgDur">30</span> min).
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn-sup btn-sup-secondary btn-sup-sm" onclick="copiarHorarios('util')">
+            <i class="bi bi-files"></i> Copiar Seg → Ter a Sex</button>
+          <button class="btn-sup btn-sup-secondary btn-sup-sm" onclick="copiarHorarios('todos')">
+            <i class="bi bi-files"></i> Copiar Seg → toda a semana</button>
+          <button class="btn-sup btn-sup-primary btn-sup-sm" onclick="addLinhaHorario()">
+            <i class="bi bi-plus-lg"></i> Adicionar horário</button>
+        </div>
+        <div class="sup-table-wrap">
+          <table class="sup-hcfg-table">
+            <thead><tr>
+              <th style="width:160px">Dia</th><th>Início</th><th>Fim</th>
+              <th style="width:160px">Horários gerados</th><th style="width:60px">Ações</th>
+            </tr></thead>
+            <tbody id="tbodyConfig"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalConfig')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarConfigHorarios()">
+          <i class="bi bi-check-lg"></i> Salvar configuração</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: CURSO ============ -->
+  <div class="sup-modal-overlay" id="modalCurso">
+    <div class="sup-modal">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-mortarboard"></i>
+          <span id="modalCursoTitulo">Novo curso</span></span>
+        <button class="sup-modal-close" onclick="fecharModal('modalCurso')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroCurso"></div>
+        <input type="hidden" id="cursoId">
+        <div class="sup-field">
+          <label>Nome do curso *</label>
+          <input type="text" class="sup-input" id="cursoNome" maxlength="150"
+                 placeholder="Ex: Treinamento GNSS">
+        </div>
+        <div class="sup-field">
+          <label>Duração do atendimento (minutos) *</label>
+          <input type="number" class="sup-input" id="cursoDuracao" value="60"
+                 min="5" max="1440" step="5">
+          <div class="sup-help">Tempo que cada agendamento desse curso ocupa na agenda.</div>
+        </div>
+        <div class="sup-grid-2" id="cursoCapWrap">
+          <div class="sup-field" id="cursoCapPresencialWrap">
+            <label>Capacidade presencial</label>
+            <input type="number" class="sup-input" id="cursoCapPresencial" value="1"
+                   min="1" max="999">
+            <div class="sup-help">Clientes presenciais no mesmo horário.</div>
+          </div>
+          <div class="sup-field" id="cursoCapOnlineWrap">
+            <label>Capacidade online</label>
+            <input type="number" class="sup-input" id="cursoCapOnline" value="1"
+                   min="1" max="999">
+            <div class="sup-help">Clientes online no mesmo horário.</div>
+          </div>
+        </div>
+        <div class="sup-field">
+          <label>Instrutor <small style="color:#6b7280">(quem vai dar este curso)</small></label>
+          <input type="text" class="sup-input" id="cursoInstrutor" maxlength="150"
+                 placeholder="Ex: Eng. João Silva">
+          <div class="sup-help">Aparece no e-mail de confirmação enviado ao cliente.</div>
+        </div>
+        <div class="sup-field">
+          <label><input type="checkbox" id="cursoAtivo" checked> Curso ativo</label>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalCurso')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarCurso()">
+          <i class="bi bi-check-lg"></i> Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: AGENDAMENTO ============ -->
+  <div class="sup-modal-overlay" id="modalAgendamento">
+    <div class="sup-modal">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-calendar-plus"></i> <span id="modalAgTitulo">Novo atendimento</span></span>
+        <button class="sup-modal-close" onclick="fecharModal('modalAgendamento')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroAg"></div>
+        <input type="hidden" id="agtId">
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>Serviço</label>
+            <select class="sup-select" id="agtServico" onchange="onAgtServicoChange()">
+              <option value="">— Sem serviço —</option>
+            </select>
+          </div>
+          <div class="sup-field">
+            <label>Equipamento</label>
+            <select class="sup-select" id="agtEquipamento"><option value="">—</option></select>
+          </div>
+        </div>
+        <div class="sup-field">
+          <label>Título *</label>
+          <input type="text" class="sup-input" id="agtTitulo"
+                 placeholder="Preenchido com o serviço, ou digite" maxlength="200">
+        </div>
+        <div class="sup-field">
+          <label>Cliente</label>
+          <input type="text" class="sup-input" id="agtCliente" maxlength="200">
+        </div>
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>E-mail</label>
+            <input type="email" class="sup-input" id="agtEmail" maxlength="190">
+          </div>
+          <div class="sup-field">
+            <label>Telefone</label>
+            <input type="text" class="sup-input" id="agtTelefone" maxlength="40">
+          </div>
+        </div>
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>Início *</label>
+            <input type="datetime-local" class="sup-input" id="agtInicio">
+          </div>
+          <div class="sup-field">
+            <label>Fim *</label>
+            <input type="datetime-local" class="sup-input" id="agtFim">
+          </div>
+        </div>
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>Modalidade</label>
+            <select class="sup-select" id="agtModalidade">
+              <option value="">—</option>
+              <option value="presencial">Presencial</option>
+              <option value="online">Online</option>
+            </select>
+          </div>
+          <div class="sup-field">
+            <label>Locação ou venda</label>
+            <select class="sup-select" id="agtTipo">
+              <option value="">—</option>
+              <option value="locacao">Locação</option>
+              <option value="venda">Venda</option>
+            </select>
+          </div>
+        </div>
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>Vendedor</label>
+            <select class="sup-select" id="agtVendedor"><option value="">—</option></select>
+          </div>
+          <div class="sup-field">
+            <label>Status</label>
+            <select class="sup-select" id="agtStatus">
+              <option value="pendente">Pendente (aguardando confirmação)</option>
+              <option value="agendado">Agendado (confirmado)</option>
+              <option value="atendido">Atendido</option>
+              <option value="nao_compareceu">Não compareceu</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+          </div>
+        </div>
+        <div class="sup-field">
+          <label>Observações / mensagem do cliente</label>
+          <textarea class="sup-textarea" id="agtObs" maxlength="1000"></textarea>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-danger" id="btnExcluirAg" onclick="excluirAgendamento()"
+                style="margin-right:auto;display:none"><i class="bi bi-trash"></i> Excluir</button>
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalAgendamento')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarAgendamento()"><i class="bi bi-check-lg"></i> Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: BLOQUEIO ============ -->
+  <div class="sup-modal-overlay" id="modalBloqueio">
+    <div class="sup-modal">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-lock"></i> Bloquear horário</span>
+        <button class="sup-modal-close" onclick="fecharModal('modalBloqueio')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroBloq"></div>
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>Início *</label>
+            <input type="datetime-local" class="sup-input" id="bloqInicio">
+          </div>
+          <div class="sup-field">
+            <label>Fim *</label>
+            <input type="datetime-local" class="sup-input" id="bloqFim">
+          </div>
+        </div>
+        <div class="sup-field">
+          <label>Motivo</label>
+          <input type="text" class="sup-input" id="bloqMotivo" maxlength="255" placeholder="Ex: Feriado, treinamento...">
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalBloqueio')">Cancelar</button>
+        <button class="btn-sup btn-sup-warning" onclick="salvarBloqueio()"><i class="bi bi-lock"></i> Bloquear</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: PENDENTES ============ -->
+  <div class="sup-modal-overlay" id="modalPendentes">
+    <div class="sup-modal lg">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-hourglass-split"></i>
+          Agendamentos aguardando confirmação</span>
+        <button class="sup-modal-close" onclick="fecharModal('modalPendentes')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-table-wrap">
+          <table class="sup-table">
+            <thead><tr>
+              <th>Unidade</th><th>Data / Hora</th><th>Cliente</th>
+              <th>Serviço</th><th>Modalidade</th><th>Ações</th>
+            </tr></thead>
+            <tbody id="tbodyPendentes">
+              <tr><td colspan="6" class="sup-empty">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalPendentes')">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: FERIADO ============ -->
+  <div class="sup-modal-overlay" id="modalFeriado">
+    <div class="sup-modal">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-calendar-x"></i> Adicionar feriado</span>
+        <button class="sup-modal-close" onclick="fecharModal('modalFeriado')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroFeriado"></div>
+        <div class="sup-field">
+          <label>Data *</label>
+          <input type="date" class="sup-input" id="feriadoData">
+        </div>
+        <div class="sup-field">
+          <label>Nome do feriado *</label>
+          <input type="text" class="sup-input" id="feriadoNome" maxlength="150"
+                 placeholder="Ex: Aniversário da cidade">
+        </div>
+        <div class="sup-field">
+          <label>Aplica a <span class="text-danger">*</span></label>
+          <select class="sup-select" id="feriadoAplicaA"></select>
+          <div class="sup-help">
+            Escolha a unidade (feriado estadual/municipal) ou "Nacional" para
+            travar todas as unidades de uma vez.
+          </div>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalFeriado')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarFeriado()">
+          <i class="bi bi-check-lg"></i> Adicionar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: AGENDAMENTOS DO DIA (Hoje / Amanhã) ============ -->
+  <div class="sup-modal-overlay" id="modalDia">
+    <div class="sup-modal lg">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title">
+          <i class="bi bi-calendar-event"></i>
+          <span id="modalDiaTitulo">Agendamentos do dia</span>
+        </span>
+        <button class="sup-modal-close" onclick="fecharModal('modalDia')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-table-wrap">
+          <table class="sup-table">
+            <thead><tr>
+              <th>Horário</th><th>Cliente</th><th>Curso</th>
+              <th>Unidade</th><th>Vendedor</th><th>Modalidade</th><th>Status</th>
+            </tr></thead>
+            <tbody id="tbodyDia">
+              <tr><td colspan="7" class="sup-empty">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalDia')">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: LISTA DE AGENDAS (visão geral) ============ -->
+  <div class="sup-modal-overlay" id="modalListaAgendas">
+    <div class="sup-modal lg">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title">
+          <i class="bi bi-collection"></i> Agendas de Atendimento
+        </span>
+        <button class="sup-modal-close" onclick="fecharModal('modalListaAgendas')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-table-wrap">
+          <table class="sup-table">
+            <thead><tr>
+              <th>Agenda</th><th>Unidade</th><th>Tipo</th>
+              <th>Cursos</th><th>Hoje / Amanhã</th><th>Status</th><th></th>
+            </tr></thead>
+            <tbody id="tbodyListaAgendas">
+              <tr><td colspan="7" class="sup-empty">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalListaAgendas')">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <script src="/SistemaCPE/web/assests/js/equipe-suporte.js"></script>
+</body>
+</html>

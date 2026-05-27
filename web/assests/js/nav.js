@@ -67,6 +67,17 @@ const globalMenu = [
     external: true
   },
   // ==================================================
+  // ✨ MENU: Módulo Equipe de Suporte (agendas de atendimento)
+  // Data: 22/05/2026
+  // ==================================================
+  {
+    path: "/SistemaCPE/web/pages/equipe-suporte.html",
+    label: "Equipe de Suporte",
+    icon: "bi-headset",
+    requiredRoles: ["ADMIN", "TI"],
+    external: true
+  },
+  // ==================================================
   // ✨ MENU: Módulo de Recepção
   // Data: 30/04/2026
   // Aberto a todos os perfis — qualquer usuário pode agendar sala

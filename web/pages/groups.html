@@ -142,6 +142,14 @@
                   <label style="font-size:.72rem;color:#5e6c84;margin-bottom:2px;display:block;">UF</label>
                   <input type="text" id="unitUf" class="form-control form-control-sm text-uppercase" placeholder="MG" maxlength="2">
                 </div>
+                <div style="flex:1;min-width:140px;">
+                  <label style="font-size:.72rem;color:#5e6c84;margin-bottom:2px;display:block;"
+                    title="Telefone exibido no e-mail de confirmação do agendamento ao cliente.">
+                    Telefone
+                  </label>
+                  <input type="text" id="unitTelefone" class="form-control form-control-sm"
+                         placeholder="(31) 99999-9999" maxlength="40">
+                </div>
                 <div style="display:flex;gap:6px;">
                   <button class="btn btn-sm btn-success" onclick="unitSalvar()"><i class="bi bi-check-lg"></i> Salvar</button>
                   <button class="btn btn-sm btn-outline-secondary" onclick="unitFecharForm()"><i class="bi bi-x-lg"></i></button>
@@ -930,6 +938,7 @@
       document.getElementById('unitSigla').value   = dados?.sigla   || '';
       document.getElementById('unitCidade').value  = dados?.cidade  || '';
       document.getElementById('unitUf').value      = dados?.uf      || '';
+      document.getElementById('unitTelefone').value= dados?.telefone|| '';
       document.getElementById('unitFormErro').style.display = 'none';
       document.getElementById('unitForm').style.display = 'block';
       document.getElementById('unitNome').focus();
@@ -945,6 +954,7 @@
       const sigla  = document.getElementById('unitSigla').value.trim() || null;
       const cidade = document.getElementById('unitCidade').value.trim() || null;
       const uf     = document.getElementById('unitUf').value.trim().toUpperCase() || null;
+      const telefone = document.getElementById('unitTelefone').value.trim() || null;
       const erroEl = document.getElementById('unitFormErro');
 
       if (!nome || nome.length < 2) {
@@ -965,7 +975,7 @@
         const res = await fetch(url, {
           method,
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nome, sigla, cidade, uf })
+          body: JSON.stringify({ nome, sigla, cidade, uf, telefone })
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
@@ -1218,13 +1228,13 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
 
-        <div class="modal-body p-0">''
+        <div class="modal-body p-0">
 
           <!-- ALERTA INTERNO -->
           <div id="catModalAlert" class="alert alert-danger d-none m-3 mb-0"></div>
           <div id="catModalSuccess" class="alert alert-success d-none m-3 mb-0"></div>
 
-          <div class="row g-0" style="min-height:580px;">
+          <div class="row g-0" style="height:560px;">
 
             <!-- ===== COLUNA ESQUERDA: Lista de categorias ===== -->
             <div class="col-md-5 border-end d-flex flex-column" style="background:#f9fafb;">
@@ -1247,8 +1257,8 @@
             </div>
 
             <!-- ===== COLUNA DIREITA: Formulário ===== -->
-            <div class="col-md-7">
-              <div class="p-3">
+            <div class="col-md-7 d-flex flex-column">
+              <div class="p-3" style="flex:1; overflow-y:auto;">
 
                 <!-- Form: Nova/Editar Categoria -->
                 <div id="formCategoriaDiv" class="d-none">

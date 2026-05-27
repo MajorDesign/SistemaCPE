@@ -33,6 +33,7 @@ class UnidadeBase(BaseModel):
     cidade: Optional[str] = Field(None, max_length=120)
     uf: Optional[str] = Field(None, min_length=2, max_length=2)
     endereco: Optional[str] = Field(None, max_length=255)
+    telefone: Optional[str] = Field(None, max_length=40)
     ativo: bool = True
 
 
@@ -46,6 +47,7 @@ class UnidadeUpdate(BaseModel):
     cidade: Optional[str] = Field(None, max_length=120)
     uf: Optional[str] = Field(None, min_length=2, max_length=2)
     endereco: Optional[str] = Field(None, max_length=255)
+    telefone: Optional[str] = Field(None, max_length=40)
     ativo: Optional[bool] = None
 
 
@@ -62,12 +64,12 @@ async def list_unidades(somente_ativas: bool = False):
         cursor = conn.cursor(dictionary=True)
         if somente_ativas:
             cursor.execute(
-                "SELECT id, nome, sigla, cidade, uf, endereco, ativo, created_at "
+                "SELECT id, nome, sigla, cidade, uf, endereco, telefone, ativo, created_at "
                 "FROM unidades_cpe WHERE ativo = 1 ORDER BY nome"
             )
         else:
             cursor.execute(
-                "SELECT id, nome, sigla, cidade, uf, endereco, ativo, created_at "
+                "SELECT id, nome, sigla, cidade, uf, endereco, telefone, ativo, created_at "
                 "FROM unidades_cpe ORDER BY nome"
             )
         rows = cursor.fetchall()
@@ -87,7 +89,7 @@ async def get_unidade(unidade_id: int):
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT id, nome, sigla, cidade, uf, endereco, ativo, created_at "
+            "SELECT id, nome, sigla, cidade, uf, endereco, telefone, ativo, created_at "
             "FROM unidades_cpe WHERE id = %s",
             (unidade_id,),
         )
@@ -117,14 +119,15 @@ async def create_unidade(data: UnidadeCreate):
 
         uf = (data.uf or "").upper() or None
         cursor.execute(
-            "INSERT INTO unidades_cpe (nome, sigla, cidade, uf, endereco, ativo) "
-            "VALUES (%s, %s, %s, %s, %s, %s)",
-            (data.nome, data.sigla, data.cidade, uf, data.endereco, 1 if data.ativo else 0),
+            "INSERT INTO unidades_cpe (nome, sigla, cidade, uf, endereco, telefone, ativo) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (data.nome, data.sigla, data.cidade, uf, data.endereco, data.telefone,
+             1 if data.ativo else 0),
         )
         conn.commit()
         new_id = cursor.lastrowid
         cursor.execute(
-            "SELECT id, nome, sigla, cidade, uf, endereco, ativo, created_at "
+            "SELECT id, nome, sigla, cidade, uf, endereco, telefone, ativo, created_at "
             "FROM unidades_cpe WHERE id = %s",
             (new_id,),
         )
@@ -167,6 +170,8 @@ async def update_unidade(unidade_id: int, data: UnidadeUpdate):
             updates.append("uf = %s"); params.append(data.uf.upper() or None)
         if data.endereco is not None:
             updates.append("endereco = %s"); params.append(data.endereco)
+        if data.telefone is not None:
+            updates.append("telefone = %s"); params.append(data.telefone or None)
         if data.ativo is not None:
             updates.append("ativo = %s"); params.append(1 if data.ativo else 0)
 
@@ -178,7 +183,7 @@ async def update_unidade(unidade_id: int, data: UnidadeUpdate):
         conn.commit()
 
         cursor.execute(
-            "SELECT id, nome, sigla, cidade, uf, endereco, ativo, created_at "
+            "SELECT id, nome, sigla, cidade, uf, endereco, telefone, ativo, created_at "
             "FROM unidades_cpe WHERE id = %s",
             (unidade_id,),
         )
