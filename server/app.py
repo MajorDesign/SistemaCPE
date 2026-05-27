@@ -1622,11 +1622,16 @@ if __name__ == "__main__":
     logger.info("📚 Documentacao: http://localhost:8000/docs")
     logger.info("=" * 100 + "\n")
     
+    # reload=True so em dev: em prod (servico Windows NSSM) o uvicorn reload
+    # spawna worker com Python errado (do PATH em vez do venv) — quebra
+    # registro de routers e fica em loop. Em prod, deixar False; o
+    # Restart-Service CPEControlAPI cuida do reload quando precisar.
+    _reload = os.getenv("UVICORN_RELOAD", "0").strip() == "1"
     uvicorn.run(
         "app:app",
         host="0.0.0.0",   # aceita conexoes da rede local
         port=8000,
-        reload=True,
+        reload=_reload,
         log_level="info",
         proxy_headers=True,         # confia em X-Forwarded-Proto/For/Host (Caddy/cloudflared)
         forwarded_allow_ips="*",    # de qualquer IP (estamos atras de tunnel/proxy local)
