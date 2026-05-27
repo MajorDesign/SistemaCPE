@@ -8,10 +8,14 @@ e horario, preenche os dados e cria um agendamento que entra como
 'pendente' ate a equipe confirmar.
 """
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from database import get_db_or_404, convert_datetime_list
 from datetime import datetime, date, timedelta, time as _time
 import logging
+import os
+import shutil
+import uuid as _uuid
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -178,12 +182,15 @@ def _gerar_horarios(agenda: dict, horarios: list, dia: date, duracao_min: int) -
     """Gera os horarios de inicio possiveis para um atendimento de
     `duracao_min` minutos numa data, conforme as faixas de funcionamento.
 
-    O passo entre os inicios e a granularidade da agenda (slot_duracao_min);
-    o bloco reservado tem o tamanho da duracao do servico.
+    Passo da grade = duracao do curso. Isso evita "buracos" e horarios
+    quebrados — cada inicio comeca exatamente onde o anterior terminaria.
+    Ex: curso 60min em faixa 08:00-12:00 gera 08:00, 09:00, 10:00, 11:00.
+
+    O campo `slot_duracao_min` da agenda continua no banco por
+    retrocompatibilidade mas nao influencia mais o passo da grade.
     """
     js_wd = (dia.weekday() + 1) % 7          # Python Mon=0 -> JS Dom=0
-    step = max(5, int(agenda.get("slot_duracao_min") or 30))
-    dur = max(5, int(duracao_min or step))
+    dur = max(5, int(duracao_min or 30))
     out = []
     for h in horarios:
         if int(h["dia_semana"]) != js_wd or not h.get("ativo", 1):
@@ -193,7 +200,7 @@ def _gerar_horarios(agenda: dict, horarios: list, dia: date, duracao_min: int) -
         atual = ini
         while atual + timedelta(minutes=dur) <= fim:
             out.append(atual)
-            atual += timedelta(minutes=step)
+            atual += timedelta(minutes=dur)
     return sorted(set(out))
 
 
@@ -201,7 +208,8 @@ def _eventos_periodo(cursor, agenda_id: int, ini: datetime, fim: datetime):
     """Carrega de uma vez agendamentos ativos e bloqueios da agenda no
     periodo. Usado pelas telas de disponibilidade (calcula em memoria)."""
     cursor.execute(
-        "SELECT inicio, fim, servico_id, modalidade FROM atend_agendamentos "
+        "SELECT inicio, fim, servico_id, treinamento_id, modalidade "
+        "FROM atend_agendamentos "
         "WHERE agenda_id=%s AND status IN ('pendente','agendado','atendido') "
         "AND inicio < %s AND fim > %s", (agenda_id, fim, ini))
     ags = cursor.fetchall()
@@ -212,15 +220,21 @@ def _eventos_periodo(cursor, agenda_id: int, ini: datetime, fim: datetime):
     return ags, blqs
 
 
-def _slot_tem_vaga(ags, blqs, servico_id, cap_p, cap_o, ini, fim, modalidade=None) -> bool:
+def _slot_tem_vaga(ags, blqs, oferta_id, cap_p, cap_o, ini, fim,
+                   modalidade=None, entidade="servico") -> bool:
     """True se o slot tem vaga. Se `modalidade` for informada, checa so ela;
     senao, considera vaga em qualquer modalidade. Presencial e online sao
-    contados de forma independente."""
+    contados de forma independente.
+
+    `entidade` = 'servico' | 'treinamento' — define qual campo do agendamento
+    deve bater com oferta_id."""
     if any(b["inicio"] < fim and b["fim"] > ini for b in blqs):
         return False
 
+    chave = "servico_id" if entidade == "servico" else "treinamento_id"
+
     def _conta(modal):
-        return sum(1 for a in ags if a["servico_id"] == servico_id
+        return sum(1 for a in ags if a.get(chave) == oferta_id
                    and a["modalidade"] == modal
                    and a["inicio"] < fim and a["fim"] > ini)
 
@@ -249,10 +263,45 @@ def _feriados_set(cursor, agenda_id, dini, dfim) -> set:
     return {str(r["data"]) for r in cursor.fetchall()}
 
 
+def _resolver_oferta(cursor, agenda_id, servico_id=None, treinamento_id=None):
+    """Retorna metadados da 'oferta' (curso ou treinamento) ou None se
+    nem servico_id nem treinamento_id foram informados.
+
+    Quando ambos forem passados, prioriza servico_id (compatibilidade).
+    Levanta 404 se o ID nao existe ou nao pertence a agenda.
+    """
+    if servico_id:
+        cursor.execute(
+            "SELECT id, nome, duracao_min, cap_presencial, cap_online "
+            "FROM atend_servicos WHERE id=%s", (servico_id,))
+        s = cursor.fetchone()
+        if not s or (agenda_id is not None and not _pertence_agenda(cursor, "atend_servicos", servico_id, agenda_id)):
+            raise HTTPException(status_code=404, detail="Curso nao encontrado nessa agenda")
+        return {"entidade": "servico", "id": s["id"], "nome": s["nome"],
+                "duracao_min": s["duracao_min"],
+                "cap_presencial": s["cap_presencial"], "cap_online": s["cap_online"]}
+    if treinamento_id:
+        cursor.execute(
+            "SELECT id, nome, duracao_min, cap_presencial, cap_online "
+            "FROM atend_treinamentos WHERE id=%s", (treinamento_id,))
+        t = cursor.fetchone()
+        if not t or (agenda_id is not None and not _pertence_agenda(cursor, "atend_treinamentos", treinamento_id, agenda_id)):
+            raise HTTPException(status_code=404, detail="Treinamento nao encontrado nessa agenda")
+        return {"entidade": "treinamento", "id": t["id"], "nome": t["nome"],
+                "duracao_min": t["duracao_min"],
+                "cap_presencial": t["cap_presencial"], "cap_online": t["cap_online"]}
+    return None
+
+
+def _pertence_agenda(cursor, tabela: str, id_: int, agenda_id: int) -> bool:
+    cursor.execute(f"SELECT 1 FROM {tabela} WHERE id=%s AND agenda_id=%s", (id_, agenda_id))
+    return cursor.fetchone() is not None
+
+
 def _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
-                 excluir_id=None):
+                 excluir_id=None, treinamento_id=None):
     """Valida se cabe um agendamento. Retorna None se ha vaga, ou uma
-    mensagem de erro. Capacidade vem do curso (cap_presencial/cap_online);
+    mensagem de erro. Capacidade vem da oferta (curso OU treinamento);
     presencial e online sao limites independentes."""
     if _eh_feriado(cursor, agenda_id, inicio.date()):
         return "Esse dia e feriado nessa agenda."
@@ -263,11 +312,13 @@ def _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
         return "Esse horario esta bloqueado nessa agenda."
 
     cap = 1
-    por_modalidade = bool(servico_id) and modalidade in ("presencial", "online")
-    if por_modalidade:
+    cap_por_oferta = (servico_id or treinamento_id) and modalidade in ("presencial", "online")
+    if cap_por_oferta:
+        tabela = "atend_servicos" if servico_id else "atend_treinamentos"
+        oferta_id = servico_id or treinamento_id
         cursor.execute(
-            "SELECT cap_presencial, cap_online FROM atend_servicos WHERE id=%s",
-            (servico_id,))
+            f"SELECT cap_presencial, cap_online FROM {tabela} WHERE id=%s",
+            (oferta_id,))
         s = cursor.fetchone()
         if s:
             bruto = s["cap_online"] if modalidade == "online" else s["cap_presencial"]
@@ -277,16 +328,20 @@ def _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
            "AND status IN ('pendente','agendado','atendido') "
            "AND inicio<%s AND fim>%s")
     params = [agenda_id, fim, inicio]
-    if por_modalidade:
-        # capacidade por curso + modalidade (presencial e online independentes)
-        sql += " AND servico_id=%s AND modalidade=%s"
-        params += [servico_id, modalidade]
+    if cap_por_oferta:
+        # capacidade por oferta + modalidade (presencial e online independentes)
+        if servico_id:
+            sql += " AND servico_id=%s AND modalidade=%s"
+            params += [servico_id, modalidade]
+        else:
+            sql += " AND treinamento_id=%s AND modalidade=%s"
+            params += [treinamento_id, modalidade]
     if excluir_id:
         sql += " AND id != %s"
         params.append(excluir_id)
     cursor.execute(sql, params)
     if cursor.fetchone()["n"] >= cap:
-        if por_modalidade:
+        if cap_por_oferta:
             rotulo = "online" if modalidade == "online" else "presenciais"
             return f"Esse horario ja atingiu o limite de atendimentos {rotulo}."
         return "Esse horario ja esta ocupado nessa agenda."
@@ -295,18 +350,21 @@ def _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
 
 def _dados_agendamento_completo(cursor, agendamento_id: int) -> dict | None:
     """Carrega todos os dados de um agendamento (joins com agenda, unidade,
-    servico) — base para os 3 e-mails (cliente recebido/confirmado, equipe alerta)."""
+    servico OU treinamento) — base para os 3 e-mails (cliente recebido/
+    confirmado, equipe alerta)."""
     cursor.execute("""
         SELECT a.cliente_nome, a.cliente_email, a.cliente_telefone,
                a.inicio, a.modalidade, a.observacoes, a.titulo,
-               s.nome AS servico_nome, s.instrutor AS servico_instrutor,
+               COALESCE(s.nome,      t.nome)      AS servico_nome,
+               COALESCE(s.instrutor, t.instrutor) AS servico_instrutor,
                ag.nome AS agenda_nome, ag.tipo AS agenda_tipo,
                u.nome AS unidade_nome, u.endereco AS unidade_endereco,
                u.telefone AS unidade_telefone
         FROM atend_agendamentos a
-        JOIN atend_agendas ag        ON ag.id = a.agenda_id
-        LEFT JOIN atend_servicos s   ON s.id  = a.servico_id
-        LEFT JOIN unidades_cpe u     ON u.id  = ag.unidade_id
+        JOIN atend_agendas ag          ON ag.id = a.agenda_id
+        LEFT JOIN atend_servicos s     ON s.id  = a.servico_id
+        LEFT JOIN atend_treinamentos t ON t.id  = a.treinamento_id
+        LEFT JOIN unidades_cpe u       ON u.id  = ag.unidade_id
         WHERE a.id = %s
     """, (agendamento_id,))
     return cursor.fetchone()
@@ -530,14 +588,17 @@ def agendamentos_do_dia(request: Request, data: str):
                    a.status, a.origem,
                    ag.nome AS agenda_nome, ag.cor AS agenda_cor,
                    u.nome AS unidade_nome,
-                   s.nome AS servico_nome, e.nome AS equipamento_nome,
-                   v.name AS vendedor_nome
+                   COALESCE(s.nome, t.nome) AS servico_nome,
+                   CASE WHEN a.treinamento_id IS NOT NULL THEN 'treinamento' ELSE 'curso' END AS tipo_oferta,
+                   e.nome AS equipamento_nome,
+                   COALESCE(v.name, a.vendedor_nome) AS vendedor_nome
             FROM atend_agendamentos a
-            JOIN atend_agendas ag        ON ag.id = a.agenda_id
-            LEFT JOIN unidades_cpe u     ON u.id  = ag.unidade_id
-            LEFT JOIN atend_servicos s   ON s.id  = a.servico_id
-            LEFT JOIN atend_equipamentos e ON e.id = a.equipamento_id
-            LEFT JOIN users v            ON v.id  = a.vendedor_id
+            JOIN atend_agendas ag          ON ag.id = a.agenda_id
+            LEFT JOIN unidades_cpe u       ON u.id  = ag.unidade_id
+            LEFT JOIN atend_servicos s     ON s.id  = a.servico_id
+            LEFT JOIN atend_treinamentos t ON t.id  = a.treinamento_id
+            LEFT JOIN atend_equipamentos e ON e.id  = a.equipamento_id
+            LEFT JOIN users v              ON v.id  = a.vendedor_id
             WHERE DATE(a.inicio) = %s
               AND a.status IN ('pendente','agendado','atendido')
             ORDER BY a.inicio
@@ -545,6 +606,136 @@ def agendamentos_do_dia(request: Request, data: str):
         return {"success": True,
                 "data": str(dia),
                 "agendamentos": convert_datetime_list(cursor.fetchall())}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/clientes")
+def listar_clientes(request: Request):
+    """Base de clientes derivada dos agendamentos publicos.
+    Dedup por e-mail. Pra cada cliente, retorna os dados MAIS RECENTES
+    (caso ele tenha atualizado entre agendamentos) + contadores."""
+    _exigir_view_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        # 1) Pega o UltimO agendamento de cada email (id maior == mais recente)
+        cursor.execute("""
+            SELECT a.cliente_email AS email,
+                   a.cliente_nome AS nome,
+                   a.cliente_telefone AS telefone,
+                   a.cliente_empresa AS empresa,
+                   a.cliente_funcao AS funcao
+            FROM atend_agendamentos a
+            WHERE a.cliente_email IS NOT NULL AND TRIM(a.cliente_email) != ''
+              AND a.id = (
+                SELECT MAX(a2.id) FROM atend_agendamentos a2
+                WHERE a2.cliente_email = a.cliente_email
+              )
+        """)
+        dados = {r["email"].lower(): r for r in cursor.fetchall()}
+
+        # 2) Contadores e datas por email
+        cursor.execute("""
+            SELECT LOWER(cliente_email) AS email,
+                   COUNT(*) AS total_agendamentos,
+                   SUM(status='atendido')  AS total_atendidos,
+                   SUM(status='cancelado') AS total_cancelados,
+                   MIN(created_at) AS primeiro_contato,
+                   MAX(created_at) AS ultimo_contato
+            FROM atend_agendamentos
+            WHERE cliente_email IS NOT NULL AND TRIM(cliente_email) != ''
+            GROUP BY LOWER(cliente_email)
+        """)
+        for r in cursor.fetchall():
+            d = dados.get(r["email"])
+            if d:
+                d.update({k: r[k] for k in
+                         ("total_agendamentos", "total_atendidos",
+                          "total_cancelados", "primeiro_contato", "ultimo_contato")})
+
+        clientes = sorted(dados.values(),
+                          key=lambda c: c.get("ultimo_contato") or datetime.min,
+                          reverse=True)
+        return {"success": True, "clientes": convert_datetime_list(clientes)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.put("/clientes")
+def atualizar_cliente(request: Request, data: dict):
+    """Atualiza os dados de um cliente em TODOS os agendamentos com o mesmo
+    e-mail (a base de clientes e derivada da tabela atend_agendamentos, entao
+    pra propagar a edicao precisa atualizar a fonte).
+
+    Apenas admin do modulo (ADMIN, TI, RESPONSAVEL_GRUPO do Suporte ou
+    grupo 'Suporte ti') pode editar — Comercial e Suporte comum so visualizam.
+
+    E-mail nao e editavel (e a chave de identificacao da base).
+    """
+    _exigir_admin_suporte(request)
+    email = (data.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="E-mail obrigatorio")
+
+    nome     = (data.get("nome")     or "").strip() or None
+    telefone = (data.get("telefone") or "").strip() or None
+    empresa  = (data.get("empresa")  or "").strip() or None
+    funcao   = (data.get("funcao")   or "").strip() or None
+    if not nome:
+        raise HTTPException(status_code=400, detail="Nome obrigatorio")
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            UPDATE atend_agendamentos
+               SET cliente_nome=%s, cliente_telefone=%s,
+                   cliente_empresa=%s, cliente_funcao=%s
+             WHERE LOWER(cliente_email)=%s
+        """, (nome, telefone, empresa, funcao, email))
+        conn.commit()
+        return {"success": True, "atualizados": cursor.rowcount}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/clientes/historico")
+def historico_cliente(request: Request, email: str):
+    """Historico completo de agendamentos de um cliente (por email).
+    Mostra curso/treinamento, instrutor, data, modalidade, unidade, status."""
+    _exigir_view_suporte(request)
+    email = (email or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="E-mail obrigatorio")
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT a.id, a.inicio, a.fim, a.modalidade, a.tipo_negocio, a.status,
+                   a.titulo, a.observacoes, a.created_at,
+                   COALESCE(s.nome, t.nome) AS oferta_nome,
+                   COALESCE(s.instrutor, t.instrutor) AS instrutor,
+                   CASE WHEN a.treinamento_id IS NOT NULL THEN 'treinamento' ELSE 'curso' END AS tipo_oferta,
+                   ag.nome AS agenda_nome,
+                   u.nome AS unidade_nome,
+                   e.nome AS equipamento_nome,
+                   COALESCE(v.name, a.vendedor_nome) AS vendedor_nome
+            FROM atend_agendamentos a
+            JOIN atend_agendas ag          ON ag.id = a.agenda_id
+            LEFT JOIN atend_servicos s     ON s.id  = a.servico_id
+            LEFT JOIN atend_treinamentos t ON t.id  = a.treinamento_id
+            LEFT JOIN unidades_cpe u       ON u.id  = ag.unidade_id
+            LEFT JOIN atend_equipamentos e ON e.id  = a.equipamento_id
+            LEFT JOIN users v              ON v.id  = a.vendedor_id
+            WHERE LOWER(a.cliente_email) = %s
+            ORDER BY a.inicio DESC
+        """, (email,))
+        return {"success": True, "email": email,
+                "historico": convert_datetime_list(cursor.fetchall())}
     finally:
         cursor.close()
         conn.close()
@@ -561,14 +752,17 @@ def listar_pendentes(request: Request):
             SELECT a.id, a.titulo, a.cliente_nome, a.cliente_email, a.cliente_telefone,
                    a.inicio, a.fim, a.modalidade, a.tipo_negocio, a.observacoes, a.origem,
                    ag.nome AS agenda_nome, u.nome AS unidade_nome,
-                   s.nome AS servico_nome, e.nome AS equipamento_nome,
-                   v.name AS vendedor_nome
+                   COALESCE(s.nome, t.nome) AS servico_nome,
+                   CASE WHEN a.treinamento_id IS NOT NULL THEN 'treinamento' ELSE 'curso' END AS tipo_oferta,
+                   e.nome AS equipamento_nome,
+                   COALESCE(v.name, a.vendedor_nome) AS vendedor_nome
             FROM atend_agendamentos a
-            JOIN atend_agendas ag       ON ag.id = a.agenda_id
-            LEFT JOIN unidades_cpe u    ON u.id  = ag.unidade_id
-            LEFT JOIN atend_servicos s  ON s.id  = a.servico_id
-            LEFT JOIN atend_equipamentos e ON e.id = a.equipamento_id
-            LEFT JOIN users v           ON v.id  = a.vendedor_id
+            JOIN atend_agendas ag          ON ag.id = a.agenda_id
+            LEFT JOIN unidades_cpe u       ON u.id  = ag.unidade_id
+            LEFT JOIN atend_servicos s     ON s.id  = a.servico_id
+            LEFT JOIN atend_treinamentos t ON t.id  = a.treinamento_id
+            LEFT JOIN atend_equipamentos e ON e.id  = a.equipamento_id
+            LEFT JOIN users v              ON v.id  = a.vendedor_id
             WHERE a.status = 'pendente'
             ORDER BY a.inicio
         """)
@@ -661,13 +855,16 @@ def obter_agenda(agenda_id: int, request: Request):
 
 @router.post("/agendas")
 def criar_agenda(request: Request, data: dict):
+    """Cria uma nova agenda + pre-popula horarios de funcionamento padrao
+    (Seg-Sex 08:00-12:00 + 13:00-18:00 — almoco "bloqueado" naturalmente).
+    O admin pode personalizar depois em 'Configurar horarios'."""
     user = _exigir_suporte(request)
     nome = (data.get("nome") or "").strip()
     if not nome:
         raise HTTPException(status_code=400, detail="Nome da agenda e obrigatorio")
-    dur = int(data.get("slot_duracao_min") or 30)
-    if dur < 5 or dur > 480:
-        raise HTTPException(status_code=400, detail="Granularidade do slot deve ser entre 5 e 480 minutos")
+    # slot_duracao_min e legado — mantido no banco pra retrocompat, mas nao
+    # afeta mais a grade (passo agora vem da duracao do curso). Default 30.
+    slot_legado = int(data.get("slot_duracao_min") or 30)
     tipo = data.get("tipo") if data.get("tipo") in ("fisica", "online") else "fisica"
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
@@ -683,10 +880,23 @@ def criar_agenda(request: Request, data: dict):
             nome, data.get("unidade_id") or None, tipo,
             (data.get("descricao") or "").strip() or None,
             (data.get("instrucoes") or "").strip() or None,
-            (data.get("cor") or "#0d9488").strip(), dur, user["id"],
+            (data.get("cor") or "#0d9488").strip(), slot_legado, user["id"],
         ))
+        nova_id = cursor.lastrowid
+
+        # Horarios padrao CPE: Seg-Sex, manha 09:00-13:00 + tarde 14:00-18:00
+        # Almoco 13:00-14:00 fica naturalmente fora.
+        # Sabado/Domingo ficam vazios — admin pode adicionar em "Configurar horarios".
+        faixas_padrao = []
+        for dia_semana in (1, 2, 3, 4, 5):       # JS: 0=dom, 1=seg ... 5=sex, 6=sab
+            faixas_padrao.append((nova_id, dia_semana, "09:00", "13:00"))
+            faixas_padrao.append((nova_id, dia_semana, "14:00", "18:00"))
+        cursor.executemany(
+            "INSERT INTO atend_horarios (agenda_id, dia_semana, hora_inicio, hora_fim) "
+            "VALUES (%s, %s, %s, %s)", faixas_padrao)
+
         conn.commit()
-        return {"success": True, "id": cursor.lastrowid}
+        return {"success": True, "id": nova_id}
     finally:
         cursor.close()
         conn.close()
@@ -754,11 +964,18 @@ def listar_servicos(agenda_id: int, request: Request):
     cursor = conn.cursor(dictionary=True)
     try:
         _agenda_ou_404(cursor, agenda_id)
-        cursor.execute(
-            "SELECT s.*, (SELECT COUNT(*) FROM atend_equipamentos e "
-            "WHERE e.servico_id=s.id AND e.ativo=1) AS total_equipamentos "
-            "FROM atend_servicos s WHERE s.agenda_id=%s ORDER BY s.ordem, s.nome",
-            (agenda_id,))
+        # Conta equipamentos vinculados via tabela polimorfica atend_equipamento_vinculos
+        # (substituiu o antigo atend_equipamentos.servico_id que foi dropado na migration 050)
+        cursor.execute("""
+            SELECT s.*,
+                   (SELECT COUNT(*) FROM atend_equipamento_vinculos v
+                    JOIN atend_equipamentos e ON e.id = v.equipamento_id
+                    WHERE v.entidade='servico' AND v.entidade_id=s.id AND e.ativo=1
+                   ) AS total_equipamentos
+            FROM atend_servicos s
+            WHERE s.agenda_id=%s
+            ORDER BY s.ordem, s.nome
+        """, (agenda_id,))
         return {"success": True, "servicos": cursor.fetchall()}
     finally:
         cursor.close()
@@ -782,12 +999,16 @@ def criar_servico(request: Request, data: dict):
     try:
         _agenda_ou_404(cursor, agenda_id)
         instrutor = (data.get("instrutor") or "").strip() or None
+        descricao = (data.get("descricao") or "").strip() or None
+        vendedor_id = data.get("vendedor_id") or None
+        vendedor_nome = (data.get("vendedor_nome") or "").strip() or None
         cursor.execute("""
             INSERT INTO atend_servicos
-                (agenda_id, nome, duracao_min, cap_presencial, cap_online,
-                 instrutor, ativo, ordem)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        """, (agenda_id, nome, dur, cap_p, cap_o, instrutor,
+                (agenda_id, nome, descricao, duracao_min, cap_presencial, cap_online,
+                 instrutor, vendedor_id, vendedor_nome, ativo, ordem)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (agenda_id, nome, descricao, dur, cap_p, cap_o, instrutor,
+              vendedor_id, vendedor_nome,
               1 if data.get("ativo", 1) else 0,
               int(data.get("ordem") or 0)))
         conn.commit()
@@ -813,11 +1034,17 @@ def atualizar_servico(servico_id: int, request: Request, data: dict):
     try:
         _servico_ou_404(cursor, servico_id)
         instrutor = (data.get("instrutor") or "").strip() or None
+        descricao = (data.get("descricao") or "").strip() or None
+        vendedor_id = data.get("vendedor_id") or None
+        vendedor_nome = (data.get("vendedor_nome") or "").strip() or None
         cursor.execute("""
-            UPDATE atend_servicos SET nome=%s, duracao_min=%s, cap_presencial=%s,
-                   cap_online=%s, instrutor=%s, ativo=%s, ordem=%s
+            UPDATE atend_servicos
+               SET nome=%s, descricao=%s, duracao_min=%s, cap_presencial=%s,
+                   cap_online=%s, instrutor=%s, vendedor_id=%s, vendedor_nome=%s,
+                   ativo=%s, ordem=%s
              WHERE id=%s
-        """, (nome, dur, cap_p, cap_o, instrutor,
+        """, (nome, descricao, dur, cap_p, cap_o, instrutor,
+              vendedor_id, vendedor_nome,
               1 if data.get("ativo", 1) else 0,
               int(data.get("ordem") or 0), servico_id))
         conn.commit()
@@ -834,6 +1061,13 @@ def excluir_servico(servico_id: int, request: Request):
     cursor = conn.cursor(dictionary=True)
     try:
         _servico_ou_404(cursor, servico_id)
+        # Limpa midia (polimorfica, sem FK)
+        cursor.execute(
+            "DELETE FROM atend_midia_fotos WHERE entidade='servico' AND entidade_id=%s",
+            (servico_id,))
+        cursor.execute(
+            "DELETE FROM atend_midia_videos WHERE entidade='servico' AND entidade_id=%s",
+            (servico_id,))
         cursor.execute("DELETE FROM atend_servicos WHERE id=%s", (servico_id,))
         conn.commit()
         return {"success": True}
@@ -843,19 +1077,87 @@ def excluir_servico(servico_id: int, request: Request):
 
 
 # ============================================================
-# EQUIPAMENTOS
+# EQUIPAMENTOS — catalogo global com vinculos m:n
 # ============================================================
+# Equipamento agora e cadastrado UMA vez e pode ser vinculado a
+# multiplos cursos e/ou treinamentos atraves de atend_equipamento_vinculos.
+
+def _equipamento_com_vinculos(cursor, eqs: list) -> list:
+    """Anexa lista de vinculos (cursos + treinamentos) em cada equipamento."""
+    if not eqs:
+        return eqs
+    ids = [e["id"] for e in eqs]
+    placeholders = ",".join(["%s"] * len(ids))
+    cursor.execute(f"""
+        SELECT v.equipamento_id, v.entidade, v.entidade_id,
+               CASE WHEN v.entidade='servico'
+                    THEN (SELECT nome FROM atend_servicos     WHERE id=v.entidade_id)
+                    ELSE (SELECT nome FROM atend_treinamentos WHERE id=v.entidade_id) END AS nome,
+               CASE WHEN v.entidade='servico'
+                    THEN (SELECT agenda_id FROM atend_servicos     WHERE id=v.entidade_id)
+                    ELSE (SELECT agenda_id FROM atend_treinamentos WHERE id=v.entidade_id) END AS agenda_id
+        FROM atend_equipamento_vinculos v
+        WHERE v.equipamento_id IN ({placeholders})
+    """, ids)
+    vinculos_por_eq = {}
+    for v in cursor.fetchall():
+        vinculos_por_eq.setdefault(v["equipamento_id"], []).append({
+            "entidade": v["entidade"], "entidade_id": v["entidade_id"],
+            "nome": v["nome"], "agenda_id": v["agenda_id"],
+        })
+    for e in eqs:
+        e["vinculos"] = vinculos_por_eq.get(e["id"], [])
+    return eqs
+
+
+@router.get("/equipamentos")
+def listar_todos_equipamentos(request: Request):
+    """Catalogo global de equipamentos (com vinculos m:n)."""
+    _exigir_view_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT * FROM atend_equipamentos ORDER BY ordem, nome")
+        return {"success": True, "equipamentos": _equipamento_com_vinculos(cursor, cursor.fetchall())}
+    finally:
+        cursor.close()
+        conn.close()
+
 
 @router.get("/servicos/{servico_id}/equipamentos")
 def listar_equipamentos(servico_id: int, request: Request):
+    """Equipamentos vinculados a um curso."""
     _exigir_view_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
         _servico_ou_404(cursor, servico_id)
-        cursor.execute(
-            "SELECT * FROM atend_equipamentos WHERE servico_id=%s ORDER BY ordem, nome",
-            (servico_id,))
+        cursor.execute("""
+            SELECT e.* FROM atend_equipamentos e
+            JOIN atend_equipamento_vinculos v ON v.equipamento_id = e.id
+            WHERE v.entidade='servico' AND v.entidade_id=%s
+            ORDER BY e.ordem, e.nome
+        """, (servico_id,))
+        return {"success": True, "equipamentos": cursor.fetchall()}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/treinamentos/{treinamento_id}/equipamentos")
+def listar_equipamentos_treino(treinamento_id: int, request: Request):
+    """Equipamentos vinculados a um treinamento."""
+    _exigir_view_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _treinamento_ou_404(cursor, treinamento_id)
+        cursor.execute("""
+            SELECT e.* FROM atend_equipamentos e
+            JOIN atend_equipamento_vinculos v ON v.equipamento_id = e.id
+            WHERE v.entidade='treinamento' AND v.entidade_id=%s
+            ORDER BY e.ordem, e.nome
+        """, (treinamento_id,))
         return {"success": True, "equipamentos": cursor.fetchall()}
     finally:
         cursor.close()
@@ -864,22 +1166,32 @@ def listar_equipamentos(servico_id: int, request: Request):
 
 @router.post("/equipamentos")
 def criar_equipamento(request: Request, data: dict):
-    _exigir_suporte(request)
-    servico_id = data.get("servico_id")
+    _exigir_admin_suporte(request)
     nome = (data.get("nome") or "").strip()
-    if not servico_id or not nome:
-        raise HTTPException(status_code=400, detail="servico_id e nome sao obrigatorios")
+    if not nome:
+        raise HTTPException(status_code=400, detail="Nome e obrigatorio")
+    descricao = (data.get("descricao") or "").strip() or None
+    # Opcional: lista de vinculos iniciais  [{"entidade":"servico|treinamento","entidade_id":N}]
+    vinculos = data.get("vinculos") or []
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        _servico_ou_404(cursor, servico_id)
         cursor.execute("""
-            INSERT INTO atend_equipamentos (servico_id, nome, ativo, ordem)
+            INSERT INTO atend_equipamentos (nome, descricao, ativo, ordem)
             VALUES (%s, %s, %s, %s)
-        """, (servico_id, nome, 1 if data.get("ativo", 1) else 0,
+        """, (nome, descricao, 1 if data.get("ativo", 1) else 0,
               int(data.get("ordem") or 0)))
+        novo = cursor.lastrowid
+        for v in vinculos:
+            ent = v.get("entidade")
+            ent_id = v.get("entidade_id")
+            if ent in ("servico", "treinamento") and ent_id:
+                cursor.execute("""
+                    INSERT IGNORE INTO atend_equipamento_vinculos
+                        (equipamento_id, entidade, entidade_id) VALUES (%s, %s, %s)
+                """, (novo, ent, int(ent_id)))
         conn.commit()
-        return {"success": True, "id": cursor.lastrowid}
+        return {"success": True, "id": novo}
     finally:
         cursor.close()
         conn.close()
@@ -887,7 +1199,7 @@ def criar_equipamento(request: Request, data: dict):
 
 @router.put("/equipamentos/{equipamento_id}")
 def atualizar_equipamento(equipamento_id: int, request: Request, data: dict):
-    _exigir_suporte(request)
+    _exigir_admin_suporte(request)
     nome = (data.get("nome") or "").strip()
     if not nome:
         raise HTTPException(status_code=400, detail="Nome do equipamento e obrigatorio")
@@ -897,10 +1209,68 @@ def atualizar_equipamento(equipamento_id: int, request: Request, data: dict):
         cursor.execute("SELECT id FROM atend_equipamentos WHERE id=%s", (equipamento_id,))
         if not cursor.fetchone():
             raise HTTPException(status_code=404, detail="Equipamento nao encontrado")
+        descricao = (data.get("descricao") or "").strip() or None
         cursor.execute("""
-            UPDATE atend_equipamentos SET nome=%s, ativo=%s, ordem=%s WHERE id=%s
-        """, (nome, 1 if data.get("ativo", 1) else 0,
+            UPDATE atend_equipamentos SET nome=%s, descricao=%s, ativo=%s, ordem=%s
+             WHERE id=%s
+        """, (nome, descricao, 1 if data.get("ativo", 1) else 0,
               int(data.get("ordem") or 0), equipamento_id))
+
+        # Se o cliente mandar vinculos no payload, substitui o conjunto inteiro
+        if "vinculos" in data:
+            cursor.execute(
+                "DELETE FROM atend_equipamento_vinculos WHERE equipamento_id=%s",
+                (equipamento_id,))
+            for v in (data.get("vinculos") or []):
+                ent = v.get("entidade")
+                ent_id = v.get("entidade_id")
+                if ent in ("servico", "treinamento") and ent_id:
+                    cursor.execute("""
+                        INSERT IGNORE INTO atend_equipamento_vinculos
+                            (equipamento_id, entidade, entidade_id) VALUES (%s, %s, %s)
+                    """, (equipamento_id, ent, int(ent_id)))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ---- Helpers individuais de vinculo (atalho para adicionar/remover sem PUT inteiro) ----
+
+@router.post("/equipamentos/{equipamento_id}/vinculos")
+def add_vinculo_equipamento(equipamento_id: int, request: Request, data: dict):
+    _exigir_admin_suporte(request)
+    ent = data.get("entidade")
+    ent_id = data.get("entidade_id")
+    if ent not in ("servico", "treinamento") or not ent_id:
+        raise HTTPException(status_code=400, detail="entidade e entidade_id sao obrigatorios")
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "INSERT IGNORE INTO atend_equipamento_vinculos (equipamento_id, entidade, entidade_id) "
+            "VALUES (%s, %s, %s)", (equipamento_id, ent, int(ent_id)))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/equipamentos/{equipamento_id}/vinculos")
+def remover_vinculo_equipamento(equipamento_id: int, request: Request,
+                                 entidade: str, entidade_id: int):
+    _exigir_admin_suporte(request)
+    if entidade not in ("servico", "treinamento"):
+        raise HTTPException(status_code=400, detail="entidade invalida")
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "DELETE FROM atend_equipamento_vinculos "
+            "WHERE equipamento_id=%s AND entidade=%s AND entidade_id=%s",
+            (equipamento_id, entidade, entidade_id))
         conn.commit()
         return {"success": True}
     finally:
@@ -1108,10 +1478,14 @@ def salvar_horarios(agenda_id: int, request: Request, data: dict):
 
 def _row_agendamentos(cursor, agenda_id: int, dt_ini: date, dt_fim: date):
     cursor.execute("""
-        SELECT a.*, s.nome AS servico_nome, e.nome AS equipamento_nome,
+        SELECT a.*,
+               COALESCE(s.nome, t.nome) AS servico_nome,
+               CASE WHEN a.treinamento_id IS NOT NULL THEN 'treinamento' ELSE 'curso' END AS tipo_oferta,
+               e.nome AS equipamento_nome,
                v.name AS vendedor_nome
         FROM atend_agendamentos a
         LEFT JOIN atend_servicos s     ON s.id = a.servico_id
+        LEFT JOIN atend_treinamentos t ON t.id = a.treinamento_id
         LEFT JOIN atend_equipamentos e ON e.id = a.equipamento_id
         LEFT JOIN users v              ON v.id = a.vendedor_id
         WHERE a.agenda_id=%s AND a.inicio < %s AND a.fim >= %s
@@ -1153,19 +1527,28 @@ def listar_agendamentos(agenda_id: int, request: Request, inicio: str, fim: str)
 
 
 def _gravar_agendamento(cursor, agenda_id, dados, origem, created_by):
-    """INSERT compartilhado entre o agendamento interno e o publico."""
+    """INSERT compartilhado entre o agendamento interno e o publico.
+    dados pode ter servico_id OU treinamento_id (mutuamente exclusivos).
+    Vendedor: aceita vendedor_id (cadastrado) E/OU vendedor_nome (texto
+    livre, quando o cliente nao achou o vendedor na lista).
+    Cliente: alem de nome/email/telefone aceita empresa e funcao (opcionais
+    — formam a base de clientes derivada)."""
     cursor.execute("""
         INSERT INTO atend_agendamentos
-            (agenda_id, servico_id, equipamento_id, titulo,
-             cliente_nome, cliente_email, cliente_telefone, observacoes,
-             modalidade, tipo_negocio, vendedor_id,
+            (agenda_id, servico_id, treinamento_id, equipamento_id, titulo,
+             cliente_nome, cliente_email, cliente_telefone,
+             cliente_empresa, cliente_funcao,
+             observacoes, modalidade, tipo_negocio, vendedor_id, vendedor_nome,
              inicio, fim, status, origem, created_by)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
-        agenda_id, dados["servico_id"], dados["equipamento_id"], dados["titulo"],
+        agenda_id, dados.get("servico_id"), dados.get("treinamento_id"),
+        dados["equipamento_id"], dados["titulo"],
         dados["cliente_nome"], dados["cliente_email"], dados["cliente_telefone"],
+        dados.get("cliente_empresa"), dados.get("cliente_funcao"),
         dados["observacoes"], dados["modalidade"], dados["tipo_negocio"],
-        dados["vendedor_id"], dados["inicio"], dados["fim"], dados["status"],
+        dados["vendedor_id"], dados.get("vendedor_nome"),
+        dados["inicio"], dados["fim"], dados["status"],
         origem, created_by,
     ))
     return cursor.lastrowid
@@ -1188,22 +1571,29 @@ def criar_agendamento(request: Request, data: dict):
     try:
         _agenda_ou_404(cursor, agenda_id)
         servico_id = data.get("servico_id") or None
+        treinamento_id = data.get("treinamento_id") or None
         titulo = (data.get("titulo") or "").strip()
         if servico_id:
             srv = _servico_ou_404(cursor, servico_id, agenda_id)
             if not titulo:
                 titulo = srv["nome"]
+        elif treinamento_id:
+            trn = _treinamento_ou_404(cursor, treinamento_id, agenda_id)
+            if not titulo:
+                titulo = trn["nome"]
         if not titulo:
-            raise HTTPException(status_code=400, detail="Informe o titulo ou um servico")
+            raise HTTPException(status_code=400, detail="Informe o titulo, curso ou treinamento")
         status = data.get("status") if data.get("status") in _STATUS_VALIDOS else "agendado"
         modalidade = (data.get("modalidade")
                       if data.get("modalidade") in ("presencial", "online") else None)
         if status in _STATUS_OCUPA:
-            erro = _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim)
+            erro = _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
+                                treinamento_id=treinamento_id)
             if erro:
                 raise HTTPException(status_code=409, detail=erro)
         novo = _gravar_agendamento(cursor, agenda_id, {
             "servico_id": servico_id,
+            "treinamento_id": treinamento_id,
             "equipamento_id": data.get("equipamento_id") or None,
             "titulo": titulo,
             "cliente_nome": (data.get("cliente_nome") or "").strip() or None,
@@ -1249,24 +1639,27 @@ def atualizar_agendamento(agendamento_id: int, request: Request, data: dict):
             return (data.get(chave) if chave in data else atual[chave])
 
         novo_servico = _campo("servico_id") or None
+        novo_treinamento = _campo("treinamento_id") or None
         novo_modalidade = _campo("modalidade")
         if novo_modalidade not in ("presencial", "online"):
             novo_modalidade = None
         if novo_status in _STATUS_OCUPA:
             erro = _checar_vaga(cursor, atual["agenda_id"], novo_servico,
-                                novo_modalidade, inicio, fim, excluir_id=agendamento_id)
+                                novo_modalidade, inicio, fim,
+                                excluir_id=agendamento_id,
+                                treinamento_id=novo_treinamento)
             if erro:
                 raise HTTPException(status_code=409, detail=erro)
 
         cursor.execute("""
             UPDATE atend_agendamentos
-               SET titulo=%s, servico_id=%s, equipamento_id=%s,
+               SET titulo=%s, servico_id=%s, treinamento_id=%s, equipamento_id=%s,
                    cliente_nome=%s, cliente_email=%s, cliente_telefone=%s,
                    observacoes=%s, modalidade=%s, tipo_negocio=%s, vendedor_id=%s,
                    inicio=%s, fim=%s, status=%s
              WHERE id=%s
         """, (
-            titulo, _campo("servico_id") or None, _campo("equipamento_id") or None,
+            titulo, novo_servico, novo_treinamento, _campo("equipamento_id") or None,
             (_campo("cliente_nome") or None), (_campo("cliente_email") or None),
             (_campo("cliente_telefone") or None), (_campo("observacoes") or None),
             (_campo("modalidade") or None), (_campo("tipo_negocio") or None),
@@ -1349,6 +1742,298 @@ def excluir_bloqueio(bloqueio_id: int, request: Request):
 
 
 # ============================================================
+# TREINAMENTOS (CRUD interno) - espelho de servicos
+# ============================================================
+
+def _treinamento_ou_404(cursor, treinamento_id: int, agenda_id: int = None) -> dict:
+    cursor.execute("SELECT * FROM atend_treinamentos WHERE id=%s", (treinamento_id,))
+    t = cursor.fetchone()
+    if not t or (agenda_id is not None and t["agenda_id"] != agenda_id):
+        raise HTTPException(status_code=404, detail="Treinamento nao encontrado")
+    return t
+
+
+@router.get("/agendas/{agenda_id}/treinamentos")
+def listar_treinamentos(agenda_id: int, request: Request):
+    _exigir_view_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _agenda_ou_404(cursor, agenda_id)
+        cursor.execute("""
+            SELECT t.*,
+                   (SELECT COUNT(*) FROM atend_midia_fotos f
+                    WHERE f.entidade='treinamento' AND f.entidade_id=t.id) AS total_fotos,
+                   (SELECT COUNT(*) FROM atend_midia_videos v
+                    WHERE v.entidade='treinamento' AND v.entidade_id=t.id) AS total_videos
+            FROM atend_treinamentos t
+            WHERE t.agenda_id=%s ORDER BY t.ordem, t.nome
+        """, (agenda_id,))
+        return {"success": True, "treinamentos": cursor.fetchall()}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/treinamentos")
+def criar_treinamento(request: Request, data: dict):
+    _exigir_admin_suporte(request)
+    agenda_id = data.get("agenda_id")
+    nome = (data.get("nome") or "").strip()
+    if not agenda_id or not nome:
+        raise HTTPException(status_code=400, detail="agenda_id e nome sao obrigatorios")
+    dur = int(data.get("duracao_min") or 60)
+    if dur < 5 or dur > 1440:
+        raise HTTPException(status_code=400, detail="Duracao deve ser entre 5 e 1440 minutos")
+    cap_p = max(1, int(data.get("cap_presencial") or 1))
+    cap_o = max(1, int(data.get("cap_online") or 1))
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _agenda_ou_404(cursor, agenda_id)
+        cursor.execute("""
+            INSERT INTO atend_treinamentos
+                (agenda_id, nome, descricao, duracao_min, cap_presencial, cap_online,
+                 instrutor, vendedor_id, vendedor_nome, ativo, ordem)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (
+            agenda_id, nome,
+            (data.get("descricao") or "").strip() or None,
+            dur, cap_p, cap_o,
+            (data.get("instrutor") or "").strip() or None,
+            data.get("vendedor_id") or None,
+            (data.get("vendedor_nome") or "").strip() or None,
+            1 if data.get("ativo", 1) else 0,
+            int(data.get("ordem") or 0),
+        ))
+        conn.commit()
+        return {"success": True, "id": cursor.lastrowid}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.put("/treinamentos/{treinamento_id}")
+def atualizar_treinamento(treinamento_id: int, request: Request, data: dict):
+    _exigir_admin_suporte(request)
+    nome = (data.get("nome") or "").strip()
+    if not nome:
+        raise HTTPException(status_code=400, detail="Nome do treinamento e obrigatorio")
+    dur = int(data.get("duracao_min") or 60)
+    if dur < 5 or dur > 1440:
+        raise HTTPException(status_code=400, detail="Duracao deve ser entre 5 e 1440 minutos")
+    cap_p = max(1, int(data.get("cap_presencial") or 1))
+    cap_o = max(1, int(data.get("cap_online") or 1))
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _treinamento_ou_404(cursor, treinamento_id)
+        cursor.execute("""
+            UPDATE atend_treinamentos
+               SET nome=%s, descricao=%s, duracao_min=%s, cap_presencial=%s,
+                   cap_online=%s, instrutor=%s, vendedor_id=%s, vendedor_nome=%s,
+                   ativo=%s, ordem=%s
+             WHERE id=%s
+        """, (
+            nome,
+            (data.get("descricao") or "").strip() or None,
+            dur, cap_p, cap_o,
+            (data.get("instrutor") or "").strip() or None,
+            data.get("vendedor_id") or None,
+            (data.get("vendedor_nome") or "").strip() or None,
+            1 if data.get("ativo", 1) else 0,
+            int(data.get("ordem") or 0), treinamento_id,
+        ))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/treinamentos/{treinamento_id}")
+def excluir_treinamento(treinamento_id: int, request: Request):
+    _exigir_admin_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _treinamento_ou_404(cursor, treinamento_id)
+        # Limpa fotos/videos associadas (polimorfico, sem FK)
+        cursor.execute(
+            "DELETE FROM atend_midia_fotos WHERE entidade='treinamento' AND entidade_id=%s",
+            (treinamento_id,))
+        cursor.execute(
+            "DELETE FROM atend_midia_videos WHERE entidade='treinamento' AND entidade_id=%s",
+            (treinamento_id,))
+        cursor.execute("DELETE FROM atend_treinamentos WHERE id=%s", (treinamento_id,))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================
+# MIDIA (fotos e videos) - polimorfica (servico ou treinamento)
+# ============================================================
+
+_MIDIA_ENTIDADES = ("servico", "treinamento")
+_UPLOAD_ROOT = Path(__file__).resolve().parents[2] / "web" / "uploads" / "atendimentos"
+_UPLOAD_URL_BASE = "/SistemaCPE/web/uploads/atendimentos"
+_FOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+_MAX_FOTO_MB = 8
+
+
+def _validar_entidade(entidade: str, entidade_id: int, cursor):
+    """Garante que a entidade existe (servico ou treinamento)."""
+    if entidade not in _MIDIA_ENTIDADES:
+        raise HTTPException(status_code=400, detail="Entidade invalida (use 'servico' ou 'treinamento')")
+    tabela = "atend_servicos" if entidade == "servico" else "atend_treinamentos"
+    cursor.execute(f"SELECT id FROM {tabela} WHERE id=%s", (entidade_id,))
+    if not cursor.fetchone():
+        raise HTTPException(status_code=404, detail=f"{entidade.capitalize()} nao encontrado")
+
+
+@router.get("/midia/{entidade}/{entidade_id}")
+def listar_midia(entidade: str, entidade_id: int, request: Request):
+    """Lista fotos + videos de um servico/treinamento."""
+    _exigir_view_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _validar_entidade(entidade, entidade_id, cursor)
+        cursor.execute(
+            "SELECT id, arquivo, ordem FROM atend_midia_fotos "
+            "WHERE entidade=%s AND entidade_id=%s ORDER BY ordem, id",
+            (entidade, entidade_id))
+        fotos = cursor.fetchall()
+        cursor.execute(
+            "SELECT id, url, titulo, ordem FROM atend_midia_videos "
+            "WHERE entidade=%s AND entidade_id=%s ORDER BY ordem, id",
+            (entidade, entidade_id))
+        videos = cursor.fetchall()
+        return {"success": True, "fotos": fotos, "videos": videos}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/midia/{entidade}/{entidade_id}/fotos")
+async def upload_foto(entidade: str, entidade_id: int, request: Request,
+                      file: UploadFile = File(...)):
+    """Upload de uma foto. Aceita um arquivo por chamada (o frontend
+    chama N vezes pra upload multiplo). Salva em web/uploads/atendimentos."""
+    _exigir_admin_suporte(request)
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in _FOTO_EXTS:
+        raise HTTPException(status_code=400,
+                            detail=f"Extensao nao permitida ({ext}). Use: {', '.join(_FOTO_EXTS)}")
+
+    _UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+    filename = f"{entidade}_{entidade_id}_{_uuid.uuid4().hex[:12]}{ext}"
+    destino = _UPLOAD_ROOT / filename
+
+    # Salva no disco com limite de tamanho
+    size = 0
+    limit = _MAX_FOTO_MB * 1024 * 1024
+    with open(destino, "wb") as out:
+        while True:
+            chunk = await file.read(64 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > limit:
+                out.close()
+                destino.unlink(missing_ok=True)
+                raise HTTPException(status_code=413,
+                                    detail=f"Foto maior que {_MAX_FOTO_MB} MB")
+            out.write(chunk)
+
+    arquivo_url = f"{_UPLOAD_URL_BASE}/{filename}"
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _validar_entidade(entidade, entidade_id, cursor)
+        cursor.execute("""
+            INSERT INTO atend_midia_fotos (entidade, entidade_id, arquivo, ordem)
+            VALUES (%s, %s, %s,
+                    COALESCE((SELECT MAX(ordem)+1 FROM atend_midia_fotos f
+                              WHERE f.entidade=%s AND f.entidade_id=%s), 0))
+        """, (entidade, entidade_id, arquivo_url, entidade, entidade_id))
+        conn.commit()
+        return {"success": True, "id": cursor.lastrowid, "arquivo": arquivo_url}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/midia/fotos/{foto_id}")
+def excluir_foto(foto_id: int, request: Request):
+    _exigir_admin_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT arquivo FROM atend_midia_fotos WHERE id=%s", (foto_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Foto nao encontrada")
+        # Apaga o arquivo do disco (best-effort)
+        rel = (row["arquivo"] or "").replace(_UPLOAD_URL_BASE, "").lstrip("/")
+        if rel:
+            try:
+                (_UPLOAD_ROOT / rel).unlink(missing_ok=True)
+            except Exception as err:
+                logger.warning(f"[MIDIA] falha ao remover {rel}: {err}")
+        cursor.execute("DELETE FROM atend_midia_fotos WHERE id=%s", (foto_id,))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/midia/{entidade}/{entidade_id}/videos")
+def adicionar_video(entidade: str, entidade_id: int, request: Request, data: dict):
+    _exigir_admin_suporte(request)
+    url = (data.get("url") or "").strip()
+    if not url or not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(status_code=400, detail="URL invalida (precisa comecar com http:// ou https://)")
+    titulo = (data.get("titulo") or "").strip() or None
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _validar_entidade(entidade, entidade_id, cursor)
+        cursor.execute("""
+            INSERT INTO atend_midia_videos (entidade, entidade_id, url, titulo, ordem)
+            VALUES (%s, %s, %s, %s,
+                    COALESCE((SELECT MAX(ordem)+1 FROM atend_midia_videos v
+                              WHERE v.entidade=%s AND v.entidade_id=%s), 0))
+        """, (entidade, entidade_id, url, titulo, entidade, entidade_id))
+        conn.commit()
+        return {"success": True, "id": cursor.lastrowid}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/midia/videos/{video_id}")
+def excluir_video(video_id: int, request: Request):
+    _exigir_admin_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT id FROM atend_midia_videos WHERE id=%s", (video_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Video nao encontrado")
+        cursor.execute("DELETE FROM atend_midia_videos WHERE id=%s", (video_id,))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================
 # PARTE PUBLICA (sem login) - o cliente se agenda
 # ============================================================
 
@@ -1374,14 +2059,38 @@ def pub_listar_agendas(tipo: str = None):
             """)
         agendas = cursor.fetchall()
         for a in agendas:
-            cursor.execute(
-                "SELECT id, nome, duracao_min FROM atend_servicos "
-                "WHERE agenda_id=%s AND ativo=1 ORDER BY ordem, nome", (a["id"],))
-            a["servicos"] = cursor.fetchall()
+            a["servicos"] = _pub_listar_ofertas(cursor, a["id"], "servico")
+            a["treinamentos"] = _pub_listar_ofertas(cursor, a["id"], "treinamento")
         return {"success": True, "agendas": agendas}
     finally:
         cursor.close()
         conn.close()
+
+
+def _pub_listar_ofertas(cursor, agenda_id: int, entidade: str) -> list:
+    """Retorna cursos ou treinamentos da agenda com galeria de fotos/videos
+    inclusa. Usado pelos endpoints publicos."""
+    tabela = "atend_servicos" if entidade == "servico" else "atend_treinamentos"
+    cursor.execute(f"""
+        SELECT id, nome, descricao, duracao_min, instrutor,
+               COALESCE(vendedor_nome,
+                        (SELECT name FROM users WHERE id = vendedor_id)) AS vendedor
+        FROM {tabela}
+        WHERE agenda_id=%s AND ativo=1 ORDER BY ordem, nome
+    """, (agenda_id,))
+    itens = cursor.fetchall()
+    for it in itens:
+        cursor.execute(
+            "SELECT id, arquivo FROM atend_midia_fotos "
+            "WHERE entidade=%s AND entidade_id=%s ORDER BY ordem, id",
+            (entidade, it["id"]))
+        it["fotos"] = cursor.fetchall()
+        cursor.execute(
+            "SELECT id, url, titulo FROM atend_midia_videos "
+            "WHERE entidade=%s AND entidade_id=%s ORDER BY ordem, id",
+            (entidade, it["id"]))
+        it["videos"] = cursor.fetchall()
+    return itens
 
 
 @router.get("/publico/agendas/{agenda_id}")
@@ -1395,10 +2104,8 @@ def pub_obter_agenda(agenda_id: int):
         ag = cursor.fetchone()
         if not ag:
             raise HTTPException(status_code=404, detail="Agenda nao encontrada")
-        cursor.execute(
-            "SELECT id, nome, duracao_min FROM atend_servicos "
-            "WHERE agenda_id=%s AND ativo=1 ORDER BY ordem, nome", (agenda_id,))
-        ag["servicos"] = cursor.fetchall()
+        ag["servicos"] = _pub_listar_ofertas(cursor, agenda_id, "servico")
+        ag["treinamentos"] = _pub_listar_ofertas(cursor, agenda_id, "treinamento")
         return {"success": True, "agenda": ag}
     finally:
         cursor.close()
@@ -1407,12 +2114,36 @@ def pub_obter_agenda(agenda_id: int):
 
 @router.get("/publico/servicos/{servico_id}/equipamentos")
 def pub_equipamentos(servico_id: int):
+    """Equipamentos vinculados a um servico (curso). Vinculo m:n."""
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute(
-            "SELECT id, nome FROM atend_equipamentos "
-            "WHERE servico_id=%s AND ativo=1 ORDER BY ordem, nome", (servico_id,))
+        cursor.execute("""
+            SELECT e.id, e.nome, e.descricao
+            FROM atend_equipamentos e
+            JOIN atend_equipamento_vinculos v ON v.equipamento_id = e.id
+            WHERE v.entidade='servico' AND v.entidade_id=%s AND e.ativo=1
+            ORDER BY e.ordem, e.nome
+        """, (servico_id,))
+        return {"success": True, "equipamentos": cursor.fetchall()}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/publico/treinamentos/{treinamento_id}/equipamentos")
+def pub_equipamentos_treino(treinamento_id: int):
+    """Equipamentos vinculados a um treinamento."""
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT e.id, e.nome, e.descricao
+            FROM atend_equipamentos e
+            JOIN atend_equipamento_vinculos v ON v.equipamento_id = e.id
+            WHERE v.entidade='treinamento' AND v.entidade_id=%s AND e.ativo=1
+            ORDER BY e.ordem, e.nome
+        """, (treinamento_id,))
         return {"success": True, "equipamentos": cursor.fetchall()}
     finally:
         cursor.close()
@@ -1424,31 +2155,49 @@ def pub_vendedores():
     return {"success": True, "vendedores": _query_vendedores()}
 
 
-def _contexto_agenda_servico(cursor, agenda_id: int, servico_id: int):
-    """Carrega agenda ativa + servico ativo + faixas de horario."""
+def _contexto_agenda_oferta(cursor, agenda_id: int,
+                            servico_id: int = None,
+                            treinamento_id: int = None):
+    """Carrega agenda ativa + oferta ativa (curso OU treinamento) + faixas de
+    horario. A oferta retornada tem chaves uniformes: id, nome, agenda_id,
+    duracao_min, cap_presencial, cap_online + `entidade` ('servico'|'treinamento')."""
     cursor.execute("SELECT * FROM atend_agendas WHERE id=%s AND ativo=1", (agenda_id,))
     agenda = cursor.fetchone()
     if not agenda:
         raise HTTPException(status_code=404, detail="Agenda nao encontrada")
-    cursor.execute("SELECT * FROM atend_servicos WHERE id=%s AND ativo=1", (servico_id,))
-    servico = cursor.fetchone()
-    if not servico or servico["agenda_id"] != agenda_id:
-        raise HTTPException(status_code=404, detail="Servico nao encontrado nessa agenda")
+    oferta = None
+    if servico_id:
+        cursor.execute("SELECT * FROM atend_servicos WHERE id=%s AND ativo=1", (servico_id,))
+        s = cursor.fetchone()
+        if not s or s["agenda_id"] != agenda_id:
+            raise HTTPException(status_code=404, detail="Curso nao encontrado nessa agenda")
+        oferta = dict(s); oferta["entidade"] = "servico"
+    elif treinamento_id:
+        cursor.execute("SELECT * FROM atend_treinamentos WHERE id=%s AND ativo=1", (treinamento_id,))
+        t = cursor.fetchone()
+        if not t or t["agenda_id"] != agenda_id:
+            raise HTTPException(status_code=404, detail="Treinamento nao encontrado nessa agenda")
+        oferta = dict(t); oferta["entidade"] = "treinamento"
+    else:
+        raise HTTPException(status_code=400, detail="Informe servico_id ou treinamento_id")
     cursor.execute("SELECT * FROM atend_horarios WHERE agenda_id=%s", (agenda_id,))
     horarios = cursor.fetchall()
-    return agenda, servico, horarios
+    return agenda, oferta, horarios
 
 
 @router.get("/publico/agendas/{agenda_id}/dias")
-def pub_dias_disponiveis(agenda_id: int, servico_id: int, modalidade: str = None):
-    """Dias com pelo menos um horario livre para o servico na modalidade
-    escolhida, nos proximos `_DIAS_BUSCA_PUBLICA` dias."""
+def pub_dias_disponiveis(agenda_id: int, servico_id: int = None,
+                         treinamento_id: int = None, modalidade: str = None):
+    """Dias com pelo menos um horario livre para a oferta (curso ou
+    treinamento) na modalidade escolhida, nos proximos `_DIAS_BUSCA_PUBLICA`
+    dias. Passe APENAS UM: servico_id ou treinamento_id."""
     if modalidade not in ("presencial", "online"):
         modalidade = None
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        agenda, servico, horarios = _contexto_agenda_servico(cursor, agenda_id, servico_id)
+        agenda, oferta, horarios = _contexto_agenda_oferta(
+            cursor, agenda_id, servico_id, treinamento_id)
         agora = datetime.now()
         hoje = agora.date()
         fim_janela = datetime.combine(hoje + timedelta(days=_DIAS_BUSCA_PUBLICA), _time())
@@ -1456,12 +2205,12 @@ def pub_dias_disponiveis(agenda_id: int, servico_id: int, modalidade: str = None
                                      datetime.combine(hoje, _time()), fim_janela)
         feriados = _feriados_set(cursor, agenda_id, hoje,
                                  hoje + timedelta(days=_DIAS_BUSCA_PUBLICA))
-        dur = servico["duracao_min"]
-        cap_p, cap_o = servico["cap_presencial"], servico["cap_online"]
+        dur = oferta["duracao_min"]
+        cap_p, cap_o = oferta["cap_presencial"], oferta["cap_online"]
         dias = []
         for i in range(_DIAS_BUSCA_PUBLICA):
             d = hoje + timedelta(days=i)
-            if str(d) in feriados:        # feriado trava o dia inteiro
+            if str(d) in feriados:
                 continue
             total = 0
             livres = 0
@@ -1469,11 +2218,10 @@ def pub_dias_disponiveis(agenda_id: int, servico_id: int, modalidade: str = None
                 if ini < agora:
                     continue
                 total += 1
-                if _slot_tem_vaga(ags, blqs, servico_id, cap_p, cap_o,
-                                  ini, ini + timedelta(minutes=dur), modalidade):
+                if _slot_tem_vaga(ags, blqs, oferta["id"], cap_p, cap_o,
+                                  ini, ini + timedelta(minutes=dur),
+                                  modalidade, entidade=oferta["entidade"]):
                     livres += 1
-            # devolve todo dia que tem horario de funcionamento (mesmo lotado),
-            # para o calendario poder marcar o dia cheio em vermelho
             if total:
                 dias.append({"data": str(d), "total": total, "livres": livres})
         return {"success": True, "dias": dias}
@@ -1483,29 +2231,27 @@ def pub_dias_disponiveis(agenda_id: int, servico_id: int, modalidade: str = None
 
 
 @router.get("/publico/agendas/{agenda_id}/horarios")
-def pub_horarios_disponiveis(agenda_id: int, servico_id: int, data: str,
+def pub_horarios_disponiveis(agenda_id: int, data: str,
+                             servico_id: int = None, treinamento_id: int = None,
                              modalidade: str = None):
-    """Horarios de inicio do servico numa data, com a flag de disponibilidade
-    para a modalidade escolhida."""
+    """Horarios de inicio da oferta numa data, com a flag de disponibilidade."""
     if modalidade not in ("presencial", "online"):
         modalidade = None
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        agenda, servico, horarios = _contexto_agenda_servico(cursor, agenda_id, servico_id)
+        agenda, oferta, horarios = _contexto_agenda_oferta(
+            cursor, agenda_id, servico_id, treinamento_id)
         dia = _parse_date(data)
         if _eh_feriado(cursor, agenda_id, dia):
-            return {"success": True, "duracao_min": servico["duracao_min"],
+            return {"success": True, "duracao_min": oferta["duracao_min"],
                     "horarios": [], "feriado": True}
         agora = datetime.now()
-        dur = servico["duracao_min"]
-        cap_p, cap_o = servico["cap_presencial"], servico["cap_online"]
+        dur = oferta["duracao_min"]
+        cap_p, cap_o = oferta["cap_presencial"], oferta["cap_online"]
         ags, blqs = _eventos_periodo(cursor, agenda_id,
                                      datetime.combine(dia, _time()),
                                      datetime.combine(dia + timedelta(days=1), _time()))
-        # Devolve TODOS os horarios futuros do dia com a flag `disponivel`.
-        # disponivel = ha vaga em pelo menos uma modalidade. Nenhum dado do
-        # cliente que ocupou e exposto.
         slots = []
         for ini in _gerar_horarios(agenda, horarios, dia, dur):
             if ini < agora:
@@ -1515,8 +2261,9 @@ def pub_horarios_disponiveis(agenda_id: int, servico_id: int, data: str,
                 "inicio": ini.strftime("%Y-%m-%d %H:%M"),
                 "fim": fim.strftime("%Y-%m-%d %H:%M"),
                 "label": ini.strftime("%H:%M"),
-                "disponivel": _slot_tem_vaga(ags, blqs, servico_id,
-                                             cap_p, cap_o, ini, fim, modalidade),
+                "disponivel": _slot_tem_vaga(ags, blqs, oferta["id"],
+                                             cap_p, cap_o, ini, fim,
+                                             modalidade, entidade=oferta["entidade"]),
             })
         return {"success": True, "duracao_min": dur, "horarios": slots}
     finally:
@@ -1528,9 +2275,11 @@ def pub_horarios_disponiveis(agenda_id: int, servico_id: int, data: str,
 def pub_agendar(data: dict):
     """Cria o agendamento feito pelo cliente. Entra como 'pendente'."""
     agenda_id = data.get("agenda_id")
-    servico_id = data.get("servico_id")
-    if not agenda_id or not servico_id:
-        raise HTTPException(status_code=400, detail="Selecione a agenda e o servico")
+    servico_id = data.get("servico_id") or None
+    treinamento_id = data.get("treinamento_id") or None
+    if not agenda_id or (not servico_id and not treinamento_id):
+        raise HTTPException(status_code=400,
+                            detail="Selecione a agenda e o curso ou treinamento")
     nome = (data.get("cliente_nome") or "").strip()
     email = (data.get("cliente_email") or "").strip()
     telefone = (data.get("cliente_telefone") or "").strip()
@@ -1543,8 +2292,9 @@ def pub_agendar(data: dict):
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        agenda, servico, horarios = _contexto_agenda_servico(cursor, agenda_id, servico_id)
-        dur = servico["duracao_min"]
+        agenda, oferta, horarios = _contexto_agenda_oferta(
+            cursor, agenda_id, servico_id, treinamento_id)
+        dur = oferta["duracao_min"]
         fim = inicio + timedelta(minutes=dur)
 
         # o inicio precisa ser um horario valido gerado pela config
@@ -1558,37 +2308,48 @@ def pub_agendar(data: dict):
         if modalidade not in ("presencial", "online"):
             raise HTTPException(status_code=400,
                                 detail="Informe se o atendimento sera presencial ou online")
-        # valida capacidade do curso para a modalidade escolhida
-        erro = _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim)
+        # valida capacidade da oferta para a modalidade escolhida
+        erro = _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
+                            treinamento_id=treinamento_id)
         if erro:
             raise HTTPException(status_code=409, detail=erro + " Escolha outro horario.")
 
-        # equipamento (se informado) precisa pertencer ao servico
+        # equipamento (se informado) precisa estar vinculado a essa oferta
         equipamento_id = data.get("equipamento_id") or None
         if equipamento_id:
-            cursor.execute("SELECT id FROM atend_equipamentos "
-                           "WHERE id=%s AND servico_id=%s", (equipamento_id, servico_id))
+            cursor.execute(
+                "SELECT 1 FROM atend_equipamento_vinculos "
+                "WHERE equipamento_id=%s AND entidade=%s AND entidade_id=%s",
+                (equipamento_id, oferta["entidade"], oferta["id"]))
             if not cursor.fetchone():
                 raise HTTPException(status_code=400,
-                                    detail="Equipamento invalido para esse servico")
-        # vendedor (se informado) precisa ser do grupo Comercial
+                                    detail="Equipamento nao vinculado a essa oferta")
+        # vendedor: cliente pode escolher um cadastrado (vendedor_id) OU
+        # informar o nome livre (vendedor_nome) quando nao achou na lista.
         vendedor_id = data.get("vendedor_id") or None
-        if vendedor_id and not any(v["id"] == int(vendedor_id) for v in _query_vendedores()):
-            raise HTTPException(status_code=400, detail="Vendedor invalido")
+        vendedor_nome_livre = (data.get("vendedor_nome") or "").strip() or None
+        if vendedor_id:
+            if not any(v["id"] == int(vendedor_id) for v in _query_vendedores()):
+                raise HTTPException(status_code=400, detail="Vendedor invalido")
+            vendedor_nome_livre = None  # tem cadastro: ignora nome livre
 
         novo = _gravar_agendamento(cursor, agenda_id, {
             "servico_id": servico_id,
+            "treinamento_id": treinamento_id,
             "equipamento_id": equipamento_id,
-            "titulo": servico["nome"],
+            "titulo": oferta["nome"],
             "cliente_nome": nome,
             "cliente_email": email,
             "cliente_telefone": telefone,
+            "cliente_empresa": (data.get("cliente_empresa") or "").strip() or None,
+            "cliente_funcao": (data.get("cliente_funcao") or "").strip() or None,
             "observacoes": (data.get("observacoes") or "").strip() or None,
             "modalidade": data.get("modalidade") if data.get("modalidade") in
                 ("presencial", "online") else None,
             "tipo_negocio": data.get("tipo_negocio") if data.get("tipo_negocio") in
                 ("locacao", "venda") else None,
             "vendedor_id": vendedor_id,
+            "vendedor_nome": vendedor_nome_livre,
             "inicio": inicio, "fim": fim, "status": "pendente",
         }, origem="publico", created_by=None)
         conn.commit()

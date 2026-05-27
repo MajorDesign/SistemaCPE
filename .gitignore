@@ -218,8 +218,10 @@ tools/**/.venv/
 # Uploads de usuarios (sao dados, nao codigo)
 web/uploads/contratos/*
 web/uploads/fleet/*
+web/uploads/atendimentos/*
 !web/uploads/contratos/.gitkeep
 !web/uploads/fleet/.gitkeep
+!web/uploads/atendimentos/.gitkeep
 
 # Binarios gerados pelo PyInstaller (tools/termo_notebook)
 tools/**/dist/

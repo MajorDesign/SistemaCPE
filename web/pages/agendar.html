@@ -112,6 +112,29 @@
     </div>
   </div>
 
+  <!-- ============ MODAL: Detalhes da oferta (curso ou treinamento) ============ -->
+  <div class="ag-modal-overlay" id="modalDetalhe" onclick="fecharDetalhe(event)">
+    <div class="ag-modal ag-modal-detalhe" onclick="event.stopPropagation()">
+      <div class="ag-modal-header">
+        <div style="flex:1">
+          <div class="ag-modal-eyebrow" id="detalheEyebrow">Curso</div>
+          <div class="ag-modal-title" id="detalheTitulo">—</div>
+        </div>
+        <button class="ag-modal-close" type="button" onclick="fecharDetalhe()"
+                aria-label="Fechar">&times;</button>
+      </div>
+      <div class="ag-modal-body" id="detalheBody"></div>
+      <div class="ag-modal-footer">
+        <button class="ag-btn ag-btn-ghost" type="button" onclick="fecharDetalhe()">
+          <i class="bi bi-arrow-left"></i> Voltar
+        </button>
+        <button class="ag-btn" type="button" id="detalheBtnAgendar">
+          <i class="bi bi-calendar-check"></i> Agendar este
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ FORM: novo agendamento ============ -->
   <section id="viewForm" style="display:none">
     <div class="ag-content">
@@ -208,6 +231,16 @@
               <input type="text" class="ag-input" id="fTelefone" maxlength="40"
                      placeholder="(11) 96123-4567">
             </div>
+            <div class="ag-field">
+              <label>Empresa onde trabalha</label>
+              <input type="text" class="ag-input" id="fEmpresa" maxlength="150"
+                     placeholder="Nome da empresa (opcional)">
+            </div>
+            <div class="ag-field">
+              <label>Sua função na empresa</label>
+              <input type="text" class="ag-input" id="fFuncao" maxlength="120"
+                     placeholder="Ex: Engenheiro, Topógrafo, Gerente... (opcional)">
+            </div>
           </div>
 
           <div class="ag-step-heading">Dados Adicionais</div>
@@ -226,6 +259,14 @@
             <div class="ag-field">
               <label>Qual é o vendedor que te atende? <span class="ag-req">*</span></label>
               <div class="ag-radio-list" id="listaVendedores"></div>
+              <div id="boxVendedorLivre" style="display:none;margin-top:8px">
+                <input type="text" class="ag-input" id="fVendedorLivre"
+                       placeholder="Digite o nome do vendedor" maxlength="150">
+                <div class="ag-help" style="margin-top:4px">
+                  Não tem problema se ele ainda não foi cadastrado — a equipe
+                  identifica depois.
+                </div>
+              </div>
             </div>
           </div>
           <div class="ag-form-footer">

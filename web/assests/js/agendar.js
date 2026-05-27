@@ -121,30 +121,159 @@ function renderCards() {
   }).join('');
 }
 
-/* ============ MODAL: servicos da unidade ============ */
+/* ============ MODAL: servicos + treinamentos da unidade ============ */
 function abrirModalServicos(agendaId) {
   const a = agendasPub.find(x => x.id === agendaId);
   if (!a) return;
   el('modalServicosTitulo').textContent = a.nome;
   const lista = el('modalServicosLista');
   const srv = a.servicos || [];
-  if (!srv.length) {
-    lista.innerHTML = '<li class="ag-modal-srv-empty">Nenhum serviço cadastrado.</li>';
-  } else {
-    lista.innerHTML = srv.map(s => `
-      <li>
-        <i class="bi bi-check-circle-fill"></i>
-        <div>
-          <div class="ag-modal-srv-nome">${esc(s.nome)}</div>
-          <div class="ag-modal-srv-dur">${s.duracao_min} min</div>
-        </div>
-      </li>`).join('');
+  const trn = a.treinamentos || [];
+
+  const blocos = [];
+  if (srv.length) {
+    blocos.push('<div class="ag-modal-secao-titulo"><i class="bi bi-mortarboard"></i> Cursos</div>');
+    blocos.push(srv.map(s => _renderOferta(s, 'curso')).join(''));
   }
-  // botao do rodape leva pro form da agenda
+  if (trn.length) {
+    blocos.push('<div class="ag-modal-secao-titulo"><i class="bi bi-easel"></i> Treinamentos</div>');
+    blocos.push(trn.map(t => _renderOferta(t, 'treinamento')).join(''));
+  }
+  lista.innerHTML = blocos.length
+    ? blocos.join('')
+    : '<li class="ag-modal-srv-empty">Nenhum serviço ou treinamento cadastrado.</li>';
+
   const btn = el('modalServicosAgendar');
   btn.onclick = () => { fecharModalServicos(); abrirForm(agendaId); };
   el('modalServicos').classList.add('show');
   document.body.style.overflow = 'hidden';
+}
+
+/* Card COMPACTO usado na lista do modal "Ver servicos disponiveis":
+   apenas nome + duracao + snippet curto da descricao + indicador de fotos/videos.
+   Clicar abre o modal de detalhes com tudo. */
+function _renderOferta(item, kind) {
+  const fotos = item.fotos || [];
+  const videos = item.videos || [];
+  const snippet = item.descricao
+    ? esc(item.descricao.slice(0, 110)) + (item.descricao.length > 110 ? '…' : '')
+    : '';
+  // primeira foto vira capa (clicavel pra detalhes)
+  const capa = fotos.length
+    ? `<img class="ag-oferta-capa" src="${esc(fotos[0].arquivo)}" alt="">`
+    : `<div class="ag-oferta-capa ag-oferta-capa-vazia"><i class="bi bi-image"></i></div>`;
+  const badgeMidia = (fotos.length > 1 || videos.length > 0)
+    ? `<div class="ag-oferta-badges">
+        ${fotos.length > 1 ? `<span><i class="bi bi-images"></i> ${fotos.length}</span>` : ''}
+        ${videos.length    ? `<span><i class="bi bi-camera-video"></i> ${videos.length}</span>` : ''}
+      </div>`
+    : '';
+  return `<div class="ag-oferta-card-compact" onclick="abrirDetalheOferta(${item.id}, '${kind}')">
+    ${capa}
+    ${badgeMidia}
+    <div class="ag-oferta-content">
+      <div class="ag-oferta-nome">${esc(item.nome)}
+        ${kind === 'treinamento' ? '<span class="ag-oferta-tag">Treinamento</span>' : ''}</div>
+      <div class="ag-oferta-meta-row">
+        <span class="ag-oferta-meta"><i class="bi bi-clock"></i> ${item.duracao_min} min</span>
+        ${item.instrutor ? `<span class="ag-oferta-meta"><i class="bi bi-person-badge"></i> ${esc(item.instrutor)}</span>` : ''}
+      </div>
+      ${snippet ? `<div class="ag-oferta-snippet">${snippet}</div>` : ''}
+      <div class="ag-oferta-cta-row">
+        <span class="ag-oferta-cta">Ver detalhes <i class="bi bi-arrow-right"></i></span>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* Abre modal de detalhes (drill-down) com TUDO da oferta. */
+function abrirDetalheOferta(itemId, kind) {
+  // localiza item na agenda atualmente aberta no modal de servicos
+  const tituloAgenda = el('modalServicosTitulo').textContent;
+  const ag = agendasPub.find(a => a.nome === tituloAgenda);
+  if (!ag) return;
+  const lista = kind === 'treinamento' ? (ag.treinamentos || []) : (ag.servicos || []);
+  const item = lista.find(x => x.id === itemId);
+  if (!item) return;
+
+  // header
+  el('detalheEyebrow').textContent = kind === 'treinamento' ? 'Treinamento' : 'Curso';
+  el('detalheTitulo').textContent = item.nome;
+
+  // body
+  const fotos = item.fotos || [];
+  const videos = item.videos || [];
+  const heroFoto = fotos.length
+    ? `<img class="ag-detalhe-hero" src="${esc(fotos[0].arquivo)}" alt=""
+            onclick="abrirFotoLightbox('${esc(fotos[0].arquivo)}')">`
+    : '';
+  const galeriaSec = fotos.length > 1
+    ? `<div class="ag-detalhe-secao">
+        <div class="ag-detalhe-secao-titulo"><i class="bi bi-images"></i> Galeria</div>
+        <div class="ag-detalhe-galeria">${fotos.slice(1).map(f =>
+          `<img src="${esc(f.arquivo)}" alt="" onclick="abrirFotoLightbox('${esc(f.arquivo)}')">`
+        ).join('')}</div>
+      </div>`
+    : '';
+  const videosSec = videos.length
+    ? `<div class="ag-detalhe-secao">
+        <div class="ag-detalhe-secao-titulo"><i class="bi bi-camera-video"></i> Vídeos</div>
+        <div class="ag-detalhe-videos">${videos.map(v =>
+          `<a href="${esc(v.url)}" target="_blank" rel="noopener">
+            <i class="bi bi-play-circle-fill"></i>
+            <span>${esc(v.titulo || 'Ver vídeo')}</span>
+          </a>`
+        ).join('')}</div>
+      </div>`
+    : '';
+  const descSec = item.descricao
+    ? `<div class="ag-detalhe-secao">
+        <div class="ag-detalhe-secao-titulo"><i class="bi bi-file-text"></i> Sobre</div>
+        <div class="ag-detalhe-desc">${esc(item.descricao)}</div>
+      </div>`
+    : '';
+
+  el('detalheBody').innerHTML = `
+    ${heroFoto}
+    <div class="ag-detalhe-meta">
+      <span class="ag-oferta-meta"><i class="bi bi-clock"></i> ${item.duracao_min} min</span>
+      ${item.instrutor ? `<span class="ag-oferta-meta"><i class="bi bi-person-badge"></i> Instrutor: ${esc(item.instrutor)}</span>` : ''}
+      ${item.vendedor  ? `<span class="ag-oferta-meta"><i class="bi bi-person-vcard"></i> Vendedor: ${esc(item.vendedor)}</span>` : ''}
+    </div>
+    ${descSec}
+    ${galeriaSec}
+    ${videosSec}
+  `;
+
+  // botao "Agendar este" — fecha tudo e abre o form com a oferta pre-selecionada
+  el('detalheBtnAgendar').innerHTML =
+    `<i class="bi bi-calendar-check"></i> Agendar este ${kind === 'treinamento' ? 'treinamento' : 'curso'}`;
+  el('detalheBtnAgendar').onclick = () => {
+    fecharDetalhe();
+    fecharModalServicos();
+    abrirForm(ag.id, { entidade: kind, id: itemId });
+  };
+
+  el('modalDetalhe').classList.add('show');
+}
+
+function fecharDetalhe(ev) {
+  if (ev && ev.target && ev.target.id !== 'modalDetalhe') return;
+  el('modalDetalhe').classList.remove('show');
+}
+
+function abrirFotoLightbox(src) {
+  // Lightbox simples: overlay com a foto em tamanho grande
+  let lb = document.getElementById('agLightbox');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'agLightbox';
+    lb.className = 'ag-lightbox';
+    lb.onclick = () => lb.classList.remove('show');
+    document.body.appendChild(lb);
+  }
+  lb.innerHTML = `<img src="${esc(src)}" alt=""><button class="ag-lightbox-close">&times;</button>`;
+  lb.classList.add('show');
 }
 
 function fecharModalServicos(ev) {
@@ -154,7 +283,9 @@ function fecharModalServicos(ev) {
 }
 
 /* ============ FORM ============ */
-function abrirForm(agendaId) {
+// preselect (opcional): { entidade: 'servico'|'treinamento', id: number }
+// — se passado, o select de serviço ja vem pre-selecionado e dispara o load.
+function abrirForm(agendaId, preselect) {
   _mostrarApenas('viewForm');
   el('passo1').style.display = 'block';
   el('passo2').style.display = 'none';
@@ -186,6 +317,16 @@ function abrirForm(agendaId) {
     radios.forEach(r => { r.checked = r.value === modalidadeSel; });
     if (typeof onModalidadeChange === 'function') onModalidadeChange();
   }
+  // Se veio com preselect (clique em "Agendar este X" no modal de detalhes),
+  // ja seleciona o serviço/treinamento e dispara carga de dias.
+  if (preselect && preselect.entidade && preselect.id) {
+    const val = preselect.entidade + ':' + preselect.id;
+    const sel = el('fServico');
+    if ([...sel.options].some(o => o.value === val)) {
+      sel.value = val;
+      onServicoChange();
+    }
+  }
 }
 
 function voltarLanding() {
@@ -213,13 +354,39 @@ function onAgendaChange() {
   } else {
     el('boxInstrucoes').style.display = 'none';
   }
-  // serviços da agenda
+  // serviços + treinamentos da agenda (agrupados via <optgroup>)
   const fs = el('fServico');
-  fs.innerHTML = '<option value="">--- Escolha um serviço ---</option>' +
-    (agendaSel ? agendaSel.servicos.map(s =>
-      `<option value="${s.id}">${esc(s.nome)}</option>`).join('') : '');
+  const cursos = (agendaSel && agendaSel.servicos) || [];
+  const treinos = (agendaSel && agendaSel.treinamentos) || [];
+  let html = '<option value="">--- Escolha um serviço ---</option>';
+  if (cursos.length) {
+    html += '<optgroup label="Cursos">';
+    html += cursos.map(s =>
+      `<option value="servico:${s.id}">${esc(s.nome)}</option>`).join('');
+    html += '</optgroup>';
+  }
+  if (treinos.length) {
+    html += '<optgroup label="Treinamentos">';
+    html += treinos.map(t =>
+      `<option value="treinamento:${t.id}">${esc(t.nome)}</option>`).join('');
+    html += '</optgroup>';
+  }
+  fs.innerHTML = html;
   document.querySelectorAll('input[name="modalidade"]').forEach(r => { r.checked = false; });
   resetCalendario();
+}
+
+/* Decodifica o value do select 'fServico' (formato 'tipo:ID') em
+   { servico_id, treinamento_id } pronto pra query string. */
+function _ofertaSelecionada() {
+  const v = (el('fServico').value || '').split(':');
+  if (v.length !== 2) return null;
+  const [tipo, idStr] = v;
+  const id = parseInt(idStr);
+  if (!id) return null;
+  return tipo === 'treinamento'
+    ? { treinamento_id: id }
+    : { servico_id: id };
 }
 
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -245,18 +412,18 @@ function onModalidadeChange() { carregarDias(); }
 // a disponibilidade dos dias depende da modalidade.
 async function carregarDias() {
   resetCalendario();
-  const servicoId = el('fServico').value;
+  const oferta = _ofertaSelecionada();
   const modalidade = radioVal('modalidade');
-  if (!servicoId || !agendaSel) return;
+  if (!oferta || !agendaSel) return;
   if (!modalidade) {
     el('agCalGrid').innerHTML = '<div class="ag-help" style="grid-column:1/-1">' +
       'Escolha presencial ou online para ver os dias disponíveis.</div>';
     return;
   }
   el('agCalGrid').innerHTML = '<div class="ag-help" style="grid-column:1/-1">Carregando dias...</div>';
+  const params = new URLSearchParams({ ...oferta, modalidade });
   try {
-    const d = await get(
-      `/agendas/${agendaSel.id}/dias?servico_id=${servicoId}&modalidade=${modalidade}`);
+    const d = await get(`/agendas/${agendaSel.id}/dias?${params}`);
     diasInfo = {};
     (d.dias || []).forEach(x => { diasInfo[x.data] = x; });
     const primeiroLivre = (d.dias || []).find(x => x.livres > 0);
@@ -308,9 +475,13 @@ async function selecionarDia(dataStr) {
   el('fHorario').value = '';
   renderCalendario();
   el('agSlots').innerHTML = '<div class="ag-help">Carregando horários...</div>';
+  const oferta = _ofertaSelecionada();
+  if (!oferta) return;
+  const params = new URLSearchParams({
+    ...oferta, data: dataStr, modalidade: radioVal('modalidade'),
+  });
   try {
-    const d = await get(`/agendas/${agendaSel.id}/horarios?servico_id=${el('fServico').value}` +
-      `&data=${dataStr}&modalidade=${radioVal('modalidade')}`);
+    const d = await get(`/agendas/${agendaSel.id}/horarios?${params}`);
     renderSlots(d.horarios || []);
   } catch (e) {
     el('agSlots').innerHTML = '<div class="ag-help">Erro ao carregar horários.</div>';
@@ -359,12 +530,16 @@ async function irPasso(n) {
 }
 
 async function prepararPasso2() {
-  // equipamentos do serviço escolhido
-  const servicoId = el('fServico').value;
+  // equipamentos da oferta escolhida (curso ou treinamento)
+  const oferta = _ofertaSelecionada();
   const cx = el('listaEquipamentos');
   cx.innerHTML = '<div class="ag-help">Carregando...</div>';
+  if (!oferta) { el('boxEquipamentos').style.display = 'none'; return; }
+  const path = oferta.servico_id
+    ? `/servicos/${oferta.servico_id}/equipamentos`
+    : `/treinamentos/${oferta.treinamento_id}/equipamentos`;
   try {
-    const d = await get(`/servicos/${servicoId}/equipamentos`);
+    const d = await get(path);
     const eqs = d.equipamentos || [];
     if (!eqs.length) {
       el('boxEquipamentos').style.display = 'none';
@@ -385,10 +560,30 @@ async function prepararPasso2() {
     } catch (e) { vendedores = []; }
   }
   const lv = el('listaVendedores');
-  lv.innerHTML = vendedores.length
-    ? vendedores.map(v =>
-        `<label class="ag-radio"><input type="radio" name="vendedor" value="${v.id}"> ${esc(v.name)}</label>`).join('')
-    : '<div class="ag-help">Nenhum vendedor cadastrado no grupo Comercial.</div>';
+  el('boxVendedorLivre').style.display = 'none';
+  el('fVendedorLivre').value = '';
+
+  if (vendedores.length) {
+    // Lista de cadastrados + opcao "Outro" no final
+    lv.innerHTML = vendedores.map(v =>
+        `<label class="ag-radio"><input type="radio" name="vendedor" value="${v.id}"
+           onchange="onVendedorChange()"> ${esc(v.name)}</label>`).join('') +
+      `<label class="ag-radio"><input type="radio" name="vendedor" value="outro"
+         onchange="onVendedorChange()"> <em>Outro / não está na lista</em></label>`;
+  } else {
+    // Lista vazia — vai direto pro input livre
+    lv.innerHTML = '<div class="ag-help" style="margin-bottom:6px">' +
+      'Nenhum vendedor cadastrado. Informe o nome:</div>';
+    el('boxVendedorLivre').style.display = 'block';
+  }
+}
+
+function onVendedorChange() {
+  const v = radioVal('vendedor');
+  const box = el('boxVendedorLivre');
+  box.style.display = (v === 'outro') ? 'block' : 'none';
+  if (v === 'outro') el('fVendedorLivre').focus();
+  else el('fVendedorLivre').value = '';
 }
 
 function radioVal(nome) {
@@ -412,21 +607,41 @@ async function enviarAgendamento() {
   if (!modalidade) return setErro('Informe se o treinamento é presencial ou online.');
   const tipo = radioVal('tipo');
   if (!tipo) return setErro('Informe se é locação ou venda.');
-  const vendedor = radioVal('vendedor');
-  if (vendedores.length && !vendedor) return setErro('Selecione o vendedor que te atende.');
+  // Vendedor: cadastrado (id), "outro" (nome livre obrigatorio),
+  // ou input direto se nao tem nenhum cadastrado (lista vazia)
+  const vendedorVal = radioVal('vendedor');
+  let vendedor_id = null;
+  let vendedor_nome = '';
+  if (vendedores.length) {
+    if (!vendedorVal) return setErro('Selecione o vendedor que te atende.');
+    if (vendedorVal === 'outro') {
+      vendedor_nome = el('fVendedorLivre').value.trim();
+      if (!vendedor_nome) return setErro('Digite o nome do vendedor.');
+    } else {
+      vendedor_id = parseInt(vendedorVal);
+    }
+  } else {
+    vendedor_nome = el('fVendedorLivre').value.trim();
+    if (!vendedor_nome) return setErro('Informe o nome do vendedor.');
+  }
 
+  const oferta = _ofertaSelecionada();
+  if (!oferta) return setErro('Escolha um curso ou treinamento.');
   const payload = {
     agenda_id: agendaSel.id,
-    servico_id: parseInt(el('fServico').value),
+    ...oferta,                    // servico_id OU treinamento_id
     inicio: el('fHorario').value,
     cliente_nome: nome,
     cliente_email: email,
     cliente_telefone: telefone,
+    cliente_empresa: el('fEmpresa').value.trim(),
+    cliente_funcao: el('fFuncao').value.trim(),
     observacoes: el('fMensagem').value.trim(),
     equipamento_id: equipamento || null,
     modalidade: modalidade,
     tipo_negocio: tipo,
-    vendedor_id: vendedor || null,
+    vendedor_id: vendedor_id,
+    vendedor_nome: vendedor_nome,
   };
 
   const btn = el('btnEnviar');
@@ -490,9 +705,11 @@ async function bootstrap() {
 
 document.addEventListener('DOMContentLoaded', bootstrap);
 
-// ESC fecha o modal de servicos
+// ESC fecha modais (detalhes tem prioridade — esta por cima)
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && el('modalServicos') && el('modalServicos').classList.contains('show')) {
-    fecharModalServicos();
-  }
+  if (e.key !== 'Escape') return;
+  const detalhe = el('modalDetalhe');
+  if (detalhe && detalhe.classList.contains('show')) { fecharDetalhe(); return; }
+  const srv = el('modalServicos');
+  if (srv && srv.classList.contains('show')) { fecharModalServicos(); }
 });

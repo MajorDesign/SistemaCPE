@@ -48,8 +48,14 @@
         <div class="sup-nav-item" data-section="cursos" onclick="showSection('cursos')">
           <i class="bi bi-mortarboard"></i><span class="sup-nav-label">Cursos</span>
         </div>
+        <div class="sup-nav-item" data-section="treinamentos" onclick="showSection('treinamentos')">
+          <i class="bi bi-easel"></i><span class="sup-nav-label">Treinamentos</span>
+        </div>
         <div class="sup-nav-item" data-section="equipamentos" onclick="showSection('equipamentos')">
           <i class="bi bi-pc-display"></i><span class="sup-nav-label">Equipamentos</span>
+        </div>
+        <div class="sup-nav-item" data-section="clientes" onclick="showSection('clientes')">
+          <i class="bi bi-people"></i><span class="sup-nav-label">Clientes</span>
         </div>
         <div class="sup-nav-item" data-section="feriados" onclick="showSection('feriados')">
           <i class="bi bi-calendar-x"></i><span class="sup-nav-label">Feriados</span>
@@ -253,39 +259,92 @@
         </div>
       </section>
 
-      <!-- ====== EQUIPAMENTOS ====== -->
-      <section class="sup-page" id="page-equipamentos">
+      <!-- ====== TREINAMENTOS ====== -->
+      <section class="sup-page" id="page-treinamentos">
         <div class="sup-page-header">
-          <span class="sup-page-title">Equipamentos por curso</span>
+          <span class="sup-page-title">Treinamentos por unidade</span>
         </div>
         <div class="sup-card">
-          <div class="sup-grid-2" style="max-width:680px;margin-bottom:8px">
-            <div class="sup-field">
+          <div class="sup-page-header" style="margin-bottom:14px">
+            <div class="sup-field" style="margin:0;min-width:280px">
               <label>Unidade / Agenda</label>
-              <select class="sup-select" id="equipAgendaSel" onchange="carregarCursosDoEquip()"></select>
+              <select class="sup-select" id="treinoAgendaSel" onchange="carregarTreinamentos()"></select>
             </div>
-            <div class="sup-field">
-              <label>Curso</label>
-              <select class="sup-select" id="equipCursoSel" onchange="carregarEquipamentos()">
-                <option value="">— Escolha um curso —</option>
-              </select>
-            </div>
-          </div>
-          <p class="sup-help" style="margin-bottom:10px">
-            Os equipamentos cadastrados aqui aparecem para o cliente quando ele
-            escolhe este curso no agendamento.
-          </p>
-          <div style="display:flex;gap:8px;margin-bottom:12px;max-width:520px" data-need-admin>
-            <input type="text" class="sup-input" id="equipNovoNome"
-                   placeholder="Nome do equipamento (ex: GNSS i80)" maxlength="150">
-            <button class="btn-sup btn-sup-primary" id="btnAddEquip" onclick="addEquipamento()"
-                    style="white-space:nowrap"><i class="bi bi-plus-lg"></i> Adicionar</button>
+            <span class="sup-spacer"></span>
+            <button class="btn-sup btn-sup-primary" onclick="novoTreinamento()" data-need-admin>
+              <i class="bi bi-plus-lg"></i> Novo treinamento
+            </button>
           </div>
           <div class="sup-table-wrap">
             <table class="sup-table">
-              <thead><tr><th>Equipamento</th><th>Status</th><th></th></tr></thead>
+              <thead><tr>
+                <th>Treinamento</th><th>Instrutor</th><th>Vendedor</th><th>Duração</th>
+                <th>Mídia</th><th>Status</th><th></th>
+              </tr></thead>
+              <tbody id="tbodyTreinamentos">
+                <tr><td colspan="7" class="sup-empty">Selecione uma agenda.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====== EQUIPAMENTOS ====== -->
+      <section class="sup-page" id="page-equipamentos">
+        <div class="sup-page-header">
+          <span class="sup-page-title">Catálogo de Equipamentos</span>
+          <span class="sup-spacer"></span>
+          <button class="btn-sup btn-sup-primary" id="btnAddEquip" onclick="novoEquipamento()" data-need-admin>
+            <i class="bi bi-plus-lg"></i> Novo equipamento
+          </button>
+        </div>
+        <div class="sup-card">
+          <p class="sup-help" style="margin-bottom:10px">
+            Cada equipamento é cadastrado <strong>uma vez</strong> e pode ser vinculado a
+            vários cursos e/ou treinamentos. No agendamento, o cliente vê os
+            equipamentos vinculados ao curso/treinamento que ele escolheu.
+          </p>
+          <div class="sup-table-wrap">
+            <table class="sup-table">
+              <thead><tr>
+                <th>Equipamento</th><th>Descrição</th>
+                <th>Vinculado a</th><th>Status</th><th></th>
+              </tr></thead>
               <tbody id="tbodyEquipamentos">
-                <tr><td colspan="3" class="sup-empty">Selecione um curso.</td></tr>
+                <tr><td colspan="5" class="sup-empty">Carregando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====== CLIENTES ====== -->
+      <section class="sup-page" id="page-clientes">
+        <div class="sup-page-header">
+          <span class="sup-page-title">Base de Clientes</span>
+          <span class="sup-spacer"></span>
+          <input type="text" class="sup-input" id="buscaCliente"
+                 placeholder="Buscar nome, e-mail, empresa..."
+                 style="max-width:280px" oninput="renderClientes()">
+          <button class="btn-sup btn-sup-ghost" onclick="exportarClientesCSV()"
+                  title="Baixar lista filtrada como CSV (Excel)">
+            <i class="bi bi-file-earmark-spreadsheet"></i> Exportar CSV
+          </button>
+        </div>
+        <div class="sup-card">
+          <p class="sup-help" style="margin-bottom:12px">
+            Base derivada dos agendamentos públicos — cada e-mail aparece uma única
+            vez com os dados mais recentes. Clique em <i class="bi bi-eye"></i>
+            para ver o histórico completo de agendamentos do cliente.
+          </p>
+          <div class="sup-table-wrap">
+            <table class="sup-table">
+              <thead><tr>
+                <th>Nome</th><th>Empresa / Função</th><th>Contato</th>
+                <th>Agendamentos</th><th>Último contato</th><th></th>
+              </tr></thead>
+              <tbody id="tbodyClientes">
+                <tr><td colspan="6" class="sup-empty">Carregando...</td></tr>
               </tbody>
             </table>
           </div>
@@ -352,16 +411,10 @@
             <select class="sup-select" id="agUnidade"><option value="">— Nenhuma —</option></select>
           </div>
         </div>
-        <div class="sup-grid-2">
-          <div class="sup-field">
-            <label>Duração do slot (min) *</label>
-            <input type="number" class="sup-input" id="agDuracao" value="30" min="5" max="480" step="5">
-          </div>
-          <div class="sup-field">
-            <label>&nbsp;</label>
-            <div class="sup-help">Granularidade dos horários gerados.</div>
-          </div>
-        </div>
+        <!-- Slot oculto — mantido por compatibilidade. Valor default = 30,
+             nao influencia mais o passo da grade (que vem da duracao do curso). -->
+        <input type="hidden" id="agDuracao" value="30">
+
         <div class="sup-grid-2">
           <div class="sup-field">
             <label>Cor no calendário</label>
@@ -373,6 +426,16 @@
               <option value="1">Ativa</option><option value="0">Inativa</option>
             </select>
           </div>
+        </div>
+
+        <div style="background:#f0fdf4;border-left:4px solid var(--sup-success);
+                    padding:10px 12px;border-radius:6px;margin:10px 0 12px;
+                    font-size:.82rem;color:#166534">
+          <i class="bi bi-info-circle"></i>
+          <strong>Horário padrão CPE:</strong> Segunda a Sexta, 09:00–13:00 e 14:00–18:00
+          (almoço 13:00–14:00 fora). Pra personalizar (incluir sábado, mudar
+          faixas, etc), use <strong>Calendário → Configurar horários</strong>
+          após salvar.
         </div>
         <div class="sup-field">
           <label>Descrição <small style="color:#6b7280">(resumo curto, aparece no card público)</small></label>
@@ -434,7 +497,7 @@
 
   <!-- ============ MODAL: CURSO ============ -->
   <div class="sup-modal-overlay" id="modalCurso">
-    <div class="sup-modal">
+    <div class="sup-modal lg">
       <div class="sup-modal-header">
         <span class="sup-modal-title"><i class="bi bi-mortarboard"></i>
           <span id="modalCursoTitulo">Novo curso</span></span>
@@ -447,6 +510,11 @@
           <label>Nome do curso *</label>
           <input type="text" class="sup-input" id="cursoNome" maxlength="150"
                  placeholder="Ex: Treinamento GNSS">
+        </div>
+        <div class="sup-field">
+          <label>Descrição <small style="color:#6b7280">(visível pro cliente no público)</small></label>
+          <textarea class="sup-textarea" id="cursoDescricao" maxlength="2000"
+                    placeholder="Como vai ser o curso, o que será abordado, pré-requisitos..."></textarea>
         </div>
         <div class="sup-field">
           <label>Duração do atendimento (minutos) *</label>
@@ -475,12 +543,316 @@
           <div class="sup-help">Aparece no e-mail de confirmação enviado ao cliente.</div>
         </div>
         <div class="sup-field">
+          <label>Vendedor responsável <small style="color:#6b7280">(padrão — pode ser trocado no agendamento)</small></label>
+          <select class="sup-select" id="cursoVendedorSel" onchange="onCursoVendedorChange()">
+            <option value="">— Sem vendedor padrão —</option>
+          </select>
+          <div class="sup-help">
+            Vendedor cadastrado no grupo Comercial.
+            <a href="#" onclick="toggleCursoVendedorManual(); return false;" style="color:#92400e;font-weight:600;">
+              Não está na lista? Cadastre manualmente
+            </a>
+          </div>
+        </div>
+        <div class="sup-field" id="cursoVendedorManualWrap" style="display:none">
+          <label>Vendedor manual</label>
+          <input type="text" class="sup-input" id="cursoVendedorNome" maxlength="150"
+                 placeholder="Nome do vendedor (preenchido quando ele ainda não tem cadastro)">
+          <div class="sup-help">No futuro, edite este curso e vincule ao cadastro no select acima.</div>
+        </div>
+        <div class="sup-field">
           <label><input type="checkbox" id="cursoAtivo" checked> Curso ativo</label>
+        </div>
+
+        <!-- Equipamentos (só visível ao editar — precisa de servico_id) -->
+        <div id="cursoEquipsWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-pc-display"></i> Equipamentos deste curso
+          </div>
+          <div id="cursoEquipsLista" style="margin-bottom:10px"></div>
+          <div class="sup-grid-2" style="align-items:end">
+            <div class="sup-field" style="margin:0;display:flex;gap:6px">
+              <select class="sup-select" id="cursoEquipSel">
+                <option value="">— Vincular equipamento existente —</option>
+              </select>
+              <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                      onclick="vincularEquipCurso()" style="white-space:nowrap">
+                <i class="bi bi-link-45deg"></i> Vincular
+              </button>
+            </div>
+            <div class="sup-field" style="margin:0">
+              <a href="#" onclick="toggleCriarEquipInlineCurso(); return false;"
+                 style="color:#92400e;font-weight:600;font-size:.85rem">
+                <i class="bi bi-plus-circle"></i> Criar novo equipamento
+              </a>
+            </div>
+          </div>
+          <div id="cursoEquipNovoWrap" style="display:none;margin-top:8px;padding:10px;background:#fafafa;border-radius:8px">
+            <div class="sup-field" style="margin-bottom:8px">
+              <input type="text" class="sup-input" id="cursoEquipNovoNome"
+                     placeholder="Nome do equipamento (ex: GNSS i80)" maxlength="150">
+            </div>
+            <div class="sup-field" style="margin-bottom:8px">
+              <input type="text" class="sup-input" id="cursoEquipNovoDesc"
+                     placeholder="Descrição (opcional)" maxlength="250">
+            </div>
+            <button type="button" class="btn-sup btn-sup-primary btn-sup-sm"
+                    onclick="criarEquipInlineCurso()">
+              <i class="bi bi-check-lg"></i> Criar e vincular
+            </button>
+          </div>
+        </div>
+
+        <!-- Mídia (só visível ao editar — precisa de servico_id) -->
+        <div id="cursoMidiaWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-images"></i> Galeria (fotos)
+          </div>
+          <div id="cursoFotosLista" class="sup-midia-grid"></div>
+          <div style="margin-top:8px">
+            <input type="file" id="cursoFotoInput" accept="image/*" multiple style="display:none"
+                   onchange="uploadFotosCurso(event)">
+            <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                    onclick="document.getElementById('cursoFotoInput').click()">
+              <i class="bi bi-upload"></i> Enviar fotos
+            </button>
+            <span class="sup-help" style="margin-left:8px">JPG, PNG ou WEBP até 8MB cada</span>
+          </div>
+
+          <div class="sup-card-title" style="margin-top:18px;margin-bottom:10px">
+            <i class="bi bi-camera-video"></i> Vídeos (links)
+          </div>
+          <div id="cursoVideosLista"></div>
+          <div class="sup-grid-2" style="margin-top:8px">
+            <div class="sup-field" style="margin:0">
+              <input type="text" class="sup-input" id="cursoVideoTitulo"
+                     placeholder="Título (opcional)" maxlength="150">
+            </div>
+            <div class="sup-field" style="margin:0;display:flex;gap:6px">
+              <input type="url" class="sup-input" id="cursoVideoUrl"
+                     placeholder="https://youtube.com/..." maxlength="500">
+              <button type="button" class="btn-sup btn-sup-primary btn-sup-sm"
+                      onclick="addVideoCurso()" style="white-space:nowrap">
+                <i class="bi bi-plus-lg"></i> Adicionar
+              </button>
+            </div>
+          </div>
         </div>
       </div>
       <div class="sup-modal-footer">
         <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalCurso')">Cancelar</button>
         <button class="btn-sup btn-sup-primary" onclick="salvarCurso()">
+          <i class="bi bi-check-lg"></i> Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: TREINAMENTO (espelho de curso) ============ -->
+  <div class="sup-modal-overlay" id="modalTreinamento">
+    <div class="sup-modal lg">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-easel"></i>
+          <span id="modalTreinoTitulo">Novo treinamento</span></span>
+        <button class="sup-modal-close" onclick="fecharModal('modalTreinamento')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroTreino"></div>
+        <input type="hidden" id="treinoId">
+        <div class="sup-field">
+          <label>Nome do treinamento *</label>
+          <input type="text" class="sup-input" id="treinoNome" maxlength="150"
+                 placeholder="Ex: Treinamento completo GNSS RTK">
+        </div>
+        <div class="sup-field">
+          <label>Descrição <small style="color:#6b7280">(visível pro cliente no público)</small></label>
+          <textarea class="sup-textarea" id="treinoDescricao" maxlength="2000"
+                    placeholder="Como vai ser o treinamento, módulos, carga horária, certificação..."></textarea>
+        </div>
+        <div class="sup-field">
+          <label>Duração do atendimento (minutos) *</label>
+          <input type="number" class="sup-input" id="treinoDuracao" value="120"
+                 min="5" max="1440" step="5">
+        </div>
+        <div class="sup-grid-2" id="treinoCapWrap">
+          <div class="sup-field" id="treinoCapPresencialWrap">
+            <label>Capacidade presencial</label>
+            <input type="number" class="sup-input" id="treinoCapPresencial" value="1"
+                   min="1" max="999">
+          </div>
+          <div class="sup-field" id="treinoCapOnlineWrap">
+            <label>Capacidade online</label>
+            <input type="number" class="sup-input" id="treinoCapOnline" value="1"
+                   min="1" max="999">
+          </div>
+        </div>
+        <div class="sup-field">
+          <label>Instrutor</label>
+          <input type="text" class="sup-input" id="treinoInstrutor" maxlength="150"
+                 placeholder="Ex: Eng. João Silva">
+        </div>
+        <div class="sup-field">
+          <label>Vendedor responsável <small style="color:#6b7280">(padrão)</small></label>
+          <select class="sup-select" id="treinoVendedorSel" onchange="onTreinoVendedorChange()">
+            <option value="">— Sem vendedor padrão —</option>
+          </select>
+          <div class="sup-help">
+            <a href="#" onclick="toggleTreinoVendedorManual(); return false;" style="color:#92400e;font-weight:600;">
+              Não está na lista? Cadastre manualmente
+            </a>
+          </div>
+        </div>
+        <div class="sup-field" id="treinoVendedorManualWrap" style="display:none">
+          <label>Vendedor manual</label>
+          <input type="text" class="sup-input" id="treinoVendedorNome" maxlength="150">
+        </div>
+        <div class="sup-field">
+          <label><input type="checkbox" id="treinoAtivo" checked> Treinamento ativo</label>
+        </div>
+
+        <!-- Equipamentos do treinamento (só ao editar) -->
+        <div id="treinoEquipsWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-pc-display"></i> Equipamentos deste treinamento
+          </div>
+          <div id="treinoEquipsLista" style="margin-bottom:10px"></div>
+          <div class="sup-grid-2" style="align-items:end">
+            <div class="sup-field" style="margin:0;display:flex;gap:6px">
+              <select class="sup-select" id="treinoEquipSel">
+                <option value="">— Vincular equipamento existente —</option>
+              </select>
+              <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                      onclick="vincularEquipTreino()" style="white-space:nowrap">
+                <i class="bi bi-link-45deg"></i> Vincular
+              </button>
+            </div>
+            <div class="sup-field" style="margin:0">
+              <a href="#" onclick="toggleCriarEquipInlineTreino(); return false;"
+                 style="color:#92400e;font-weight:600;font-size:.85rem">
+                <i class="bi bi-plus-circle"></i> Criar novo equipamento
+              </a>
+            </div>
+          </div>
+          <div id="treinoEquipNovoWrap" style="display:none;margin-top:8px;padding:10px;background:#fafafa;border-radius:8px">
+            <div class="sup-field" style="margin-bottom:8px">
+              <input type="text" class="sup-input" id="treinoEquipNovoNome"
+                     placeholder="Nome do equipamento" maxlength="150">
+            </div>
+            <div class="sup-field" style="margin-bottom:8px">
+              <input type="text" class="sup-input" id="treinoEquipNovoDesc"
+                     placeholder="Descrição (opcional)" maxlength="250">
+            </div>
+            <button type="button" class="btn-sup btn-sup-primary btn-sup-sm"
+                    onclick="criarEquipInlineTreino()">
+              <i class="bi bi-check-lg"></i> Criar e vincular
+            </button>
+          </div>
+        </div>
+
+        <div id="treinoMidiaWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-images"></i> Galeria (fotos)
+          </div>
+          <div id="treinoFotosLista" class="sup-midia-grid"></div>
+          <div style="margin-top:8px">
+            <input type="file" id="treinoFotoInput" accept="image/*" multiple style="display:none"
+                   onchange="uploadFotosTreino(event)">
+            <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                    onclick="document.getElementById('treinoFotoInput').click()">
+              <i class="bi bi-upload"></i> Enviar fotos
+            </button>
+            <span class="sup-help" style="margin-left:8px">JPG, PNG ou WEBP até 8MB cada</span>
+          </div>
+
+          <div class="sup-card-title" style="margin-top:18px;margin-bottom:10px">
+            <i class="bi bi-camera-video"></i> Vídeos (links)
+          </div>
+          <div id="treinoVideosLista"></div>
+          <div class="sup-grid-2" style="margin-top:8px">
+            <div class="sup-field" style="margin:0">
+              <input type="text" class="sup-input" id="treinoVideoTitulo"
+                     placeholder="Título (opcional)" maxlength="150">
+            </div>
+            <div class="sup-field" style="margin:0;display:flex;gap:6px">
+              <input type="url" class="sup-input" id="treinoVideoUrl"
+                     placeholder="https://youtube.com/..." maxlength="500">
+              <button type="button" class="btn-sup btn-sup-primary btn-sup-sm"
+                      onclick="addVideoTreino()" style="white-space:nowrap">
+                <i class="bi bi-plus-lg"></i> Adicionar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-danger" id="btnExcluirTreino" onclick="excluirTreinamento()"
+                style="margin-right:auto;display:none"><i class="bi bi-trash"></i> Excluir</button>
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalTreinamento')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarTreinamento()">
+          <i class="bi bi-check-lg"></i> Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: EQUIPAMENTO ============ -->
+  <div class="sup-modal-overlay" id="modalEquip">
+    <div class="sup-modal lg">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-pc-display"></i>
+          <span id="modalEquipTitulo">Novo equipamento</span></span>
+        <button class="sup-modal-close" onclick="fecharModal('modalEquip')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroEquip"></div>
+        <input type="hidden" id="equipId">
+        <div class="sup-field">
+          <label>Nome *</label>
+          <input type="text" class="sup-input" id="equipNome" maxlength="150"
+                 placeholder="Ex: GNSS i80">
+        </div>
+        <div class="sup-field">
+          <label>Descrição <small style="color:#6b7280">(opcional — visível pro cliente)</small></label>
+          <textarea class="sup-textarea" id="equipDescricao" maxlength="1000"
+                    placeholder="Especificações, marca, capacidade..."></textarea>
+        </div>
+        <div class="sup-field">
+          <label><input type="checkbox" id="equipAtivo" checked> Equipamento ativo</label>
+        </div>
+
+        <!-- Vinculos com cursos / treinamentos -->
+        <div style="border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-link-45deg"></i> Vincular a cursos / treinamentos
+          </div>
+          <p class="sup-help" style="margin-bottom:10px">
+            Marque os cursos e treinamentos onde este equipamento aparece pro cliente
+            na hora do agendamento.
+          </p>
+          <div class="sup-grid-2" style="align-items:end;margin-bottom:8px">
+            <div class="sup-field" style="margin:0">
+              <label>Tipo</label>
+              <select class="sup-select" id="equipVincTipo" onchange="onEquipVincTipoChange()">
+                <option value="servico">Curso</option>
+                <option value="treinamento">Treinamento</option>
+              </select>
+            </div>
+            <div class="sup-field" style="margin:0;display:flex;gap:6px">
+              <select class="sup-select" id="equipVincItemSel">
+                <option value="">— Escolha um item —</option>
+              </select>
+              <button type="button" class="btn-sup btn-sup-primary btn-sup-sm"
+                      onclick="addVinculoEquip()" style="white-space:nowrap">
+                <i class="bi bi-plus-lg"></i> Vincular
+              </button>
+            </div>
+          </div>
+          <div id="equipVincLista"></div>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-danger" id="btnExcluirEquip" onclick="excluirEquipDoModal()"
+                style="margin-right:auto;display:none"><i class="bi bi-trash"></i> Excluir</button>
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalEquip')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarEquipamento()">
           <i class="bi bi-check-lg"></i> Salvar</button>
       </div>
     </div>
@@ -731,6 +1103,88 @@
       </div>
       <div class="sup-modal-footer">
         <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalListaAgendas')">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: EDITAR CLIENTE (admin only) ============ -->
+  <div class="sup-modal-overlay" id="modalEditarCliente">
+    <div class="sup-modal">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-pencil-square"></i> Editar Cliente</span>
+        <button class="sup-modal-close" onclick="fecharModal('modalEditarCliente')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroEditarCliente"></div>
+        <p class="sup-help" style="margin-bottom:12px;background:#FEF3C7;
+            padding:10px;border-radius:6px;color:#92400E">
+          <i class="bi bi-info-circle"></i>
+          A edição atualiza os dados deste cliente em <strong>todos</strong> os
+          agendamentos passados (o e-mail é a chave e não pode ser alterado).
+        </p>
+        <input type="hidden" id="edClienteEmail">
+        <div class="sup-field">
+          <label>E-mail (não editável)</label>
+          <input type="email" class="sup-input" id="edClienteEmailDisplay" disabled>
+        </div>
+        <div class="sup-field">
+          <label>Nome completo *</label>
+          <input type="text" class="sup-input" id="edClienteNome" maxlength="200">
+        </div>
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>Telefone</label>
+            <input type="text" class="sup-input" id="edClienteTelefone" maxlength="40">
+          </div>
+          <div class="sup-field">
+            <label>Empresa</label>
+            <input type="text" class="sup-input" id="edClienteEmpresa" maxlength="150">
+          </div>
+        </div>
+        <div class="sup-field">
+          <label>Função na empresa</label>
+          <input type="text" class="sup-input" id="edClienteFuncao" maxlength="120">
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalEditarCliente')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarEdicaoCliente()">
+          <i class="bi bi-check-lg"></i> Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: HISTORICO DO CLIENTE ============ -->
+  <div class="sup-modal-overlay" id="modalCliente">
+    <div class="sup-modal lg">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title">
+          <i class="bi bi-person-vcard"></i> <span id="modalClienteTitulo">Cliente</span>
+        </span>
+        <button class="sup-modal-close" onclick="fecharModal('modalCliente')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div id="modalClienteHeader" style="background:var(--sup-primary-soft);
+             padding:12px 14px;border-radius:8px;margin-bottom:14px;
+             display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+             gap:12px;font-size:.86rem"></div>
+        <div class="sup-card-title" style="margin-bottom:10px">
+          <i class="bi bi-clock-history"></i> Histórico de Agendamentos
+        </div>
+        <div class="sup-table-wrap">
+          <table class="sup-table">
+            <thead><tr>
+              <th>Data</th><th>Curso / Treinamento</th><th>Instrutor</th>
+              <th>Unidade</th><th>Modalidade</th><th>Status</th>
+            </tr></thead>
+            <tbody id="tbodyHistorico">
+              <tr><td colspan="6" class="sup-empty">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalCliente')">Fechar</button>
       </div>
     </div>
   </div>
