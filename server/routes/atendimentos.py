@@ -54,15 +54,88 @@ def _get_user(request: Request) -> dict:
     return user
 
 
-def _exigir_suporte(request: Request) -> dict:
-    """Garante que o usuario e ADMIN ou T.I. (parte interna do modulo)."""
+def _grupo_do_user(user: dict) -> str:
+    """Retorna o nome do grupo do user (vazio se nao tem)."""
+    gid = user.get("group_id")
+    if not gid:
+        return ""
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT name FROM cpe_grupo WHERE id=%s", (gid,))
+        row = cursor.fetchone()
+        return (row["name"] if row else "") or ""
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# Niveis de acesso ao modulo:
+#   admin  -> CRUD de estrutura (agendas, cursos, equipamentos, horarios,
+#             feriados, bloqueios). ADMIN, TI, RESPONSAVEL_GRUPO do Suporte,
+#             grupo "Suporte ti".
+#   op     -> operacao do dia-a-dia (criar/cancelar agendamento via PUT status).
+#             admin + usuario comum do grupo "Suporte".
+#   view   -> somente leitura (Comercial + qualquer um dos acima).
+
+_GRUPOS_ADMIN_FIXOS = ("Suporte ti",)
+_GRUPOS_RESP_ADMIN  = ("Suporte",)   # responsavel_grupo desses grupos = admin
+_GRUPOS_OP          = ("Suporte",)   # usuarios comuns desses grupos = op
+_GRUPOS_VIEW_ONLY   = ("Comercial",)
+
+
+def _calc_nivel_suporte(user: dict) -> str:
+    """Retorna 'admin' | 'op' | 'view' | 'none'."""
+    role = user.get("role")
+    if role == "ADMIN" or role == "TI":
+        return "admin"
+    grupo = _grupo_do_user(user)
+    if grupo in _GRUPOS_ADMIN_FIXOS:
+        return "admin"
+    if role == "RESPONSAVEL_GRUPO" and grupo in _GRUPOS_RESP_ADMIN:
+        return "admin"
+    if grupo in _GRUPOS_OP:
+        return "op"
+    if grupo in _GRUPOS_VIEW_ONLY:
+        return "view"
+    return "none"
+
+
+def _403(nivel_exigido: str):
+    msgs = {
+        "admin": "Apenas Administrador, T.I. ou Responsavel do Suporte podem alterar a estrutura do modulo.",
+        "op":    "Voce nao tem permissao para criar ou alterar agendamentos.",
+        "view":  "Voce nao tem permissao para acessar o modulo de Equipe de Suporte.",
+    }
+    raise HTTPException(status_code=403, detail=msgs.get(nivel_exigido, "Acesso negado."))
+
+
+def _exigir_view_suporte(request: Request) -> dict:
+    """Leitura — qualquer perfil autorizado (admin, op ou view)."""
     user = _get_user(request)
-    if user.get("role") not in ("ADMIN", "TI"):
-        raise HTTPException(
-            status_code=403,
-            detail="Apenas Administrador e T.I. acessam o modulo de Equipe de Suporte.",
-        )
+    if _calc_nivel_suporte(user) == "none":
+        _403("view")
     return user
+
+
+def _exigir_op_suporte(request: Request) -> dict:
+    """Operacao — admin ou usuario do Suporte. Comercial bloqueado."""
+    user = _get_user(request)
+    if _calc_nivel_suporte(user) not in ("admin", "op"):
+        _403("op")
+    return user
+
+
+def _exigir_admin_suporte(request: Request) -> dict:
+    """Estrutura — apenas ADMIN, TI, Responsavel do Suporte ou grupo Suporte ti."""
+    user = _get_user(request)
+    if _calc_nivel_suporte(user) != "admin":
+        _403("admin")
+    return user
+
+
+# Alias retro-compat: mantem chamadas existentes (vao ser trocadas abaixo).
+_exigir_suporte = _exigir_admin_suporte
 
 
 # ============================================================
@@ -373,12 +446,31 @@ def _servico_ou_404(cursor, servico_id: int, agenda_id: int = None) -> dict:
 
 
 # ============================================================
+# NIVEL DE ACESSO (pra UI esconder/mostrar acoes)
+# ============================================================
+
+@router.get("/meu-nivel")
+def meu_nivel(request: Request):
+    """Retorna o nivel de acesso do user logado no modulo:
+        admin -> CRUD de estrutura (agendas, cursos, etc)
+        op    -> criar/cancelar agendamento (Suporte comum)
+        view  -> somente leitura (Comercial)
+        none  -> sem acesso
+
+    Frontend usa isso pra esconder botoes que o user nao pode usar.
+    Backend tambem valida em cada endpoint — esta resposta e so UX."""
+    user = _get_user(request)
+    return {"success": True, "nivel": _calc_nivel_suporte(user),
+            "grupo": _grupo_do_user(user), "role": user.get("role")}
+
+
+# ============================================================
 # DASHBOARD
 # ============================================================
 
 @router.get("/dashboard")
 def dashboard(request: Request):
-    _exigir_suporte(request)
+    _exigir_view_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -427,7 +519,7 @@ def agendamentos_do_dia(request: Request, data: str):
     """Lista todos os agendamentos ativos (pendente/agendado/atendido) de
     uma data, com joins de agenda, unidade, servico, vendedor e equipamento.
     Usado pelos cards 'Hoje' / 'Amanha' do dashboard."""
-    _exigir_suporte(request)
+    _exigir_view_suporte(request)
     dia = _parse_date(data, "data")
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
@@ -461,7 +553,7 @@ def agendamentos_do_dia(request: Request, data: str):
 @router.get("/pendentes")
 def listar_pendentes(request: Request):
     """Todos os agendamentos aguardando confirmacao, de todas as agendas."""
-    _exigir_suporte(request)
+    _exigir_view_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -492,7 +584,7 @@ def listar_pendentes(request: Request):
 
 @router.get("/agendas")
 def listar_agendas(request: Request, incluir_inativas: int = 0):
-    _exigir_suporte(request)
+    _exigir_view_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -548,7 +640,7 @@ def listar_agendas(request: Request, incluir_inativas: int = 0):
 
 @router.get("/agendas/{agenda_id}")
 def obter_agenda(agenda_id: int, request: Request):
-    _exigir_suporte(request)
+    _exigir_view_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -657,7 +749,7 @@ def excluir_agenda(agenda_id: int, request: Request):
 
 @router.get("/agendas/{agenda_id}/servicos")
 def listar_servicos(agenda_id: int, request: Request):
-    _exigir_suporte(request)
+    _exigir_view_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -756,7 +848,7 @@ def excluir_servico(servico_id: int, request: Request):
 
 @router.get("/servicos/{servico_id}/equipamentos")
 def listar_equipamentos(servico_id: int, request: Request):
-    _exigir_suporte(request)
+    _exigir_view_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -839,7 +931,7 @@ def excluir_equipamento(equipamento_id: int, request: Request):
 
 @router.get("/vendedores")
 def listar_vendedores(request: Request):
-    _exigir_suporte(request)
+    _exigir_view_suporte(request)
     return {"success": True, "vendedores": _query_vendedores()}
 
 
@@ -868,7 +960,7 @@ def _query_vendedores() -> list:
 def listar_feriados(request: Request, agenda_id: int = None):
     """Feriados nacionais + (se agenda_id informado) os especificos da agenda,
     do ano corrente em diante."""
-    _exigir_suporte(request)
+    _exigir_view_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -952,7 +1044,7 @@ def excluir_feriado(feriado_id: int, request: Request):
 
 @router.get("/agendas/{agenda_id}/horarios")
 def listar_horarios(agenda_id: int, request: Request):
-    _exigir_suporte(request)
+    _exigir_view_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -1031,7 +1123,7 @@ def _row_agendamentos(cursor, agenda_id: int, dt_ini: date, dt_fim: date):
 
 @router.get("/agendas/{agenda_id}/agendamentos")
 def listar_agendamentos(agenda_id: int, request: Request, inicio: str, fim: str):
-    _exigir_suporte(request)
+    _exigir_view_suporte(request)
     dt_ini = _parse_date(inicio, "inicio")
     dt_fim = _parse_date(fim, "fim")
     conn = get_db_or_404()
@@ -1082,7 +1174,7 @@ def _gravar_agendamento(cursor, agenda_id, dados, origem, created_by):
 @router.post("/agendamentos")
 def criar_agendamento(request: Request, data: dict):
     """Agendamento criado pela equipe (parte interna)."""
-    user = _exigir_suporte(request)
+    user = _exigir_op_suporte(request)
     agenda_id = data.get("agenda_id")
     if not agenda_id:
         raise HTTPException(status_code=400, detail="agenda_id e obrigatorio")
@@ -1133,7 +1225,7 @@ def criar_agendamento(request: Request, data: dict):
 
 @router.put("/agendamentos/{agendamento_id}")
 def atualizar_agendamento(agendamento_id: int, request: Request, data: dict):
-    _exigir_suporte(request)
+    _exigir_op_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:

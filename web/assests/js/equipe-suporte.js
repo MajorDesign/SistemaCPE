@@ -14,6 +14,16 @@ const HORA_INI = 6, HORA_FIM = 21, ROW_H = 48;   // grade do calendário
 /* estado */
 let agendas = [];
 let agendaAtual = null;
+
+// Permissoes do user logado no modulo — preenchidas no init via /meu-nivel.
+// admin = CRUD estrutura (agendas, cursos, equipamentos, horarios, feriados)
+// op    = criar/cancelar agendamento (Suporte comum)
+// view  = somente leitura (Comercial)
+let _nivel     = 'none';
+let _canView   = false;
+let _canOp     = false;
+let _canAdmin  = false;
+
 let calView = 'semana';
 let calRef = new Date();              // âncora do período exibido
 let calAgendamentos = [];
@@ -24,6 +34,31 @@ let servicosAgenda = [];     // serviços da agenda aberta (modal de agendamento
 let vendedoresList = [];     // usuários do grupo Comercial
 let cursosSecao = [];        // cursos exibidos na seção Cursos
 let cursosPreselect = null;  // agenda a pré-selecionar ao abrir a seção Cursos
+
+/* ============ PERMISSOES ============ */
+async function carregarPermissoes() {
+  const r = await apiFetch('/meu-nivel');
+  if (r.success) {
+    _nivel    = r.nivel || 'none';
+    _canView  = _nivel !== 'none';
+    _canOp    = _nivel === 'op' || _nivel === 'admin';
+    _canAdmin = _nivel === 'admin';
+  }
+  aplicarPermissoes();
+}
+
+/* Mostra/esconde controles do admin conforme nivel. Chamado depois de
+   cada render que injeta HTML novo (modais, tabelas, cards). */
+function aplicarPermissoes() {
+  // Esconde tudo marcado com [data-need-admin] se nao for admin
+  document.querySelectorAll('[data-need-admin]').forEach(el => {
+    el.style.display = _canAdmin ? '' : 'none';
+  });
+  // Esconde tudo marcado com [data-need-op] se nao puder operacao
+  document.querySelectorAll('[data-need-op]').forEach(el => {
+    el.style.display = _canOp ? '' : 'none';
+  });
+}
 
 /* ============ AUTH / API ============ */
 function _token() {
@@ -192,18 +227,19 @@ function renderAgendasCards() {
       <div class="sup-ag-acoes">
         <button class="btn-sup btn-sup-primary btn-sup-sm" onclick="abrirAgenda(${a.id})">
           <i class="bi bi-calendar3"></i> Calendário</button>
-        <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="configHorariosDe(${a.id})">
+        <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="configHorariosDe(${a.id})" data-need-admin>
           <i class="bi bi-gear"></i> Horários</button>
         <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="irParaCursos(${a.id})">
           <i class="bi bi-mortarboard"></i> Cursos</button>
-        <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="abrirModalAgenda(${a.id})">
+        <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="abrirModalAgenda(${a.id})" data-need-admin>
           <i class="bi bi-pencil"></i> Editar</button>
         <button class="btn-sup btn-sup-${a.ativo ? 'danger' : 'primary'} btn-sup-sm"
-          onclick="toggleAgenda(${a.id})">
+          onclick="toggleAgenda(${a.id})" data-need-admin>
           <i class="bi bi-power"></i> ${a.ativo ? 'Desativar' : 'Ativar'}</button>
       </div>
     </div>`;
   }).join('');
+  aplicarPermissoes();
 }
 
 /* ============ LINK PUBLICO ============ */
@@ -286,10 +322,11 @@ function renderAgendasTabela() {
       <td>${a.agendamentos_prox7}</td>
       <td>${ocup}</td>
       <td>${status}</td>
-      <td><button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="abrirModalAgenda(${a.id})">
+      <td><button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="abrirModalAgenda(${a.id})" data-need-admin>
         <i class="bi bi-pencil"></i></button></td>
     </tr>`;
   }).join('');
+  aplicarPermissoes();
 }
 
 function esc(s) {
@@ -323,7 +360,9 @@ function abrirModalAgenda(id) {
   document.getElementById('agAtivo').value = a ? (a.ativo ? '1' : '0') : '1';
   document.getElementById('agDescricao').value = a && a.descricao ? a.descricao : '';
   document.getElementById('agInstrucoes').value = a && a.instrucoes ? a.instrucoes : '';
-  document.getElementById('btnExcluirAgenda').style.display = a ? 'inline-flex' : 'none';
+  // Excluir agenda: so admin pode (DELETE destrutivo).
+  document.getElementById('btnExcluirAgenda').style.display =
+    (a && _canAdmin) ? 'inline-flex' : 'none';
   abrirModal('modalAgenda');
 }
 
@@ -640,6 +679,11 @@ function rotuloStatus(s) {
 
 /* ============ AGENDAMENTO — CRUD ============ */
 async function novoAgendamentoEm(dataStr) {
+  // Sem permissao de operacao (Comercial / sem grupo) nem abre o modal.
+  if (!_canOp) {
+    toast('Voce nao tem permissao para criar agendamentos.', 'error');
+    return;
+  }
   // bloqueia tentativa de criar atendimento em feriado (defesa de UX,
   // o backend tambem rejeita via _checar_vaga em atendimentos.py)
   const dia = new Date(dataStr + 'T00:00');
@@ -715,7 +759,9 @@ async function abrirModalAgendamento(id) {
   document.getElementById('agtVendedor').value = a && a.vendedor_id ? a.vendedor_id : '';
   document.getElementById('agtStatus').value = a ? a.status : 'agendado';
   document.getElementById('agtObs').value = a && a.observacoes ? a.observacoes : '';
-  document.getElementById('btnExcluirAg').style.display = a ? 'inline-flex' : 'none';
+  // Excluir agendamento (DELETE) e admin-only; cancelar (status='cancelado') e op.
+  document.getElementById('btnExcluirAg').style.display =
+    (a && _canAdmin) ? 'inline-flex' : 'none';
   await _carregarEquipSelect(a && a.servico_id ? a.servico_id : '',
                              a && a.equipamento_id ? a.equipamento_id : '');
   abrirModal('modalAgendamento');
@@ -910,10 +956,11 @@ async function carregarCursos() {
                   : '<span class="sup-pill off">Inativo</span>'}</td>
     <td style="white-space:nowrap">
       <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="editarCurso(${s.id})"
-        title="Editar"><i class="bi bi-pencil"></i></button>
+        title="Editar" data-need-admin><i class="bi bi-pencil"></i></button>
       <button class="btn-sup btn-sup-danger btn-sup-sm" onclick="excluirCurso(${s.id})"
-        title="Excluir"><i class="bi bi-trash"></i></button>
+        title="Excluir" data-need-admin><i class="bi bi-trash"></i></button>
     </td></tr>`).join('');
+  aplicarPermissoes();
 }
 
 function _agendaAtualCursos() {
@@ -1037,9 +1084,10 @@ async function carregarEquipamentos() {
     <td>${esc(e.nome)}</td>
     <td>${e.ativo ? '<span class="sup-pill ok">Ativo</span>'
                   : '<span class="sup-pill off">Inativo</span>'}</td>
-    <td><button class="btn-sup btn-sup-danger btn-sup-sm" onclick="excluirEquipamento(${e.id})">
+    <td><button class="btn-sup btn-sup-danger btn-sup-sm" onclick="excluirEquipamento(${e.id})" data-need-admin>
       <i class="bi bi-trash"></i></button></td>
   </tr>`).join('');
+  aplicarPermissoes();
 }
 
 async function addEquipamento() {
@@ -1191,12 +1239,13 @@ async function renderPendentes() {
       <td>${esc(p.servico_nome || p.titulo || '—')}</td>
       <td>${modal}</td>
       <td style="white-space:nowrap">
-        <button class="btn-sup btn-sup-primary btn-sup-sm" onclick="confirmarPendente(${p.id})">
+        <button class="btn-sup btn-sup-primary btn-sup-sm" onclick="confirmarPendente(${p.id})" data-need-op>
           <i class="bi bi-check-lg"></i> Confirmar</button>
-        <button class="btn-sup btn-sup-danger btn-sup-sm" onclick="recusarPendente(${p.id})">
+        <button class="btn-sup btn-sup-danger btn-sup-sm" onclick="recusarPendente(${p.id})" data-need-op>
           <i class="bi bi-x-lg"></i> Recusar</button>
       </td></tr>`;
   }).join('');
+  aplicarPermissoes();
 }
 
 async function confirmarPendente(id) {
@@ -1251,9 +1300,10 @@ async function carregarFeriados() {
       <td>${esc(f.nome)}</td>
       <td>${abr}</td>
       <td><button class="btn-sup btn-sup-danger btn-sup-sm"
-        onclick="excluirFeriado(${f.id}, ${nacional})"><i class="bi bi-trash"></i></button></td>
+        onclick="excluirFeriado(${f.id}, ${nacional})" data-need-admin><i class="bi bi-trash"></i></button></td>
     </tr>`;
   }).join('');
+  aplicarPermissoes();
 }
 
 function abrirModalFeriado() {
@@ -1388,6 +1438,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const u = JSON.parse(localStorage.getItem('cpe_user') || '{}');
     document.getElementById('topbarUser').textContent = u.name || '';
   } catch (e) { /* ignore */ }
+  await carregarPermissoes();    // descobre o nivel do user antes de renderizar
   await carregarUnidades();
   await loadDashboard();
   // sino: primeira carga + poll a cada 30s
