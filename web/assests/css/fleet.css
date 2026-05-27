@@ -110,6 +110,9 @@ body.fleet-body iframe { max-width: 100%; height: auto; }
 .fleet-sidebar-logo img {
   width: 40px;
   flex-shrink: 0;
+  /* logo original eh preta — em fundo escuro da sidebar fica invisivel.
+     filter torna branca pra ficar legivel. */
+  filter: brightness(0) invert(1);
 }
 
 .fleet-sidebar-logo-text {

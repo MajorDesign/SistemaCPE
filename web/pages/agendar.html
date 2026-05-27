@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agendamento — CPE Tecnologia</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/agendar.css">
+
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+</head>
+<body>
+
+  <div class="ag-topbar">
+    <img src="/SistemaCPE/web/assests/images/logocpe.png" alt="CPE">
+    <span class="ag-topbar-logo">CPE Tecnologia</span>
+  </div>
+
+  <!-- ============ ESCOLHA DA MODALIDADE (tela inicial) ============ -->
+  <section id="viewModalidade" class="ag-modalidade-wrap">
+    <div class="ag-modalidade-inner">
+      <div class="ag-modalidade-badge">
+        <i class="bi bi-calendar2-check"></i> Agendamento de Treinamento
+      </div>
+      <h1 class="ag-modalidade-headline">Como você quer ser atendido?</h1>
+      <p class="ag-modalidade-sub">Escolha a modalidade do seu treinamento para começar.</p>
+
+      <div class="ag-modalidade-grid">
+        <button type="button" class="ag-modalidade-card presencial"
+                onclick="escolherModalidade('presencial')">
+          <div class="ag-modalidade-icon">
+            <i class="bi bi-buildings"></i>
+          </div>
+          <div class="ag-modalidade-titulo">Presencial</div>
+          <div class="ag-modalidade-desc">
+            Atendimento em uma de nossas unidades CPE.
+            Você escolhe a unidade no próximo passo.
+          </div>
+          <div class="ag-modalidade-cta">
+            Escolher unidade <i class="bi bi-arrow-right"></i>
+          </div>
+        </button>
+
+        <button type="button" class="ag-modalidade-card online"
+                onclick="escolherModalidade('online')">
+          <div class="ag-modalidade-icon">
+            <i class="bi bi-camera-video"></i>
+          </div>
+          <div class="ag-modalidade-titulo">Online</div>
+          <div class="ag-modalidade-desc">
+            Atendimento remoto por videochamada,
+            sem precisar ir até uma unidade.
+          </div>
+          <div class="ag-modalidade-cta">
+            Agendar online <i class="bi bi-arrow-right"></i>
+          </div>
+        </button>
+      </div>
+
+      <p class="ag-modalidade-footer">
+        <i class="bi bi-shield-check"></i>
+        Suas informações são tratadas com total confidencialidade.
+      </p>
+    </div>
+  </section>
+
+  <!-- ============ LANDING: lista de unidades (so para presencial) ============ -->
+  <section id="viewLanding" style="display:none">
+    <div class="ag-hero">
+      <div class="ag-container">
+        <a href="#" onclick="voltarModalidade(); return false;" class="ag-voltar-link">
+          <i class="bi bi-arrow-left"></i> Trocar modalidade
+        </a>
+        <h1>CPE Tecnologia</h1>
+      </div>
+    </div>
+    <div class="ag-content">
+      <div class="ag-section-title">Escolha a unidade</div>
+      <div class="ag-search">
+        <i class="bi bi-search"></i>
+        <input type="text" id="buscaAgenda" placeholder="Busca por unidade ou serviço..."
+               oninput="renderCards()">
+      </div>
+      <div class="ag-cards" id="cardsAgendas">
+        <div class="ag-loading">Carregando unidades...</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MODAL: Servicos da unidade ============ -->
+  <div class="ag-modal-overlay" id="modalServicos" onclick="fecharModalServicos(event)">
+    <div class="ag-modal" onclick="event.stopPropagation()">
+      <div class="ag-modal-header">
+        <div>
+          <div class="ag-modal-eyebrow">Serviços disponíveis</div>
+          <div class="ag-modal-title" id="modalServicosTitulo">—</div>
+        </div>
+        <button class="ag-modal-close" type="button" onclick="fecharModalServicos()"
+                aria-label="Fechar">&times;</button>
+      </div>
+      <div class="ag-modal-body">
+        <ul class="ag-modal-srv" id="modalServicosLista"></ul>
+      </div>
+      <div class="ag-modal-footer">
+        <button class="ag-btn ag-btn-ghost" type="button" onclick="fecharModalServicos()">Fechar</button>
+        <button class="ag-btn" type="button" id="modalServicosAgendar">
+          <i class="bi bi-calendar-check"></i> Agendar nesta unidade
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FORM: novo agendamento ============ -->
+  <section id="viewForm" style="display:none">
+    <div class="ag-content">
+      <div class="ag-form-wrap">
+        <div class="ag-form-title">Novo Agendamento</div>
+
+        <div class="ag-steps">
+          <div class="ag-step active" id="step1">
+            <div class="ag-step-num">1</div>
+            <div class="ag-step-label">Dados do Agendamento</div>
+          </div>
+          <div class="ag-step-line"></div>
+          <div class="ag-step" id="step2">
+            <div class="ag-step-num">2</div>
+            <div class="ag-step-label">Informações Adicionais</div>
+          </div>
+        </div>
+
+        <div class="ag-alerta erro" id="formErro"></div>
+
+        <!-- ===== PASSO 1 ===== -->
+        <div id="passo1">
+          <div class="ag-step-heading">Dados do Agendamento</div>
+          <div class="ag-fieldset">
+            <div class="ag-field">
+              <label>Agenda <span class="ag-req">*</span></label>
+              <select class="ag-select" id="fAgenda" onchange="onAgendaChange()"></select>
+            </div>
+            <div class="ag-instrucoes" id="boxInstrucoes" style="display:none">
+              <b>Instruções para Agendamento</b>
+              <span id="txtInstrucoes"></span>
+            </div>
+            <div class="ag-field">
+              <label>Serviço <span class="ag-req">*</span></label>
+              <select class="ag-select" id="fServico" onchange="onServicoChange()">
+                <option value="">--- Escolha um serviço ---</option>
+              </select>
+            </div>
+            <div class="ag-field">
+              <label>O treinamento será presencial ou online? <span class="ag-req">*</span></label>
+              <div class="ag-radio-list">
+                <label class="ag-radio"><input type="radio" name="modalidade"
+                  value="presencial" onchange="onModalidadeChange()"> Presencial</label>
+                <label class="ag-radio"><input type="radio" name="modalidade"
+                  value="online" onchange="onModalidadeChange()"> Online</label>
+              </div>
+            </div>
+            <div class="ag-field">
+              <label>Escolha o dia e o horário <span class="ag-req">*</span></label>
+              <div class="ag-cal">
+                <div class="ag-cal-head">
+                  <button type="button" class="ag-cal-nav" onclick="calMudarMes(-1)">‹</button>
+                  <span id="agCalMes">—</span>
+                  <button type="button" class="ag-cal-nav" onclick="calMudarMes(1)">›</button>
+                </div>
+                <div class="ag-cal-grid" id="agCalGrid">
+                  <div class="ag-help" style="grid-column:1/-1">Escolha um serviço primeiro.</div>
+                </div>
+                <div class="ag-cal-legenda">
+                  <span><i class="ag-dot livre"></i> Disponível</span>
+                  <span><i class="ag-dot cheio"></i> Sem vaga</span>
+                </div>
+              </div>
+              <div id="agSlots" class="ag-slots"></div>
+              <input type="hidden" id="fHorario">
+            </div>
+            <div class="ag-field">
+              <label>Mensagem para quem vai te atender</label>
+              <textarea class="ag-textarea" id="fMensagem" maxlength="1000"
+                placeholder="Inclua informações importantes, ex.: se precisa de algum auxílio especial."></textarea>
+            </div>
+          </div>
+          <div class="ag-form-footer">
+            <button class="ag-btn ag-btn-ghost" onclick="voltarLanding()">
+              <i class="bi bi-arrow-left"></i> Voltar</button>
+            <button class="ag-btn" onclick="irPasso(2)">Próximo <i class="bi bi-arrow-right"></i></button>
+          </div>
+        </div>
+
+        <!-- ===== PASSO 2 ===== -->
+        <div id="passo2" style="display:none">
+          <div class="ag-step-heading">Informações Adicionais</div>
+          <div class="ag-fieldset">
+            <div class="ag-field">
+              <label>Nome completo <span class="ag-req">*</span></label>
+              <input type="text" class="ag-input" id="fNome" maxlength="200">
+            </div>
+            <div class="ag-field">
+              <label>E-mail <span class="ag-req">*</span></label>
+              <input type="email" class="ag-input" id="fEmail" maxlength="190">
+            </div>
+            <div class="ag-field">
+              <label>Telefone <span class="ag-req">*</span></label>
+              <input type="text" class="ag-input" id="fTelefone" maxlength="40"
+                     placeholder="(11) 96123-4567">
+            </div>
+          </div>
+
+          <div class="ag-step-heading">Dados Adicionais</div>
+          <div class="ag-fieldset">
+            <div class="ag-field" id="boxEquipamentos">
+              <label>Equipamento <span class="ag-req">*</span></label>
+              <div class="ag-radio-list" id="listaEquipamentos"></div>
+            </div>
+            <div class="ag-field">
+              <label>Locação ou venda? <span class="ag-req">*</span></label>
+              <div class="ag-radio-list">
+                <label class="ag-radio"><input type="radio" name="tipo" value="locacao"> Locação</label>
+                <label class="ag-radio"><input type="radio" name="tipo" value="venda"> Venda</label>
+              </div>
+            </div>
+            <div class="ag-field">
+              <label>Qual é o vendedor que te atende? <span class="ag-req">*</span></label>
+              <div class="ag-radio-list" id="listaVendedores"></div>
+            </div>
+          </div>
+          <div class="ag-form-footer">
+            <button class="ag-btn ag-btn-ghost" onclick="irPasso(1)">
+              <i class="bi bi-arrow-left"></i> Voltar</button>
+            <button class="ag-btn" id="btnEnviar" onclick="enviarAgendamento()">
+              <i class="bi bi-check-lg"></i> Confirmar agendamento</button>
+          </div>
+        </div>
+
+        <!-- ===== SUCESSO ===== -->
+        <div id="passoOk" style="display:none">
+          <div class="ag-sucesso">
+            <i class="bi bi-check-circle-fill"></i>
+            <h2>Agendamento registrado!</h2>
+            <p id="okMsg">Aguarde a confirmação da equipe.</p>
+            <button class="ag-btn" onclick="voltarLanding()">Fazer outro agendamento</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script src="/SistemaCPE/web/assests/js/agendar.js"></script>
+</body>
+</html>
