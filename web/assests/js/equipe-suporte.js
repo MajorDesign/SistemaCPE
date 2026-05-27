@@ -121,7 +121,8 @@ function setErro(id, msg) {
 /* ============ NAVEGAÇÃO ============ */
 const TITULOS_SECAO = {
   dashboard: 'Dashboard', agendas: 'Agendas', calendario: 'Calendário',
-  cursos: 'Cursos', equipamentos: 'Equipamentos', feriados: 'Feriados',
+  cursos: 'Cursos', treinamentos: 'Treinamentos',
+  equipamentos: 'Equipamentos', clientes: 'Clientes', feriados: 'Feriados',
 };
 function showSection(name) {
   document.querySelectorAll('.sup-page').forEach(p => p.classList.remove('active'));
@@ -131,6 +132,8 @@ function showSection(name) {
   document.getElementById('topbarTitle').textContent = TITULOS_SECAO[name] || '';
   document.getElementById('supSidebar').classList.remove('show');
   if (name === 'dashboard') loadDashboard();
+  else if (name === 'treinamentos') initSecaoTreinamentos();
+  else if (name === 'clientes') initSecaoClientes();
   else if (name === 'agendas') initSecaoAgendas();
   else if (name === 'calendario') initSecaoCalendario();
   else if (name === 'cursos') initSecaoCursos();
@@ -243,26 +246,34 @@ function renderAgendasCards() {
 }
 
 /* ============ LINK PUBLICO ============ */
-// Link sempre aponta pro dominio publico — eh o que o cliente vai usar,
-// independentemente de onde o admin esteja acessando (local, IP, dominio).
-const PUBLIC_AGENDAR_URL =
-  'https://cpecontrol.cpetecnologia.com.br/SistemaCPE/web/pages/agendar.html';
+// Detecta o ambiente atual:
+//   - local (localhost / 127.0.0.1 / IP da rede) -> link aponta pro host atual
+//     (modo dev — voce testa a UX completa sem publicar nada)
+//   - dominio publico (cpecontrol.cpetecnologia.com.br) -> link de producao
+// Em qualquer caso usa `window.location.origin` — sempre bate o ambiente em uso.
+const PUBLIC_AGENDAR_PATH = '/SistemaCPE/web/pages/agendar.html';
+
+function _isAmbienteLocal() {
+  const h = window.location.hostname;
+  return h === 'localhost' || h === '127.0.0.1' || /^\d{1,3}(\.\d{1,3}){3}$/.test(h);
+}
 
 function _urlAgendarPublico() {
-  return PUBLIC_AGENDAR_URL;
+  return window.location.origin + PUBLIC_AGENDAR_PATH;
 }
 
 async function copiarLinkPublico() {
   const url = _urlAgendarPublico();
+  const tag = _isAmbienteLocal() ? '[DEV] ' : '';
   try {
     await navigator.clipboard.writeText(url);
-    toast('Link copiado: ' + url, 'success');
+    toast(tag + 'Link copiado: ' + url, 'success');
   } catch (e) {
     // fallback se o clipboard API falhar (HTTP, browser antigo)
     const tmp = document.createElement('textarea');
     tmp.value = url; document.body.appendChild(tmp);
     tmp.select(); document.execCommand('copy'); tmp.remove();
-    toast('Link copiado: ' + url, 'success');
+    toast(tag + 'Link copiado: ' + url, 'success');
   }
 }
 
@@ -986,43 +997,88 @@ function _adaptarModalCursoPorTipo() {
   }
 }
 
-function novoCurso() {
+/* Carrega vendedores no select. Pre-seleciona id se passado. */
+async function _popularSelectVendedor(selId, vendedor_id) {
+  if (!vendedoresList.length) {
+    const v = await apiFetch('/vendedores');
+    vendedoresList = v.success ? (v.vendedores || []) : [];
+  }
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Sem vendedor padrão —</option>' +
+    vendedoresList.map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join('');
+  if (vendedor_id) sel.value = vendedor_id;
+}
+
+function onCursoVendedorChange() {
+  // Se selecionar vendedor cadastrado, limpa o campo manual
+  if (document.getElementById('cursoVendedorSel').value) {
+    document.getElementById('cursoVendedorNome').value = '';
+  }
+}
+function toggleCursoVendedorManual() {
+  const wrap = document.getElementById('cursoVendedorManualWrap');
+  wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+}
+
+async function novoCurso() {
   setErro('erroCurso', '');
   document.getElementById('modalCursoTitulo').textContent = 'Novo curso';
   document.getElementById('cursoId').value = '';
   document.getElementById('cursoNome').value = '';
+  document.getElementById('cursoDescricao').value = '';
   document.getElementById('cursoDuracao').value = 60;
   document.getElementById('cursoCapPresencial').value = 1;
   document.getElementById('cursoCapOnline').value = 1;
   document.getElementById('cursoInstrutor').value = '';
+  document.getElementById('cursoVendedorNome').value = '';
+  document.getElementById('cursoVendedorManualWrap').style.display = 'none';
   document.getElementById('cursoAtivo').checked = true;
+  document.getElementById('cursoMidiaWrap').style.display = 'none';
+  document.getElementById('cursoEquipsWrap').style.display = 'none';
+  await _popularSelectVendedor('cursoVendedorSel');
   _adaptarModalCursoPorTipo();
   abrirModal('modalCurso');
 }
-function editarCurso(id) {
+
+async function editarCurso(id) {
   const s = cursosSecao.find(x => x.id === id);
   if (!s) return;
   setErro('erroCurso', '');
   document.getElementById('modalCursoTitulo').textContent = 'Editar curso';
   document.getElementById('cursoId').value = s.id;
   document.getElementById('cursoNome').value = s.nome;
+  document.getElementById('cursoDescricao').value = s.descricao || '';
   document.getElementById('cursoDuracao').value = s.duracao_min;
   document.getElementById('cursoCapPresencial').value = s.cap_presencial || 1;
   document.getElementById('cursoCapOnline').value = s.cap_online || 1;
   document.getElementById('cursoInstrutor').value = s.instrutor || '';
+  document.getElementById('cursoVendedorNome').value = s.vendedor_nome || '';
+  document.getElementById('cursoVendedorManualWrap').style.display = s.vendedor_nome ? '' : 'none';
   document.getElementById('cursoAtivo').checked = !!s.ativo;
+  await _popularSelectVendedor('cursoVendedorSel', s.vendedor_id);
+  // Mídia + Equipamentos só ao editar (precisam de servico_id existente)
+  document.getElementById('cursoMidiaWrap').style.display = '';
+  document.getElementById('cursoEquipsWrap').style.display = '';
+  document.getElementById('cursoEquipNovoWrap').style.display = 'none';
+  carregarMidia('servico', s.id, 'curso');
+  carregarEquipsVinculados('servico', s.id, 'curso');
   _adaptarModalCursoPorTipo();
   abrirModal('modalCurso');
 }
+
 async function salvarCurso() {
   const id = document.getElementById('cursoId').value;
   const payload = {
     agenda_id: document.getElementById('cursoAgendaSel').value,
     nome: document.getElementById('cursoNome').value.trim(),
+    descricao: document.getElementById('cursoDescricao').value.trim(),
     duracao_min: parseInt(document.getElementById('cursoDuracao').value) || 60,
     cap_presencial: parseInt(document.getElementById('cursoCapPresencial').value) || 1,
     cap_online: parseInt(document.getElementById('cursoCapOnline').value) || 1,
     instrutor: document.getElementById('cursoInstrutor').value.trim(),
+    vendedor_id: document.getElementById('cursoVendedorSel').value || null,
+    vendedor_nome: document.getElementById('cursoVendedorNome').value.trim(),
     ativo: document.getElementById('cursoAtivo').checked,
   };
   if (!payload.nome) { setErro('erroCurso', 'Informe o nome do curso.'); return; }
@@ -1042,74 +1098,563 @@ async function excluirCurso(id) {
   await carregarCursos();
 }
 
-/* ============ SEÇÃO EQUIPAMENTOS ============ */
+/* ============ SEÇÃO EQUIPAMENTOS — catalogo global ============ */
+let equipsSecao = [];          // todos os equipamentos do sistema
+let equipVincAtuais = [];      // vinculos do equipamento sendo editado
+let _opcoesItensCache = {};    // cache servico/treinamento pra select de vinculo
+
 async function initSecaoEquipamentos() {
   if (!agendas.length) await loadAgendas();
-  _opcoesAgendas('equipAgendaSel');
-  await carregarCursosDoEquip();
-}
-
-async function carregarCursosDoEquip() {
-  const agId = document.getElementById('equipAgendaSel').value;
-  const sel = document.getElementById('equipCursoSel');
-  if (!agId) {
-    sel.innerHTML = '<option value="">— Escolha um curso —</option>';
-    carregarEquipamentos();
-    return;
-  }
-  const r = await apiFetch('/agendas/' + agId + '/servicos');
-  const cursos = r.success ? (r.servicos || []) : [];
-  sel.innerHTML = '<option value="">— Escolha um curso —</option>' +
-    cursos.map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('');
-  carregarEquipamentos();
+  await carregarEquipamentos();
 }
 
 async function carregarEquipamentos() {
-  const cursoId = document.getElementById('equipCursoSel').value;
   const tbody = document.getElementById('tbodyEquipamentos');
-  const btn = document.getElementById('btnAddEquip');
-  if (!cursoId) {
-    tbody.innerHTML = '<tr><td colspan="3" class="sup-empty">Selecione um curso.</td></tr>';
-    btn.disabled = true;
+  const r = await apiFetch('/equipamentos');
+  equipsSecao = r.success ? (r.equipamentos || []) : [];
+  if (!equipsSecao.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="sup-empty">' +
+      'Nenhum equipamento cadastrado. Clique em "Novo equipamento".</td></tr>';
     return;
   }
-  btn.disabled = false;
-  const r = await apiFetch('/servicos/' + cursoId + '/equipamentos');
-  const eqs = r.success ? (r.equipamentos || []) : [];
-  if (!eqs.length) {
-    tbody.innerHTML = '<tr><td colspan="3" class="sup-empty">Nenhum equipamento neste curso.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = eqs.map(e => `<tr>
-    <td>${esc(e.nome)}</td>
-    <td>${e.ativo ? '<span class="sup-pill ok">Ativo</span>'
-                  : '<span class="sup-pill off">Inativo</span>'}</td>
-    <td><button class="btn-sup btn-sup-danger btn-sup-sm" onclick="excluirEquipamento(${e.id})" data-need-admin>
-      <i class="bi bi-trash"></i></button></td>
-  </tr>`).join('');
+  tbody.innerHTML = equipsSecao.map(e => {
+    const vincs = (e.vinculos || []).map(v => {
+      const tipoIcon = v.entidade === 'treinamento' ? 'bi-easel' : 'bi-mortarboard';
+      const tipoCls  = v.entidade === 'treinamento' ? 'pendente' : 'agendado';
+      return `<span class="sup-pill ${tipoCls}" title="${v.entidade}">
+        <i class="bi ${tipoIcon}"></i> ${esc(v.nome || '?')}
+      </span>`;
+    }).join(' ');
+    return `<tr>
+      <td><strong>${esc(e.nome)}</strong></td>
+      <td>${e.descricao
+        ? '<span class="sup-help">' + esc(e.descricao) + '</span>'
+        : '<span class="sup-help">—</span>'}</td>
+      <td>${vincs || '<span class="sup-help">Sem vínculo</span>'}</td>
+      <td>${e.ativo ? '<span class="sup-pill ok">Ativo</span>'
+                    : '<span class="sup-pill off">Inativo</span>'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="editarEquipamento(${e.id})"
+                title="Editar / vincular" data-need-admin><i class="bi bi-pencil"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
   aplicarPermissoes();
 }
 
-async function addEquipamento() {
-  const cursoId = document.getElementById('equipCursoSel').value;
-  if (!cursoId) { toast('Escolha um curso primeiro.', 'error'); return; }
-  const inp = document.getElementById('equipNovoNome');
-  const nome = inp.value.trim();
-  if (!nome) { toast('Informe o nome do equipamento.', 'error'); return; }
-  const r = await apiFetch('/equipamentos', {
-    method: 'POST', body: JSON.stringify({ servico_id: cursoId, nome }),
+/* Popula select de itens (curso ou treinamento) para o bloco de vinculo,
+   com cache. Cada opcao mostra "Agenda - Item". */
+async function _carregarOpcoesItens(entidade) {
+  if (_opcoesItensCache[entidade]) return _opcoesItensCache[entidade];
+  const itens = [];
+  for (const a of agendas.filter(x => x.ativo)) {
+    const path = entidade === 'servico'
+      ? '/agendas/' + a.id + '/servicos'
+      : '/agendas/' + a.id + '/treinamentos';
+    const r = await apiFetch(path);
+    const lista = r.success ? (r[entidade === 'servico' ? 'servicos' : 'treinamentos'] || []) : [];
+    lista.forEach(it => itens.push({
+      id: it.id, nome: it.nome, agenda_id: a.id, agenda_nome: a.nome,
+    }));
+  }
+  _opcoesItensCache[entidade] = itens;
+  return itens;
+}
+
+async function onEquipVincTipoChange() {
+  const tipo = document.getElementById('equipVincTipo').value;
+  const sel = document.getElementById('equipVincItemSel');
+  sel.innerHTML = '<option value="">Carregando...</option>';
+  const itens = await _carregarOpcoesItens(tipo);
+  // exclui os ja vinculados (mesma entidade + entidade_id)
+  const jaVinc = new Set(
+    equipVincAtuais.filter(v => v.entidade === tipo).map(v => v.entidade_id));
+  const livres = itens.filter(i => !jaVinc.has(i.id));
+  sel.innerHTML = '<option value="">— Escolha um item —</option>' +
+    livres.map(i => `<option value="${i.id}">${esc(i.agenda_nome)} → ${esc(i.nome)}</option>`).join('');
+}
+
+function _renderVincList() {
+  const box = document.getElementById('equipVincLista');
+  if (!equipVincAtuais.length) {
+    box.innerHTML = '<div class="sup-help" style="padding:12px;background:#fafafa;border-radius:6px">' +
+      'Nenhum vínculo. Use o seletor acima pra adicionar.</div>';
+    return;
+  }
+  box.innerHTML = equipVincAtuais.map((v, idx) => {
+    const tipoIcon = v.entidade === 'treinamento' ? 'bi-easel' : 'bi-mortarboard';
+    const tipoLabel = v.entidade === 'treinamento' ? 'Treinamento' : 'Curso';
+    return `<div class="sup-midia-video-item">
+      <i class="bi ${tipoIcon}"></i>
+      <span style="flex:1">
+        <strong>${esc(v.nome || ('#' + v.entidade_id))}</strong>
+        <span class="sup-help" style="margin-left:6px">(${tipoLabel})</span>
+      </span>
+      <button type="button" title="Remover" onclick="removerVincLocal(${idx})">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>`;
+  }).join('');
+}
+
+async function addVinculoEquip() {
+  const tipo = document.getElementById('equipVincTipo').value;
+  const sel = document.getElementById('equipVincItemSel');
+  const itemId = parseInt(sel.value);
+  if (!itemId) { toast('Escolha um item.', 'error'); return; }
+  const itens = await _carregarOpcoesItens(tipo);
+  const item = itens.find(i => i.id === itemId);
+  if (!item) return;
+  equipVincAtuais.push({
+    entidade: tipo, entidade_id: itemId, nome: item.nome,
   });
-  if (!r.success) { toast(r.detail || 'Erro ao adicionar.', 'error'); return; }
-  inp.value = '';
-  toast('Equipamento adicionado.', 'success');
+  _renderVincList();
+  // remove do select
+  onEquipVincTipoChange();
+}
+
+function removerVincLocal(idx) {
+  equipVincAtuais.splice(idx, 1);
+  _renderVincList();
+  onEquipVincTipoChange();
+}
+
+async function novoEquipamento() {
+  setErro('erroEquip', '');
+  document.getElementById('modalEquipTitulo').textContent = 'Novo equipamento';
+  document.getElementById('equipId').value = '';
+  document.getElementById('equipNome').value = '';
+  document.getElementById('equipDescricao').value = '';
+  document.getElementById('equipAtivo').checked = true;
+  document.getElementById('btnExcluirEquip').style.display = 'none';
+  equipVincAtuais = [];
+  _opcoesItensCache = {};
+  _renderVincList();
+  document.getElementById('equipVincTipo').value = 'servico';
+  await onEquipVincTipoChange();
+  abrirModal('modalEquip');
+}
+
+async function editarEquipamento(id) {
+  const e = equipsSecao.find(x => x.id === id);
+  if (!e) return;
+  setErro('erroEquip', '');
+  document.getElementById('modalEquipTitulo').textContent = 'Editar equipamento';
+  document.getElementById('equipId').value = e.id;
+  document.getElementById('equipNome').value = e.nome;
+  document.getElementById('equipDescricao').value = e.descricao || '';
+  document.getElementById('equipAtivo').checked = !!e.ativo;
+  document.getElementById('btnExcluirEquip').style.display = _canAdmin ? 'inline-flex' : 'none';
+  equipVincAtuais = (e.vinculos || []).map(v => ({
+    entidade: v.entidade, entidade_id: v.entidade_id, nome: v.nome,
+  }));
+  _opcoesItensCache = {};
+  _renderVincList();
+  document.getElementById('equipVincTipo').value = 'servico';
+  await onEquipVincTipoChange();
+  abrirModal('modalEquip');
+}
+
+async function salvarEquipamento() {
+  const id = document.getElementById('equipId').value;
+  const payload = {
+    nome: document.getElementById('equipNome').value.trim(),
+    descricao: document.getElementById('equipDescricao').value.trim(),
+    ativo: document.getElementById('equipAtivo').checked,
+    vinculos: equipVincAtuais.map(v => ({
+      entidade: v.entidade, entidade_id: v.entidade_id,
+    })),
+  };
+  if (!payload.nome) { setErro('erroEquip', 'Informe o nome.'); return; }
+  const r = id
+    ? await apiFetch('/equipamentos/' + id, { method: 'PUT', body: JSON.stringify(payload) })
+    : await apiFetch('/equipamentos', { method: 'POST', body: JSON.stringify(payload) });
+  if (!r.success) { setErro('erroEquip', r.detail || 'Erro ao salvar.'); return; }
+  fecharModal('modalEquip');
+  toast('Equipamento salvo.', 'success');
   await carregarEquipamentos();
 }
+
+async function excluirEquipDoModal() {
+  const id = document.getElementById('equipId').value;
+  if (!id) return;
+  if (!confirm('Excluir este equipamento? Os vínculos com cursos/treinamentos serão removidos.')) return;
+  const r = await apiFetch('/equipamentos/' + id, { method: 'DELETE' });
+  if (!r.success) { setErro('erroEquip', r.detail || 'Erro ao excluir.'); return; }
+  fecharModal('modalEquip');
+  toast('Equipamento excluído.', 'success');
+  await carregarEquipamentos();
+}
+
+// Compat: chamada antiga `excluirEquipamento(id)` (caso ainda apareça em algum render)
 async function excluirEquipamento(id) {
   if (!confirm('Excluir este equipamento?')) return;
   const r = await apiFetch('/equipamentos/' + id, { method: 'DELETE' });
   if (!r.success) { toast(r.detail || 'Erro ao excluir.', 'error'); return; }
   toast('Equipamento excluído.', 'success');
   await carregarEquipamentos();
+}
+
+/* ============ MIDIA (fotos + videos) — generico ============ */
+// `kind` e 'curso' ou 'treino' — define o prefixo dos ids dos elementos
+async function carregarMidia(entidade, entidadeId, kind) {
+  const r = await apiFetch(`/midia/${entidade}/${entidadeId}`);
+  const fotos = r.success ? (r.fotos || []) : [];
+  const videos = r.success ? (r.videos || []) : [];
+  _renderFotos(kind, entidade, entidadeId, fotos);
+  _renderVideos(kind, entidade, entidadeId, videos);
+}
+
+function _renderFotos(kind, entidade, entidadeId, fotos) {
+  const box = document.getElementById(kind + 'FotosLista');
+  if (!box) return;
+  if (!fotos.length) {
+    box.innerHTML = '<div class="sup-midia-empty">Nenhuma foto enviada ainda.</div>';
+    return;
+  }
+  box.innerHTML = fotos.map(f => `
+    <div class="sup-midia-foto">
+      <img src="${esc(f.arquivo)}" alt="">
+      <button type="button" title="Excluir"
+              onclick="excluirFoto(${f.id}, '${entidade}', ${entidadeId}, '${kind}')">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>`).join('');
+}
+
+function _renderVideos(kind, entidade, entidadeId, videos) {
+  const box = document.getElementById(kind + 'VideosLista');
+  if (!box) return;
+  if (!videos.length) {
+    box.innerHTML = '<div class="sup-midia-empty">Nenhum vídeo cadastrado ainda.</div>';
+    return;
+  }
+  box.innerHTML = videos.map(v => `
+    <div class="sup-midia-video-item">
+      <i class="bi bi-camera-video"></i>
+      <a href="${esc(v.url)}" target="_blank" rel="noopener">
+        ${esc(v.titulo || v.url)}
+      </a>
+      <button type="button" title="Excluir"
+              onclick="excluirVideo(${v.id}, '${entidade}', ${entidadeId}, '${kind}')">
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>`).join('');
+}
+
+/* ============ EQUIPAMENTOS dentro do modal de curso/treinamento ============ */
+// Lista equipamentos vinculados + select pra vincular outro + criar inline.
+// `kind` = 'curso' | 'treino'  (prefixo dos ids dos elementos)
+// `entidade` = 'servico' | 'treinamento'
+
+async function carregarEquipsVinculados(entidade, entidadeId, kind) {
+  const path = entidade === 'servico'
+    ? '/servicos/' + entidadeId + '/equipamentos'
+    : '/treinamentos/' + entidadeId + '/equipamentos';
+  const r = await apiFetch(path);
+  const vincs = r.success ? (r.equipamentos || []) : [];
+  _renderEquipsVinculados(kind, entidade, entidadeId, vincs);
+  await _atualizarSelectEquipsLivres(kind, entidade, entidadeId, vincs);
+}
+
+function _renderEquipsVinculados(kind, entidade, entidadeId, equips) {
+  const box = document.getElementById(kind + 'EquipsLista');
+  if (!box) return;
+  if (!equips.length) {
+    box.innerHTML = '<div class="sup-help" style="padding:10px;background:#fafafa;border-radius:6px">' +
+      'Nenhum equipamento vinculado ainda.</div>';
+    return;
+  }
+  box.innerHTML = equips.map(e => `
+    <div class="sup-midia-video-item">
+      <i class="bi bi-pc-display"></i>
+      <span style="flex:1">
+        <strong>${esc(e.nome)}</strong>
+        ${e.descricao ? '<span class="sup-help" style="margin-left:6px">— ' + esc(e.descricao) + '</span>' : ''}
+      </span>
+      <button type="button" title="Desvincular"
+              onclick="desvincularEquip(${e.id}, '${entidade}', ${entidadeId}, '${kind}')">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </div>`).join('');
+}
+
+async function _atualizarSelectEquipsLivres(kind, entidade, entidadeId, jaVinculados) {
+  const sel = document.getElementById(kind + 'EquipSel');
+  if (!sel) return;
+  // Pega TODOS do catalogo e remove os ja vinculados
+  const r = await apiFetch('/equipamentos');
+  const todos = r.success ? (r.equipamentos || []) : [];
+  const idsVinc = new Set(jaVinculados.map(e => e.id));
+  const livres = todos.filter(e => !idsVinc.has(e.id) && e.ativo);
+  sel.innerHTML = '<option value="">— Vincular equipamento existente —</option>' +
+    livres.map(e => `<option value="${e.id}">${esc(e.nome)}</option>`).join('');
+}
+
+async function _vincularEquip(entidade, entidadeId, kind) {
+  const sel = document.getElementById(kind + 'EquipSel');
+  const equipId = parseInt(sel.value);
+  if (!equipId) { toast('Escolha um equipamento.', 'error'); return; }
+  const r = await apiFetch('/equipamentos/' + equipId + '/vinculos', {
+    method: 'POST', body: JSON.stringify({ entidade, entidade_id: entidadeId }),
+  });
+  if (!r.success) { toast(r.detail || 'Erro ao vincular.', 'error'); return; }
+  toast('Equipamento vinculado.', 'success');
+  carregarEquipsVinculados(entidade, entidadeId, kind);
+}
+
+async function _criarEquipInline(entidade, entidadeId, kind) {
+  const nome = document.getElementById(kind + 'EquipNovoNome').value.trim();
+  const desc = document.getElementById(kind + 'EquipNovoDesc').value.trim();
+  if (!nome) { toast('Informe o nome do equipamento.', 'error'); return; }
+  const r = await apiFetch('/equipamentos', {
+    method: 'POST',
+    body: JSON.stringify({
+      nome, descricao: desc, ativo: true,
+      vinculos: [{ entidade, entidade_id: entidadeId }],
+    }),
+  });
+  if (!r.success) { toast(r.detail || 'Erro ao criar.', 'error'); return; }
+  // limpa campos e re-recolhe
+  document.getElementById(kind + 'EquipNovoNome').value = '';
+  document.getElementById(kind + 'EquipNovoDesc').value = '';
+  document.getElementById(kind + 'EquipNovoWrap').style.display = 'none';
+  toast('Equipamento criado e vinculado.', 'success');
+  carregarEquipsVinculados(entidade, entidadeId, kind);
+}
+
+async function desvincularEquip(equipId, entidade, entidadeId, kind) {
+  if (!confirm('Desvincular este equipamento? (o equipamento continua no catálogo)')) return;
+  const params = new URLSearchParams({ entidade, entidade_id: entidadeId });
+  const r = await apiFetch('/equipamentos/' + equipId + '/vinculos?' + params, { method: 'DELETE' });
+  if (!r.success) { toast(r.detail || 'Erro ao desvincular.', 'error'); return; }
+  toast('Desvinculado.', 'success');
+  carregarEquipsVinculados(entidade, entidadeId, kind);
+}
+
+// Wrappers por kind
+function vincularEquipCurso()  { const id = document.getElementById('cursoId').value;   return _vincularEquip('servico',     id, 'curso'); }
+function vincularEquipTreino() { const id = document.getElementById('treinoId').value;  return _vincularEquip('treinamento', id, 'treino'); }
+function criarEquipInlineCurso()  { const id = document.getElementById('cursoId').value;   return _criarEquipInline('servico',     id, 'curso'); }
+function criarEquipInlineTreino() { const id = document.getElementById('treinoId').value;  return _criarEquipInline('treinamento', id, 'treino'); }
+function toggleCriarEquipInlineCurso()  { const w = document.getElementById('cursoEquipNovoWrap');  w.style.display = w.style.display === 'none' ? '' : 'none'; }
+function toggleCriarEquipInlineTreino() { const w = document.getElementById('treinoEquipNovoWrap'); w.style.display = w.style.display === 'none' ? '' : 'none'; }
+
+async function uploadFotosCurso(ev)  { return _uploadFotos(ev, 'servico',     'curso'); }
+async function uploadFotosTreino(ev) { return _uploadFotos(ev, 'treinamento', 'treino'); }
+async function _uploadFotos(ev, entidade, kind) {
+  const files = [...(ev.target.files || [])];
+  if (!files.length) return;
+  const entId = document.getElementById((kind === 'curso' ? 'curso' : 'treino') + 'Id').value;
+  if (!entId) { toast('Salve primeiro.', 'error'); return; }
+  toast(`Enviando ${files.length} foto(s)...`, 'info');
+  for (const f of files) {
+    const fd = new FormData();
+    fd.append('file', f);
+    try {
+      const res = await fetch(API + `/midia/${entidade}/${entId}/fotos`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'X-Auth-Token': _token() },
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast(`Falha em ${f.name}: ${err.detail || res.statusText}`, 'error');
+      }
+    } catch (e) {
+      toast(`Erro: ${e.message}`, 'error');
+    }
+  }
+  ev.target.value = '';
+  carregarMidia(entidade, entId, kind);
+}
+
+async function addVideoCurso()  { return _addVideo('servico',     'curso'); }
+async function addVideoTreino() { return _addVideo('treinamento', 'treino'); }
+async function _addVideo(entidade, kind) {
+  const prefix = (kind === 'curso' ? 'curso' : 'treino');
+  const entId = document.getElementById(prefix + 'Id').value;
+  if (!entId) { toast('Salve primeiro.', 'error'); return; }
+  const url = document.getElementById(prefix + 'VideoUrl').value.trim();
+  const titulo = document.getElementById(prefix + 'VideoTitulo').value.trim();
+  if (!url) { toast('Informe a URL do vídeo.', 'error'); return; }
+  const r = await apiFetch(`/midia/${entidade}/${entId}/videos`, {
+    method: 'POST', body: JSON.stringify({ url, titulo }),
+  });
+  if (!r.success) { toast(r.detail || 'Erro ao adicionar.', 'error'); return; }
+  document.getElementById(prefix + 'VideoUrl').value = '';
+  document.getElementById(prefix + 'VideoTitulo').value = '';
+  carregarMidia(entidade, entId, kind);
+}
+
+async function excluirFoto(id, entidade, entidadeId, kind) {
+  if (!confirm('Excluir esta foto?')) return;
+  const r = await apiFetch(`/midia/fotos/${id}`, { method: 'DELETE' });
+  if (!r.success) { toast(r.detail || 'Erro.', 'error'); return; }
+  carregarMidia(entidade, entidadeId, kind);
+}
+async function excluirVideo(id, entidade, entidadeId, kind) {
+  if (!confirm('Excluir este vídeo?')) return;
+  const r = await apiFetch(`/midia/videos/${id}`, { method: 'DELETE' });
+  if (!r.success) { toast(r.detail || 'Erro.', 'error'); return; }
+  carregarMidia(entidade, entidadeId, kind);
+}
+
+/* ============ SEÇÃO TREINAMENTOS ============ */
+let treinosSecao = [];
+
+async function initSecaoTreinamentos() {
+  if (!agendas.length) await loadAgendas();
+  _opcoesAgendas('treinoAgendaSel');
+  await carregarTreinamentos();
+}
+
+async function carregarTreinamentos() {
+  const agId = document.getElementById('treinoAgendaSel').value;
+  const tbody = document.getElementById('tbodyTreinamentos');
+  if (!agId) {
+    tbody.innerHTML = '<tr><td colspan="7" class="sup-empty">Cadastre uma agenda primeiro.</td></tr>';
+    treinosSecao = [];
+    return;
+  }
+  const r = await apiFetch('/agendas/' + agId + '/treinamentos');
+  treinosSecao = r.success ? (r.treinamentos || []) : [];
+  if (!treinosSecao.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="sup-empty">Nenhum treinamento nesta agenda. Clique em "Novo treinamento".</td></tr>';
+    return;
+  }
+  tbody.innerHTML = treinosSecao.map(t => {
+    const vendedor = t.vendedor_nome
+      || (t.vendedor_id ? (vendedoresList.find(v => v.id == t.vendedor_id) || {}).name : '');
+    return `<tr>
+      <td><strong>${esc(t.nome)}</strong>
+        ${t.descricao ? '<br><span class="sup-help">' + esc(t.descricao.slice(0,80)) + (t.descricao.length>80?'…':'') + '</span>' : ''}</td>
+      <td>${t.instrutor ? '<i class="bi bi-person-badge"></i> ' + esc(t.instrutor) : '<span class="sup-help">—</span>'}</td>
+      <td>${vendedor ? esc(vendedor) : '<span class="sup-help">—</span>'}</td>
+      <td>${t.duracao_min} min</td>
+      <td>
+        <span title="Fotos"><i class="bi bi-image"></i> ${t.total_fotos || 0}</span>
+        &middot;
+        <span title="Vídeos"><i class="bi bi-camera-video"></i> ${t.total_videos || 0}</span>
+      </td>
+      <td>${t.ativo ? '<span class="sup-pill ok">Ativo</span>'
+                    : '<span class="sup-pill off">Inativo</span>'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="editarTreinamento(${t.id})"
+                title="Editar" data-need-admin><i class="bi bi-pencil"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+  aplicarPermissoes();
+}
+
+function _agendaAtualTreinos() {
+  const id = parseInt(document.getElementById('treinoAgendaSel').value);
+  return agendas.find(a => a.id === id) || null;
+}
+function _adaptarModalTreinoPorTipo() {
+  const ag = _agendaAtualTreinos();
+  const presWrap = document.getElementById('treinoCapPresencialWrap');
+  const grid = document.getElementById('treinoCapWrap');
+  if (!presWrap || !grid) return;
+  if (ag && ag.tipo === 'online') {
+    presWrap.style.display = 'none';
+    grid.style.gridTemplateColumns = '1fr';
+    document.getElementById('treinoCapPresencial').value = 1;
+  } else {
+    presWrap.style.display = '';
+    grid.style.gridTemplateColumns = '';
+  }
+}
+function onTreinoVendedorChange() {
+  if (document.getElementById('treinoVendedorSel').value) {
+    document.getElementById('treinoVendedorNome').value = '';
+  }
+}
+function toggleTreinoVendedorManual() {
+  const wrap = document.getElementById('treinoVendedorManualWrap');
+  wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+}
+
+async function novoTreinamento() {
+  setErro('erroTreino', '');
+  document.getElementById('modalTreinoTitulo').textContent = 'Novo treinamento';
+  document.getElementById('treinoId').value = '';
+  document.getElementById('treinoNome').value = '';
+  document.getElementById('treinoDescricao').value = '';
+  document.getElementById('treinoDuracao').value = 120;
+  document.getElementById('treinoCapPresencial').value = 1;
+  document.getElementById('treinoCapOnline').value = 1;
+  document.getElementById('treinoInstrutor').value = '';
+  document.getElementById('treinoVendedorNome').value = '';
+  document.getElementById('treinoVendedorManualWrap').style.display = 'none';
+  document.getElementById('treinoAtivo').checked = true;
+  document.getElementById('treinoMidiaWrap').style.display = 'none';
+  document.getElementById('treinoEquipsWrap').style.display = 'none';
+  document.getElementById('btnExcluirTreino').style.display = 'none';
+  await _popularSelectVendedor('treinoVendedorSel');
+  _adaptarModalTreinoPorTipo();
+  abrirModal('modalTreinamento');
+}
+
+async function editarTreinamento(id) {
+  const t = treinosSecao.find(x => x.id === id);
+  if (!t) return;
+  setErro('erroTreino', '');
+  document.getElementById('modalTreinoTitulo').textContent = 'Editar treinamento';
+  document.getElementById('treinoId').value = t.id;
+  document.getElementById('treinoNome').value = t.nome;
+  document.getElementById('treinoDescricao').value = t.descricao || '';
+  document.getElementById('treinoDuracao').value = t.duracao_min;
+  document.getElementById('treinoCapPresencial').value = t.cap_presencial || 1;
+  document.getElementById('treinoCapOnline').value = t.cap_online || 1;
+  document.getElementById('treinoInstrutor').value = t.instrutor || '';
+  document.getElementById('treinoVendedorNome').value = t.vendedor_nome || '';
+  document.getElementById('treinoVendedorManualWrap').style.display = t.vendedor_nome ? '' : 'none';
+  document.getElementById('treinoAtivo').checked = !!t.ativo;
+  document.getElementById('btnExcluirTreino').style.display = _canAdmin ? 'inline-flex' : 'none';
+  await _popularSelectVendedor('treinoVendedorSel', t.vendedor_id);
+  document.getElementById('treinoMidiaWrap').style.display = '';
+  document.getElementById('treinoEquipsWrap').style.display = '';
+  document.getElementById('treinoEquipNovoWrap').style.display = 'none';
+  carregarMidia('treinamento', t.id, 'treino');
+  carregarEquipsVinculados('treinamento', t.id, 'treino');
+  _adaptarModalTreinoPorTipo();
+  abrirModal('modalTreinamento');
+}
+
+async function salvarTreinamento() {
+  const id = document.getElementById('treinoId').value;
+  const payload = {
+    agenda_id: document.getElementById('treinoAgendaSel').value,
+    nome: document.getElementById('treinoNome').value.trim(),
+    descricao: document.getElementById('treinoDescricao').value.trim(),
+    duracao_min: parseInt(document.getElementById('treinoDuracao').value) || 120,
+    cap_presencial: parseInt(document.getElementById('treinoCapPresencial').value) || 1,
+    cap_online: parseInt(document.getElementById('treinoCapOnline').value) || 1,
+    instrutor: document.getElementById('treinoInstrutor').value.trim(),
+    vendedor_id: document.getElementById('treinoVendedorSel').value || null,
+    vendedor_nome: document.getElementById('treinoVendedorNome').value.trim(),
+    ativo: document.getElementById('treinoAtivo').checked,
+  };
+  if (!payload.nome) { setErro('erroTreino', 'Informe o nome.'); return; }
+  const r = id
+    ? await apiFetch('/treinamentos/' + id, { method: 'PUT', body: JSON.stringify(payload) })
+    : await apiFetch('/treinamentos', { method: 'POST', body: JSON.stringify(payload) });
+  if (!r.success) { setErro('erroTreino', r.detail || 'Erro ao salvar.'); return; }
+  fecharModal('modalTreinamento');
+  toast('Treinamento salvo.', 'success');
+  await carregarTreinamentos();
+}
+
+async function excluirTreinamento() {
+  const id = document.getElementById('treinoId').value;
+  if (!id || !confirm('Excluir este treinamento? Fotos e vídeos vinculados serão removidos.')) return;
+  const r = await apiFetch('/treinamentos/' + id, { method: 'DELETE' });
+  if (!r.success) { setErro('erroTreino', r.detail || 'Erro ao excluir.'); return; }
+  fecharModal('modalTreinamento');
+  toast('Treinamento excluído.', 'success');
+  await carregarTreinamentos();
 }
 
 /* ============ MODAL: agendamentos do dia (Hoje / Amanha) ============ */
@@ -1274,6 +1819,178 @@ function fmtDataBR(iso) {
   return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
 }
 function _capitaliza(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+/* ============ SEÇÃO CLIENTES ============ */
+let clientesSecao = [];
+
+async function initSecaoClientes() {
+  document.getElementById('buscaCliente').value = '';
+  const tbody = document.getElementById('tbodyClientes');
+  tbody.innerHTML = '<tr><td colspan="6" class="sup-empty">Carregando...</td></tr>';
+  const r = await apiFetch('/clientes');
+  clientesSecao = r.success ? (r.clientes || []) : [];
+  renderClientes();
+}
+
+function renderClientes() {
+  const busca = (document.getElementById('buscaCliente').value || '').toLowerCase().trim();
+  const lista = clientesSecao.filter(c => {
+    if (!busca) return true;
+    return (c.nome || '').toLowerCase().includes(busca)
+        || (c.email || '').toLowerCase().includes(busca)
+        || (c.empresa || '').toLowerCase().includes(busca)
+        || (c.telefone || '').toLowerCase().includes(busca);
+  });
+  const tbody = document.getElementById('tbodyClientes');
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="sup-empty">' +
+      (clientesSecao.length ? 'Nenhum cliente encontrado.' : 'Ainda não há clientes na base. Eles aparecem após o primeiro agendamento público.') +
+      '</td></tr>';
+    return;
+  }
+  tbody.innerHTML = lista.map(c => {
+    const empresaFuncao = [c.empresa, c.funcao].filter(Boolean).map(esc).join('<br><span class="sup-help">');
+    const ult = c.ultimo_contato ? fmtDataBR(c.ultimo_contato) : '—';
+    const totA = c.total_atendidos || 0;
+    const totC = c.total_cancelados || 0;
+    return `<tr>
+      <td><strong>${esc(c.nome || '—')}</strong></td>
+      <td>${empresaFuncao ? empresaFuncao + (c.funcao ? '</span>' : '') : '<span class="sup-help">—</span>'}</td>
+      <td>${esc(c.email)}${c.telefone
+        ? '<br><span class="sup-help">' + esc(c.telefone) + '</span>' : ''}</td>
+      <td>
+        <strong>${c.total_agendamentos}</strong> total
+        <span class="sup-help">(${totA} atendidos, ${totC} cancelados)</span>
+      </td>
+      <td>${ult}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-sup btn-sup-ghost btn-sup-sm" title="Ver histórico"
+                onclick="verHistoricoCliente('${esc(c.email)}', '${esc(c.nome || '')}')">
+          <i class="bi bi-eye"></i> Histórico
+        </button>
+        <button class="btn-sup btn-sup-ghost btn-sup-sm" title="Editar"
+                data-need-admin
+                onclick="editarCliente('${esc(c.email)}')">
+          <i class="bi bi-pencil"></i>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+  aplicarPermissoes();
+}
+
+/* ====== Editar cliente (admin do modulo) ====== */
+function editarCliente(email) {
+  const c = clientesSecao.find(x => x.email === email);
+  if (!c) return;
+  setErro('erroEditarCliente', '');
+  document.getElementById('edClienteEmail').value         = c.email;
+  document.getElementById('edClienteEmailDisplay').value  = c.email;
+  document.getElementById('edClienteNome').value          = c.nome || '';
+  document.getElementById('edClienteTelefone').value      = c.telefone || '';
+  document.getElementById('edClienteEmpresa').value       = c.empresa || '';
+  document.getElementById('edClienteFuncao').value        = c.funcao || '';
+  abrirModal('modalEditarCliente');
+}
+
+async function salvarEdicaoCliente() {
+  const payload = {
+    email:    document.getElementById('edClienteEmail').value,
+    nome:     document.getElementById('edClienteNome').value.trim(),
+    telefone: document.getElementById('edClienteTelefone').value.trim(),
+    empresa:  document.getElementById('edClienteEmpresa').value.trim(),
+    funcao:   document.getElementById('edClienteFuncao').value.trim(),
+  };
+  if (!payload.nome) { setErro('erroEditarCliente', 'Informe o nome.'); return; }
+  const r = await apiFetch('/clientes', { method: 'PUT', body: JSON.stringify(payload) });
+  if (!r.success) { setErro('erroEditarCliente', r.detail || 'Erro ao salvar.'); return; }
+  fecharModal('modalEditarCliente');
+  toast(`Cliente atualizado (${r.atualizados} agendamento(s) afetados).`, 'success');
+  await initSecaoClientes();
+}
+
+/* ====== Exportar CSV (client-side, do que está filtrado) ====== */
+function exportarClientesCSV() {
+  const busca = (document.getElementById('buscaCliente').value || '').toLowerCase().trim();
+  const lista = clientesSecao.filter(c => {
+    if (!busca) return true;
+    return (c.nome || '').toLowerCase().includes(busca)
+        || (c.email || '').toLowerCase().includes(busca)
+        || (c.empresa || '').toLowerCase().includes(busca)
+        || (c.telefone || '').toLowerCase().includes(busca);
+  });
+  if (!lista.length) { toast('Nenhum cliente para exportar.', 'error'); return; }
+
+  const cols = ['Nome', 'Email', 'Telefone', 'Empresa', 'Funcao',
+                'Total agendamentos', 'Atendidos', 'Cancelados',
+                'Primeiro contato', 'Ultimo contato'];
+  const cell = v => {
+    const s = String(v == null ? '' : v).replace(/"/g, '""');
+    return /[",\n;]/.test(s) ? `"${s}"` : s;
+  };
+  const rows = lista.map(c => [
+    c.nome, c.email, c.telefone, c.empresa, c.funcao,
+    c.total_agendamentos, c.total_atendidos, c.total_cancelados,
+    c.primeiro_contato ? fmtDataBR(c.primeiro_contato) : '',
+    c.ultimo_contato   ? fmtDataBR(c.ultimo_contato)   : '',
+  ].map(cell).join(';'));
+  // BOM UTF-8 pra Excel abrir com acentos corretos
+  const csv = '﻿' + cols.join(';') + '\n' + rows.join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `clientes-cpe-${stamp}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`Exportado: ${lista.length} cliente(s).`, 'success');
+}
+
+async function verHistoricoCliente(email, nome) {
+  document.getElementById('modalClienteTitulo').textContent = nome || email;
+  document.getElementById('tbodyHistorico').innerHTML =
+    '<tr><td colspan="6" class="sup-empty">Carregando...</td></tr>';
+  // Header com dados do cliente
+  const c = clientesSecao.find(x => x.email === email) || {};
+  document.getElementById('modalClienteHeader').innerHTML = `
+    <div><strong>E-mail</strong><br>${esc(c.email)}</div>
+    <div><strong>Telefone</strong><br>${esc(c.telefone || '—')}</div>
+    <div><strong>Empresa</strong><br>${esc(c.empresa || '—')}</div>
+    <div><strong>Função</strong><br>${esc(c.funcao || '—')}</div>
+  `;
+  abrirModal('modalCliente');
+
+  const r = await apiFetch('/clientes/historico?email=' + encodeURIComponent(email));
+  const hist = r.success ? (r.historico || []) : [];
+  const tbody = document.getElementById('tbodyHistorico');
+  if (!hist.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="sup-empty">Sem agendamentos.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = hist.map(h => {
+    const dt = parseDT(h.inicio);
+    const data = `${fmtDataBR(h.inicio)}<br><span class="sup-help">${hm(dt)}</span>`;
+    const tipoTag = h.tipo_oferta === 'treinamento'
+      ? '<span class="sup-pill pendente">Treinamento</span>'
+      : '<span class="sup-pill agendado">Curso</span>';
+    const modal = h.modalidade === 'online'
+      ? '<i class="bi bi-camera-video"></i> Online'
+      : h.modalidade === 'presencial'
+        ? '<i class="bi bi-buildings"></i> Presencial' : '—';
+    return `<tr>
+      <td>${data}</td>
+      <td>${tipoTag}<br><strong>${esc(h.oferta_nome || h.titulo || '—')}</strong></td>
+      <td>${esc(h.instrutor || '—')}</td>
+      <td>${esc(h.unidade_nome || h.agenda_nome || '—')}</td>
+      <td>${modal}</td>
+      <td><span class="sup-pill ${h.status}">${rotuloStatus(h.status)}</span></td>
+    </tr>`;
+  }).join('');
+}
 
 async function initSecaoFeriados() {
   if (!agendas.length) await loadAgendas();
