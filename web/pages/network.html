@@ -388,7 +388,8 @@
   <script src="/SistemaCPE/web/assests/js/nav.js"></script>
 
   <script>
-  const API = window.API_BASE_URL || `http://${location.hostname || '127.0.0.1'}:8000`;
+  // `??` em vez de `||` pra respeitar same-origin (API_BASE_URL='' em dominio publico)
+  const API = (window.API_BASE_URL ?? `http://${location.hostname || '127.0.0.1'}:8000`);
 
   let _units    = [];   // cadastro do banco
   let _snaps    = [];   // status ao vivo

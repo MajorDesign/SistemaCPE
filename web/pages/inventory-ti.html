@@ -922,8 +922,10 @@
   let _fornList    = [];   // lista de fornecedores (cache p/ selects)
   let _modalId     = null;
 
-  const API = window.API_BASE_URL
-    || `http://${location.hostname || '127.0.0.1'}:8000`;
+  // Em dominio publico, config.js define API_BASE_URL = '' (same-origin
+  // via Caddy). Usamos `??` em vez de `||` pra string vazia NAO cair no
+  // fallback — senao quebra com Mixed Content (https + http://...:8000).
+  const API = (window.API_BASE_URL ?? `http://${location.hostname || '127.0.0.1'}:8000`);
 
   function tok() {
     return localStorage.getItem("cpe_token")
