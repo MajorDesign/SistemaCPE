@@ -112,6 +112,7 @@ class UserResponse(BaseModel):
     cpf: Optional[str] = None          # CPF (11 dígitos, sem máscara) — usado em termos
     is_active: bool
     created_at: Optional[str] = None
+    must_change_password: bool = False  # flag setada quando admin reseta a senha
 
 # --- GRUPOS ---
 class GroupBase(BaseModel):
@@ -523,6 +524,7 @@ def login(login_data: LoginRequest, response: Response, request: Request = None)
                  SELECT
                     u.id, u.name, u.email, u.username, u.role,
                     u.group_id, u.unit_id, u.cpf, u.is_active, u.created_at, u.password_hash,
+                    u.must_change_password,
                     `cpe_grupo`.`name` AS group_name,
                     unidades_cpe.nome AS unit_nome
                 FROM users u
@@ -535,6 +537,7 @@ def login(login_data: LoginRequest, response: Response, request: Request = None)
                 SELECT
                     u.id, u.name, u.email, u.username, u.role,
                     u.group_id, u.unit_id, u.cpf, u.is_active, u.created_at, u.password_hash,
+                    u.must_change_password,
                     `cpe_grupo`.`name` AS group_name,
                     unidades_cpe.nome AS unit_nome
                 FROM users u
@@ -1212,35 +1215,100 @@ async def update_user(user_id: int, user: UserUpdate):
             conn.close()
 
 class PasswordChangeRequest(BaseModel):
-    senha_atual: str = Field(..., min_length=1)
+    # senha_atual eh obrigatorio quando o proprio user troca a propria senha
+    # (sem flag must_change_password ativa). Pode vir vazio quando:
+    #  - admin reseta a senha de outro user (sem confirmar a atual)
+    #  - user com must_change_password=1 trocando (acabou de receber temp)
+    senha_atual: Optional[str] = None
     senha_nova:  str = Field(..., min_length=8)
+    # admin pode marcar pra forcar troca no proximo login do user resetado
+    forcar_troca: Optional[bool] = False
+
+
+def _resolver_requester_id(request: Request) -> Optional[int]:
+    """Pega o ID do usuario logado via cookie ou header X-Auth-Token."""
+    from security import parse_session_token, COOKIE_NAME
+    tok = request.cookies.get(COOKIE_NAME) or request.headers.get("X-Auth-Token") \
+        or request.headers.get("x-auth-token")
+    if not tok:
+        return None
+    return parse_session_token(tok)
+
 
 @users_router.post("/{user_id}/senha")
-async def change_password(user_id: int, payload: PasswordChangeRequest):
-    """Troca a senha do próprio usuário verificando a senha atual."""
+async def change_password(user_id: int, payload: PasswordChangeRequest, request: Request):
+    """Troca/reseta senha de usuario.
+
+    Tres modos:
+      1. SELF normal: user troca a propria senha — exige `senha_atual`,
+         confere com bcrypt. Zera must_change_password.
+      2. SELF apos reset admin: user com must_change_password=1 troca
+         sem precisar de `senha_atual` (acabou de receber temporaria).
+         Zera a flag.
+      3. ADMIN: ADMIN/TI/MANAGER/RESPONSAVEL_GRUPO redefine senha de
+         OUTRO user sem precisar de `senha_atual`. Pode marcar
+         `forcar_troca=true` (set must_change_password=1) — recomendado
+         pra forcar o user a definir uma senha pessoal antes de seguir.
+    """
+    requester_id = _resolver_requester_id(request)
+    if not requester_id:
+        raise HTTPException(status_code=401, detail="Nao autenticado")
+
     conn = get_db_or_404()
     cursor = None
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, password_hash FROM users WHERE id = %s", (user_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-        if not row.get("password_hash"):
-            raise HTTPException(status_code=400, detail="Usuário sem senha definida")
+        # Quem esta solicitando + alvo
+        cursor.execute(
+            "SELECT id, role, password_hash, must_change_password "
+            "FROM users WHERE id = %s", (requester_id,))
+        requester = cursor.fetchone()
+        if not requester:
+            raise HTTPException(status_code=401, detail="Solicitante invalido")
 
-        senha_valida = bcrypt.checkpw(
-            payload.senha_atual.encode("utf-8"),
-            row["password_hash"].encode("utf-8"),
-        )
-        if not senha_valida:
-            raise HTTPException(status_code=401, detail="Senha atual incorreta")
+        cursor.execute(
+            "SELECT id, password_hash, must_change_password "
+            "FROM users WHERE id = %s", (user_id,))
+        target = cursor.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="Usuario nao encontrado")
 
-        novo_hash = bcrypt.hashpw(payload.senha_nova.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-        cursor.execute("UPDATE users SET password_hash = %s WHERE id = %s", (novo_hash, user_id))
+        is_self = (requester["id"] == user_id)
+        is_admin = requester["role"] in ("ADMIN", "TI", "MANAGER", "RESPONSAVEL_GRUPO")
+
+        if not is_self and not is_admin:
+            raise HTTPException(status_code=403,
+                                detail="Sem permissao pra resetar senha de outro usuario")
+
+        # Modo SELF: precisa confirmar a senha atual, A NAO SER que
+        # esteja com flag must_change_password (acabou de ser resetado).
+        if is_self and not target.get("must_change_password"):
+            if not payload.senha_atual:
+                raise HTTPException(status_code=400,
+                                    detail="Informe a senha atual")
+            if not bcrypt.checkpw(payload.senha_atual.encode("utf-8"),
+                                  (target["password_hash"] or "").encode("utf-8")):
+                raise HTTPException(status_code=401, detail="Senha atual incorreta")
+
+        # Decide nova flag must_change_password:
+        #   admin reset com forcar_troca = 1
+        #   qualquer SELF (incluindo apos reset) = 0
+        if is_self:
+            nova_flag = 0
+        else:
+            nova_flag = 1 if payload.forcar_troca else 0
+
+        novo_hash = bcrypt.hashpw(payload.senha_nova.encode("utf-8"),
+                                  bcrypt.gensalt()).decode("utf-8")
+        cursor.execute(
+            "UPDATE users SET password_hash = %s, must_change_password = %s WHERE id = %s",
+            (novo_hash, nova_flag, user_id))
         conn.commit()
-        return {"ok": True, "mensagem": "Senha alterada com sucesso"}
+        logger.info(f"[USERS] Senha alterada — alvo={user_id} solicitante={requester_id} "
+                    f"is_self={is_self} forcar_troca={nova_flag}")
+        return {"ok": True, "mensagem": "Senha alterada com sucesso",
+                "must_change_password": bool(nova_flag)}
     except HTTPException:
         raise
     except Exception as err:

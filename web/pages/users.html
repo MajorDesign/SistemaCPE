@@ -1853,12 +1853,12 @@ function renderUsers(list = users) {
 
       try {
         const API = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : `http://${location.hostname}:8000`;
-        const r = await fetch(`${API}/api/users/${userId}/password`, {
-          method: 'PUT',
+        const r = await fetch(`${API}/api/users/${userId}/senha`, {
+          method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json',
                      'X-Auth-Token': localStorage.getItem('cpe_token') || '' },
-          body: JSON.stringify({ password: senha, forcar_troca: forcar }),
+          body: JSON.stringify({ senha_nova: senha, forcar_troca: forcar }),
         });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) {

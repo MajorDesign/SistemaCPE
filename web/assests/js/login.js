@@ -266,7 +266,8 @@
       console.log(`[LOGIN] 🎯 URL de redirecionamento: ${redirectUrl}`);
 
       // Se admin resetou a senha, FORÇA o usuário a trocar antes de seguir.
-      if (data && data.must_change_password) {
+      // Backend retorna a flag dentro de data.user (UserResponse)
+      if (data && data.user && data.user.must_change_password) {
         console.log("[LOGIN] ⚠ Flag must_change_password ATIVA — bloqueando navegação.");
         sessionStorage.setItem("mustChangePassword", "1");
         sessionStorage.setItem("redirectAfterLogin", redirectUrl);
