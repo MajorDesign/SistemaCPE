@@ -29,7 +29,7 @@ body {
   padding: 14px 32px; display: flex; align-items: center; gap: 12px;
 }
 .ag-topbar img {
-  width: 36px; height: 36px; flex-shrink: 0;
+  width: auto; height: 36px; flex-shrink: 0;
   /* logo preta vira branca em fundo escuro */
   filter: brightness(0) invert(1);
 }

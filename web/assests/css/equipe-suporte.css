@@ -70,7 +70,7 @@ a { text-decoration: none; color: inherit; }
   border-bottom: 1px solid rgba(255,255,255,.08);
 }
 .sup-sidebar-logo img {
-  width: 40px; flex-shrink: 0;
+  width: 100px; flex-shrink: 0;
   /* Logo original é preta — em fundo preto da sidebar fica invisivel.
      filter:brightness(0)+invert(1) torna a imagem 100% branca, mantendo
      a silhueta da logo (globo+texto CPE). */
