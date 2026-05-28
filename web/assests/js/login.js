@@ -265,6 +265,22 @@
 
       console.log(`[LOGIN] 🎯 URL de redirecionamento: ${redirectUrl}`);
 
+      // Se admin resetou a senha, FORÇA o usuário a trocar antes de seguir.
+      if (data && data.must_change_password) {
+        console.log("[LOGIN] ⚠ Flag must_change_password ATIVA — bloqueando navegação.");
+        sessionStorage.setItem("mustChangePassword", "1");
+        sessionStorage.setItem("redirectAfterLogin", redirectUrl);
+        setTimeout(() => {
+          alert(
+            "⚠ Sua senha foi RESETADA por um administrador.\n\n" +
+            "Por segurança, você precisa definir uma nova senha agora.\n" +
+            "Você será levado para a tela de troca."
+          );
+          window.location.href = "/SistemaCPE/web/pages/change-password.html";
+        }, 600);
+        return;
+      }
+
       setTimeout(() => {
         window.location.href = redirectUrl;
       }, 1000);

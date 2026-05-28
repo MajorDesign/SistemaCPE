@@ -53,7 +53,8 @@ def login(request: Request, data: dict):
         conn = get_db_connection()
         cursor = conn.cursor(dictionary=True)
         cursor.execute("""
-            SELECT id, name, email, username, password_hash, role, is_active, department_id, group_id
+            SELECT id, name, email, username, password_hash, role, is_active,
+                   department_id, group_id, must_change_password
             FROM users WHERE email = %s OR username = %s LIMIT 1
         """, (credential, credential))
         user = cursor.fetchone()
@@ -79,6 +80,9 @@ def login(request: Request, data: dict):
             "name": user["name"],
             "email": user["email"],
             "role": user["role"],
+            # Flag setada quando admin reseta a senha. Frontend usa pra
+            # forcar o user a trocar antes de continuar.
+            "must_change_password": bool(user.get("must_change_password")),
             "message": "Login realizado com sucesso!"
         })
         set_session_cookie(response, token)

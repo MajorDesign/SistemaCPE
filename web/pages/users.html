@@ -917,6 +917,9 @@ function renderUsers(list = users) {
               <button class="btn btn-sm btn-outline-primary" onclick="editUser(${user.id})" title="Editar" data-bs-toggle="modal" data-bs-target="#userModal">
                 <i class="bi bi-pencil"></i> Editar
               </button>
+              <button class="btn btn-sm btn-outline-warning" onclick="abrirResetSenha(${user.id}, '${escapeHtml(user.name)}')" title="Resetar senha">
+                <i class="bi bi-key"></i> Senha
+              </button>
               <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id}, '${escapeHtml(user.name)}');" title="Deletar">
                 <i class="bi bi-trash"></i> Deletar
               </button>
@@ -1734,6 +1737,141 @@ function renderUsers(list = users) {
     window.loadPendentes = loadPendentes;
     window.loadEmailsAutorizados = loadEmailsAutorizados;
   })();
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: RESETAR SENHA (admin)                                 -->
+  <!-- ============================================================ -->
+  <div class="modal fade" id="resetSenhaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header" style="background:#FEF3C7;color:#92400E;border-bottom:1px solid #FDE68A">
+          <h5 class="modal-title">
+            <i class="bi bi-key"></i> Resetar senha do usuário
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning" style="font-size:.85rem">
+            <i class="bi bi-shield-lock"></i> <strong>Lembrete:</strong> não é possível ver a senha
+            atual do usuário (ela é armazenada como hash unidirecional, é matematicamente
+            irrecuperável). Você pode definir uma nova senha aqui.
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label"><strong>Usuário:</strong></label>
+            <div id="resetSenhaNome" class="form-control-plaintext" style="font-weight:600"></div>
+            <input type="hidden" id="resetSenhaUserId">
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="resetNovaSenha">
+              Nova senha <span class="text-danger">*</span>
+            </label>
+            <div style="position:relative">
+              <input type="password" class="form-control" id="resetNovaSenha"
+                     placeholder="Mínimo 8 caracteres" minlength="8" maxlength="100">
+              <button type="button" class="btn btn-sm" style="position:absolute;right:6px;top:4px;background:none"
+                      onclick="toggleResetSenha()" title="Mostrar/Ocultar">
+                <i class="bi bi-eye" id="resetSenhaEyeIcon"></i>
+              </button>
+            </div>
+            <div class="form-text">
+              Mínimo 8 caracteres. Recomenda-se senha temporária forte e marcar
+              "forçar troca" abaixo.
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label" for="resetConfirmarSenha">
+              Confirmar nova senha <span class="text-danger">*</span>
+            </label>
+            <input type="password" class="form-control" id="resetConfirmarSenha"
+                   placeholder="Repita a senha">
+          </div>
+
+          <div class="form-check" style="background:#FEF3C7;padding:10px 12px;border-radius:6px">
+            <input class="form-check-input" type="checkbox" id="resetForcarTroca" checked>
+            <label class="form-check-label" for="resetForcarTroca">
+              <strong>Forçar troca de senha no próximo login</strong>
+              <div class="form-text">
+                Recomendado. O usuário verá um alerta forte ao entrar e precisa
+                trocar a senha antes de continuar.
+              </div>
+            </label>
+          </div>
+
+          <div id="resetSenhaErro" class="alert alert-danger mt-3" style="display:none"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-warning" onclick="confirmarResetSenha()">
+            <i class="bi bi-check-lg"></i> Resetar senha
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Captura o nome e abre o modal de reset
+    function abrirResetSenha(userId, userName) {
+      document.getElementById('resetSenhaUserId').value = userId;
+      document.getElementById('resetSenhaNome').textContent = userName || '—';
+      document.getElementById('resetNovaSenha').value = '';
+      document.getElementById('resetConfirmarSenha').value = '';
+      document.getElementById('resetForcarTroca').checked = true;
+      document.getElementById('resetSenhaErro').style.display = 'none';
+      const modal = new bootstrap.Modal(document.getElementById('resetSenhaModal'));
+      modal.show();
+    }
+
+    function toggleResetSenha() {
+      const inp = document.getElementById('resetNovaSenha');
+      const ico = document.getElementById('resetSenhaEyeIcon');
+      const show = inp.type === 'password';
+      inp.type = show ? 'text' : 'password';
+      ico.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+    }
+
+    async function confirmarResetSenha() {
+      const errEl = document.getElementById('resetSenhaErro');
+      errEl.style.display = 'none';
+      const userId = document.getElementById('resetSenhaUserId').value;
+      const senha = document.getElementById('resetNovaSenha').value;
+      const conf  = document.getElementById('resetConfirmarSenha').value;
+      const forcar = document.getElementById('resetForcarTroca').checked;
+
+      if (!senha || senha.length < 8) {
+        errEl.textContent = 'A senha precisa ter no mínimo 8 caracteres.';
+        errEl.style.display = 'block'; return;
+      }
+      if (senha !== conf) {
+        errEl.textContent = 'As senhas não coincidem.';
+        errEl.style.display = 'block'; return;
+      }
+
+      try {
+        const API = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : `http://${location.hostname}:8000`;
+        const r = await fetch(`${API}/api/users/${userId}/password`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json',
+                     'X-Auth-Token': localStorage.getItem('cpe_token') || '' },
+          body: JSON.stringify({ password: senha, forcar_troca: forcar }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          errEl.textContent = d.detail || `Erro ${r.status}`;
+          errEl.style.display = 'block'; return;
+        }
+        bootstrap.Modal.getInstance(document.getElementById('resetSenhaModal')).hide();
+        alert(`Senha resetada com sucesso!${forcar ? '\n\nO usuário será obrigado a trocar a senha no próximo login.' : ''}`);
+      } catch (err) {
+        errEl.textContent = 'Erro de conexão: ' + err.message;
+        errEl.style.display = 'block';
+      }
+    }
   </script>
 
 </body>

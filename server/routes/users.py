@@ -734,6 +734,17 @@ async def change_password(
         # ✅ Hash da nova senha
         password_hash = hash_password(new_password)
 
+        # ✅ "forcar_troca": so admin que reseta senha de OUTRO user pode marcar.
+        # Se eh o proprio usuario trocando a propria senha, ZERA a flag.
+        is_self = (current_user["id"] == user_id)
+        is_admin_reset = (not is_self) and current_user["role"] in (
+            "ADMIN", "TI", "MANAGER", "RESPONSAVEL_GRUPO"
+        )
+        forcar_troca_flag = 0
+        if is_admin_reset and data.get("forcar_troca"):
+            forcar_troca_flag = 1
+        # is_self => sempre zera (o user acabou de redefinir do jeito dele)
+
         with engine.begin() as conn:
             # ✅ Verificar se usuário existe
             user_exists = conn.execute(
@@ -749,10 +760,11 @@ async def change_password(
 
             user_name = user_exists[1]
 
-            # ✅ Atualizar senha
+            # ✅ Atualizar senha + flag
             result = conn.execute(
-                text("UPDATE users SET password_hash = :hash WHERE id = :id"),
-                {"hash": password_hash, "id": user_id}
+                text("UPDATE users SET password_hash = :hash, "
+                     "must_change_password = :mcp WHERE id = :id"),
+                {"hash": password_hash, "mcp": forcar_troca_flag, "id": user_id}
             )
 
             if result.rowcount == 0:
