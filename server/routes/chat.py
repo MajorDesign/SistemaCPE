@@ -72,38 +72,6 @@ class ChatConnectionManager:
                 self._cleanup_voice_sessions(user_id)
         logger.warning(f"[CHAT-WS] -user {user_id} total_online={len(self._conns)}")
 
-    @staticmethod
-    def _cleanup_voice_sessions(user_id: int):
-        """Quando user perde TODAS as conexoes WS, tira ele das salas de voz
-        (sem isso, peers ficariam tentando conectar com fantasma)."""
-        try:
-            conn = get_chat_db_or_404()
-            cur = conn.cursor(dictionary=True)
-            cur.execute(
-                "SELECT channel_id FROM chat_voice_sessions WHERE user_id=%s",
-                (user_id,))
-            channels = [r["channel_id"] for r in cur.fetchall()]
-            if channels:
-                cur.execute(
-                    "DELETE FROM chat_voice_sessions WHERE user_id=%s", (user_id,))
-                conn.commit()
-            cur.close(); conn.close()
-            # Avisa os outros peers em cada canal
-            if channels:
-                asyncio.create_task(_broadcast_voice_leaves(user_id, channels))
-        except Exception as e:
-            logger.warning(f"[CHAT-WS] cleanup voice fail user={user_id}: {e}")
-
-
-async def _broadcast_voice_leaves(user_id: int, channel_ids: List[int]):
-    for ch_id in channel_ids:
-        membros = _listar_membros_canal(ch_id)
-        await manager.send_to_users(membros, {
-            "type": "voice_leave",
-            "channel_id": ch_id,
-            "user_id": user_id,
-        })
-
     async def send_to_users(self, user_ids: List[int], payload: dict):
         """Broadcast pra todos os WSs de uma lista de users."""
         msg = json.dumps(payload, default=str)
@@ -136,6 +104,37 @@ async def _broadcast_voice_leaves(user_id: int, channel_ids: List[int]):
             cur.close(); conn.close()
         except Exception as e:
             logger.warning(f"[CHAT-WS] presence update failed: {e}")
+
+    @staticmethod
+    def _cleanup_voice_sessions(user_id: int):
+        """Quando user perde TODAS as conexoes WS, tira ele das salas de voz
+        (sem isso, peers ficariam tentando conectar com fantasma)."""
+        try:
+            conn = get_chat_db_or_404()
+            cur = conn.cursor(dictionary=True)
+            cur.execute(
+                "SELECT channel_id FROM chat_voice_sessions WHERE user_id=%s",
+                (user_id,))
+            channels = [r["channel_id"] for r in cur.fetchall()]
+            if channels:
+                cur.execute(
+                    "DELETE FROM chat_voice_sessions WHERE user_id=%s", (user_id,))
+                conn.commit()
+            cur.close(); conn.close()
+            if channels:
+                asyncio.create_task(_broadcast_voice_leaves(user_id, channels))
+        except Exception as e:
+            logger.warning(f"[CHAT-WS] cleanup voice fail user={user_id}: {e}")
+
+
+async def _broadcast_voice_leaves(user_id: int, channel_ids: List[int]):
+    for ch_id in channel_ids:
+        membros = _listar_membros_canal(ch_id)
+        await manager.send_to_users(membros, {
+            "type": "voice_leave",
+            "channel_id": ch_id,
+            "user_id": user_id,
+        })
 
 
 manager = ChatConnectionManager()
@@ -1612,24 +1611,39 @@ def cleanup_imagens_antigas(request: Request, dias: int = Query(_CLEANUP_DIAS, g
 async def chat_ws(websocket: WebSocket):
     # CRITICO: sempre fazer accept() PRIMEIRO. Chamar close() antes do
     # accept faz o Starlette mandar HTTP 403 no handshake (cliente ve
-    # WS rejeitado, nao consegue ler reason). Esse era o bug que
-    # rejeitava WSs em prod ate 2026-05-29.
-    await websocket.accept()
-
-    token = websocket.query_params.get("token", "")
-    user_id = parse_session_token(token) if token else None
-    user = get_user_by_id(user_id) if user_id else None
-    if not user:
-        await websocket.send_text(json.dumps(
-            {"type": "error", "detail": "Token ausente ou invalido"}))
-        await websocket.close(code=4401, reason="Auth invalida")
+    # WS rejeitado, nao consegue ler reason). Bug em prod ate 2026-05-29.
+    try:
+        await websocket.accept()
+    except Exception as e:
+        logger.error(f"[CHAT-WS] accept fail: {type(e).__name__}: {e}")
         return
 
-    # Registra no manager. Nao chama manager.connect() pq esse faz accept de novo.
+    token = websocket.query_params.get("token", "")
+    user_id, user = None, None
+    try:
+        user_id = parse_session_token(token) if token else None
+        user = get_user_by_id(user_id) if user_id else None
+    except Exception as e:
+        logger.error(f"[CHAT-WS] auth check fail: {type(e).__name__}: {e}")
+
+    if not user:
+        try:
+            await websocket.send_text(json.dumps(
+                {"type": "error", "detail": "Token ausente ou invalido"}))
+            await websocket.close(code=4401, reason="Auth invalida")
+        except Exception:
+            pass
+        return
+
+    # Registra no manager (sem chamar manager.connect porque ele faz accept)
     manager._conns.setdefault(user_id, set()).add(websocket)
     logger.warning(f"[CHAT-WS] +user {user_id} (conexoes={len(manager._conns[user_id])} "
                    f"total_users={len(manager._conns)})")
-    manager._set_presence(user_id, "online")
+    # Presence em executor pra nao bloquear event loop com query MySQL sincrona
+    try:
+        await asyncio.to_thread(manager._set_presence, user_id, "online")
+    except Exception as e:
+        logger.warning(f"[CHAT-WS] presence fail (nao critico): {e}")
     try:
         # Envia hello inicial
         await websocket.send_text(json.dumps({
