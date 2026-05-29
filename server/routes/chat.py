@@ -501,6 +501,367 @@ async def deletar_mensagem(message_id: int, request: Request):
 
 
 # =====================================================================
+# Canais customizados — criados pelo Responsavel de Grupo (e ADMIN/TI/MANAGER)
+# Cross-grupo/cross-setor por design. Owner gerencia; admin pode adicionar
+# membros; member so conversa.
+# =====================================================================
+_ROLES_CRIAR_CANAL = ("RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER")
+
+
+class CanalCreate(BaseModel):
+    nome: str = Field(..., min_length=2, max_length=100)
+    descricao: Optional[str] = Field(None, max_length=255)
+    member_ids: List[int] = Field(default_factory=list)
+
+
+class CanalEdit(BaseModel):
+    nome: Optional[str] = Field(None, min_length=2, max_length=100)
+    descricao: Optional[str] = Field(None, max_length=255)
+
+
+class AddMembersBody(BaseModel):
+    user_ids: List[int]
+
+
+def _role_no_canal(channel_id: int, user_id: int) -> Optional[str]:
+    """Retorna 'owner'/'admin'/'member' OU None se nao for membro."""
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT role FROM chat_channel_members WHERE channel_id=%s AND user_id=%s",
+                    (channel_id, user_id))
+        r = cur.fetchone()
+        return r[0] if r else None
+    finally:
+        cur.close(); conn.close()
+
+
+def _canal_existe_e_tipo(channel_id: int) -> tuple[bool, Optional[str]]:
+    """Returns (exists, tipo). tipo in {dm, grupo_sistema, canal} ou None."""
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT tipo FROM chat_channels WHERE id=%s AND arquivado_em IS NULL",
+                    (channel_id,))
+        r = cur.fetchone()
+        return (r is not None, r[0] if r else None)
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/channels")
+async def criar_canal(body: CanalCreate, request: Request):
+    """Cria um canal customizado (tipo='canal'). Criador vira owner."""
+    user = _user_from_request(request)
+    if user.get("role") not in _ROLES_CRIAR_CANAL:
+        raise HTTPException(status_code=403,
+                            detail="So Responsavel de Grupo, Manager, TI ou Admin podem criar canal")
+
+    nome = body.nome.strip()
+    if not nome:
+        raise HTTPException(status_code=400, detail="Nome obrigatorio")
+
+    # Filtra member_ids — so users que existem e estao ativos
+    member_ids = list({int(x) for x in body.member_ids if x and int(x) != user["id"]})
+    validos: List[int] = []
+    if member_ids:
+        plus = get_db_or_404()
+        pcur = plus.cursor(dictionary=True)
+        try:
+            placeholders = ",".join(["%s"] * len(member_ids))
+            pcur.execute(
+                f"SELECT id FROM users WHERE id IN ({placeholders}) AND is_active=1",
+                member_ids)
+            validos = [r["id"] for r in pcur.fetchall()]
+        finally:
+            pcur.close(); plus.close()
+
+    chat = get_chat_db_or_404()
+    ccur = chat.cursor()
+    try:
+        ccur.execute("""
+            INSERT INTO chat_channels (tipo, nome, descricao, criado_por)
+            VALUES ('canal', %s, %s, %s)
+        """, (nome, body.descricao, user["id"]))
+        channel_id = ccur.lastrowid
+
+        # Owner + members
+        rows = [(channel_id, user["id"], "owner")]
+        rows += [(channel_id, uid, "member") for uid in validos]
+        ccur.executemany("""
+            INSERT INTO chat_channel_members (channel_id, user_id, role)
+            VALUES (%s, %s, %s)
+        """, rows)
+        chat.commit()
+    finally:
+        ccur.close(); chat.close()
+
+    # Notifica todos os novos membros via WS pra atualizar lista de canais
+    await manager.send_to_users([user["id"]] + validos, {
+        "type": "channel_created",
+        "channel_id": channel_id,
+        "nome": nome,
+    })
+
+    return {"success": True, "channel_id": channel_id, "members_added": len(validos)}
+
+
+@router.patch("/channels/{channel_id}")
+async def editar_canal(channel_id: int, body: CanalEdit, request: Request):
+    """Edita nome/descricao. So canais tipo='canal'. Owner/admin do canal ou
+    ADMIN/TI/MANAGER do sistema."""
+    user = _user_from_request(request)
+    existe, tipo = _canal_existe_e_tipo(channel_id)
+    if not existe:
+        raise HTTPException(status_code=404, detail="Canal nao encontrado")
+    if tipo != "canal":
+        raise HTTPException(status_code=400,
+                            detail="Apenas canais customizados podem ser editados")
+
+    role = _role_no_canal(channel_id, user["id"])
+    is_sys_admin = user.get("role") in ("ADMIN", "TI", "MANAGER")
+    if role not in ("owner", "admin") and not is_sys_admin:
+        raise HTTPException(status_code=403, detail="Sem permissao pra editar este canal")
+
+    sets, params = [], []
+    if body.nome is not None:
+        nome = body.nome.strip()
+        if not nome:
+            raise HTTPException(status_code=400, detail="Nome nao pode ser vazio")
+        sets.append("nome=%s"); params.append(nome)
+    if body.descricao is not None:
+        sets.append("descricao=%s"); params.append(body.descricao)
+    if not sets:
+        return {"success": True, "noop": True}
+    params.append(channel_id)
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE chat_channels SET {', '.join(sets)} WHERE id=%s", params)
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    membros = _listar_membros_canal(channel_id)
+    await manager.send_to_users(membros, {
+        "type": "channel_updated",
+        "channel_id": channel_id,
+        "nome": body.nome, "descricao": body.descricao,
+    })
+    return {"success": True}
+
+
+@router.delete("/channels/{channel_id}")
+async def arquivar_canal(channel_id: int, request: Request):
+    """Arquiva (soft delete). So owner ou ADMIN do sistema. Nao funciona em DM/grupo_sistema."""
+    user = _user_from_request(request)
+    existe, tipo = _canal_existe_e_tipo(channel_id)
+    if not existe:
+        raise HTTPException(status_code=404, detail="Canal nao encontrado")
+    if tipo != "canal":
+        raise HTTPException(status_code=400,
+                            detail="Apenas canais customizados podem ser arquivados")
+
+    role = _role_no_canal(channel_id, user["id"])
+    is_sys_admin = user.get("role") in ("ADMIN", "TI", "MANAGER")
+    if role != "owner" and not is_sys_admin:
+        raise HTTPException(status_code=403, detail="So o dono do canal pode arquivar")
+
+    membros = _listar_membros_canal(channel_id)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE chat_channels SET arquivado_em=NOW() WHERE id=%s", (channel_id,))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    await manager.send_to_users(membros, {
+        "type": "channel_archived",
+        "channel_id": channel_id,
+    })
+    return {"success": True}
+
+
+@router.get("/channels/{channel_id}/members")
+def listar_membros_enriquecido(channel_id: int, request: Request):
+    """Lista membros com dados de cpe_plus.users + status online."""
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro deste canal")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT user_id, role, entrou_em
+            FROM chat_channel_members WHERE channel_id=%s ORDER BY role, entrou_em
+        """, (channel_id,))
+        rows = cur.fetchall()
+    finally:
+        cur.close(); conn.close()
+
+    users_map = _enriquecer_users([r["user_id"] for r in rows])
+    online = set(manager.online_users())
+    result = []
+    for r in rows:
+        u = users_map.get(r["user_id"], {})
+        result.append({
+            "user_id": r["user_id"],
+            "name": u.get("name"),
+            "email": u.get("email"),
+            "role_no_canal": r["role"],
+            "online": r["user_id"] in online,
+            "entrou_em": r["entrou_em"],
+        })
+    return {"success": True, "members": result}
+
+
+@router.post("/channels/{channel_id}/members")
+async def adicionar_membros(channel_id: int, body: AddMembersBody, request: Request):
+    """Adiciona membros. So owner/admin do canal ou ADMIN sistema."""
+    user = _user_from_request(request)
+    existe, tipo = _canal_existe_e_tipo(channel_id)
+    if not existe:
+        raise HTTPException(status_code=404, detail="Canal nao encontrado")
+    if tipo == "dm":
+        raise HTTPException(status_code=400, detail="DM nao aceita novos membros")
+    if tipo == "grupo_sistema":
+        raise HTTPException(status_code=400,
+                            detail="Membros de canais de grupo do sistema sao sincronizados automaticamente")
+
+    role = _role_no_canal(channel_id, user["id"])
+    is_sys_admin = user.get("role") in ("ADMIN", "TI", "MANAGER")
+    if role not in ("owner", "admin") and not is_sys_admin:
+        raise HTTPException(status_code=403, detail="Sem permissao pra adicionar membros")
+
+    ids = list({int(x) for x in body.user_ids if x})
+    if not ids:
+        return {"success": True, "added": 0}
+
+    # Valida que sao usuarios ativos reais
+    plus = get_db_or_404()
+    pcur = plus.cursor(dictionary=True)
+    try:
+        placeholders = ",".join(["%s"] * len(ids))
+        pcur.execute(
+            f"SELECT id FROM users WHERE id IN ({placeholders}) AND is_active=1", ids)
+        validos = [r["id"] for r in pcur.fetchall()]
+    finally:
+        pcur.close(); plus.close()
+    if not validos:
+        return {"success": True, "added": 0}
+
+    chat = get_chat_db_or_404()
+    cur = chat.cursor()
+    try:
+        rows = [(channel_id, uid, "member") for uid in validos]
+        cur.executemany("""
+            INSERT IGNORE INTO chat_channel_members (channel_id, user_id, role)
+            VALUES (%s, %s, %s)
+        """, rows)
+        added = cur.rowcount
+        chat.commit()
+    finally:
+        cur.close(); chat.close()
+
+    # Notifica os adicionados pra recarregarem canais
+    await manager.send_to_users(validos, {
+        "type": "added_to_channel",
+        "channel_id": channel_id,
+    })
+    # E notifica membros atuais que a lista mudou
+    todos = _listar_membros_canal(channel_id)
+    await manager.send_to_users(todos, {
+        "type": "channel_members_changed",
+        "channel_id": channel_id,
+    })
+
+    return {"success": True, "added": added}
+
+
+@router.delete("/channels/{channel_id}/members/{user_id}")
+async def remover_membro(channel_id: int, user_id: int, request: Request):
+    """Remove membro. user pode remover a si mesmo (sair); owner/admin
+    do canal e ADMIN sistema podem remover qualquer. Owner nao pode ser
+    removido (precisa transferir owner ou arquivar canal)."""
+    actor = _user_from_request(request)
+    existe, tipo = _canal_existe_e_tipo(channel_id)
+    if not existe:
+        raise HTTPException(status_code=404, detail="Canal nao encontrado")
+    if tipo == "dm":
+        raise HTTPException(status_code=400, detail="DM nao tem gerencia de membros")
+    if tipo == "grupo_sistema":
+        raise HTTPException(status_code=400,
+                            detail="Membros de canais de grupo do sistema sao sincronizados automaticamente")
+
+    target_role = _role_no_canal(channel_id, user_id)
+    if not target_role:
+        raise HTTPException(status_code=404, detail="Usuario nao e membro desse canal")
+    if target_role == "owner":
+        raise HTTPException(status_code=400,
+                            detail="O dono nao pode ser removido. Transfira a posse ou arquive o canal")
+
+    is_self = (actor["id"] == user_id)
+    actor_role = _role_no_canal(channel_id, actor["id"])
+    is_sys_admin = actor.get("role") in ("ADMIN", "TI", "MANAGER")
+    if not is_self and actor_role not in ("owner", "admin") and not is_sys_admin:
+        raise HTTPException(status_code=403, detail="Sem permissao pra remover este membro")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM chat_channel_members WHERE channel_id=%s AND user_id=%s",
+                    (channel_id, user_id))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    # Notifica o user removido
+    await manager.send_to_users([user_id], {
+        "type": "removed_from_channel",
+        "channel_id": channel_id,
+    })
+    # E os membros restantes que houve mudanca
+    restantes = _listar_membros_canal(channel_id)
+    if restantes:
+        await manager.send_to_users(restantes, {
+            "type": "channel_members_changed",
+            "channel_id": channel_id,
+        })
+    return {"success": True}
+
+
+@router.get("/users-disponiveis")
+def listar_users_disponiveis(request: Request, q: Optional[str] = Query(None)):
+    """Lista users ativos do sistema (id, name, email). Opcionalmente filtra
+    por substring em name/email. Usado pelo seletor de membros."""
+    _user_from_request(request)  # garante auth
+    plus = get_db_or_404()
+    cur = plus.cursor(dictionary=True)
+    try:
+        if q:
+            like = f"%{q.strip().lower()}%"
+            cur.execute("""
+                SELECT id, name, email, role, group_id
+                FROM users
+                WHERE is_active=1
+                  AND (LOWER(name) LIKE %s OR LOWER(email) LIKE %s)
+                ORDER BY name LIMIT 50
+            """, (like, like))
+        else:
+            cur.execute("""
+                SELECT id, name, email, role, group_id
+                FROM users WHERE is_active=1
+                ORDER BY name LIMIT 200
+            """)
+        return {"success": True, "users": cur.fetchall()}
+    finally:
+        cur.close(); plus.close()
+
+
+# =====================================================================
 # Sync canais por grupo do sistema (idempotente)
 # =====================================================================
 @router.post("/admin/sync-grupos")

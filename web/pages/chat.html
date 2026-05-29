@@ -610,6 +610,142 @@
     }
     .chat-reply-preview button:hover { color: var(--chat-text); }
 
+    /* ========== Modal generico (criar/configurar canal) ========== */
+    .chat-modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 5000;
+      background: rgba(0, 0, 0, 0.7);
+      align-items: center; justify-content: center;
+      padding: 20px; animation: fadeIn 0.15s ease;
+    }
+    .chat-modal-overlay.open { display: flex; }
+    @keyframes fadeIn { from {opacity:0;} to {opacity:1;} }
+    .chat-modal {
+      background: var(--chat-bg-2);
+      border: 1px solid var(--chat-border);
+      border-radius: 12px;
+      width: min(560px, 100%);
+      max-height: 88vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,.6);
+    }
+    .chat-modal-header {
+      padding: 14px 18px; border-bottom: 1px solid var(--chat-border);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--chat-bg-1);
+      border-radius: 12px 12px 0 0;
+    }
+    .chat-modal-header h3 {
+      margin: 0; font-size: 1rem; font-weight: 700; color: var(--chat-text);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .chat-modal-close {
+      background: transparent; border: none; color: var(--chat-muted);
+      cursor: pointer; font-size: 1.2rem; padding: 4px 8px;
+    }
+    .chat-modal-close:hover { color: var(--chat-text); }
+    .chat-modal-body {
+      padding: 16px 18px; overflow-y: auto;
+      color: var(--chat-text);
+    }
+    .chat-modal-footer {
+      padding: 12px 18px; border-top: 1px solid var(--chat-border);
+      display: flex; gap: 8px; justify-content: flex-end;
+      background: var(--chat-bg-1);
+      border-radius: 0 0 12px 12px;
+    }
+    .chat-modal label {
+      display: block; font-size: 0.78rem; color: var(--chat-muted);
+      text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .chat-modal input[type="text"], .chat-modal textarea {
+      width: 100%; background: var(--chat-bg-input);
+      border: 1px solid var(--chat-border);
+      border-radius: 6px; padding: 8px 10px;
+      color: var(--chat-text); font-family: inherit; font-size: 0.9rem;
+      box-sizing: border-box;
+    }
+    .chat-modal input[type="text"]:focus, .chat-modal textarea:focus {
+      outline: none; border-color: var(--chat-accent);
+    }
+    .chat-modal textarea { min-height: 60px; resize: vertical; }
+    .chat-modal .field { margin-bottom: 14px; }
+    .chat-btn {
+      padding: 8px 16px; border: none; border-radius: 6px;
+      cursor: pointer; font-weight: 600; font-size: 0.86rem;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .chat-btn-primary { background: var(--chat-accent); color: #1A1A1A; }
+    .chat-btn-primary:hover { filter: brightness(1.1); }
+    .chat-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .chat-btn-secondary {
+      background: transparent; color: var(--chat-text);
+      border: 1px solid var(--chat-border);
+    }
+    .chat-btn-secondary:hover { background: var(--chat-bg-3); }
+    .chat-btn-danger { background: #DC2626; color: #fff; }
+    .chat-btn-danger:hover { background: #B91C1C; }
+
+    /* Seletor de membros (lista com busca + checkboxes) */
+    .chat-user-search {
+      margin-bottom: 8px;
+    }
+    .chat-user-list {
+      border: 1px solid var(--chat-border);
+      border-radius: 6px;
+      max-height: 240px;
+      overflow-y: auto;
+      background: var(--chat-bg-3);
+    }
+    .chat-user-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--chat-border);
+      cursor: pointer;
+      font-size: 0.86rem;
+    }
+    .chat-user-row:last-child { border-bottom: none; }
+    .chat-user-row:hover { background: var(--chat-bg-2); }
+    .chat-user-row.selected { background: rgba(255,193,7,0.08); }
+    .chat-user-row input[type="checkbox"] { accent-color: var(--chat-accent); }
+    .chat-user-row .av {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      color: #fff; font-weight: 700; font-size: 0.72rem;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .chat-user-row .info { flex: 1; min-width: 0; }
+    .chat-user-row .name {
+      color: var(--chat-text); font-weight: 500;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .chat-user-row .email {
+      font-size: 0.74rem; color: var(--chat-muted);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* Lista de membros atuais (na config do canal) */
+    .chat-member-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--chat-border);
+      font-size: 0.86rem;
+    }
+    .chat-member-row:last-child { border-bottom: none; }
+    .chat-member-row .role-badge {
+      font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
+      background: var(--chat-bg-3); color: var(--chat-muted);
+      font-weight: 600; text-transform: uppercase;
+    }
+    .chat-member-row .role-badge.owner { background: var(--chat-accent); color: #1A1A1A; }
+    .chat-member-row .role-badge.admin { background: #6366F1; color: #fff; }
+    .chat-member-row .remove-btn {
+      background: transparent; border: none; color: #DC2626;
+      cursor: pointer; padding: 4px 8px; border-radius: 4px;
+    }
+    .chat-member-row .remove-btn:hover { background: rgba(220,38,38,0.15); }
+
     /* Mobile: vira coluna unica com tabs */
     @media (max-width: 900px) {
       .chat-app { grid-template-columns: 1fr; }
@@ -705,6 +841,105 @@
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Criar Canal -->
+<div class="chat-modal-overlay" id="modalCriarCanal" onclick="if(event.target===this) fecharModalCriarCanal()">
+  <div class="chat-modal">
+    <div class="chat-modal-header">
+      <h3><i class="bi bi-hash"></i> Criar canal</h3>
+      <button class="chat-modal-close" onclick="fecharModalCriarCanal()">&times;</button>
+    </div>
+    <div class="chat-modal-body">
+      <div class="field">
+        <label>Nome do canal *</label>
+        <input type="text" id="canalNomeInput" placeholder="Ex: projeto-novo-site" maxlength="100">
+      </div>
+      <div class="field">
+        <label>Descrição (opcional)</label>
+        <textarea id="canalDescInput" placeholder="Pra que serve este canal?" maxlength="255"></textarea>
+      </div>
+      <div class="field">
+        <label>Adicionar membros (você é automaticamente o dono)</label>
+        <div class="chat-user-search">
+          <input type="text" id="canalMembrosBusca" placeholder="Buscar por nome ou email..."
+                 oninput="_filtrarUsuariosDisponiveis(this.value, 'criar')">
+        </div>
+        <div class="chat-user-list" id="canalMembrosList">
+          <div style="padding:14px;text-align:center;color:var(--chat-muted)">Carregando usuários...</div>
+        </div>
+        <div style="font-size:0.75rem;color:var(--chat-muted);margin-top:6px">
+          <span id="canalMembrosCount">0 selecionados</span> · Pode ser de qualquer grupo ou setor
+        </div>
+      </div>
+    </div>
+    <div class="chat-modal-footer">
+      <button class="chat-btn chat-btn-secondary" onclick="fecharModalCriarCanal()">Cancelar</button>
+      <button class="chat-btn chat-btn-primary" id="canalCriarBtn" onclick="confirmarCriarCanal()">
+        <i class="bi bi-plus-lg"></i> Criar canal
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Configurar Canal -->
+<div class="chat-modal-overlay" id="modalConfigCanal" onclick="if(event.target===this) fecharModalConfigCanal()">
+  <div class="chat-modal">
+    <div class="chat-modal-header">
+      <h3><i class="bi bi-gear"></i> Configurar canal</h3>
+      <button class="chat-modal-close" onclick="fecharModalConfigCanal()">&times;</button>
+    </div>
+    <div class="chat-modal-body">
+      <div class="field">
+        <label>Nome</label>
+        <input type="text" id="configCanalNome" maxlength="100">
+      </div>
+      <div class="field">
+        <label>Descrição</label>
+        <textarea id="configCanalDesc" maxlength="255"></textarea>
+      </div>
+      <div class="field">
+        <button class="chat-btn chat-btn-primary" id="configCanalSalvarBtn" onclick="salvarEdicaoCanal()">
+          <i class="bi bi-check-lg"></i> Salvar alterações
+        </button>
+      </div>
+      <hr style="border:0;border-top:1px solid var(--chat-border);margin:14px 0">
+      <div class="field">
+        <label>Membros do canal</label>
+        <div class="chat-user-list" id="configCanalMembros">
+          <div style="padding:14px;text-align:center;color:var(--chat-muted)">Carregando...</div>
+        </div>
+      </div>
+      <div class="field" id="configCanalAddSection">
+        <label>Adicionar mais membros</label>
+        <div class="chat-user-search">
+          <input type="text" id="configAddBusca" placeholder="Buscar..."
+                 oninput="_filtrarUsuariosDisponiveis(this.value, 'config')">
+        </div>
+        <div class="chat-user-list" id="configCanalAddList">
+          <div style="padding:14px;text-align:center;color:var(--chat-muted)">Buscando...</div>
+        </div>
+        <div style="margin-top:8px;text-align:right">
+          <button class="chat-btn chat-btn-primary" onclick="confirmarAddMembrosConfig()">
+            <i class="bi bi-person-plus"></i> Adicionar selecionados
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="chat-modal-footer" style="justify-content:space-between">
+      <div>
+        <button class="chat-btn chat-btn-danger" id="configCanalArquivarBtn" onclick="confirmarArquivarCanal()">
+          <i class="bi bi-archive"></i> Arquivar canal
+        </button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="chat-btn chat-btn-secondary" onclick="sairDoCanalAtual()">
+          <i class="bi bi-box-arrow-right"></i> Sair do canal
+        </button>
+        <button class="chat-btn chat-btn-secondary" onclick="fecharModalConfigCanal()">Fechar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -846,10 +1081,20 @@ function renderListaCanais() {
     html += `<div class="chat-section-title">Canais do sistema</div>`;
     html += grupos.map(c => _renderItem(c, `<i class="bi bi-hash chan-icon"></i>`)).join('');
   }
-  // Canais customizados (fase futura)
+  // Canais customizados (criados pelos Responsaveis de Grupo / Admins)
+  const podeCriarCanal = ['RESPONSAVEL_GRUPO','ADMIN','TI','MANAGER'].includes(_self.role || '');
+  html += `<div class="chat-section-title">
+    Canais
+    ${podeCriarCanal
+      ? `<button onclick="abrirModalCriarCanal()" title="Criar novo canal"><i class="bi bi-plus-lg"></i></button>`
+      : ''}
+  </div>`;
   if (outros.length) {
-    html += `<div class="chat-section-title">Canais</div>`;
     html += outros.map(c => _renderItem(c, `<i class="bi bi-hash chan-icon"></i>`)).join('');
+  } else {
+    html += `<div style="padding:6px 16px;color:var(--chat-muted);font-size:0.76rem">
+      ${podeCriarCanal ? 'Nenhum canal ainda. Clique em + acima pra criar.' : 'Você ainda não foi adicionado em nenhum canal.'}
+    </div>`;
   }
   // DMs
   html += `<div class="chat-section-title">
@@ -896,10 +1141,19 @@ async function abrirCanal(channelId) {
   // Header
   const hdr = document.getElementById('chatMainHeader');
   const icon = c.tipo === 'dm' ? 'bi-at' : 'bi-hash';
+  // So canais customizados podem ter o engrenagem (DM/grupo_sistema nao)
+  const podeConfigurar = c.tipo === 'canal';
   hdr.innerHTML = `
     <i class="bi ${icon} header-icon"></i>
     <h2>${_esc(c.nome || '#' + c.id)}</h2>
     ${c.descricao ? `<span class="header-desc">${_esc(c.descricao)}</span>` : ''}
+    ${podeConfigurar
+      ? `<button onclick="abrirModalConfigCanal(${c.id})" title="Configurar canal"
+                 style="margin-left:auto;background:transparent;border:none;color:var(--chat-muted);
+                        cursor:pointer;font-size:1.05rem;padding:4px 8px;border-radius:6px">
+           <i class="bi bi-gear"></i>
+         </button>`
+      : ''}
   `;
   document.getElementById('chatInputArea').style.display = '';
   document.getElementById('chatInput').focus();
@@ -1188,6 +1442,26 @@ function conectarWebSocket() {
       if (_canalAtivo && data.channel_id === _canalAtivo.id) {
         aplicarReacaoNaUI(data);
       }
+    } else if (data.type === 'channel_created' ||
+               data.type === 'added_to_channel' ||
+               data.type === 'channel_archived' ||
+               data.type === 'channel_updated') {
+      // Lista de canais mudou — recarrega
+      carregarCanais();
+    } else if (data.type === 'removed_from_channel') {
+      // Voce foi removido. Se era o canal aberto, volta pra empty state
+      if (_canalAtivo && _canalAtivo.id === data.channel_id) {
+        _canalAtivo = null;
+        document.getElementById('chatMainHeader').innerHTML = `
+          <i class="bi bi-chat-dots header-icon"></i><h2>Selecione um canal</h2>`;
+        document.getElementById('chatMessages').innerHTML = `
+          <div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Você foi removido deste canal.</p></div>`;
+        document.getElementById('chatInputArea').style.display = 'none';
+      }
+      carregarCanais();
+    } else if (data.type === 'channel_members_changed') {
+      // Se o modal de config esta aberto pro mesmo canal, atualiza
+      if (_configCanalId === data.channel_id) _recarregarMembrosConfig();
     } else if (data.type === 'pong') {
       // keepalive ok
     } else if (data.type === 'error') {
@@ -1787,6 +2061,298 @@ function _fecharMentionPopover() {
   _mentionState = null;
   document.getElementById('chatMentionPopover')?.classList.remove('open');
 }
+
+/* =====================================================================
+   CANAIS CUSTOMIZADOS — criar, configurar, adicionar/remover membros
+   ===================================================================== */
+
+let _allUsersDisponiveis = [];     // cache de users (carregado on demand)
+let _selecionadosCriar   = new Set();
+let _selecionadosAdd     = new Set();
+let _configCanalId       = null;   // canal sendo configurado
+
+async function _carregarUsuariosDisponiveis() {
+  if (_allUsersDisponiveis.length) return _allUsersDisponiveis;
+  try {
+    const r = await api('GET', '/users-disponiveis');
+    _allUsersDisponiveis = (r.users || []).filter(u => u.id !== _self.id);
+  } catch (e) {
+    console.warn('[chat] erro carregando users', e);
+    _allUsersDisponiveis = _usuariosSistema;  // fallback
+  }
+  return _allUsersDisponiveis;
+}
+
+function _renderUserSelector(containerId, modo, excluirIds = new Set()) {
+  // modo = 'criar' | 'config'
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const sel = modo === 'criar' ? _selecionadosCriar : _selecionadosAdd;
+  const query = (document.getElementById(modo === 'criar' ? 'canalMembrosBusca' : 'configAddBusca')?.value || '').toLowerCase();
+  const filtered = _allUsersDisponiveis
+    .filter(u => !excluirIds.has(u.id))
+    .filter(u => !query ||
+      (u.name || '').toLowerCase().includes(query) ||
+      (u.email || '').toLowerCase().includes(query));
+  if (!filtered.length) {
+    container.innerHTML = `<div style="padding:14px;text-align:center;color:var(--chat-muted)">
+      Nenhum usuário encontrado.</div>`;
+    return;
+  }
+  container.innerHTML = filtered.map(u => {
+    const checked = sel.has(u.id) ? 'checked' : '';
+    const selClass = sel.has(u.id) ? 'selected' : '';
+    return `<label class="chat-user-row ${selClass}">
+      <input type="checkbox" ${checked} onchange="_toggleUserSelected(${u.id}, '${modo}', this.checked)">
+      <div class="av">${_esc(_initials(u.name))}</div>
+      <div class="info">
+        <div class="name">${_esc(u.name || u.email)}</div>
+        <div class="email">${_esc(u.email || '')}</div>
+      </div>
+    </label>`;
+  }).join('');
+  _atualizarContadorSelecao(modo);
+}
+
+function _toggleUserSelected(userId, modo, checked) {
+  const sel = modo === 'criar' ? _selecionadosCriar : _selecionadosAdd;
+  if (checked) sel.add(userId); else sel.delete(userId);
+  _atualizarContadorSelecao(modo);
+  // Atualiza visual da linha sem re-renderizar tudo
+  const row = event?.target?.closest('.chat-user-row');
+  if (row) row.classList.toggle('selected', checked);
+}
+
+function _atualizarContadorSelecao(modo) {
+  const sel = modo === 'criar' ? _selecionadosCriar : _selecionadosAdd;
+  const cont = document.getElementById(modo === 'criar' ? 'canalMembrosCount' : null);
+  if (cont) cont.textContent = `${sel.size} selecionado${sel.size === 1 ? '' : 's'}`;
+}
+
+function _filtrarUsuariosDisponiveis(q, modo) {
+  if (modo === 'criar') {
+    _renderUserSelector('canalMembrosList', 'criar');
+  } else {
+    // No config, exclui quem ja eh membro
+    const jaMembros = new Set(_configMembrosCache.map(m => m.user_id));
+    _renderUserSelector('configCanalAddList', 'config', jaMembros);
+  }
+}
+
+/* ----- Modal criar canal ----- */
+async function abrirModalCriarCanal() {
+  _selecionadosCriar = new Set();
+  document.getElementById('canalNomeInput').value = '';
+  document.getElementById('canalDescInput').value = '';
+  document.getElementById('canalMembrosBusca').value = '';
+  document.getElementById('modalCriarCanal').classList.add('open');
+  await _carregarUsuariosDisponiveis();
+  _renderUserSelector('canalMembrosList', 'criar');
+}
+
+function fecharModalCriarCanal() {
+  document.getElementById('modalCriarCanal').classList.remove('open');
+}
+
+async function confirmarCriarCanal() {
+  const nome = document.getElementById('canalNomeInput').value.trim();
+  const desc = document.getElementById('canalDescInput').value.trim();
+  if (!nome || nome.length < 2) { alert('Nome do canal precisa ter ao menos 2 caracteres.'); return; }
+  const btn = document.getElementById('canalCriarBtn');
+  btn.disabled = true;
+  try {
+    const r = await api('POST', '/channels', {
+      nome,
+      descricao: desc || null,
+      member_ids: [..._selecionadosCriar],
+    });
+    fecharModalCriarCanal();
+    await carregarCanais();
+    if (r.channel_id) abrirCanal(r.channel_id);
+  } catch (e) {
+    alert('Erro ao criar canal: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ----- Modal configurar canal ----- */
+let _configMembrosCache = [];
+
+async function abrirModalConfigCanal(channelId) {
+  const c = _canais.find(x => x.id === channelId);
+  if (!c) return;
+  _configCanalId = channelId;
+  _selecionadosAdd = new Set();
+  document.getElementById('configCanalNome').value = c.nome || '';
+  document.getElementById('configCanalDesc').value = c.descricao || '';
+  document.getElementById('configAddBusca').value = '';
+  document.getElementById('modalConfigCanal').classList.add('open');
+  await Promise.all([
+    _carregarUsuariosDisponiveis(),
+    _recarregarMembrosConfig(),
+  ]);
+  // Verifica permissoes e habilita botoes
+  const meuRole = _configMembrosCache.find(m => m.user_id === _self.id)?.role_no_canal;
+  const podeAdmin = ['owner','admin'].includes(meuRole) ||
+                    ['ADMIN','TI','MANAGER'].includes(_self.role || '');
+  const podeArquivar = meuRole === 'owner' ||
+                       ['ADMIN','TI','MANAGER'].includes(_self.role || '');
+  document.getElementById('configCanalNome').disabled = !podeAdmin;
+  document.getElementById('configCanalDesc').disabled = !podeAdmin;
+  document.getElementById('configCanalSalvarBtn').style.display = podeAdmin ? '' : 'none';
+  document.getElementById('configCanalAddSection').style.display = podeAdmin ? '' : 'none';
+  document.getElementById('configCanalArquivarBtn').style.display = podeArquivar ? '' : 'none';
+}
+
+function fecharModalConfigCanal() {
+  document.getElementById('modalConfigCanal').classList.remove('open');
+  _configCanalId = null;
+  _configMembrosCache = [];
+}
+
+async function _recarregarMembrosConfig() {
+  if (!_configCanalId) return;
+  try {
+    const r = await api('GET', `/channels/${_configCanalId}/members`);
+    _configMembrosCache = r.members || [];
+    _renderMembrosConfig();
+    _renderUserSelector('configCanalAddList', 'config',
+      new Set(_configMembrosCache.map(m => m.user_id)));
+  } catch (e) {
+    document.getElementById('configCanalMembros').innerHTML =
+      `<div style="padding:14px;color:#EF4444">Erro: ${_esc(e.message)}</div>`;
+  }
+}
+
+function _renderMembrosConfig() {
+  const box = document.getElementById('configCanalMembros');
+  const meuRole = _configMembrosCache.find(m => m.user_id === _self.id)?.role_no_canal;
+  const podeRemover = ['owner','admin'].includes(meuRole) ||
+                      ['ADMIN','TI','MANAGER'].includes(_self.role || '');
+  box.innerHTML = _configMembrosCache.map(m => {
+    const roleClass = m.role_no_canal === 'owner' ? 'owner'
+                    : m.role_no_canal === 'admin' ? 'admin' : '';
+    const canRemove = podeRemover && m.role_no_canal !== 'owner' && m.user_id !== _self.id;
+    return `<div class="chat-member-row">
+      <div class="av" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#8B5CF6);
+                color:#fff;font-weight:700;font-size:0.72rem;display:flex;align-items:center;justify-content:center">
+        ${_esc(_initials(m.name))}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="color:var(--chat-text);font-weight:500">${_esc(m.name || m.email)}</div>
+        <div style="font-size:0.74rem;color:var(--chat-muted)">${_esc(m.email || '')}</div>
+      </div>
+      <span class="role-badge ${roleClass}">${m.role_no_canal}</span>
+      ${canRemove
+        ? `<button class="remove-btn" onclick="removerMembroConfig(${m.user_id})" title="Remover do canal">
+             <i class="bi bi-x-circle"></i>
+           </button>`
+        : ''}
+    </div>`;
+  }).join('');
+}
+
+async function salvarEdicaoCanal() {
+  if (!_configCanalId) return;
+  const nome = document.getElementById('configCanalNome').value.trim();
+  const desc = document.getElementById('configCanalDesc').value.trim();
+  if (!nome || nome.length < 2) { alert('Nome inválido'); return; }
+  try {
+    await api('PATCH', `/channels/${_configCanalId}`, { nome, descricao: desc || null });
+    // Atualiza local
+    const c = _canais.find(x => x.id === _configCanalId);
+    if (c) { c.nome = nome; c.descricao = desc; }
+    renderListaCanais();
+    if (_canalAtivo && _canalAtivo.id === _configCanalId) {
+      _canalAtivo.nome = nome; _canalAtivo.descricao = desc;
+      // Re-render do header
+      abrirCanal(_configCanalId);
+    }
+    alert('Canal atualizado.');
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function confirmarAddMembrosConfig() {
+  if (!_configCanalId) return;
+  const ids = [..._selecionadosAdd];
+  if (!ids.length) { alert('Selecione ao menos um usuário.'); return; }
+  try {
+    const r = await api('POST', `/channels/${_configCanalId}/members`, { user_ids: ids });
+    _selecionadosAdd = new Set();
+    await _recarregarMembrosConfig();
+    alert(`${r.added} usuário(s) adicionado(s).`);
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function removerMembroConfig(userId) {
+  if (!_configCanalId) return;
+  if (!confirm('Remover este membro do canal?')) return;
+  try {
+    await api('DELETE', `/channels/${_configCanalId}/members/${userId}`);
+    await _recarregarMembrosConfig();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function sairDoCanalAtual() {
+  if (!_configCanalId) return;
+  if (!confirm('Sair deste canal? Você não vai mais receber mensagens dele.')) return;
+  try {
+    await api('DELETE', `/channels/${_configCanalId}/members/${_self.id}`);
+    fecharModalConfigCanal();
+    // Remove da lista local
+    _canais = _canais.filter(c => c.id !== _configCanalId);
+    if (_canalAtivo?.id === _configCanalId) {
+      _canalAtivo = null;
+      document.getElementById('chatMainHeader').innerHTML = `
+        <i class="bi bi-chat-dots header-icon"></i>
+        <h2>Selecione um canal</h2>`;
+      document.getElementById('chatMessages').innerHTML = `
+        <div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Selecione um canal</p></div>`;
+      document.getElementById('chatInputArea').style.display = 'none';
+    }
+    renderListaCanais();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function confirmarArquivarCanal() {
+  if (!_configCanalId) return;
+  if (!confirm('Arquivar este canal? Ele desaparece pra todos os membros. (Esta ação não pode ser desfeita pela UI.)')) return;
+  try {
+    await api('DELETE', `/channels/${_configCanalId}`);
+    fecharModalConfigCanal();
+    await carregarCanais();
+    if (_canalAtivo?.id === _configCanalId) {
+      _canalAtivo = null;
+      document.getElementById('chatMainHeader').innerHTML = `
+        <i class="bi bi-chat-dots header-icon"></i>
+        <h2>Selecione um canal</h2>`;
+      document.getElementById('chatMessages').innerHTML = `
+        <div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Selecione um canal</p></div>`;
+      document.getElementById('chatInputArea').style.display = 'none';
+    }
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+// Esc fecha modais
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (document.getElementById('modalCriarCanal')?.classList.contains('open')) {
+    fecharModalCriarCanal();
+  } else if (document.getElementById('modalConfigCanal')?.classList.contains('open')) {
+    fecharModalConfigCanal();
+  }
+});
 </script>
 </body>
 </html>
