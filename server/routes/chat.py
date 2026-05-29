@@ -141,6 +141,50 @@ manager = ChatConnectionManager()
 
 
 # =====================================================================
+# Estado em memoria de chamadas 1-a-1 pendentes (nao respondidas ainda)
+# Estrutura: target_user_id -> {from_user_id, from_name, channel_id, ts}
+#
+# Por que em memoria: chamadas duram <1min e o estado e consultado MUITO.
+# Quando o user reconecta no WS, re-enviamos o invite pra ele (caso tenha
+# perdido). Quando ele clica numa push notif, validamos se a call ainda
+# esta valida (TTL 35s).
+# =====================================================================
+_PENDING_CALLS: Dict[int, dict] = {}
+_CALL_TTL_SECONDS = 35
+
+
+def _registrar_chamada(target: int, from_uid: int, from_name: str, channel_id: int):
+    _PENDING_CALLS[target] = {
+        "from_user_id": from_uid,
+        "from_user_name": from_name,
+        "channel_id": channel_id,
+        "ts": datetime.utcnow().timestamp(),
+    }
+
+
+def _cancelar_chamada(target: int, from_uid: Optional[int] = None) -> bool:
+    """Remove call pendente. Se from_uid passado, so cancela se for desse caller."""
+    c = _PENDING_CALLS.get(target)
+    if not c:
+        return False
+    if from_uid is not None and c["from_user_id"] != from_uid:
+        return False
+    _PENDING_CALLS.pop(target, None)
+    return True
+
+
+def _chamada_pendente(target: int) -> Optional[dict]:
+    c = _PENDING_CALLS.get(target)
+    if not c:
+        return None
+    if datetime.utcnow().timestamp() - c["ts"] > _CALL_TTL_SECONDS:
+        _PENDING_CALLS.pop(target, None)
+        return None
+    return c
+
+
+
+# =====================================================================
 # Upload de imagens (anexos)
 # =====================================================================
 _UPLOAD_CHAT_ROOT     = Path(__file__).resolve().parents[2] / "web" / "uploads" / "chat"
@@ -1568,6 +1612,19 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
             "online_users": manager.online_users(),
         }))
 
+        # Replay de chamada pendente — se algum invite foi mandado pra mim
+        # enquanto eu nao estava conectado (e ainda esta no TTL), reenvia
+        # agora. Resolve o caso "fechou aba, abriu de novo durante a call".
+        pending = _chamada_pendente(user_id)
+        if pending:
+            await websocket.send_text(json.dumps({
+                "type": "call_invite",
+                "from_user_id": pending["from_user_id"],
+                "from_user_name": pending["from_user_name"],
+                "channel_id": pending["channel_id"],
+                "replay": True,
+            }))
+
         while True:
             raw = await websocket.receive_text()
             try:
@@ -1600,21 +1657,42 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
                 )
             elif msg_type in ("call_invite", "call_accept", "call_reject",
                               "call_cancel", "call_ringing"):
-                # Chamada 1-a-1: handshake antes de entrar na sala de voz da DM.
-                # Sem persistencia — historico de chamadas pode vir em fase futura.
                 target = data.get("to_user_id")
                 if not target:
                     continue
-                if not get_user_by_id(int(target)):
+                target = int(target)
+                if not get_user_by_id(target):
                     await websocket.send_text(json.dumps(
                         {"type": "error", "detail": "Usuario destinatario nao encontrado"}))
                     continue
+
                 payload = {
                     **data,
                     "from_user_id": user_id,
                     "from_user_name": user.get("name"),
                 }
-                await manager.send_to_users([int(target)], payload)
+
+                # Estado em memoria das pending calls + push notification
+                if msg_type == "call_invite":
+                    ch_id = data.get("channel_id")
+                    _registrar_chamada(target, user_id, user.get("name") or "", int(ch_id) if ch_id else 0)
+                    # Dispara push notification (cobre caso "destinatario sem chat.html aberto")
+                    if _PUSH_ENABLED:
+                        titulo = f"📞 {user.get('name') or 'Alguém'} está te ligando"
+                        corpo = "Toque pra atender"
+                        url = f"/SistemaCPE/web/pages/chat.html?incoming_call={user_id}"
+                        tag = f"cpe-call-{user_id}"
+                        asyncio.create_task(asyncio.to_thread(
+                            _enviar_push_async, [target], titulo, corpo, url, tag))
+                elif msg_type in ("call_cancel",):
+                    _cancelar_chamada(target, user_id)
+                elif msg_type in ("call_accept", "call_reject"):
+                    # No accept/reject, quem cancela e o destinatario respondendo
+                    # ao caller (que esta em data.to_user_id). O originador do
+                    # invite original tinha target=me. Cleanup correto:
+                    _cancelar_chamada(user_id)  # eu (callee) respondi, limpa
+
+                await manager.send_to_users([target], payload)
             elif msg_type in ("voice_offer", "voice_answer", "voice_ice"):
                 # Signaling 1-a-1 entre peers. Frontend manda {to_user_id, ...}
                 target_uid = data.get("to_user_id")
