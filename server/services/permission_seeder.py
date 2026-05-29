@@ -68,11 +68,6 @@ PAGES_CATALOG: list[PageDef] = [
      "category": "operational", "icon": "bi-check2-square",
      "url": "/SistemaCPE/web/pages/tasks.html",                    "ordem": 30},
 
-    {"page_key": "PROJECTS",         "display_name": "Projetos",
-     "description": "Visão de projetos e portfólios",
-     "category": "operational", "icon": "bi-folder",
-     "url": "/SistemaCPE/web/pages/projects.html",                 "ordem": 40},
-
     {"page_key": "AGENDA",           "display_name": "Agenda",
      "description": "Calendário integrado com Carbonio",
      "category": "operational", "icon": "bi-calendar-event",
@@ -98,10 +93,9 @@ PAGES_CATALOG: list[PageDef] = [
      "category": "operational", "icon": "bi-file-earmark-text",
      "url": "/SistemaCPE/web/pages/contratos.html",                "ordem": 90},
 
-    {"page_key": "AVALIACOES",       "display_name": "Avaliações",
-     "description": "Avaliações de tickets e performance",
-     "category": "operational", "icon": "bi-star",
-     "url": "/SistemaCPE/web/pages/avaliacoes.html",               "ordem": 100},
+    # AVALIACOES foi unificada em REPORTS (aba "Avaliacoes" dentro de
+    # Relatorios). O arquivo avaliacoes.html virou shim de redirect; a
+    # permissao foi removida pra nao aparecer em telas de admin de roles.
 
     {"page_key": "KNOWLEDGE_BASE",   "display_name": "Base de Conhecimento",
      "description": "Artigos, manuais e documentação",
@@ -158,9 +152,10 @@ PAGES_CATALOG: list[PageDef] = [
      "url": "/SistemaCPE/web/pages/password-vault.html",           "ordem": 240},
 
     {"page_key": "REPORTS",          "display_name": "Relatórios",
-     "description": "Relatórios e análises do sistema",
+     "description": "Relatórios e análises do sistema (chamados + avaliações)",
      "category": "admin", "icon": "bi-graph-up",
-     "url": "/SistemaCPE/web/pages/reports.html",                  "ordem": 250},
+     "url": "/SistemaCPE/web/pages/reports.html",                  "ordem": 250,
+     "default_roles": ["RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"]},
 
     {"page_key": "BILLING",          "display_name": "Faturamento",
      "description": "Faturamento e pagamentos",

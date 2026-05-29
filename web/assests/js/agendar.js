@@ -219,7 +219,7 @@ function abrirDetalheOferta(itemId, kind) {
     ? `<div class="ag-detalhe-secao">
         <div class="ag-detalhe-secao-titulo"><i class="bi bi-camera-video"></i> Vídeos</div>
         <div class="ag-detalhe-videos">${videos.map(v =>
-          `<a href="${esc(v.url)}" target="_blank" rel="noopener">
+          `<a href="#" onclick="abrirVideoPopup('${esc(v.url)}', '${esc(v.titulo || '')}'); return false;">
             <i class="bi bi-play-circle-fill"></i>
             <span>${esc(v.titulo || 'Ver vídeo')}</span>
           </a>`
@@ -274,6 +274,100 @@ function abrirFotoLightbox(src) {
   }
   lb.innerHTML = `<img src="${esc(src)}" alt=""><button class="ag-lightbox-close">&times;</button>`;
   lb.classList.add('show');
+}
+
+/* ====== POPUP DE VIDEO (mesmo padrao de lightbox, com player embed) ======
+   Suporta YouTube, Vimeo e arquivos diretos (mp4/webm). Pra qualquer outro
+   host, mostra fallback com link "Abrir em nova aba" — alguns sites bloqueiam
+   iframe por X-Frame-Options. */
+function abrirVideoPopup(url, titulo) {
+  let pop = document.getElementById('agVideoPopup');
+  if (!pop) {
+    pop = document.createElement('div');
+    pop.id = 'agVideoPopup';
+    pop.className = 'ag-video-popup';
+    pop.onclick = (e) => { if (e.target === pop) fecharVideoPopup(); };
+    document.body.appendChild(pop);
+  }
+  pop.innerHTML = _renderVideoPopupHtml(url, titulo);
+  pop.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function fecharVideoPopup() {
+  const pop = document.getElementById('agVideoPopup');
+  if (!pop || !pop.classList.contains('show')) return;
+  pop.classList.remove('show');
+  // Limpa o conteudo pra parar o video (iframe/video tag continuam tocando senao)
+  pop.innerHTML = '';
+  document.body.style.overflow = '';
+}
+
+function _renderVideoPopupHtml(url, titulo) {
+  const embed = _toEmbedUrl(url);
+  let player;
+  if (embed.type === 'iframe') {
+    player = `<iframe src="${esc(embed.src)}" frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      allowfullscreen></iframe>`;
+  } else if (embed.type === 'video') {
+    player = `<video src="${esc(embed.src)}" controls autoplay playsinline></video>`;
+  } else {
+    player = `<div class="ag-video-popup-fallback">
+      <i class="bi bi-info-circle"></i>
+      <p>Esse vídeo não pode ser exibido dentro da página.</p>
+      <a href="${esc(url)}" target="_blank" rel="noopener" class="ag-btn ag-btn-primary">
+        <i class="bi bi-box-arrow-up-right"></i> Abrir em nova aba
+      </a>
+    </div>`;
+  }
+  return `
+    <div class="ag-video-popup-box" onclick="event.stopPropagation()">
+      <div class="ag-video-popup-header">
+        <span class="ag-video-popup-title">
+          <i class="bi bi-camera-video"></i> ${esc(titulo || 'Vídeo')}
+        </span>
+        <button type="button" class="ag-video-popup-close"
+                onclick="fecharVideoPopup()" title="Fechar (Esc)">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="ag-video-popup-player">${player}</div>
+    </div>`;
+}
+
+function _toEmbedUrl(url) {
+  try {
+    const u = new URL(url, location.origin);
+    const host = u.hostname.replace(/^www\./, '');
+    // YouTube
+    if (host === 'youtube.com' || host === 'm.youtube.com') {
+      if (u.pathname === '/watch') {
+        const v = u.searchParams.get('v');
+        if (v) return { type: 'iframe', src: `https://www.youtube.com/embed/${v}?autoplay=1&rel=0` };
+      }
+      if (u.pathname.startsWith('/embed/')) return { type: 'iframe', src: url };
+      if (u.pathname.startsWith('/shorts/')) {
+        const id = u.pathname.split('/')[2];
+        if (id) return { type: 'iframe', src: `https://www.youtube.com/embed/${id}?autoplay=1&rel=0` };
+      }
+    }
+    if (host === 'youtu.be') {
+      const id = u.pathname.replace(/^\//, '').split('/')[0];
+      if (id) return { type: 'iframe', src: `https://www.youtube.com/embed/${id}?autoplay=1&rel=0` };
+    }
+    // Vimeo
+    if (host === 'vimeo.com') {
+      const id = u.pathname.replace(/^\//, '').split('/')[0];
+      if (/^\d+$/.test(id)) return { type: 'iframe', src: `https://player.vimeo.com/video/${id}?autoplay=1` };
+    }
+    if (host === 'player.vimeo.com') return { type: 'iframe', src: url };
+    // Arquivo direto
+    if (/\.(mp4|webm|ogg|ogv|mov)(\?.*)?$/i.test(u.pathname)) {
+      return { type: 'video', src: url };
+    }
+  } catch (_e) { /* URL invalida cai no fallback */ }
+  return { type: 'unknown', src: url };
 }
 
 function fecharModalServicos(ev) {
@@ -705,9 +799,11 @@ async function bootstrap() {
 
 document.addEventListener('DOMContentLoaded', bootstrap);
 
-// ESC fecha modais (detalhes tem prioridade — esta por cima)
+// ESC fecha modais (popup de video > detalhes > lista de servicos)
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
+  const vp = document.getElementById('agVideoPopup');
+  if (vp && vp.classList.contains('show')) { fecharVideoPopup(); return; }
   const detalhe = el('modalDetalhe');
   if (detalhe && detalhe.classList.contains('show')) { fecharDetalhe(); return; }
   const srv = el('modalServicos');

@@ -540,6 +540,96 @@ a { text-decoration: none; color: inherit; }
   cursor: pointer; padding: 2px 6px;
 }
 
+/* ---- Fotos do EQUIPAMENTO: cards fixos 350x350 ---- */
+.sup-equip-fotos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 350px);
+  gap: 12px;
+  justify-content: start;
+}
+.sup-equip-fotos-item {
+  position: relative;
+  width: 350px; height: 350px;
+  background: #f3f4f6;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--sup-border);
+  cursor: zoom-in;
+  transition: transform .15s, box-shadow .15s;
+}
+.sup-equip-fotos-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,.12);
+}
+.sup-equip-fotos-item img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.sup-equip-fotos-item button {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(239, 68, 68, .92); color: #fff;
+  border: none; width: 28px; height: 28px; border-radius: 50%;
+  cursor: pointer; font-size: .85rem;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
+.sup-equip-fotos-item button:hover { background: var(--sup-danger); }
+
+/* Mobile: deixa o card fluido para nao estourar a tela */
+@media (max-width: 420px) {
+  .sup-equip-fotos-grid { grid-template-columns: 1fr; }
+  .sup-equip-fotos-item { width: 100%; height: auto; aspect-ratio: 1/1; }
+}
+
+/* ---- Miniatura do equipamento no catalogo (tabela) ---- */
+.sup-equip-thumb {
+  width: 42px; height: 42px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #f3f4f6;
+  border: 1px solid var(--sup-border);
+  cursor: zoom-in;
+  flex-shrink: 0;
+  transition: transform .12s;
+}
+.sup-equip-thumb:hover { transform: scale(1.08); }
+.sup-equip-thumb-empty {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #9ca3af; font-size: 1.1rem; cursor: default;
+}
+.sup-equip-thumb-empty:hover { transform: none; }
+
+/* ---- Lightbox (clique-pra-ampliar foto) ---- */
+.sup-lightbox {
+  display: none;
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(10, 10, 10, .92);
+  align-items: center; justify-content: center;
+  padding: 24px;
+  cursor: zoom-out;
+  animation: supLbFade .15s ease-out;
+}
+.sup-lightbox.open { display: flex; }
+.sup-lightbox img {
+  max-width: 95vw; max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6);
+  cursor: default;
+}
+.sup-lightbox-close {
+  position: absolute; top: 16px; right: 20px;
+  background: rgba(255,255,255,.12);
+  color: #fff; border: none;
+  width: 42px; height: 42px; border-radius: 50%;
+  cursor: pointer; font-size: 1.1rem;
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(8px);
+}
+.sup-lightbox-close:hover { background: rgba(255,255,255,.22); }
+@keyframes supLbFade {
+  from { opacity: 0; } to { opacity: 1; }
+}
+
 /* feriado — celula compacta (mes) */
 .sup-day-col.feriado { /* tambem se aplica no mes */ }
 .sup-feriado-tag {

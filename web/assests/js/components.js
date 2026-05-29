@@ -38,13 +38,6 @@ const sidebarHTML = `
       </a>
     </li>
     <li class="menu-item">
-      <a href="pages/projects.html" class="menu-link">
-        <span class="menu-icon">📁</span>
-        <span>Projetos</span>
-        <span class="menu-badge">BETA</span>
-      </a>
-    </li>
-    <li class="menu-item">
       <a href="pages/inventory.html" class="menu-link">
         <span class="menu-icon">📦</span>
         <span>Inventário</span>

@@ -607,6 +607,11 @@
     document.getElementById('rptDataFim').value    = hoje.toISOString().slice(0,10);
 
     rptCarregar();
+
+    // Deep-link: ?tab=avaliacoes (vindo do redirect do avaliacoes.html antigo
+    // ou de bookmark/link direto) abre direto na aba Avaliacoes.
+    const tab = new URLSearchParams(location.search).get('tab');
+    if (tab === 'avaliacoes') rptMostrarAba('avaliacoes');
   }
 
   // Nav.js chama window.onNavReady ou dispara evento 'navReady'
