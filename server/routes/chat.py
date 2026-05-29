@@ -21,9 +21,13 @@ import json
 import logging
 import asyncio
 import os
+import re
 import uuid as _uuid
 from pathlib import Path
 from datetime import datetime, timedelta
+
+# Token de @mention armazenado no content: `<@123>` => user id 123
+_MENTION_RE = re.compile(r"<@(\d+)>")
 
 from database import get_chat_db_or_404, get_db_or_404
 from security import parse_session_token, get_user_by_id
@@ -294,21 +298,70 @@ def listar_mensagens(channel_id: int, request: Request,
             u = users_map.get(m["user_id"], {})
             m["author"] = {"id": m["user_id"], "name": u.get("name"), "email": u.get("email")}
 
-        # Anexa attachments (1 query pra todas as msgs)
+        # Anexa attachments + reactions + mentions + reply_to (1 query cada)
         if msgs:
             msg_ids = [m["id"] for m in msgs]
             placeholders = ",".join(["%s"] * len(msg_ids))
+
+            # Attachments
             cur.execute(f"""
                 SELECT id, message_id, tipo, arquivo, nome_original, mime, tamanho
-                FROM chat_attachments
-                WHERE message_id IN ({placeholders})
-                ORDER BY id
+                FROM chat_attachments WHERE message_id IN ({placeholders}) ORDER BY id
             """, msg_ids)
-            por_msg: Dict[int, List[dict]] = {}
+            atts_por_msg: Dict[int, List[dict]] = {}
             for a in cur.fetchall():
-                por_msg.setdefault(a["message_id"], []).append(a)
+                atts_por_msg.setdefault(a["message_id"], []).append(a)
+
+            # Reactions agrupadas por (msg, emoji) com lista de user_ids
+            cur.execute(f"""
+                SELECT message_id, emoji, user_id
+                FROM chat_message_reactions WHERE message_id IN ({placeholders})
+                ORDER BY criado_em
+            """, msg_ids)
+            react_raw: Dict[int, Dict[str, List[int]]] = {}
+            for r in cur.fetchall():
+                react_raw.setdefault(r["message_id"], {}).setdefault(r["emoji"], []).append(r["user_id"])
+
+            # Mentions
+            cur.execute(f"""
+                SELECT message_id, user_id FROM chat_mentions
+                WHERE message_id IN ({placeholders})
+            """, msg_ids)
+            mentions_por_msg: Dict[int, List[int]] = {}
+            for r in cur.fetchall():
+                mentions_por_msg.setdefault(r["message_id"], []).append(r["user_id"])
+
+            # Reply_to: pega preview das msgs originais referenciadas
+            reply_ids = [m["reply_to_id"] for m in msgs if m.get("reply_to_id")]
+            reply_map: Dict[int, dict] = {}
+            if reply_ids:
+                p2 = ",".join(["%s"] * len(reply_ids))
+                cur.execute(f"""
+                    SELECT id, user_id, content, deletado_em
+                    FROM chat_messages WHERE id IN ({p2})
+                """, reply_ids)
+                rmsgs = cur.fetchall()
+                rusers = _enriquecer_users(list({r["user_id"] for r in rmsgs}))
+                for r in rmsgs:
+                    u = rusers.get(r["user_id"], {})
+                    reply_map[r["id"]] = {
+                        "id": r["id"],
+                        "author_name": u.get("name"),
+                        "content_preview": ("(mensagem apagada)" if r["deletado_em"]
+                                            else (r["content"] or "")[:160]),
+                    }
+
             for m in msgs:
-                m["attachments"] = por_msg.get(m["id"], [])
+                m["attachments"] = atts_por_msg.get(m["id"], [])
+                m["mentions"] = mentions_por_msg.get(m["id"], [])
+                reacs = react_raw.get(m["id"], {})
+                m["reactions"] = [
+                    {"emoji": e, "count": len(uids), "users": uids,
+                     "self_reacted": user["id"] in uids}
+                    for e, uids in reacs.items()
+                ]
+                if m.get("reply_to_id"):
+                    m["reply_to"] = reply_map.get(m["reply_to_id"])
         return {"success": True, "messages": msgs, "has_more": len(msgs) == limit}
     finally:
         cur.close(); conn.close()
@@ -506,8 +559,14 @@ def sync_canais_grupos(request: Request):
 async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str,
                                    content: str, reply_to_id: Optional[int],
                                    attachments: Optional[List[dict]] = None):
-    """attachments: lista de dicts {tipo, arquivo, nome_original, mime, tamanho}
-    (sem id — gerado no INSERT)."""
+    """attachments: lista de dicts {tipo, arquivo, nome_original, mime, tamanho}.
+    Parses @mentions do content (<@user_id>) e cria registros em chat_mentions."""
+    # Mentions: parse + filtra so quem realmente eh membro do canal
+    mention_ids = list({int(uid) for uid in _MENTION_RE.findall(content or "")})
+    membros = _listar_membros_canal(channel_id)
+    membros_set = set(membros)
+    mention_ids = [uid for uid in mention_ids if uid in membros_set]
+
     conn = get_chat_db_or_404()
     cur = conn.cursor(dictionary=True)
     try:
@@ -516,6 +575,8 @@ async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str
             VALUES (%s, %s, %s, %s)
         """, (channel_id, user_id, content, reply_to_id))
         msg_id = cur.lastrowid
+
+        # Anexos
         atts_out: List[dict] = []
         if attachments:
             for a in attachments:
@@ -524,9 +585,30 @@ async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """, (msg_id, a.get("tipo", "image"), a["arquivo"],
                       a.get("nome_original"), a.get("mime"), a.get("tamanho")))
-                atts_out.append({
-                    "id": cur.lastrowid, "message_id": msg_id, **a,
-                })
+                atts_out.append({"id": cur.lastrowid, "message_id": msg_id, **a})
+
+        # Mentions
+        if mention_ids:
+            cur.executemany(
+                "INSERT IGNORE INTO chat_mentions (message_id, user_id) VALUES (%s, %s)",
+                [(msg_id, uid) for uid in mention_ids])
+
+        # Reply preview (busca o autor + trecho original)
+        reply_to = None
+        if reply_to_id:
+            cur.execute("""
+                SELECT m.id, m.user_id, m.content, m.deletado_em
+                FROM chat_messages m WHERE m.id = %s
+            """, (reply_to_id,))
+            r = cur.fetchone()
+            if r:
+                u = _enriquecer_users([r["user_id"]]).get(r["user_id"], {})
+                reply_to = {
+                    "id": r["id"],
+                    "author_name": u.get("name"),
+                    "content_preview": ("(mensagem apagada)" if r["deletado_em"]
+                                        else (r["content"] or "")[:160]),
+                }
         conn.commit()
     finally:
         cur.close(); conn.close()
@@ -537,11 +619,13 @@ async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str
         "id": msg_id,
         "content": content,
         "reply_to_id": reply_to_id,
+        "reply_to": reply_to,
         "criado_em": datetime.utcnow().isoformat(),
         "author": {"id": user_id, "name": user_name},
         "attachments": atts_out,
+        "mentions": mention_ids,
+        "reactions": [],
     }
-    membros = _listar_membros_canal(channel_id)
     await manager.send_to_users(membros, payload)
     return payload
 
@@ -596,6 +680,67 @@ async def upload_imagem(channel_id: int, request: Request,
         reply_to_id=None, attachments=[attachment],
     )
     return {"success": True, "message": msg_payload}
+
+
+# =====================================================================
+# Reactions: toggle emoji em uma mensagem
+# =====================================================================
+class ReacaoBody(BaseModel):
+    emoji: str = Field(..., min_length=1, max_length=16)
+
+
+@router.post("/messages/{message_id}/reactions")
+async def toggle_reacao(message_id: int, body: ReacaoBody, request: Request):
+    """Toggle: se o user ja reagiu com esse emoji, remove; senao, adiciona.
+    Faz broadcast via WS pros membros do canal."""
+    user = _user_from_request(request)
+    m = _msg_e_canal_ou_404(message_id)
+    if m["deletado_em"]:
+        raise HTTPException(status_code=400, detail="Mensagem apagada nao aceita reacoes")
+    if not _usuario_pertence_ao_canal(user["id"], m["channel_id"]):
+        raise HTTPException(status_code=403, detail="Voce nao e membro do canal")
+
+    emoji = body.emoji.strip()
+    if not emoji:
+        raise HTTPException(status_code=400, detail="Emoji vazio")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    added: bool
+    try:
+        cur.execute("""
+            SELECT 1 FROM chat_message_reactions
+            WHERE message_id=%s AND user_id=%s AND emoji=%s
+        """, (message_id, user["id"], emoji))
+        ja_tinha = cur.fetchone() is not None
+
+        if ja_tinha:
+            cur.execute("""
+                DELETE FROM chat_message_reactions
+                WHERE message_id=%s AND user_id=%s AND emoji=%s
+            """, (message_id, user["id"], emoji))
+            added = False
+        else:
+            cur.execute("""
+                INSERT INTO chat_message_reactions (message_id, user_id, emoji)
+                VALUES (%s, %s, %s)
+            """, (message_id, user["id"], emoji))
+            added = True
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    payload = {
+        "type": "reaction",
+        "channel_id": m["channel_id"],
+        "message_id": message_id,
+        "emoji": emoji,
+        "user_id": user["id"],
+        "added": added,
+    }
+    membros = _listar_membros_canal(m["channel_id"])
+    await manager.send_to_users(membros, payload)
+    return {"success": True, "added": added}
 
 
 # =====================================================================
@@ -682,10 +827,15 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
                     await websocket.send_text(json.dumps(
                         {"type": "error", "detail": "Voce nao e membro deste canal"}))
                     continue
+                reply_id = data.get("reply_to_id")
+                try:
+                    reply_id = int(reply_id) if reply_id else None
+                except (TypeError, ValueError):
+                    reply_id = None
                 await _persistir_e_broadcastar(
                     channel_id=channel_id, user_id=user_id,
                     user_name=user.get("name"), content=content,
-                    reply_to_id=data.get("reply_to_id"),
+                    reply_to_id=reply_id,
                 )
             elif msg_type == "typing":
                 # Broadcast pros OUTROS membros (exclui o proprio)
