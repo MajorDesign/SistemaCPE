@@ -253,13 +253,17 @@ app.add_middleware(
         # IP público (NAT MikroTik) — manter enquanto staging usa
         "http://201.16.214.49:1509",
         "http://201.16.214.49:8000",
-        # Domínio público via Cloudflare Tunnel
+        # Domínios públicos via Cloudflare Tunnel
         "https://cpecontrol.us.kg",
         "https://api.cpecontrol.us.kg",
         "https://www.cpecontrol.us.kg",
+        "https://cpecontrol.cpetecnologia.com.br",
+        "https://www.cpecontrol.cpetecnologia.com.br",
+        "https://agenda.cpecontrol.com.br",
     ],
     # Aceita qualquer IP da rede local (10.x, 172.16-31.x, 192.168.x) na porta 80 ou 8000
-    allow_origin_regex=r"^https?://(10(\.\d{1,3}){3}|172\.(1[6-9]|2\d|3[01])(\.\d{1,3}){2}|192\.168(\.\d{1,3}){2})(:\d+)?(/.*)?$",
+    # OU qualquer subdominio *.cpetecnologia.com.br via HTTPS
+    allow_origin_regex=r"^https?://(10(\.\d{1,3}){3}|172\.(1[6-9]|2\d|3[01])(\.\d{1,3}){2}|192\.168(\.\d{1,3}){2})(:\d+)?(/.*)?$|^https://[a-z0-9-]+\.cpetecnologia\.com\.br$",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
