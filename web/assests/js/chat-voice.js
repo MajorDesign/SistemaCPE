@@ -47,21 +47,40 @@
     if (st.canalId === channelId) return;        // ja conectado
     if (st.canalId) await window.voiceSair();    // sai do anterior primeiro
 
-    // 1) Captura mic (sem camera — usuario liga depois se quiser)
-    let local;
+    // 1) Tenta capturar mic. Se falhar (PC sem mic / mic em uso / permissao
+    //    negada), pergunta se quer entrar mesmo assim como "so escuta" —
+    //    pode receber audio dos outros mas nao envia.
+    let local = null;
+    let micDisponivel = true;
     try {
       local = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         video: false,
       });
     } catch (e) {
-      alert('Não foi possível acessar o microfone: ' + e.message);
-      return;
+      micDisponivel = false;
+      const nome = e.name || '';
+      let msg;
+      if (nome === 'NotFoundError' || nome === 'OverconstrainedError') {
+        msg = 'Nenhum microfone encontrado neste dispositivo.';
+      } else if (nome === 'NotAllowedError' || nome === 'PermissionDeniedError') {
+        msg = 'Você bloqueou o acesso ao microfone. Libere nas configurações do navegador (cadeado da barra de endereço).';
+      } else if (nome === 'NotReadableError') {
+        msg = 'Microfone ocupado por outro aplicativo. Feche Zoom, Meet, Teams etc.';
+      } else {
+        msg = (e.message || 'Erro desconhecido') + ' (' + nome + ')';
+      }
+      const ok = confirm(`${msg}\n\nDeseja entrar mesmo assim como "só escuta"? Você vai conseguir ouvir os outros, mas não vai poder falar.`);
+      if (!ok) return;
+      // Cria stream vazio só pra ter o objeto (sem tracks de audio)
+      local = new MediaStream();
     }
     st.localStream = local;
     st.canalId = channelId;
     st.myPeerId = _rid();
-    st.micOn = true; st.camOn = false; st.shareOn = false;
+    st.micOn = micDisponivel;
+    st.camOn = false;
+    st.shareOn = false;
 
     // 2) Informa backend que entrei + recebe lista de peers existentes
     let resp;
