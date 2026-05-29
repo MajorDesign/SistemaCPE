@@ -229,8 +229,22 @@ function renderNavbar() {
       </div>
 
       <div class="navbar-right">
-        <!-- SINO DE NOTIFICAÇÕES -->
-        <button class="navbar-icon-btn notification-bell-btn" 
+        <!-- ICONE CHAT (novas mensagens/chamadas — script global cuida do badge) -->
+        <button class="navbar-icon-btn chat-notify-btn"
+                id="chatNotifyBtn"
+                title="Chat — abrir"
+                onclick="window.location.href='/SistemaCPE/web/pages/chat.html'"
+                style="position:relative">
+          <i class="bi bi-chat-dots-fill"></i>
+          <span id="chatNotifyBadge"
+                style="display:none;position:absolute;top:2px;right:2px;
+                       background:#EF4444;color:#fff;font-size:0.6rem;font-weight:700;
+                       min-width:16px;height:16px;border-radius:8px;padding:0 4px;
+                       display:none;align-items:center;justify-content:center"></span>
+        </button>
+
+        <!-- SINO DE NOTIFICAÇÕES (tickets) -->
+        <button class="navbar-icon-btn notification-bell-btn"
                 id="notificationBellBtn"
                 title="Notificações"
                 onclick="toggleNotificationPanel(event)">
@@ -1128,3 +1142,17 @@ if (document.readyState === "complete" || document.readyState === "interactive")
   console.log("[NAV.JS/FALLBACK] 🔄 DOM já carregado, inicializando agora");
   setTimeout(initializeNavigation, 50);
 }
+
+// =========================================
+// CHAT GLOBAL NOTIFIER — carrega script global de chat em todas as paginas
+// que usam navbar (sino + toast + popup chamada). O proprio script se
+// auto-desativa em chat.html (la tem WS proprio).
+// =========================================
+(function loadChatGlobalNotifier() {
+  if (document.querySelector('script[data-cgn]')) return;
+  const s = document.createElement('script');
+  s.src = '/SistemaCPE/web/assests/js/chat-global-notifier.js';
+  s.setAttribute('data-cgn', '1');
+  s.defer = true;
+  document.head.appendChild(s);
+})();
