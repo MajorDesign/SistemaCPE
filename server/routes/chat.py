@@ -1598,6 +1598,23 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
                     user_name=user.get("name"), content=content,
                     reply_to_id=reply_id,
                 )
+            elif msg_type in ("call_invite", "call_accept", "call_reject",
+                              "call_cancel", "call_ringing"):
+                # Chamada 1-a-1: handshake antes de entrar na sala de voz da DM.
+                # Sem persistencia — historico de chamadas pode vir em fase futura.
+                target = data.get("to_user_id")
+                if not target:
+                    continue
+                if not get_user_by_id(int(target)):
+                    await websocket.send_text(json.dumps(
+                        {"type": "error", "detail": "Usuario destinatario nao encontrado"}))
+                    continue
+                payload = {
+                    **data,
+                    "from_user_id": user_id,
+                    "from_user_name": user.get("name"),
+                }
+                await manager.send_to_users([int(target)], payload)
             elif msg_type in ("voice_offer", "voice_answer", "voice_ice"):
                 # Signaling 1-a-1 entre peers. Frontend manda {to_user_id, ...}
                 target_uid = data.get("to_user_id")

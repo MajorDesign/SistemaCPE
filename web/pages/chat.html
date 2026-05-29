@@ -618,6 +618,79 @@
     }
     .chat-reply-preview button:hover { color: var(--chat-text); }
 
+    /* ========== Chamadas 1-a-1 (incoming/outgoing modais) ========== */
+    .call-modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 6000;
+      background: rgba(0,0,0,.85);
+      align-items: center; justify-content: center;
+      animation: fadeIn 0.2s;
+    }
+    .call-modal-overlay.open { display: flex; }
+    .call-modal {
+      background: var(--chat-bg-2);
+      border-radius: 16px;
+      padding: 30px 40px 24px;
+      max-width: 360px; width: 90%;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,.6);
+      border: 1px solid var(--chat-border);
+    }
+    .call-modal .call-status {
+      font-size: 0.78rem; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--chat-muted);
+      margin-bottom: 8px;
+    }
+    .call-modal .call-status.ringing { color: var(--chat-accent); }
+    .call-modal .call-avatar {
+      width: 110px; height: 110px; border-radius: 50%;
+      margin: 12px auto;
+      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      color: #fff; font-size: 2.6rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      animation: pulseAvatar 1.6s ease-in-out infinite;
+    }
+    .call-modal.incoming .call-avatar {
+      animation: pulseRing 1.4s ease-out infinite;
+    }
+    @keyframes pulseAvatar {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    @keyframes pulseRing {
+      0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.6); }
+      70% { box-shadow: 0 0 0 22px rgba(255, 193, 7, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
+    }
+    .call-modal .call-name {
+      font-size: 1.3rem; font-weight: 700; color: var(--chat-text);
+      margin-bottom: 4px;
+    }
+    .call-modal .call-sub {
+      font-size: 0.84rem; color: var(--chat-muted); margin-bottom: 24px;
+    }
+    .call-modal .call-buttons {
+      display: flex; justify-content: center; gap: 24px;
+    }
+    .call-modal .call-buttons button {
+      width: 60px; height: 60px; border-radius: 50%;
+      border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; color: #fff;
+      transition: transform 0.1s, filter 0.1s;
+    }
+    .call-modal .call-buttons button:hover { transform: scale(1.08); filter: brightness(1.1); }
+    .call-modal .btn-accept { background: #10B981; }
+    .call-modal .btn-reject { background: #DC2626; }
+    .call-modal .btn-cancel { background: #DC2626; }
+
+    .chat-call-btn {
+      background: transparent; border: 1px solid var(--chat-accent);
+      color: var(--chat-accent); border-radius: 6px;
+      padding: 6px 12px; cursor: pointer; font-size: 0.82rem;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .chat-call-btn:hover { background: var(--chat-accent); color: #1A1A1A; }
+
     /* ========== Fase 4: canal de voz ========== */
     .chat-voice-peer-row {
       display: flex; align-items: center; gap: 8px;
@@ -1146,6 +1219,17 @@
   </div>
 </div>
 
+<!-- Modal: Chamada (incoming OU outgoing) -->
+<div class="call-modal-overlay" id="callModal">
+  <div class="call-modal" id="callModalBox">
+    <div class="call-status" id="callStatus">CHAMANDO</div>
+    <div class="call-avatar" id="callAvatar">?</div>
+    <div class="call-name" id="callName">—</div>
+    <div class="call-sub" id="callSub">Aguardando resposta...</div>
+    <div class="call-buttons" id="callButtons"></div>
+  </div>
+</div>
+
 <!-- Modal: Pinadas / Busca -->
 <div class="chat-modal-overlay" id="modalListaMsgs" onclick="if(event.target===this) fecharModalListaMsgs()">
   <div class="chat-modal">
@@ -1411,11 +1495,19 @@ async function abrirCanal(channelId) {
        </button>`
     : '';
 
+  // Botao Ligar (so em DMs)
+  const dmCallBtn = (c.tipo === 'dm' && c.dm_with?.id)
+    ? `<button class="chat-call-btn" onclick="iniciarChamada(${c.dm_with.id}, ${c.id}, '${_esc(c.dm_with.name || '')}')">
+         <i class="bi bi-telephone-fill"></i> Ligar
+       </button>`
+    : '';
+
   hdr.innerHTML = `
     <i class="bi ${icon} header-icon"></i>
     <h2>${_esc(c.nome || '#' + c.id)}</h2>
     ${c.descricao ? `<span class="header-desc">${_esc(c.descricao)}</span>` : ''}
     <div class="header-tools">
+      ${dmCallBtn}
       ${voiceBtn}
       ${!ehVoz ? `<button onclick="abrirModalPinadas(${c.id})" title="Mensagens fixadas">
         <i class="bi bi-pin-angle-fill"></i></button>` : ''}
@@ -1776,6 +1868,14 @@ function conectarWebSocket() {
     } else if (data.type === 'voice_offer' || data.type === 'voice_answer' ||
                data.type === 'voice_ice') {
       if (typeof window.onVoiceSignal === 'function') window.onVoiceSignal(data);
+    } else if (data.type === 'call_invite') {
+      _onCallInvite(data);
+    } else if (data.type === 'call_accept') {
+      _onCallAccept(data);
+    } else if (data.type === 'call_reject') {
+      _onCallReject(data);
+    } else if (data.type === 'call_cancel') {
+      _onCallCancel(data);
     } else if (data.type === 'pong') {
       // keepalive ok
     } else if (data.type === 'error') {
@@ -1831,10 +1931,15 @@ function renderUsuariosSistema() {
   });
   box.innerHTML = sorted.map(u => {
     const on = _onlineIds.has(u.id);
-    return `<div class="member-item ${on ? 'online' : ''}" onclick="abrirDM(${u.id})"
-                 title="Iniciar DM com ${_esc(u.name)}">
-      <div class="member-avatar">${_esc(_initials(u.name))}</div>
-      <span class="member-name">${_esc(u.name || u.email)}</span>
+    return `<div class="member-item ${on ? 'online' : ''}"
+                 title="${_esc(u.name)}">
+      <div class="member-avatar" onclick="abrirDM(${u.id})" style="cursor:pointer">${_esc(_initials(u.name))}</div>
+      <span class="member-name" onclick="abrirDM(${u.id})" style="cursor:pointer">${_esc(u.name || u.email)}</span>
+      <button onclick="event.stopPropagation(); iniciarChamada(${u.id}, null, '${_esc(u.name || '')}')"
+              title="Ligar pra ${_esc(u.name || '')}"
+              style="background:transparent;border:none;color:var(--chat-accent);cursor:pointer;padding:4px 6px;font-size:0.95rem">
+        <i class="bi bi-telephone-fill"></i>
+      </button>
     </div>`;
   }).join('');
 }
@@ -2811,11 +2916,221 @@ function _pularParaMsg(msgId) {
   if (el) {
     rolarParaMsg(msgId);
   } else {
-    // Msg fora da janela visivel — TODO: carregar histórico até ela.
-    // Por enquanto: avisa.
     alert('Esta mensagem não está carregada na tela. Role pra cima pra carregar o histórico mais antigo.');
   }
 }
+
+/* =====================================================================
+   CHAMADAS 1-a-1 — ringtone + modais + integracao com voice room
+   ===================================================================== */
+const CALL_TIMEOUT_MS = 30000;
+let _callState = null;        // {direction:'in'|'out', peer:{user_id,name}, channel_id, timeout}
+let _ringtoneInterval = null;
+let _ringtoneAudioCtx = null;
+
+function _tocarRingtone(tipo) {
+  _pararRingtone();
+  try {
+    if (!_ringtoneAudioCtx) {
+      _ringtoneAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const ctx = _ringtoneAudioCtx;
+    if (ctx.state === 'suspended') ctx.resume();
+    const playPattern = () => {
+      if (tipo === 'incoming') {
+        // Toque mais alto, 2 bips repetidos
+        _bip(ctx, 880, 0, 0.4, 0.25);
+        _bip(ctx, 880, 0.5, 0.4, 0.25);
+      } else {
+        // Outgoing: bip suave longo
+        _bip(ctx, 480, 0, 0.7, 0.10);
+      }
+    };
+    playPattern();
+    _ringtoneInterval = setInterval(playPattern, tipo === 'incoming' ? 1800 : 2400);
+  } catch (e) { console.warn('[ringtone]', e); }
+}
+function _bip(ctx, freq, when, dur, vol) {
+  const osc = ctx.createOscillator();
+  const g = ctx.createGain();
+  osc.type = 'sine'; osc.frequency.value = freq;
+  g.gain.setValueAtTime(0, ctx.currentTime + when);
+  g.gain.linearRampToValueAtTime(vol, ctx.currentTime + when + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + when + dur);
+  osc.connect(g); g.connect(ctx.destination);
+  osc.start(ctx.currentTime + when);
+  osc.stop(ctx.currentTime + when + dur + 0.02);
+}
+function _pararRingtone() {
+  if (_ringtoneInterval) { clearInterval(_ringtoneInterval); _ringtoneInterval = null; }
+}
+
+function _wsSendChat(payload) {
+  if (_ws && _ws.readyState === WebSocket.OPEN) _ws.send(JSON.stringify(payload));
+}
+
+function _mostrarCallModal({ direction, peerName, peerId }) {
+  const overlay = document.getElementById('callModal');
+  const box     = document.getElementById('callModalBox');
+  const status  = document.getElementById('callStatus');
+  const av      = document.getElementById('callAvatar');
+  const name    = document.getElementById('callName');
+  const sub     = document.getElementById('callSub');
+  const btns    = document.getElementById('callButtons');
+  av.textContent  = _initials(peerName);
+  name.textContent = peerName || `Usuário #${peerId}`;
+  box.classList.toggle('incoming', direction === 'in');
+  if (direction === 'in') {
+    status.textContent = 'CHAMADA RECEBIDA';
+    status.classList.add('ringing');
+    sub.textContent = 'Toque pra atender';
+    btns.innerHTML = `
+      <button class="btn-reject" onclick="atenderChamada(false)" title="Rejeitar">
+        <i class="bi bi-telephone-x-fill"></i>
+      </button>
+      <button class="btn-accept" onclick="atenderChamada(true)" title="Atender">
+        <i class="bi bi-telephone-fill"></i>
+      </button>`;
+  } else {
+    status.textContent = 'CHAMANDO';
+    status.classList.add('ringing');
+    sub.textContent = 'Aguardando resposta...';
+    btns.innerHTML = `
+      <button class="btn-cancel" onclick="cancelarChamada()" title="Cancelar">
+        <i class="bi bi-telephone-x-fill"></i>
+      </button>`;
+  }
+  overlay.classList.add('open');
+}
+
+function _fecharCallModal() {
+  document.getElementById('callModal')?.classList.remove('open');
+}
+
+/* ----- Iniciar chamada (chamado pelo botao 📞 Ligar na DM) ----- */
+async function iniciarChamada(targetUserId, channelId, peerName) {
+  if (_callState) { alert('Você já tem uma chamada em andamento.'); return; }
+  // Se nao tiver channel_id (chamada do painel direito), abre/cria DM antes
+  let chId = channelId;
+  if (!chId) {
+    try {
+      const r = await api('POST', `/channels/dm/${targetUserId}`);
+      chId = r.channel_id;
+    } catch (e) { alert('Não foi possível abrir DM: ' + e.message); return; }
+  }
+  _callState = {
+    direction: 'out',
+    peer: { user_id: targetUserId, name: peerName },
+    channel_id: chId,
+    timeout: setTimeout(cancelarChamada, CALL_TIMEOUT_MS),
+  };
+  _mostrarCallModal({ direction: 'out', peerName, peerId: targetUserId });
+  _tocarRingtone('outgoing');
+  _wsSendChat({
+    type: 'call_invite',
+    to_user_id: targetUserId,
+    channel_id: chId,
+  });
+}
+
+function cancelarChamada() {
+  if (!_callState || _callState.direction !== 'out') return;
+  _wsSendChat({ type: 'call_cancel', to_user_id: _callState.peer.user_id });
+  _finalizarChamada();
+}
+
+function atenderChamada(accept) {
+  if (!_callState || _callState.direction !== 'in') return;
+  const { peer, channel_id } = _callState;
+  if (!accept) {
+    _wsSendChat({ type: 'call_reject', to_user_id: peer.user_id });
+    _finalizarChamada();
+    return;
+  }
+  // Aceita: avisa caller, fecha modal, entra na sala de voz da DM
+  _wsSendChat({ type: 'call_accept', to_user_id: peer.user_id, channel_id });
+  _finalizarChamada(/* keepState */ true);
+  _entrarSalaChamada(channel_id);
+}
+
+function _entrarSalaChamada(channelId) {
+  // Garante que a DM esteja na lista de canais (pra abrirCanal funcionar)
+  carregarCanais().then(() => {
+    abrirCanal(channelId);
+    setTimeout(() => {
+      if (typeof window.voiceEntrar === 'function') window.voiceEntrar(channelId);
+    }, 200);
+  });
+}
+
+function _finalizarChamada(keepState = false) {
+  if (_callState?.timeout) clearTimeout(_callState.timeout);
+  _pararRingtone();
+  _fecharCallModal();
+  if (!keepState) _callState = null;
+  else _callState = null;
+}
+
+/* ----- WS handlers ----- */
+function _onCallInvite(data) {
+  // Se ja tem uma chamada em andamento, auto-rejeita (ocupado)
+  if (_callState) {
+    _wsSendChat({ type: 'call_reject', to_user_id: data.from_user_id });
+    return;
+  }
+  _callState = {
+    direction: 'in',
+    peer: { user_id: data.from_user_id, name: data.from_user_name },
+    channel_id: data.channel_id,
+    timeout: setTimeout(() => atenderChamada(false), CALL_TIMEOUT_MS),
+  };
+  _mostrarCallModal({
+    direction: 'in',
+    peerName: data.from_user_name || `Usuário #${data.from_user_id}`,
+    peerId: data.from_user_id,
+  });
+  _tocarRingtone('incoming');
+  // Notificacao desktop (caso a aba esteja em background)
+  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+    try {
+      const n = new Notification('📞 Chamada recebida', {
+        body: `${data.from_user_name || 'Alguém'} está te ligando...`,
+        icon: '/SistemaCPE/web/assests/icons/icon-192.png',
+        tag: 'cpe-call-' + data.from_user_id,
+        requireInteraction: true,
+      });
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch {}
+  }
+}
+
+function _onCallAccept(data) {
+  if (!_callState || _callState.direction !== 'out') return;
+  if (_callState.peer.user_id !== data.from_user_id) return;
+  const channelId = _callState.channel_id;
+  _finalizarChamada(true);
+  _entrarSalaChamada(channelId);
+}
+
+function _onCallReject(data) {
+  if (!_callState || _callState.direction !== 'out') return;
+  if (_callState.peer.user_id !== data.from_user_id) return;
+  alert(`📵 ${_callState.peer.name || 'Usuário'} rejeitou a chamada.`);
+  _finalizarChamada();
+}
+
+function _onCallCancel(data) {
+  if (!_callState || _callState.direction !== 'in') return;
+  if (_callState.peer.user_id !== data.from_user_id) return;
+  _finalizarChamada();
+}
+
+// Esc rejeita / cancela chamada
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !_callState) return;
+  if (_callState.direction === 'in') atenderChamada(false);
+  else cancelarChamada();
+});
 
 /* =====================================================================
    Fase 4: cache de peers em canais de voz (pra mostrar embaixo do canal)
