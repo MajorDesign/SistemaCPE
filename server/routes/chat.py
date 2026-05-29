@@ -26,6 +26,18 @@ import uuid as _uuid
 from pathlib import Path
 from datetime import datetime, timedelta
 
+# Web Push (graceful — se pywebpush nao instalado, push fica off)
+try:
+    from pywebpush import webpush, WebPushException
+    _PYWEBPUSH_OK = True
+except Exception:
+    _PYWEBPUSH_OK = False
+
+_VAPID_PUBLIC  = os.getenv("VAPID_PUBLIC_KEY", "").strip()
+_VAPID_PRIVATE = os.getenv("VAPID_PRIVATE_KEY", "").replace("\\n", "\n").strip()
+_VAPID_CONTACT = os.getenv("VAPID_CONTACT_EMAIL", "mailto:admin@example.com").strip()
+_PUSH_ENABLED  = _PYWEBPUSH_OK and bool(_VAPID_PUBLIC) and bool(_VAPID_PRIVATE)
+
 # Token de @mention armazenado no content: `<@123>` => user id 123
 _MENTION_RE = re.compile(r"<@(\d+)>")
 
@@ -862,6 +874,122 @@ def listar_users_disponiveis(request: Request, q: Optional[str] = Query(None)):
 
 
 # =====================================================================
+# Fase 3: Web Push notifications (PWA)
+# Frontend chama /vapid-public-key, faz subscribe no browser, POST aqui.
+# Quando uma msg eh enviada, enviamos push pros membros que NAO estao
+# conectados no WS (i.e. quem nao recebeu via WebSocket).
+# =====================================================================
+class PushSubscriptionBody(BaseModel):
+    endpoint: str
+    keys: Dict[str, str] = Field(default_factory=dict)
+
+
+class PushUnsubscribeBody(BaseModel):
+    endpoint: str
+
+
+@router.get("/push/vapid-public-key")
+def vapid_public_key(request: Request):
+    _user_from_request(request)
+    if not _PUSH_ENABLED:
+        raise HTTPException(status_code=503, detail="Push notifications nao configurado no servidor")
+    return {"key": _VAPID_PUBLIC}
+
+
+@router.post("/push/subscribe")
+def push_subscribe(body: PushSubscriptionBody, request: Request):
+    """Salva subscription do usuario logado (UPSERT por endpoint)."""
+    user = _user_from_request(request)
+    if not _PUSH_ENABLED:
+        raise HTTPException(status_code=503, detail="Push nao habilitado")
+    p256dh = body.keys.get("p256dh", "")
+    auth = body.keys.get("auth", "")
+    if not body.endpoint or not p256dh or not auth:
+        raise HTTPException(status_code=400, detail="Subscription incompleta")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO chat_push_subscriptions (user_id, endpoint, p256dh, auth)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE user_id=VALUES(user_id),
+                                    p256dh=VALUES(p256dh),
+                                    auth=VALUES(auth),
+                                    ultimo_uso=NOW()
+        """, (user["id"], body.endpoint, p256dh, auth))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/push/unsubscribe")
+def push_unsubscribe(body: PushUnsubscribeBody, request: Request):
+    _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM chat_push_subscriptions WHERE endpoint=%s", (body.endpoint,))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cur.close(); conn.close()
+
+
+def _enviar_push_async(user_ids: List[int], titulo: str, corpo: str, url: str, tag: str):
+    """Best-effort: envia push pra TODOS os endpoints dos user_ids.
+    Roda sincrono (pywebpush nao tem versao async), entao chame de
+    asyncio.to_thread / executor pra nao bloquear o event loop."""
+    if not _PUSH_ENABLED or not user_ids:
+        return
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        placeholders = ",".join(["%s"] * len(user_ids))
+        cur.execute(
+            f"SELECT id, endpoint, p256dh, auth FROM chat_push_subscriptions WHERE user_id IN ({placeholders})",
+            user_ids)
+        subs = cur.fetchall()
+    finally:
+        cur.close(); conn.close()
+
+    payload = json.dumps({"title": titulo, "body": corpo, "url": url, "tag": tag})
+    dead_ids: List[int] = []
+    for s in subs:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": s["endpoint"],
+                    "keys": {"p256dh": s["p256dh"], "auth": s["auth"]},
+                },
+                data=payload,
+                vapid_private_key=_VAPID_PRIVATE,
+                vapid_claims={"sub": _VAPID_CONTACT},
+                ttl=60,
+            )
+        except WebPushException as e:
+            # 410 Gone / 404 — subscription expirou, remove
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            if status_code in (404, 410):
+                dead_ids.append(s["id"])
+            else:
+                logger.warning(f"[PUSH] erro {status_code}: {e}")
+        except Exception as e:
+            logger.warning(f"[PUSH] excecao: {e}")
+
+    if dead_ids:
+        conn = get_chat_db_or_404()
+        cur = conn.cursor()
+        try:
+            placeholders = ",".join(["%s"] * len(dead_ids))
+            cur.execute(f"DELETE FROM chat_push_subscriptions WHERE id IN ({placeholders})", dead_ids)
+            conn.commit()
+        finally:
+            cur.close(); conn.close()
+
+
+# =====================================================================
 # Sync canais por grupo do sistema (idempotente)
 # =====================================================================
 @router.post("/admin/sync-grupos")
@@ -988,6 +1116,35 @@ async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str
         "reactions": [],
     }
     await manager.send_to_users(membros, payload)
+
+    # Push notification pros membros OFFLINE (nao conectados ao WS) —
+    # quem esta online ja recebeu via WS + tem Notification API in-tab.
+    if _PUSH_ENABLED:
+        online = set(manager.online_users())
+        offline_targets = [uid for uid in membros if uid != user_id and uid not in online]
+        if offline_targets:
+            # Busca nome do canal pra titulo amigavel
+            cnome = "Mensagem"
+            try:
+                conn2 = get_chat_db_or_404()
+                cur2 = conn2.cursor(dictionary=True)
+                cur2.execute("SELECT tipo, nome FROM chat_channels WHERE id=%s", (channel_id,))
+                ch = cur2.fetchone()
+                cur2.close(); conn2.close()
+                if ch:
+                    if ch["tipo"] == "dm":
+                        titulo = user_name or "Mensagem"
+                    else:
+                        titulo = f"{user_name or 'Alguem'} em #{ch['nome'] or 'canal'}"
+                    cnome = titulo
+            except Exception:
+                cnome = user_name or "Mensagem"
+            preview = (content or "")[:140] or ("📷 Enviou uma imagem" if atts_out else "")
+            url = f"/SistemaCPE/web/pages/chat.html"
+            tag = f"cpe-chat-{channel_id}"
+            # Roda em executor pra nao bloquear event loop
+            asyncio.create_task(asyncio.to_thread(
+                _enviar_push_async, offline_targets, cnome, preview, url, tag))
     return payload
 
 
