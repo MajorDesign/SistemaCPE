@@ -1044,6 +1044,115 @@ async def upload_imagem(channel_id: int, request: Request,
 
 
 # =====================================================================
+# 2D: Pin de mensagem + busca de mensagens
+# =====================================================================
+@router.post("/messages/{message_id}/pin")
+async def toggle_pin(message_id: int, request: Request):
+    """Toggle pin. Qualquer membro do canal pode (escolha simples). Se
+    quiser restringir depois, basta checar role no canal."""
+    user = _user_from_request(request)
+    m = _msg_e_canal_ou_404(message_id)
+    if m["deletado_em"]:
+        raise HTTPException(status_code=400, detail="Mensagem apagada nao pode ser fixada")
+    if not _usuario_pertence_ao_canal(user["id"], m["channel_id"]):
+        raise HTTPException(status_code=403, detail="Voce nao e membro do canal")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT pinned_at FROM chat_messages WHERE id=%s", (message_id,))
+        atual = cur.fetchone()
+        ja_fixada = atual and atual["pinned_at"] is not None
+        if ja_fixada:
+            cur.execute("UPDATE chat_messages SET pinned_at=NULL WHERE id=%s", (message_id,))
+            pinned = False
+        else:
+            cur.execute("UPDATE chat_messages SET pinned_at=NOW() WHERE id=%s", (message_id,))
+            pinned = True
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    payload = {
+        "type": "pin_changed",
+        "channel_id": m["channel_id"],
+        "message_id": message_id,
+        "pinned": pinned,
+    }
+    membros = _listar_membros_canal(m["channel_id"])
+    await manager.send_to_users(membros, payload)
+    return {"success": True, "pinned": pinned}
+
+
+@router.get("/channels/{channel_id}/pinned")
+def listar_pinadas(channel_id: int, request: Request):
+    """Retorna todas as msgs fixadas do canal (mais recentes primeiro)."""
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro do canal")
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT id, user_id, content, criado_em, pinned_at, editado_em
+            FROM chat_messages
+            WHERE channel_id=%s AND pinned_at IS NOT NULL AND deletado_em IS NULL
+            ORDER BY pinned_at DESC LIMIT 50
+        """, (channel_id,))
+        msgs = cur.fetchall()
+        users_map = _enriquecer_users(list({m["user_id"] for m in msgs}))
+        for m in msgs:
+            u = users_map.get(m["user_id"], {})
+            m["author"] = {"id": m["user_id"], "name": u.get("name"), "email": u.get("email")}
+        return {"success": True, "messages": msgs}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/channels/{channel_id}/search")
+def buscar_mensagens(channel_id: int, request: Request,
+                     q: str = Query(..., min_length=2, max_length=200)):
+    """Busca msgs por texto (fulltext + fallback LIKE pra termos curtos).
+    Retorna ate 50 resultados mais recentes."""
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro do canal")
+    termo = q.strip()
+    if not termo:
+        return {"success": True, "messages": []}
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # FULLTEXT IN BOOLEAN MODE — termos curtos ainda podem nao casar
+        # (default min ft_word_len = 4). Fallback pra LIKE se vier vazio.
+        cur.execute("""
+            SELECT id, user_id, content, criado_em, pinned_at, editado_em
+            FROM chat_messages
+            WHERE channel_id=%s AND deletado_em IS NULL
+              AND MATCH(content) AGAINST (%s IN BOOLEAN MODE)
+            ORDER BY criado_em DESC LIMIT 50
+        """, (channel_id, termo + "*"))
+        msgs = cur.fetchall()
+        if not msgs:
+            # Fallback LIKE pra termos curtos
+            cur.execute("""
+                SELECT id, user_id, content, criado_em, pinned_at, editado_em
+                FROM chat_messages
+                WHERE channel_id=%s AND deletado_em IS NULL
+                  AND content LIKE %s
+                ORDER BY criado_em DESC LIMIT 50
+            """, (channel_id, f"%{termo}%"))
+            msgs = cur.fetchall()
+        users_map = _enriquecer_users(list({m["user_id"] for m in msgs}))
+        for m in msgs:
+            u = users_map.get(m["user_id"], {})
+            m["author"] = {"id": m["user_id"], "name": u.get("name"), "email": u.get("email")}
+        return {"success": True, "messages": msgs, "query": termo}
+    finally:
+        cur.close(); conn.close()
+
+
+# =====================================================================
 # Reactions: toggle emoji em uma mensagem
 # =====================================================================
 class ReacaoBody(BaseModel):
