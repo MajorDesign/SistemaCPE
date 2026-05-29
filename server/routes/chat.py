@@ -1,0 +1,712 @@
+"""
+Chat Realtime — Discord-like
+============================
+Modulo de chat com DMs + canais por grupo do sistema.
+
+Arquitetura:
+- Database `cpe_chat` separado (mesma instancia MariaDB).
+- Transporte: WebSocket (FastAPI native) pra realtime; REST pra historico.
+- Auth: session token HMAC ja existente (via query param `?token=` no WS).
+- ConnectionManager mantem `Set[WebSocket]` por user_id pra broadcast.
+
+NAO inclui ainda: reacoes, threads, mentions, file upload, voice, edicao
+de mensagem, presence beyond online/offline. Estes entram em fases
+seguintes apos validar a fundacao.
+"""
+
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Query, Request, status, UploadFile, File
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, Set, List, Any
+import json
+import logging
+import asyncio
+import os
+import uuid as _uuid
+from pathlib import Path
+from datetime import datetime, timedelta
+
+from database import get_chat_db_or_404, get_db_or_404
+from security import parse_session_token, get_user_by_id
+
+router = APIRouter(prefix="/api/chat", tags=["chat"])
+logger = logging.getLogger(__name__)
+
+
+# =====================================================================
+# Connection Manager — proprio do chat (nao acopla com WS de tickets)
+# =====================================================================
+class ChatConnectionManager:
+    def __init__(self):
+        # user_id -> set de WebSockets (user pode estar em multiplas abas/devices)
+        self._conns: Dict[int, Set[WebSocket]] = {}
+
+    async def connect(self, user_id: int, ws: WebSocket):
+        await ws.accept()
+        self._conns.setdefault(user_id, set()).add(ws)
+        logger.info(f"[CHAT-WS] +user {user_id} (total conexoes do user: {len(self._conns[user_id])})")
+        self._set_presence(user_id, "online")
+
+    def disconnect(self, user_id: int, ws: WebSocket):
+        if user_id in self._conns:
+            self._conns[user_id].discard(ws)
+            if not self._conns[user_id]:
+                del self._conns[user_id]
+                self._set_presence(user_id, "offline")
+        logger.info(f"[CHAT-WS] -user {user_id}")
+
+    async def send_to_users(self, user_ids: List[int], payload: dict):
+        """Broadcast pra todos os WSs de uma lista de users."""
+        msg = json.dumps(payload, default=str)
+        dead: List = []
+        for uid in user_ids:
+            for ws in list(self._conns.get(uid, ())):
+                try:
+                    await ws.send_text(msg)
+                except Exception as e:
+                    logger.warning(f"[CHAT-WS] dead ws user={uid}: {e}")
+                    dead.append((uid, ws))
+        for uid, ws in dead:
+            self.disconnect(uid, ws)
+
+    def online_users(self) -> List[int]:
+        return list(self._conns.keys())
+
+    @staticmethod
+    def _set_presence(user_id: int, status_: str):
+        """Atualiza chat_presence (best-effort, nao bloqueia se falhar)."""
+        try:
+            conn = get_chat_db_or_404()
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO chat_presence (user_id, status, ultima_atividade)
+                VALUES (%s, %s, NOW())
+                ON DUPLICATE KEY UPDATE status=VALUES(status), ultima_atividade=NOW()
+            """, (user_id, status_))
+            conn.commit()
+            cur.close(); conn.close()
+        except Exception as e:
+            logger.warning(f"[CHAT-WS] presence update failed: {e}")
+
+
+manager = ChatConnectionManager()
+
+
+# =====================================================================
+# Upload de imagens (anexos)
+# =====================================================================
+_UPLOAD_CHAT_ROOT     = Path(__file__).resolve().parents[2] / "web" / "uploads" / "chat"
+_UPLOAD_CHAT_URL_BASE = "/SistemaCPE/web/uploads/chat"
+_CHAT_IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+_MAX_CHAT_IMG_MB = 25
+_CLEANUP_DIAS = 90
+
+
+# =====================================================================
+# Pydantic models
+# =====================================================================
+class MensagemNova(BaseModel):
+    content: str = Field(..., min_length=1, max_length=4000)
+    reply_to_id: Optional[int] = None
+
+
+# =====================================================================
+# Helpers
+# =====================================================================
+def _user_from_request(request: Request) -> dict:
+    """Resolve o user atual a partir do cookie/header (REST)."""
+    token = request.cookies.get("cpe_session") or request.headers.get("X-Auth-Token", "")
+    if not token:
+        raise HTTPException(status_code=401, detail="Sem token de sessao")
+    user_id = parse_session_token(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Token invalido ou expirado")
+    user = get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuario nao encontrado")
+    return user
+
+
+def _listar_membros_canal(channel_id: int) -> List[int]:
+    """IDs dos users membros de um canal."""
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT user_id FROM chat_channel_members WHERE channel_id=%s", (channel_id,))
+        return [r[0] for r in cur.fetchall()]
+    finally:
+        cur.close(); conn.close()
+
+
+def _usuario_pertence_ao_canal(user_id: int, channel_id: int) -> bool:
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT 1 FROM chat_channel_members WHERE channel_id=%s AND user_id=%s LIMIT 1",
+            (channel_id, user_id))
+        return cur.fetchone() is not None
+    finally:
+        cur.close(); conn.close()
+
+
+def _enriquecer_users(user_ids: List[int]) -> Dict[int, dict]:
+    """Pega dados de cpe_plus.users em uma query (nome, email, group)."""
+    if not user_ids:
+        return {}
+    conn = get_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        placeholders = ",".join(["%s"] * len(user_ids))
+        cur.execute(
+            f"SELECT id, name, email, role, group_id FROM users WHERE id IN ({placeholders})",
+            user_ids)
+        return {r["id"]: r for r in cur.fetchall()}
+    finally:
+        cur.close(); conn.close()
+
+
+# =====================================================================
+# REST: canais
+# =====================================================================
+@router.get("/channels")
+def listar_canais(request: Request):
+    """Retorna os canais que o user atual eh membro (DMs + grupo_sistema + canal).
+    Inclui `unread_count` por canal (mensagens depois do ultima_msg_lida_id,
+    excluindo as proprias do user)."""
+    user = _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT c.id, c.tipo, c.nome, c.descricao, c.grupo_id, c.criado_em,
+                   m.ultima_msg_lida_id,
+                   (SELECT COUNT(*) FROM chat_messages msg
+                      WHERE msg.channel_id = c.id
+                        AND msg.deletado_em IS NULL
+                        AND msg.user_id != %s
+                        AND msg.id > COALESCE(m.ultima_msg_lida_id, 0)
+                   ) AS unread_count
+            FROM chat_channels c
+            INNER JOIN chat_channel_members m ON m.channel_id = c.id
+            WHERE m.user_id = %s AND c.arquivado_em IS NULL
+            ORDER BY c.tipo, c.nome
+        """, (user["id"], user["id"]))
+        canais = cur.fetchall()
+
+        # Pra DMs, deriva o "nome" do outro membro (pra UI mostrar)
+        dm_ids = [c["id"] for c in canais if c["tipo"] == "dm"]
+        outros_por_canal: Dict[int, int] = {}
+        if dm_ids:
+            placeholders = ",".join(["%s"] * len(dm_ids))
+            cur.execute(
+                f"SELECT channel_id, user_id FROM chat_channel_members "
+                f"WHERE channel_id IN ({placeholders}) AND user_id != %s",
+                [*dm_ids, user["id"]])
+            for r in cur.fetchall():
+                outros_por_canal[r["channel_id"]] = r["user_id"]
+        users_map = _enriquecer_users(list(outros_por_canal.values()))
+        for c in canais:
+            if c["tipo"] == "dm":
+                other_uid = outros_por_canal.get(c["id"])
+                u = users_map.get(other_uid, {})
+                c["dm_with"] = {
+                    "id": other_uid, "name": u.get("name"), "email": u.get("email")
+                }
+                c["nome"] = u.get("name") or f"Usuario #{other_uid}"
+        return {"success": True, "channels": canais}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/channels/dm/{other_user_id}")
+def abrir_ou_criar_dm(other_user_id: int, request: Request):
+    """Retorna a DM existente entre o user atual e other_user_id, ou cria."""
+    user = _user_from_request(request)
+    if user["id"] == other_user_id:
+        raise HTTPException(status_code=400, detail="Nao da pra abrir DM consigo mesmo")
+
+    # Confirma que o outro user existe
+    if not get_user_by_id(other_user_id):
+        raise HTTPException(status_code=404, detail="Usuario destino nao encontrado")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # Procura DM existente com EXATAMENTE esses 2 membros
+        cur.execute("""
+            SELECT c.id
+            FROM chat_channels c
+            INNER JOIN chat_channel_members m1 ON m1.channel_id = c.id AND m1.user_id = %s
+            INNER JOIN chat_channel_members m2 ON m2.channel_id = c.id AND m2.user_id = %s
+            WHERE c.tipo = 'dm'
+            LIMIT 1
+        """, (user["id"], other_user_id))
+        row = cur.fetchone()
+        if row:
+            return {"success": True, "channel_id": row["id"], "created": False}
+
+        # Cria
+        cur.execute("""
+            INSERT INTO chat_channels (tipo, criado_por) VALUES ('dm', %s)
+        """, (user["id"],))
+        channel_id = cur.lastrowid
+        cur.executemany("""
+            INSERT INTO chat_channel_members (channel_id, user_id, role) VALUES (%s, %s, %s)
+        """, [(channel_id, user["id"], "owner"),
+              (channel_id, other_user_id, "member")])
+        conn.commit()
+        return {"success": True, "channel_id": channel_id, "created": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/channels/{channel_id}/messages")
+def listar_mensagens(channel_id: int, request: Request,
+                     before_id: Optional[int] = Query(None),
+                     limit: int = Query(50, le=200)):
+    """Historico de mensagens (paginado, mais novas primeiro)."""
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro deste canal")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        if before_id:
+            cur.execute("""
+                SELECT id, channel_id, user_id, content, reply_to_id, criado_em, editado_em
+                FROM chat_messages
+                WHERE channel_id=%s AND deletado_em IS NULL AND id < %s
+                ORDER BY id DESC LIMIT %s
+            """, (channel_id, before_id, limit))
+        else:
+            cur.execute("""
+                SELECT id, channel_id, user_id, content, reply_to_id, criado_em, editado_em
+                FROM chat_messages
+                WHERE channel_id=%s AND deletado_em IS NULL
+                ORDER BY id DESC LIMIT %s
+            """, (channel_id, limit))
+        msgs = cur.fetchall()
+        msgs.reverse()  # cliente espera ordem cronologica ascendente
+
+        users_map = _enriquecer_users(list({m["user_id"] for m in msgs}))
+        for m in msgs:
+            u = users_map.get(m["user_id"], {})
+            m["author"] = {"id": m["user_id"], "name": u.get("name"), "email": u.get("email")}
+
+        # Anexa attachments (1 query pra todas as msgs)
+        if msgs:
+            msg_ids = [m["id"] for m in msgs]
+            placeholders = ",".join(["%s"] * len(msg_ids))
+            cur.execute(f"""
+                SELECT id, message_id, tipo, arquivo, nome_original, mime, tamanho
+                FROM chat_attachments
+                WHERE message_id IN ({placeholders})
+                ORDER BY id
+            """, msg_ids)
+            por_msg: Dict[int, List[dict]] = {}
+            for a in cur.fetchall():
+                por_msg.setdefault(a["message_id"], []).append(a)
+            for m in msgs:
+                m["attachments"] = por_msg.get(m["id"], [])
+        return {"success": True, "messages": msgs, "has_more": len(msgs) == limit}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/channels/{channel_id}/messages")
+async def enviar_mensagem(channel_id: int, body: MensagemNova, request: Request):
+    """REST pra enviar msg (alternativa ao WebSocket — util pra clientes
+    sem WS). Tambem faz broadcast pra subscribers via manager."""
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro deste canal")
+
+    msg_payload = await _persistir_e_broadcastar(
+        channel_id=channel_id,
+        user_id=user["id"],
+        user_name=user.get("name"),
+        content=body.content,
+        reply_to_id=body.reply_to_id,
+    )
+    return {"success": True, "message": msg_payload}
+
+
+# =====================================================================
+# Mark-read: atualiza ultima_msg_lida_id do user no canal
+# =====================================================================
+@router.post("/channels/{channel_id}/read")
+def marcar_canal_lido(channel_id: int, request: Request):
+    """Marca o canal como lido pelo user atual (ate a ultima msg existente)."""
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro deste canal")
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE chat_channel_members m
+            SET m.ultima_msg_lida_id = COALESCE((
+                SELECT MAX(id) FROM chat_messages
+                WHERE channel_id = m.channel_id
+            ), m.ultima_msg_lida_id)
+            WHERE m.channel_id = %s AND m.user_id = %s
+        """, (channel_id, user["id"]))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cur.close(); conn.close()
+
+
+# =====================================================================
+# Edit / Delete de mensagem
+# =====================================================================
+class MensagemEdit(BaseModel):
+    content: str = Field(..., min_length=1, max_length=4000)
+
+
+def _msg_e_canal_ou_404(message_id: int) -> dict:
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT id, channel_id, user_id, content, deletado_em
+            FROM chat_messages WHERE id=%s
+        """, (message_id,))
+        m = cur.fetchone()
+        if not m:
+            raise HTTPException(status_code=404, detail="Mensagem nao encontrada")
+        return m
+    finally:
+        cur.close(); conn.close()
+
+
+@router.patch("/messages/{message_id}")
+async def editar_mensagem(message_id: int, body: MensagemEdit, request: Request):
+    user = _user_from_request(request)
+    m = _msg_e_canal_ou_404(message_id)
+    if m["deletado_em"]:
+        raise HTTPException(status_code=400, detail="Mensagem ja foi apagada")
+    if m["user_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="So o autor pode editar")
+
+    novo_conteudo = body.content.strip()
+    if not novo_conteudo:
+        raise HTTPException(status_code=400, detail="Conteudo nao pode ser vazio")
+    if novo_conteudo == m["content"]:
+        return {"success": True, "noop": True}
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE chat_messages SET content=%s, editado_em=NOW() WHERE id=%s
+        """, (novo_conteudo, message_id))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    payload = {
+        "type": "message_edited",
+        "channel_id": m["channel_id"],
+        "id": message_id,
+        "content": novo_conteudo,
+        "editado_em": datetime.utcnow().isoformat(),
+    }
+    membros = _listar_membros_canal(m["channel_id"])
+    await manager.send_to_users(membros, payload)
+    return {"success": True, "message": payload}
+
+
+@router.delete("/messages/{message_id}")
+async def deletar_mensagem(message_id: int, request: Request):
+    """Soft delete. Autor pode sempre; ADMIN/TI/MANAGER podem qualquer msg."""
+    user = _user_from_request(request)
+    m = _msg_e_canal_ou_404(message_id)
+    if m["deletado_em"]:
+        return {"success": True, "noop": True}
+    is_admin = user.get("role") in ("ADMIN", "TI", "MANAGER")
+    if m["user_id"] != user["id"] and not is_admin:
+        raise HTTPException(status_code=403, detail="Sem permissao pra apagar")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE chat_messages SET deletado_em=NOW() WHERE id=%s", (message_id,))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    payload = {
+        "type": "message_deleted",
+        "channel_id": m["channel_id"],
+        "id": message_id,
+    }
+    membros = _listar_membros_canal(m["channel_id"])
+    await manager.send_to_users(membros, payload)
+    return {"success": True}
+
+
+# =====================================================================
+# Sync canais por grupo do sistema (idempotente)
+# =====================================================================
+@router.post("/admin/sync-grupos")
+def sync_canais_grupos(request: Request):
+    """Cria 1 canal automatico por grupo em cpe_plus.cpe_grupo e adiciona
+    todos os users daquele grupo como membros. Idempotente (chama N vezes
+    sem duplicar). Restrito a ADMIN/TI/MANAGER."""
+    user = _user_from_request(request)
+    if user.get("role") not in ("ADMIN", "TI", "MANAGER"):
+        raise HTTPException(status_code=403, detail="Restrito a administradores")
+
+    plus = get_db_or_404()
+    chat = get_chat_db_or_404()
+    pcur = plus.cursor(dictionary=True)
+    ccur = chat.cursor()
+    try:
+        pcur.execute("SELECT id, name, description FROM cpe_grupo ORDER BY id")
+        grupos = pcur.fetchall()
+        criados, ja_existiam = 0, 0
+        for g in grupos:
+            # 1) cria/encontra canal do grupo
+            ccur.execute("SELECT id FROM chat_channels WHERE grupo_id=%s", (g["id"],))
+            row = ccur.fetchone()
+            if row:
+                channel_id = row[0]
+                ja_existiam += 1
+            else:
+                ccur.execute("""
+                    INSERT INTO chat_channels (tipo, nome, descricao, grupo_id)
+                    VALUES ('grupo_sistema', %s, %s, %s)
+                """, (g["name"], g.get("description"), g["id"]))
+                channel_id = ccur.lastrowid
+                criados += 1
+
+            # 2) sincroniza membros: users com group_id = g.id
+            pcur.execute(
+                "SELECT id FROM users WHERE group_id=%s AND is_active=1", (g["id"],))
+            user_ids = [r["id"] for r in pcur.fetchall()]
+            if user_ids:
+                values = [(channel_id, uid, "member") for uid in user_ids]
+                ccur.executemany("""
+                    INSERT IGNORE INTO chat_channel_members (channel_id, user_id, role)
+                    VALUES (%s, %s, %s)
+                """, values)
+        chat.commit()
+        return {"success": True, "grupos": len(grupos), "canais_criados": criados,
+                "canais_ja_existiam": ja_existiam}
+    finally:
+        pcur.close(); plus.close()
+        ccur.close(); chat.close()
+
+
+# =====================================================================
+# Helper: persistir mensagem + broadcast pros membros online
+# =====================================================================
+async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str,
+                                   content: str, reply_to_id: Optional[int],
+                                   attachments: Optional[List[dict]] = None):
+    """attachments: lista de dicts {tipo, arquivo, nome_original, mime, tamanho}
+    (sem id — gerado no INSERT)."""
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            INSERT INTO chat_messages (channel_id, user_id, content, reply_to_id)
+            VALUES (%s, %s, %s, %s)
+        """, (channel_id, user_id, content, reply_to_id))
+        msg_id = cur.lastrowid
+        atts_out: List[dict] = []
+        if attachments:
+            for a in attachments:
+                cur.execute("""
+                    INSERT INTO chat_attachments (message_id, tipo, arquivo, nome_original, mime, tamanho)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (msg_id, a.get("tipo", "image"), a["arquivo"],
+                      a.get("nome_original"), a.get("mime"), a.get("tamanho")))
+                atts_out.append({
+                    "id": cur.lastrowid, "message_id": msg_id, **a,
+                })
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    payload = {
+        "type": "message",
+        "channel_id": channel_id,
+        "id": msg_id,
+        "content": content,
+        "reply_to_id": reply_to_id,
+        "criado_em": datetime.utcnow().isoformat(),
+        "author": {"id": user_id, "name": user_name},
+        "attachments": atts_out,
+    }
+    membros = _listar_membros_canal(channel_id)
+    await manager.send_to_users(membros, payload)
+    return payload
+
+
+# =====================================================================
+# Upload de imagem: POST /channels/{id}/upload (multipart)
+# =====================================================================
+@router.post("/channels/{channel_id}/upload")
+async def upload_imagem(channel_id: int, request: Request,
+                        file: UploadFile = File(...),
+                        caption: Optional[str] = ""):
+    """Faz upload de uma imagem, cria msg no canal com a imagem como anexo
+    (caption opcional vai como content da msg)."""
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro deste canal")
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in _CHAT_IMG_EXTS:
+        raise HTTPException(status_code=400,
+                            detail=f"Extensao nao permitida ({ext}). Use: {', '.join(sorted(_CHAT_IMG_EXTS))}")
+
+    _UPLOAD_CHAT_ROOT.mkdir(parents=True, exist_ok=True)
+    filename = f"ch{channel_id}_{_uuid.uuid4().hex[:14]}{ext}"
+    destino = _UPLOAD_CHAT_ROOT / filename
+    size = 0
+    limit = _MAX_CHAT_IMG_MB * 1024 * 1024
+    with open(destino, "wb") as out:
+        while True:
+            chunk = await file.read(64 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > limit:
+                out.close()
+                destino.unlink(missing_ok=True)
+                raise HTTPException(status_code=413,
+                                    detail=f"Imagem maior que {_MAX_CHAT_IMG_MB} MB")
+            out.write(chunk)
+
+    arquivo_url = f"{_UPLOAD_CHAT_URL_BASE}/{filename}"
+    attachment = {
+        "tipo": "image",
+        "arquivo": arquivo_url,
+        "nome_original": file.filename,
+        "mime": file.content_type or "image/*",
+        "tamanho": size,
+    }
+    msg_payload = await _persistir_e_broadcastar(
+        channel_id=channel_id, user_id=user["id"],
+        user_name=user.get("name"), content=(caption or ""),
+        reply_to_id=None, attachments=[attachment],
+    )
+    return {"success": True, "message": msg_payload}
+
+
+# =====================================================================
+# Cleanup: apaga imagens com criado_em < hoje - 90d (admin only)
+# =====================================================================
+@router.post("/admin/cleanup-imagens")
+def cleanup_imagens_antigas(request: Request, dias: int = Query(_CLEANUP_DIAS, ge=7, le=3650)):
+    """Remove imagens (disco + DB) anteriores a `dias` dias. Padrao 90.
+    Restrito a ADMIN/TI/MANAGER."""
+    user = _user_from_request(request)
+    if user.get("role") not in ("ADMIN", "TI", "MANAGER"):
+        raise HTTPException(status_code=403, detail="Restrito a administradores")
+
+    limite = datetime.utcnow() - timedelta(days=dias)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    apagadas_disco = 0
+    apagadas_db = 0
+    try:
+        cur.execute("""
+            SELECT id, arquivo FROM chat_attachments WHERE criado_em < %s
+        """, (limite,))
+        rows = cur.fetchall()
+        for r in rows:
+            rel = (r["arquivo"] or "").replace(_UPLOAD_CHAT_URL_BASE, "").lstrip("/")
+            if rel:
+                try:
+                    (_UPLOAD_CHAT_ROOT / rel).unlink(missing_ok=True)
+                    apagadas_disco += 1
+                except Exception as e:
+                    logger.warning(f"[CLEANUP] falha removendo {rel}: {e}")
+        if rows:
+            ids = [r["id"] for r in rows]
+            placeholders = ",".join(["%s"] * len(ids))
+            cur.execute(f"DELETE FROM chat_attachments WHERE id IN ({placeholders})", ids)
+            apagadas_db = cur.rowcount
+            conn.commit()
+    finally:
+        cur.close(); conn.close()
+    return {"success": True, "apagadas_disco": apagadas_disco, "apagadas_db": apagadas_db,
+            "limite": limite.isoformat(), "dias": dias}
+
+
+# =====================================================================
+# WebSocket: /api/chat/ws?token=...
+# =====================================================================
+@router.websocket("/ws")
+async def chat_ws(websocket: WebSocket, token: str = Query(...)):
+    user_id = parse_session_token(token)
+    if not user_id:
+        await websocket.close(code=4401, reason="Token invalido")
+        return
+    user = get_user_by_id(user_id)
+    if not user:
+        await websocket.close(code=4401, reason="Usuario nao encontrado")
+        return
+
+    await manager.connect(user_id, websocket)
+    try:
+        # Envia hello inicial
+        await websocket.send_text(json.dumps({
+            "type": "hello",
+            "user_id": user_id,
+            "online_users": manager.online_users(),
+        }))
+
+        while True:
+            raw = await websocket.receive_text()
+            try:
+                data = json.loads(raw)
+            except json.JSONDecodeError:
+                await websocket.send_text(json.dumps({"type": "error", "detail": "JSON invalido"}))
+                continue
+
+            msg_type = data.get("type")
+            if msg_type == "send":
+                channel_id = data.get("channel_id")
+                content = (data.get("content") or "").strip()
+                if not channel_id or not content:
+                    await websocket.send_text(json.dumps(
+                        {"type": "error", "detail": "channel_id e content obrigatorios"}))
+                    continue
+                if not _usuario_pertence_ao_canal(user_id, channel_id):
+                    await websocket.send_text(json.dumps(
+                        {"type": "error", "detail": "Voce nao e membro deste canal"}))
+                    continue
+                await _persistir_e_broadcastar(
+                    channel_id=channel_id, user_id=user_id,
+                    user_name=user.get("name"), content=content,
+                    reply_to_id=data.get("reply_to_id"),
+                )
+            elif msg_type == "typing":
+                # Broadcast pros OUTROS membros (exclui o proprio)
+                channel_id = data.get("channel_id")
+                if not channel_id or not _usuario_pertence_ao_canal(user_id, channel_id):
+                    continue
+                membros = [u for u in _listar_membros_canal(channel_id) if u != user_id]
+                if membros:
+                    await manager.send_to_users(membros, {
+                        "type": "typing",
+                        "channel_id": channel_id,
+                        "user_id": user_id,
+                        "user_name": user.get("name"),
+                    })
+            elif msg_type == "ping":
+                await websocket.send_text(json.dumps({"type": "pong"}))
+            else:
+                await websocket.send_text(json.dumps(
+                    {"type": "error", "detail": f"tipo desconhecido: {msg_type}"}))
+    except WebSocketDisconnect:
+        manager.disconnect(user_id, websocket)
+    except Exception as e:
+        logger.exception(f"[CHAT-WS] erro user={user_id}: {e}")
+        manager.disconnect(user_id, websocket)

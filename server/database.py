@@ -363,5 +363,43 @@ def mapa_dados_ticket(ticket: dict, cursor) -> dict:
 logger.info("✅ DATABASE.PY CARREGADO COM SUCESSO!")
 logger.info("   - get_db_connection() disponivel")
 logger.info("   - get_db_or_404() disponivel")
+logger.info("   - get_chat_db_connection() / get_chat_db_or_404() disponivel")
 logger.info("   - Funcoes de validacao disponivel")
 logger.info("   - Funcoes utilitarias disponivel\n")
+
+
+# =========================================
+# CONEXAO COM cpe_chat (database separado pro modulo de chat realtime)
+# Mesma instancia MariaDB, database diferente. Cross-database FK nao
+# e suportado em MySQL, entao user_id e grupo_id em cpe_chat sao soft
+# refs pra cpe_plus.users.id e cpe_plus.cpe_grupo.id.
+# =========================================
+_CHAT_DB_NAME = os.getenv("MYSQL_CHAT_DB", "cpe_chat")
+DB_CHAT_CONFIG = {**DB_CONFIG, "database": _CHAT_DB_NAME}
+
+
+def get_chat_db_connection():
+    """Conexao com o database cpe_chat (modulo de chat)."""
+    try:
+        conn = mysql.connector.connect(**DB_CHAT_CONFIG)
+        logger.debug(f"[DB-CHAT] Conexao com {_CHAT_DB_NAME} OK")
+        return conn
+    except mysql.connector.Error as err:
+        if err.errno == 1049:
+            logger.error(f"[DB-CHAT] Database '{_CHAT_DB_NAME}' nao existe — "
+                         "rode migration 056_create_cpe_chat_db.sql")
+        else:
+            logger.error(f"[DB-CHAT] Erro MySQL #{err.errno}: {err.msg}")
+        raise
+
+
+def get_chat_db_or_404():
+    """Como get_db_or_404, mas conecta no cpe_chat."""
+    try:
+        return get_chat_db_connection()
+    except Exception as err:
+        logger.error(f"[DB-CHAT] Falha conectando: {err}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro ao conectar ao banco de chat"
+        )

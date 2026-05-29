@@ -1512,6 +1512,16 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ REGISTRAR ROUTER DE CHAT REALTIME (WS + REST)
+try:
+    from routes.chat import router as chat_router
+    app.include_router(chat_router)
+    logger.info("✅ Router de Chat registrado: /api/chat (REST + WS /ws)")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Chat: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ REGISTRAR ROUTER DE TASKS (EXTERNO)
 try:
     from routes.tasks import tasks_router
