@@ -1885,7 +1885,8 @@ function conectarWebSocket() {
       console.warn('[chat-ws]', data.detail);
     }
   });
-  _ws.addEventListener('close', () => {
+  _ws.addEventListener('close', (e) => {
+    console.warn('[chat-ws] FECHOU', { code: e.code, reason: e.reason, wasClean: e.wasClean });
     document.getElementById('chatConnStatus').className = 'chat-conn-status offline';
     document.getElementById('chatConnStatus').textContent = 'reconectando...';
     setTimeout(conectarWebSocket, _wsRetryMs);
