@@ -3553,11 +3553,10 @@ function toggleDeafen() {
   _deafened = !_deafened;
   const btn = document.getElementById('btnDeafen');
   const ico = document.getElementById('iconDeafen');
-  ico.className = _deafened ? 'bi bi-headphones' : 'bi bi-headphones';
+  // Ícone slash quando deafened (sem áudio entrando)
+  ico.className = _deafened ? 'bi bi-mic-mute' : 'bi bi-headphones';
   if (_deafened) btn.classList.add('off'); else btn.classList.remove('off');
-  // Silencia todos os <audio> remotos
   document.querySelectorAll('audio').forEach(a => { a.muted = _deafened; });
-  // Se deafened, também muta o mic
   if (_deafened && !_micMuted) toggleMicMute();
 }
 
@@ -3588,11 +3587,23 @@ function cfgMostrar(secao) {
 }
 
 async function cfgListarDispositivos() {
-  // Solicita permissão de mic primeiro pra liberar labels
+  // 1) Solicita permissão de mic+cam pra liberar os labels e detectar se
+  //    tem hardware. Se NotFoundError, sabemos que nao tem mic/cam.
+  let temMic = false, temCam = false;
   try {
     const tmp = await navigator.mediaDevices.getUserMedia({ audio: true });
     tmp.getTracks().forEach(t => t.stop());
-  } catch (e) { /* ok — só perde labels */ }
+    temMic = true;
+  } catch (e) {
+    if (e.name !== 'NotFoundError' && e.name !== 'OverconstrainedError') {
+      console.warn('getUserMedia(audio) fail:', e.name, e.message);
+    }
+  }
+  try {
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
+    tmp.getTracks().forEach(t => t.stop());
+    temCam = true;
+  } catch { /* ok */ }
 
   let devices = [];
   try {
@@ -3602,25 +3613,47 @@ async function cfgListarDispositivos() {
     return;
   }
 
-  const mics      = devices.filter(d => d.kind === 'audioinput');
-  const speakers  = devices.filter(d => d.kind === 'audiooutput');
-  const cams      = devices.filter(d => d.kind === 'videoinput');
+  // 2) Filtra entradas fantasma do Windows (default/communications) que
+  //    nao tem label real quando permissao concedida.
+  const filtraReais = (list) => list.filter(d => d.label || d.deviceId === 'default');
+
+  const mics     = filtraReais(devices.filter(d => d.kind === 'audioinput'));
+  const speakers = filtraReais(devices.filter(d => d.kind === 'audiooutput'));
+  const cams     = filtraReais(devices.filter(d => d.kind === 'videoinput'));
 
   const savedMic     = localStorage.getItem('cpe_chat_micId')     || '';
   const savedSpeaker = localStorage.getItem('cpe_chat_speakerId') || '';
   const savedCam     = localStorage.getItem('cpe_chat_camId')     || '';
 
-  const fmt = (list, saved, defaultLabel) => {
+  const fmt = (list, saved, defaultLabel, vazioLabel) => {
+    if (!list.length) {
+      return `<option value="" disabled selected>${vazioLabel}</option>`;
+    }
     let html = `<option value="">${defaultLabel}</option>`;
     list.forEach((d, i) => {
       const sel = d.deviceId === saved ? 'selected' : '';
-      html += `<option value="${d.deviceId}" ${sel}>${_esc(d.label || `Dispositivo ${i+1}`)}</option>`;
+      const nome = d.label || `Dispositivo ${i+1}`;
+      html += `<option value="${d.deviceId}" ${sel}>${_esc(nome)}</option>`;
     });
     return html;
   };
-  document.getElementById('cfgMicSelect').innerHTML     = fmt(mics, savedMic, 'Padrão do sistema');
-  document.getElementById('cfgSpeakerSelect').innerHTML = fmt(speakers, savedSpeaker, 'Padrão do sistema');
-  document.getElementById('cfgCamSelect').innerHTML     = fmt(cams, savedCam, 'Nenhuma (usar só quando ligar)');
+
+  document.getElementById('cfgMicSelect').innerHTML =
+    fmt(mics, savedMic, 'Padrão do sistema',
+        temMic ? 'Nenhum microfone disponível' : '❌ Sem microfone no dispositivo');
+  document.getElementById('cfgSpeakerSelect').innerHTML =
+    fmt(speakers, savedSpeaker, 'Padrão do sistema', 'Saída padrão do navegador');
+  document.getElementById('cfgCamSelect').innerHTML =
+    fmt(cams, savedCam, 'Padrão do sistema',
+        temCam ? 'Nenhuma câmera disponível' : '❌ Sem câmera no dispositivo');
+
+  // Habilita/desabilita botao Testar baseado em ter mic
+  const btnTest = document.getElementById('cfgTestBtnLabel')?.parentElement;
+  if (btnTest) {
+    btnTest.disabled = !temMic;
+    btnTest.style.opacity = temMic ? '1' : '0.5';
+    btnTest.title = temMic ? 'Testar microfone' : 'Sem microfone disponível';
+  }
 }
 
 function cfgSalvarMic() {
@@ -3648,7 +3681,26 @@ async function cfgTestarMic() {
   try {
     _testStream = await navigator.mediaDevices.getUserMedia(constraints);
   } catch (e) {
-    alert('Erro: ' + e.message);
+    let msg;
+    switch (e.name) {
+      case 'NotFoundError':
+      case 'OverconstrainedError':
+        msg = '❌ Nenhum microfone encontrado neste dispositivo.\n\n'
+            + 'Plug um headset/fone com microfone ou use um notebook com mic embutido.';
+        break;
+      case 'NotAllowedError':
+      case 'PermissionDeniedError':
+        msg = '🔒 Acesso ao microfone bloqueado.\n\n'
+            + 'Clique no cadeado da barra de endereço → Microfone → Permitir, e recarregue a página.';
+        break;
+      case 'NotReadableError':
+        msg = '🎙 Microfone ocupado por outro app.\n\n'
+            + 'Feche Zoom, Meet, Teams, OBS etc. e tente novamente.';
+        break;
+      default:
+        msg = `Erro ao acessar microfone (${e.name}): ${e.message}`;
+    }
+    alert(msg);
     return;
   }
   _testCtx = new (window.AudioContext || window.webkitAudioContext)();
