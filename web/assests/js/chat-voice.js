@@ -47,16 +47,15 @@
     if (st.canalId === channelId) return;        // ja conectado
     if (st.canalId) await window.voiceSair();    // sai do anterior primeiro
 
-    // 1) Tenta capturar mic. Se falhar (PC sem mic / mic em uso / permissao
-    //    negada), pergunta se quer entrar mesmo assim como "so escuta" —
-    //    pode receber audio dos outros mas nao envia.
+    // 1) Tenta capturar mic. Usa 'audio: true' simples pra deixar o browser
+    //    escolher o dispositivo PADRAO do sistema (Windows: Configuracoes
+    //    -> Som -> Entrada). Browser ja aplica eco-cancel/AGC por padrao.
+    //    Se falhar (PC sem mic / mic em uso / permissao negada), pergunta
+    //    se quer entrar como "so escuta".
     let local = null;
     let micDisponivel = true;
     try {
-      local = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: false,
-      });
+      local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     } catch (e) {
       micDisponivel = false;
       const nome = e.name || '';
@@ -93,9 +92,12 @@
       return;
     }
     const existingPeers = resp.peers || [];
+    console.log('[VOICE] entrei na sala', { channelId, myPeerId: st.myPeerId,
+      existingPeers, micDisponivel });
 
     // 3) Cria peer connection com cada um (eu sou o initiator)
     for (const p of existingPeers) {
+      console.log('[VOICE] criando peer connection (initiator) com', p);
       _connectToPeer(p, /* initiator */ true);
     }
 
@@ -234,7 +236,11 @@
      ================================================================= */
   window.onVoiceSignal = function (data) {
     const st = window._voiceState;
-    if (!st.canalId) return;
+    console.log('[VOICE] WS event:', data.type, data);
+    if (!st.canalId) {
+      console.warn('[VOICE] ignorando — nao estou em sala');
+      return;
+    }
     if (data.type === 'voice_join') {
       // Outro user entrou. Nao crio peer pra mim mesmo.
       if (data.peer_id === st.myPeerId) return;
