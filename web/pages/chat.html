@@ -473,6 +473,143 @@
       display: flex; align-items: center; justify-content: center;
     }
 
+    /* ========== 2C: mentions, reactions, reply ========== */
+
+    /* @mention pill no body da msg */
+    .msg-mention {
+      background: rgba(255, 193, 7, 0.20);
+      color: var(--chat-accent);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: default;
+    }
+    .msg-mention.is-self {
+      background: rgba(255, 193, 7, 0.35);
+      color: #FFD54F;
+    }
+    /* Mensagem inteira destacada quando voce eh mencionado */
+    .msg-group.has-self-mention {
+      background: rgba(255, 193, 7, 0.06);
+      border-left: 3px solid var(--chat-accent);
+      padding-left: 9px;
+      margin-left: -12px;
+      border-radius: 0 6px 6px 0;
+    }
+
+    /* Autocomplete popover de mention */
+    .chat-mention-popover {
+      position: absolute;
+      bottom: 64px; left: 18px;
+      background: var(--chat-bg-1);
+      border: 1px solid var(--chat-border);
+      border-radius: 8px;
+      width: 280px; max-height: 240px;
+      overflow-y: auto;
+      box-shadow: 0 10px 30px rgba(0,0,0,.5);
+      z-index: 100;
+      display: none;
+    }
+    .chat-mention-popover.open { display: block; }
+    .chat-mention-popover .hint {
+      padding: 6px 10px; font-size: 0.7rem;
+      color: var(--chat-muted); text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--chat-border);
+    }
+    .chat-mention-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 10px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      color: var(--chat-text);
+    }
+    .chat-mention-item.active,
+    .chat-mention-item:hover {
+      background: var(--chat-bg-3);
+    }
+    .chat-mention-item .av {
+      width: 26px; height: 26px; border-radius: 50%;
+      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      color: #fff; font-weight: 700; font-size: 0.72rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* Reactions abaixo da msg */
+    .msg-reactions {
+      display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;
+    }
+    .msg-reaction {
+      background: var(--chat-bg-1);
+      border: 1px solid var(--chat-border);
+      border-radius: 12px;
+      padding: 1px 8px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 4px;
+      user-select: none;
+      transition: background 0.1s;
+    }
+    .msg-reaction:hover { background: var(--chat-bg-3); }
+    .msg-reaction.mine {
+      background: rgba(255, 193, 7, 0.15);
+      border-color: var(--chat-accent-dim);
+    }
+    .msg-reaction .emoji { font-size: 0.95rem; line-height: 1; }
+    .msg-reaction .count { color: var(--chat-muted); font-weight: 600; }
+    .msg-reaction.mine .count { color: var(--chat-accent); }
+
+    /* Banner de reply acima da msg */
+    .msg-reply-banner {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.78rem; color: var(--chat-muted);
+      margin-bottom: 4px;
+      cursor: pointer;
+      padding-left: 6px;
+      border-left: 2px solid var(--chat-border);
+    }
+    .msg-reply-banner:hover { color: var(--chat-text); }
+    .msg-reply-banner i { font-size: 0.85rem; }
+    .msg-reply-banner .author { color: var(--chat-accent); font-weight: 600; }
+    .msg-reply-banner .preview {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      max-width: 420px; opacity: 0.85;
+    }
+
+    /* Highlight rapido quando rola pra msg original */
+    .msg-group.flash-highlight {
+      animation: flash-msg 1.4s ease;
+    }
+    @keyframes flash-msg {
+      0%, 100% { background: transparent; }
+      30% { background: rgba(255, 193, 7, 0.25); }
+    }
+
+    /* Preview de reply ACIMA do input (quando vai responder) */
+    .chat-reply-preview {
+      display: none;
+      background: var(--chat-bg-input);
+      border-left: 3px solid var(--chat-accent);
+      padding: 6px 12px;
+      margin: 0 18px 6px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      color: var(--chat-muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .chat-reply-preview.open { display: flex; }
+    .chat-reply-preview .info { flex: 1; min-width: 0; }
+    .chat-reply-preview .author { color: var(--chat-accent); font-weight: 600; }
+    .chat-reply-preview .text {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      max-width: 100%;
+    }
+    .chat-reply-preview button {
+      background: transparent; border: none; color: var(--chat-muted);
+      cursor: pointer; padding: 2px 6px;
+    }
+    .chat-reply-preview button:hover { color: var(--chat-text); }
+
     /* Mobile: vira coluna unica com tabs */
     @media (max-width: 900px) {
       .chat-app { grid-template-columns: 1fr; }
@@ -529,6 +666,14 @@
           </div>
         </div>
         <div class="chat-typing-bar" id="chatTypingBar"></div>
+        <div class="chat-reply-preview" id="chatReplyPreview">
+          <i class="bi bi-reply"></i>
+          <div class="info">
+            Respondendo a <span class="author" id="replyPrevAuthor"></span>:
+            <div class="text" id="replyPrevText"></div>
+          </div>
+          <button onclick="cancelarReply()" title="Cancelar"><i class="bi bi-x-lg"></i></button>
+        </div>
         <div class="chat-input-area" id="chatInputArea" style="display:none">
           <div class="chat-input-box">
             <div class="chat-input-tools">
@@ -548,6 +693,7 @@
             </button>
           </div>
           <div class="chat-emoji-popover" id="chatEmojiPopover"></div>
+          <div class="chat-mention-popover" id="chatMentionPopover"></div>
         </div>
       </div>
 
@@ -599,6 +745,9 @@ let _lastTypingSent = 0;          // timestamp pra debounce
 let _titleFlashInterval = null;
 let _hasUnreadFlash = false;
 let _baseTitle = 'Chat — CPE Control';
+let _replyToId = null;            // 2C: id da msg sendo respondida
+let _replyToInfo = null;
+let _mentionState = null;         // 2C: estado do autocomplete @mention {start, query, results, active}
 
 /* ============ helpers ============ */
 function _t() {
@@ -821,16 +970,47 @@ function _msgHtml(m) {
     ? `<span class="msg-edited" title="Editada em ${_fmtHora(m.editado_em)}">(editada)</span>`
     : '';
 
-  const acoes = !isDel && canManage
+  // Acoes: reagir/responder (todos) + editar (so autor) + apagar (autor ou admin)
+  const acoes = !isDel
     ? `<div class="msg-actions">
+         <button title="Reagir" onclick="abrirReacaoPicker(${m.id}, event)"><i class="bi bi-emoji-smile"></i></button>
+         <button title="Responder" onclick="iniciarReply(${m.id})"><i class="bi bi-reply"></i></button>
          ${own ? `<button title="Editar" onclick="iniciarEdicao(${m.id})"><i class="bi bi-pencil"></i></button>` : ''}
-         <button class="danger" title="Apagar" onclick="apagarMsg(${m.id})"><i class="bi bi-trash"></i></button>
+         ${canManage ? `<button class="danger" title="Apagar" onclick="apagarMsg(${m.id})"><i class="bi bi-trash"></i></button>` : ''}
        </div>`
     : '';
 
-  return `<div class="msg-group ${isDel ? 'msg-deleted' : ''}" id="msg-${m.id}" data-content="${_esc(m.content)}">
+  // Reply banner (acima da msg)
+  let replyBanner = '';
+  if (!isDel && m.reply_to) {
+    const r = m.reply_to;
+    replyBanner = `<div class="msg-reply-banner" onclick="rolarParaMsg(${r.id})">
+      <i class="bi bi-reply"></i>
+      <span class="author">${_esc(r.author_name || 'Usuário')}</span>
+      <span class="preview">${_esc(r.content_preview || '')}</span>
+    </div>`;
+  }
+
+  // Reactions
+  let reactionsHtml = '';
+  if (!isDel && Array.isArray(m.reactions) && m.reactions.length) {
+    reactionsHtml = `<div class="msg-reactions">` + m.reactions.map(r => {
+      const mine = r.self_reacted ? 'mine' : '';
+      const usersTitle = r.users?.length ? `${r.count} ${r.count === 1 ? 'pessoa' : 'pessoas'}` : '';
+      return `<span class="msg-reaction ${mine}" title="${_esc(usersTitle)}"
+                    onclick="toggleReacao(${m.id}, '${_esc(r.emoji)}')">
+        <span class="emoji">${_esc(r.emoji)}</span><span class="count">${r.count}</span>
+      </span>`;
+    }).join('') + `</div>`;
+  }
+
+  // Highlight quando sou mencionado
+  const selfMentionClass = (m.mentions && m.mentions.includes(_self.id)) ? 'has-self-mention' : '';
+
+  return `<div class="msg-group ${isDel ? 'msg-deleted' : ''} ${selfMentionClass}" id="msg-${m.id}" data-content="${_esc(m.content)}">
     <div class="msg-avatar ${own ? 'own' : ''}">${_esc(av)}</div>
     <div class="msg-content">
+      ${replyBanner}
       <div class="msg-header">
         <span class="msg-author">${_esc(m.author?.name || 'Usuário')}</span>
         <span class="msg-time">${_fmtHora(m.criado_em)}</span>
@@ -839,6 +1019,7 @@ function _msgHtml(m) {
       <div class="msg-body">${corpo}</div>
       ${anexos}
       ${embed}
+      ${reactionsHtml}
     </div>
     ${acoes}
   </div>`;
@@ -935,6 +1116,7 @@ function autoresize(ta) {
 }
 function onChatInput(ta) {
   autoresize(ta);
+  _verificarMentionTrigger(ta);
   // Envia typing event (debounced — max 1 a cada 3s)
   if (!_canalAtivo || !_ws || _ws.readyState !== WebSocket.OPEN) return;
   const agora = Date.now();
@@ -943,6 +1125,15 @@ function onChatInput(ta) {
   _ws.send(JSON.stringify({ type: 'typing', channel_id: _canalAtivo.id }));
 }
 function onChatKeyDown(e) {
+  // Navegacao no popover de mention
+  if (_mentionState?.active) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); _mentionMove(1); return; }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); _mentionMove(-1); return; }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault(); _mentionSelecionar(); return;
+    }
+    if (e.key === 'Escape') { _fecharMentionPopover(); return; }
+  }
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviarMensagem(); }
 }
 function enviarMensagem() {
@@ -950,15 +1141,19 @@ function enviarMensagem() {
   const ta = document.getElementById('chatInput');
   const text = ta.value.trim();
   if (!text) return;
+  const payload = { type: 'send', channel_id: _canalAtivo.id, content: text };
+  if (_replyToId) payload.reply_to_id = _replyToId;
   if (_ws && _ws.readyState === WebSocket.OPEN) {
-    _ws.send(JSON.stringify({ type: 'send', channel_id: _canalAtivo.id, content: text }));
+    _ws.send(JSON.stringify(payload));
   } else {
-    // fallback REST quando WS está fora
-    api('POST', `/channels/${_canalAtivo.id}/messages`, { content: text })
+    api('POST', `/channels/${_canalAtivo.id}/messages`,
+      { content: text, reply_to_id: _replyToId })
       .then(r => appendMsg(r.message))
       .catch(e => alert('Erro ao enviar: ' + e.message));
   }
   ta.value = ''; autoresize(ta);
+  cancelarReply();
+  _fecharMentionPopover();
 }
 
 /* ============ WebSocket ============ */
@@ -989,6 +1184,10 @@ function conectarWebSocket() {
       }
     } else if (data.type === 'typing') {
       _onTypingRecebido(data);
+    } else if (data.type === 'reaction') {
+      if (_canalAtivo && data.channel_id === _canalAtivo.id) {
+        aplicarReacaoNaUI(data);
+      }
     } else if (data.type === 'pong') {
       // keepalive ok
     } else if (data.type === 'error') {
@@ -1219,28 +1418,42 @@ function mostrarNotifDesktop(m) {
   } catch (e) { /* silencioso */ }
 }
 
-/* ============ 2B: Markdown render basico ============ */
+/* ============ 2B/2C: Markdown render + mentions ============ */
 // Aceita: **negrito**  *italic*  `code`  ```code block```  [text](url)  auto-link
+//         <@user_id> mentions (2C)
 function _markdownToHtml(text) {
   if (!text) return '';
   // Escape HTML primeiro
   let s = _esc(text);
-  // Code block ```...``` (multilinha)
+  // Mentions <@id> — substitui antes de escapar mais tags (renderiza no fim sem dupla-escape)
+  // Trabalhamos com placeholders pra nao colidir com outros regex
+  const mentionPlaceholders = [];
+  s = s.replace(/&lt;@(\d+)&gt;/g, (_, uid) => {
+    const u = _usuariosSistema.find(x => x.id == uid) || (uid == _self.id ? _self : null);
+    const nome = u?.name || `Usuário #${uid}`;
+    const isSelf = uid == _self.id ? 'is-self' : '';
+    const html = `<span class="msg-mention ${isSelf}" title="${_esc(u?.email || '')}">@${_esc(nome)}</span>`;
+    mentionPlaceholders.push(html);
+    return ` MENTION${mentionPlaceholders.length - 1} `;
+  });
+  // Code block ```...```
   s = s.replace(/```([\s\S]+?)```/g, (_, code) => `<pre><code>${code}</code></pre>`);
   // Inline code `...`
   s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
   // Negrito **...**
   s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
-  // Italico *...* (nao captura ** ja processado)
+  // Italico *...*
   s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<em>$2</em>');
   // Link markdown [txt](url)
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  // Auto-link de URLs simples (que ainda nao viraram <a>)
+  // Auto-link de URLs
   s = s.replace(/(^|[\s>])(https?:\/\/[^\s<]+)/g,
     (m, p, url) => `${p}<a href="${url}" target="_blank" rel="noopener">${url}</a>`);
-  // Quebras de linha viram <br>
+  // Quebras de linha
   s = s.replace(/\n/g, '<br>');
+  // Restaura mentions
+  s = s.replace(/ MENTION(\d+) /g, (_, i) => mentionPlaceholders[+i]);
   return s;
 }
 
@@ -1391,6 +1604,189 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('.chat-input-tools')) return;
   pop.classList.remove('open');
 });
+
+/* ============ 2C: Reply (responder mensagem) ============ */
+function iniciarReply(msgId) {
+  const el = document.getElementById('msg-' + msgId);
+  if (!el) return;
+  const author = el.querySelector('.msg-author')?.textContent || 'Usuário';
+  const preview = (el.getAttribute('data-content') || '').slice(0, 140) || '(anexo)';
+  _replyToId = msgId;
+  _replyToInfo = { author, preview };
+  document.getElementById('replyPrevAuthor').textContent = author;
+  document.getElementById('replyPrevText').textContent  = preview;
+  document.getElementById('chatReplyPreview').classList.add('open');
+  document.getElementById('chatInput')?.focus();
+}
+function cancelarReply() {
+  _replyToId = null; _replyToInfo = null;
+  document.getElementById('chatReplyPreview')?.classList.remove('open');
+}
+function rolarParaMsg(msgId) {
+  const el = document.getElementById('msg-' + msgId);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.remove('flash-highlight');
+  // force reflow
+  void el.offsetWidth;
+  el.classList.add('flash-highlight');
+}
+
+/* ============ 2C: Reactions (toggle emoji) ============ */
+async function toggleReacao(msgId, emoji) {
+  try {
+    await api('POST', `/messages/${msgId}/reactions`, { emoji });
+    // Atualizacao real vem via WS broadcast (reaction)
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+function abrirReacaoPicker(msgId, ev) {
+  ev?.stopPropagation();
+  // Mini picker rapido com 8 emojis comuns. Click manda toggleReacao.
+  const QUICKS = ['👍','❤️','😂','😮','😢','🔥','🎉','✅'];
+  // Remove picker anterior
+  document.querySelectorAll('.chat-react-picker').forEach(x => x.remove());
+  const pickerEl = document.createElement('div');
+  pickerEl.className = 'chat-react-picker';
+  pickerEl.style.cssText = `
+    position: absolute; z-index: 200;
+    background: var(--chat-bg-1); border: 1px solid var(--chat-border);
+    border-radius: 22px; padding: 4px 8px;
+    display: flex; gap: 2px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.4);
+  `;
+  pickerEl.innerHTML = QUICKS.map(e =>
+    `<button style="background:none;border:none;font-size:1.2rem;cursor:pointer;
+      width:30px;height:30px;border-radius:50%" onclick="toggleReacao(${msgId}, '${e}');
+      this.parentElement.remove()">${e}</button>`).join('');
+  document.body.appendChild(pickerEl);
+  // Posiciona perto do botao clicado
+  const btn = ev?.target?.closest('button');
+  if (btn) {
+    const r = btn.getBoundingClientRect();
+    pickerEl.style.top = (r.top - 42) + 'px';
+    pickerEl.style.left = Math.max(8, r.left - 100) + 'px';
+  } else {
+    pickerEl.style.top = '50%'; pickerEl.style.left = '50%';
+  }
+  setTimeout(() => {
+    const off = (ev2) => {
+      if (!pickerEl.contains(ev2.target)) {
+        pickerEl.remove();
+        document.removeEventListener('click', off);
+      }
+    };
+    document.addEventListener('click', off);
+  }, 0);
+}
+
+function aplicarReacaoNaUI(data) {
+  // data = {message_id, emoji, user_id, added}
+  const el = document.getElementById('msg-' + data.message_id);
+  if (!el) return;
+  let bar = el.querySelector('.msg-reactions');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'msg-reactions';
+    el.querySelector('.msg-content').appendChild(bar);
+  }
+  // Procura pill existente desse emoji
+  const pills = [...bar.querySelectorAll('.msg-reaction')];
+  let pill = pills.find(p => p.querySelector('.emoji')?.textContent === data.emoji);
+  const isMe = data.user_id === _self.id;
+
+  if (data.added) {
+    if (pill) {
+      const cnt = pill.querySelector('.count');
+      cnt.textContent = (parseInt(cnt.textContent) || 0) + 1;
+      if (isMe) pill.classList.add('mine');
+    } else {
+      const mine = isMe ? 'mine' : '';
+      pill = document.createElement('span');
+      pill.className = `msg-reaction ${mine}`;
+      pill.innerHTML = `<span class="emoji">${data.emoji}</span><span class="count">1</span>`;
+      pill.onclick = () => toggleReacao(data.message_id, data.emoji);
+      bar.appendChild(pill);
+    }
+  } else {
+    if (pill) {
+      const cnt = pill.querySelector('.count');
+      const n = (parseInt(cnt.textContent) || 1) - 1;
+      if (n <= 0) pill.remove();
+      else {
+        cnt.textContent = n;
+        if (isMe) pill.classList.remove('mine');
+      }
+    }
+  }
+  if (bar.children.length === 0) bar.remove();
+}
+
+/* ============ 2C: Mention autocomplete ============ */
+function _verificarMentionTrigger(ta) {
+  const pos = ta.selectionStart;
+  const txt = ta.value.slice(0, pos);
+  // procura padrao @palavra no final ate o ultimo espaco/quebra
+  const m = txt.match(/(^|\s)@([\wÀ-ÿ]*)$/);
+  if (!m) { _fecharMentionPopover(); return; }
+  const query = (m[2] || '').toLowerCase();
+  const start = pos - m[0].length + (m[1] ? 1 : 0);  // posicao do @
+  const results = _usuariosSistema
+    .filter(u => !query || (u.name || '').toLowerCase().includes(query) ||
+                            (u.email || '').toLowerCase().includes(query))
+    .slice(0, 8);
+  _mentionState = { start, query, results, active: results.length > 0, selected: 0 };
+  _renderMentionPopover();
+}
+
+function _renderMentionPopover() {
+  const pop = document.getElementById('chatMentionPopover');
+  if (!pop) return;
+  if (!_mentionState?.active) { pop.classList.remove('open'); return; }
+  const { results, selected, query } = _mentionState;
+  let html = `<div class="hint">Mencionar${query ? ` "${_esc(query)}"` : ''}</div>`;
+  html += results.map((u, i) => `
+    <div class="chat-mention-item ${i === selected ? 'active' : ''}"
+         onmouseenter="_mentionState.selected=${i}; _renderMentionPopover()"
+         onmousedown="event.preventDefault(); _mentionSelecionar(${i})">
+      <div class="av">${_esc(_initials(u.name))}</div>
+      <span>${_esc(u.name || u.email)}</span>
+    </div>`).join('');
+  pop.innerHTML = html;
+  pop.classList.add('open');
+}
+
+function _mentionMove(delta) {
+  if (!_mentionState?.active) return;
+  const n = _mentionState.results.length;
+  _mentionState.selected = ((_mentionState.selected + delta) % n + n) % n;
+  _renderMentionPopover();
+}
+
+function _mentionSelecionar(idx) {
+  if (!_mentionState?.active) return;
+  const i = (typeof idx === 'number') ? idx : _mentionState.selected;
+  const u = _mentionState.results[i];
+  if (!u) return;
+  const ta = document.getElementById('chatInput');
+  if (!ta) return;
+  const before = ta.value.slice(0, _mentionState.start);
+  const after  = ta.value.slice(ta.selectionStart);
+  const token = `<@${u.id}> `;
+  ta.value = before + token + after;
+  const newPos = before.length + token.length;
+  ta.setSelectionRange(newPos, newPos);
+  ta.focus();
+  _fecharMentionPopover();
+  autoresize(ta);
+}
+
+function _fecharMentionPopover() {
+  _mentionState = null;
+  document.getElementById('chatMentionPopover')?.classList.remove('open');
+}
 </script>
 </body>
 </html>
