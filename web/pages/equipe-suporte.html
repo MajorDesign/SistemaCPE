@@ -818,6 +818,27 @@
           <label><input type="checkbox" id="equipAtivo" checked> Equipamento ativo</label>
         </div>
 
+        <!-- Fotos do equipamento (so visivel ao editar — precisa de equipId) -->
+        <div id="equipFotosWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-images"></i> Fotos do equipamento
+          </div>
+          <p class="sup-help" style="margin-bottom:10px">
+            As fotos ficam <strong>350×350</strong> no card. A primeira foto vira
+            <strong>miniatura no catálogo</strong>. Clique numa foto pra ampliar.
+          </p>
+          <div id="equipFotosLista" class="sup-equip-fotos-grid"></div>
+          <div style="margin-top:10px">
+            <input type="file" id="equipFotoInput" accept="image/*" multiple style="display:none"
+                   onchange="uploadFotosEquip(event)">
+            <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                    onclick="document.getElementById('equipFotoInput').click()">
+              <i class="bi bi-upload"></i> Enviar fotos
+            </button>
+            <span class="sup-help" style="margin-left:8px">JPG, PNG, WEBP ou GIF (sem limite de tamanho — teste)</span>
+          </div>
+        </div>
+
         <!-- Vinculos com cursos / treinamentos -->
         <div style="border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
           <div class="sup-card-title" style="margin-bottom:10px">
@@ -1187,6 +1208,14 @@
         <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalCliente')">Fechar</button>
       </div>
     </div>
+  </div>
+
+  <!-- Lightbox global — clicar em foto amplia em tela cheia -->
+  <div class="sup-lightbox" id="supLightbox" onclick="fecharLightbox()">
+    <button type="button" class="sup-lightbox-close" onclick="fecharLightbox()" title="Fechar (Esc)">
+      <i class="bi bi-x-lg"></i>
+    </button>
+    <img alt="" onclick="event.stopPropagation()">
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>

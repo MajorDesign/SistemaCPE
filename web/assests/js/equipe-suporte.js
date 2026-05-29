@@ -1125,8 +1125,18 @@ async function carregarEquipamentos() {
         <i class="bi ${tipoIcon}"></i> ${esc(v.nome || '?')}
       </span>`;
     }).join(' ');
+    const thumb = e.foto_principal
+      ? `<img src="${esc(e.foto_principal)}" alt="" class="sup-equip-thumb"
+              onclick="event.stopPropagation(); abrirLightbox('${esc(e.foto_principal)}')"
+              title="Clique pra ampliar">`
+      : '<span class="sup-equip-thumb sup-equip-thumb-empty"><i class="bi bi-pc-display"></i></span>';
     return `<tr>
-      <td><strong>${esc(e.nome)}</strong></td>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px">
+          ${thumb}
+          <strong>${esc(e.nome)}</strong>
+        </div>
+      </td>
       <td>${e.descricao
         ? '<span class="sup-help">' + esc(e.descricao) + '</span>'
         : '<span class="sup-help">—</span>'}</td>
@@ -1227,6 +1237,7 @@ async function novoEquipamento() {
   document.getElementById('equipDescricao').value = '';
   document.getElementById('equipAtivo').checked = true;
   document.getElementById('btnExcluirEquip').style.display = 'none';
+  document.getElementById('equipFotosWrap').style.display = 'none';
   equipVincAtuais = [];
   _opcoesItensCache = {};
   _renderVincList();
@@ -1245,6 +1256,8 @@ async function editarEquipamento(id) {
   document.getElementById('equipDescricao').value = e.descricao || '';
   document.getElementById('equipAtivo').checked = !!e.ativo;
   document.getElementById('btnExcluirEquip').style.display = _canAdmin ? 'inline-flex' : 'none';
+  document.getElementById('equipFotosWrap').style.display = '';
+  carregarFotosEquip(e.id);
   equipVincAtuais = (e.vinculos || []).map(v => ({
     entidade: v.entidade, entidade_id: v.entidade_id, nome: v.nome,
   }));
@@ -1499,6 +1512,92 @@ async function excluirVideo(id, entidade, entidadeId, kind) {
   if (!r.success) { toast(r.detail || 'Erro.', 'error'); return; }
   carregarMidia(entidade, entidadeId, kind);
 }
+
+/* ============ FOTOS DO EQUIPAMENTO (so fotos — sem videos) ============ */
+async function carregarFotosEquip(equipId) {
+  const r = await apiFetch(`/midia/equipamento/${equipId}`);
+  const fotos = r.success ? (r.fotos || []) : [];
+  _renderFotosEquip(equipId, fotos);
+}
+
+function _renderFotosEquip(equipId, fotos) {
+  const box = document.getElementById('equipFotosLista');
+  if (!box) return;
+  if (!fotos.length) {
+    box.innerHTML = '<div class="sup-midia-empty">' +
+      'Nenhuma foto. Clique em "Enviar fotos" pra adicionar.</div>';
+    return;
+  }
+  box.innerHTML = fotos.map(f => `
+    <div class="sup-equip-fotos-item" onclick="abrirLightbox('${esc(f.arquivo)}')"
+         title="Clique pra ampliar">
+      <img src="${esc(f.arquivo)}" alt="">
+      <button type="button" title="Excluir"
+              onclick="event.stopPropagation(); excluirFotoEquip(${f.id}, ${equipId})">
+        <i class="bi bi-x"></i>
+      </button>
+    </div>`).join('');
+}
+
+async function uploadFotosEquip(ev) {
+  const files = [...(ev.target.files || [])];
+  if (!files.length) return;
+  const equipId = document.getElementById('equipId').value;
+  if (!equipId) { toast('Salve primeiro.', 'error'); return; }
+  toast(`Enviando ${files.length} foto(s)...`, 'info');
+  let okCount = 0, errCount = 0;
+  for (const f of files) {
+    const fd = new FormData();
+    fd.append('file', f);
+    try {
+      const res = await fetch(API + `/midia/equipamento/${equipId}/fotos`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'X-Auth-Token': _token() },
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error('[EQUIP-FOTO] HTTP', res.status, err);
+        toast(`Falha (${res.status}) em ${f.name}: ${err.detail || res.statusText}`, 'error');
+        errCount++;
+      } else {
+        okCount++;
+      }
+    } catch (e) {
+      console.error('[EQUIP-FOTO] exceção', e);
+      toast(`Erro: ${e.message}`, 'error');
+      errCount++;
+    }
+  }
+  ev.target.value = '';
+  if (okCount) toast(`${okCount} foto(s) enviada(s).`, 'success');
+  await carregarFotosEquip(equipId);
+  // Atualiza tabela do catalogo pra refletir nova miniatura
+  await carregarEquipamentos();
+}
+
+async function excluirFotoEquip(fotoId, equipId) {
+  if (!confirm('Excluir esta foto?')) return;
+  const r = await apiFetch(`/midia/fotos/${fotoId}`, { method: 'DELETE' });
+  if (!r.success) { toast(r.detail || 'Erro.', 'error'); return; }
+  carregarFotosEquip(equipId);
+  carregarEquipamentos();
+}
+
+/* ============ LIGHTBOX (clique-pra-ampliar) ============ */
+function abrirLightbox(url) {
+  const lb = document.getElementById('supLightbox');
+  if (!lb) return;
+  lb.querySelector('img').src = url;
+  lb.classList.add('open');
+}
+function fecharLightbox() {
+  const lb = document.getElementById('supLightbox');
+  if (lb) lb.classList.remove('open');
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') fecharLightbox();
+});
 
 /* ============ SEÇÃO TREINAMENTOS ============ */
 let treinosSecao = [];

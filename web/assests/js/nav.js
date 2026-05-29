@@ -30,25 +30,23 @@ function escapeHtml(text) {
 const globalMenu = [
   { path: "/SistemaCPE/index.html", label: "Dashboard", icon: "bi-speedometer2", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/tickets.html",    label: "Tickets",    icon: "bi-ticket",     requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
-  { path: "/SistemaCPE/web/pages/avaliacoes.html", label: "Avaliações", icon: "bi-star-fill",  requiredRoles: ["RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/users.html", label: "Usuários", icon: "bi-people", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/groups.html", label: "Gerenciar Grupos", icon: "bi-diagram-3", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/chat.html", label: "Chat", icon: "bi-chat-dots", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/tasks.html", label: "Tarefas", icon: "bi-check-lg", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
-  { path: "/SistemaCPE/web/pages/projects.html", label: "Projetos", icon: "bi-folder", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
   {
     label: "Inventário",
     icon: "bi-box",
     requiredRoles: ["ADMIN", "TI", "MANAGER"],
     submenu: [
-      { path: "/SistemaCPE/web/pages/inventory.html",    label: "Equipamentos",         icon: "bi-pc-display",     requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+      { path: "/SistemaCPE/web/pages/inventory.html",    label: "Financeiro TI",        icon: '<span class="icon-pcdollar"><i class="bi bi-pc-display"></i><i class="bi bi-currency-dollar icon-pcdollar-badge"></i></span>', requiredRoles: ["ADMIN", "TI", "MANAGER"] },
       { path: "/SistemaCPE/web/pages/inventory-ti.html", label: "Inventário T.I.",       icon: "bi-laptop",         requiredRoles: ["ADMIN", "TI", "MANAGER"] },
       { path: "/SistemaCPE/web/pages/celulares.html",    label: "Celulares Corporativos", icon: "bi-phone",         requiredRoles: ["ADMIN", "TI", "MANAGER"] },
       { path: "/SistemaCPE/web/pages/network.html",      label: "Monitoramento de Rede", icon: "bi-broadcast-pin",  requiredRoles: ["ADMIN", "TI"] }
     ]
   },
   { path: "/SistemaCPE/web/pages/password-vault.html", label: "Cofre de Senhas", icon: "bi-shield-lock", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
-  { path: "/SistemaCPE/web/pages/reports.html", label: "Relatórios", icon: "bi-graph-up", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
+  { path: "/SistemaCPE/web/pages/reports.html", label: "Relatórios", icon: "bi-graph-up", requiredRoles: ["RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/billing.html", label: "Faturamento", icon: "bi-credit-card", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/knowledge-base.html", label: "Base de conhecimento", icon: "bi-book", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/contratos.html", label: "Contratos e Termos", icon: "bi-file-earmark-text", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
@@ -339,13 +337,19 @@ function renderNavbar() {
 
   // ✅ CORRIGIDO: Usar menuFiltered (não globalMenu) para respeitar permissões por role
   // Data: 01/04/2026 16:45
+  // Renderiza o icone: se vier HTML cru (icones compostos tipo PC+$), usa
+  // direto; senao gera <i class="bi XXX"></i> a partir do nome.
+  const _renderMenuIcon = (icon) => {
+    if (typeof icon === 'string' && icon.trim().startsWith('<')) return icon;
+    return `<i class="bi ${icon}"></i>`;
+  };
   menuFiltered.forEach((item, index) => {
     if (item.submenu && Array.isArray(item.submenu)) {
       menuHTML += `
         <li class="menu-item has-submenu" title="${item.label}">
           <a href="#" class="menu-link" onclick="toggleSubmenu(event, this)">
             <span class="menu-icon">
-              <i class="bi ${item.icon}"></i>
+              ${_renderMenuIcon(item.icon)}
             </span>
             <span class="menu-label">${item.label}</span>
             <i class="bi bi-chevron-right submenu-arrow"></i>
@@ -354,7 +358,7 @@ function renderNavbar() {
             ${item.submenu.map(subitem => `
               <li class="submenu-item">
                 <a href="${subitem.path}" class="submenu-link" onclick="updatePageTitle('${subitem.label}')">
-                  <i class="bi ${subitem.icon}"></i>
+                  ${_renderMenuIcon(subitem.icon)}
                   <span>${subitem.label}</span>
                 </a>
               </li>
@@ -370,7 +374,7 @@ function renderNavbar() {
         <li class="menu-item ${activeClass}" title="${item.label}">
           <a href="${item.path}" class="menu-link ${activeClass}" onclick="updatePageTitle('${item.label}')">
             <span class="menu-icon">
-              <i class="bi ${item.icon}"></i>
+              ${_renderMenuIcon(item.icon)}
             </span>
             <span class="menu-label">${item.label}</span>
           </a>
