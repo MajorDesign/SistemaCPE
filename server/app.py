@@ -225,17 +225,6 @@ app = FastAPI(
 )
 
 # =========================================
-# DEBUG: WS test endpoint sem middlewares de auth
-# =========================================
-from fastapi import WebSocket as _WS
-@app.websocket("/api/_debug/ws-test")
-async def _debug_ws_test(ws: _WS):
-    await ws.accept()
-    await ws.send_text("hello from ws test")
-    await ws.close()
-
-
-# =========================================
 # 8. MIDDLEWARE: CORS
 # =========================================
 

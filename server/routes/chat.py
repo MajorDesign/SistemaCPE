@@ -1608,15 +1608,17 @@ def cleanup_imagens_antigas(request: Request, dias: int = Query(_CLEANUP_DIAS, g
 # =====================================================================
 # WebSocket: /api/chat/ws?token=...
 # =====================================================================
-@router.websocket("/ws-debug")
-async def chat_ws_debug(websocket: WebSocket):
-    await websocket.accept()
-    await websocket.send_text("hello from chat router debug")
-    await websocket.close()
-
-
 @router.websocket("/ws")
-async def chat_ws(websocket: WebSocket, token: str = Query(...)):
+async def chat_ws(websocket: WebSocket):
+    # Le token via query_params manualmente. Usar `token: str = Query(...)`
+    # como parametro de handler WS estava causando rejeicao 403 silenciosa
+    # em prod (FastAPI 0.115.0 + uvicorn 0.30.6 + websockets 13.1). Bug
+    # diagnosticado em 2026-05-29 — handshake era rejeitado ANTES de chamar
+    # o handler, sem nenhum log.
+    token = websocket.query_params.get("token", "")
+    if not token:
+        await websocket.close(code=4401, reason="Token ausente")
+        return
     user_id = parse_session_token(token)
     if not user_id:
         await websocket.close(code=4401, reason="Token invalido")
