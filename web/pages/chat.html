@@ -1676,17 +1676,32 @@ async function carregarCanais() {
   try {
     const r = await api('GET', '/channels');
     _canais = r.channels || [];
-    // Popula _unread a partir do backend (na carga inicial)
     _unread = {};
     for (const c of _canais) {
       if (c.unread_count > 0) _unread[c.id] = c.unread_count;
     }
     renderListaCanais();
     atualizarTituloComUnread();
+    // Pra cada canal de voz, busca peers atuais em paralelo pra mostrar
+    // previa "quem esta na sala" mesmo sem eu ter entrado. Atualiza a
+    // sidebar quando termina (re-renderiza com os peers populados).
+    _carregarPeersDosCanaisVoz();
   } catch (e) {
     document.getElementById('chatChannelsList').innerHTML =
       `<div style="padding:14px;color:#EF4444;font-size:0.82rem">Erro: ${_esc(e.message)}</div>`;
   }
+}
+
+async function _carregarPeersDosCanaisVoz() {
+  const voz = _canais.filter(c => c.tipo === 'voz');
+  if (!voz.length) return;
+  await Promise.all(voz.map(async c => {
+    try {
+      const r = await api('GET', `/channels/${c.id}/voice/peers`);
+      _voicePeersPorCanal[c.id] = r.peers || [];
+    } catch { /* ok */ }
+  }));
+  renderListaCanais();
 }
 
 function renderListaCanais() {
@@ -1760,7 +1775,12 @@ function _renderItem(c, iconHtml) {
 function _renderItemVoz(c) {
   const ativo = _canalAtivo && _canalAtivo.id === c.id ? 'active' : '';
   const peers = _voicePeersPorCanal[c.id] || [];
-  let html = `<div class="chat-channel-item ${ativo}" onclick="abrirCanal(${c.id})">
+  // Double-click entra direto na sala de voz (atalho Discord-style).
+  // Single-click abre o canal normalmente (mostra sala vazia / lista de peers).
+  let html = `<div class="chat-channel-item ${ativo}"
+       onclick="abrirCanal(${c.id})"
+       ondblclick="event.preventDefault(); window.voiceEntrar && window.voiceEntrar(${c.id})"
+       title="Click duplo: entrar na chamada">
     <i class="bi bi-volume-up-fill chan-icon"></i>
     <span class="chan-name">${_esc(c.nome || '#' + c.id)}</span>
     ${peers.length ? `<span style="font-size:0.7rem;color:var(--chat-accent);font-weight:600">${peers.length}</span>` : ''}
@@ -1789,6 +1809,8 @@ async function abrirCanal(channelId) {
     atualizarTituloComUnread();
   }
   renderListaCanais();
+  // Atualiza coluna direita conforme tipo do canal aberto
+  renderColunaUsuarios();
 
   // Header
   const hdr = document.getElementById('chatMainHeader');
@@ -2131,7 +2153,7 @@ function conectarWebSocket() {
     let data; try { data = JSON.parse(ev.data); } catch { return; }
     if (data.type === 'hello') {
       _onlineIds = new Set(data.online_users || []);
-      renderUsuariosSistema();
+      renderColunaUsuarios();
     } else if (data.type === 'message') {
       _onMessageRecebida(data);
     } else if (data.type === 'message_edited') {
@@ -2224,11 +2246,76 @@ async function carregarUsuariosSistema() {
     if (!res.ok) throw new Error(res.statusText);
     const d = await res.json();
     _usuariosSistema = (d.users || d || []).filter(u => u.id !== _self.id);
-    renderUsuariosSistema();
+    renderColunaUsuarios();
   } catch (e) {
     document.getElementById('chatMembersList').innerHTML =
       `<div style="padding:14px;color:var(--chat-muted);font-size:0.82rem">
         Erro ao carregar usuários: ${_esc(e.message)}</div>`;
+  }
+}
+
+// Renderiza a coluna direita conforme o canal aberto:
+// - canal de texto / grupo_sistema / canal customizado: membros do canal
+// - voz: peers ativos na sala + outros membros do canal
+// - DM ou nada aberto: todos os users do sistema (pra abrir DM)
+function renderColunaUsuarios() {
+  const c = _canalAtivo;
+  const titleEl = document.getElementById('chatMembersTitle');
+  if (!c || c.tipo === 'dm') {
+    if (titleEl) titleEl.textContent = 'USUÁRIOS DO SISTEMA';
+    renderUsuariosSistema();
+    return;
+  }
+  // Canal de texto/voz/grupo_sistema/canal: mostra membros
+  if (titleEl) titleEl.textContent = `MEMBROS — ${c.nome || ''}`;
+  _renderMembrosDoCanal(c);
+}
+
+async function _renderMembrosDoCanal(c) {
+  const box = document.getElementById('chatMembersList');
+  if (!box) return;
+  box.innerHTML = `<div style="padding:14px;color:var(--chat-muted);font-size:0.82rem">Carregando...</div>`;
+  try {
+    const r = await api('GET', `/channels/${c.id}/members`);
+    const membros = r.members || [];
+    if (!membros.length) {
+      box.innerHTML = `<div style="padding:14px;color:var(--chat-muted);font-size:0.82rem">Nenhum membro.</div>`;
+      return;
+    }
+    // Pra canal de voz, marca quem está NA SALA agora
+    const peersVoz = c.tipo === 'voz'
+      ? new Set((_voicePeersPorCanal[c.id] || []).map(p => p.user_id))
+      : new Set();
+    // Ordena: na sala de voz primeiro, online depois, offline por último
+    membros.sort((a, b) => {
+      const aOn = peersVoz.has(a.user_id) ? 0 : (a.online ? 1 : 2);
+      const bOn = peersVoz.has(b.user_id) ? 0 : (b.online ? 1 : 2);
+      return aOn - bOn || (a.name || '').localeCompare(b.name || '');
+    });
+    box.innerHTML = membros.map(m => {
+      const on = peersVoz.has(m.user_id) || m.online;
+      const inVoice = peersVoz.has(m.user_id);
+      const roleBadge = m.role_no_canal === 'owner'
+        ? '<i class="bi bi-star-fill" style="color:var(--chat-accent);font-size:0.65rem" title="Dono"></i>'
+        : m.role_no_canal === 'admin'
+        ? '<i class="bi bi-shield-fill" style="color:#3B82F6;font-size:0.65rem" title="Admin"></i>'
+        : '';
+      const voiceIcon = inVoice
+        ? '<i class="bi bi-mic-fill" style="color:#10B981;font-size:0.75rem" title="Na sala de voz"></i>'
+        : '';
+      return `<div class="member-item ${on ? 'online' : ''}"
+                   title="${_esc(m.name)}${m.email ? ' · ' + _esc(m.email) : ''}">
+        <div class="member-avatar" onclick="abrirDM(${m.user_id})" style="cursor:pointer">
+          ${_esc(_initials(m.name))}
+        </div>
+        <span class="member-name" onclick="abrirDM(${m.user_id})" style="cursor:pointer">
+          ${_esc(m.name || m.email)}
+        </span>
+        ${roleBadge} ${voiceIcon}
+      </div>`;
+    }).join('');
+  } catch (e) {
+    box.innerHTML = `<div style="padding:14px;color:#EF4444;font-size:0.82rem">Erro: ${_esc(e.message)}</div>`;
   }
 }
 
@@ -2248,14 +2335,11 @@ function renderUsuariosSistema() {
   box.innerHTML = sorted.map(u => {
     const on = _onlineIds.has(u.id);
     return `<div class="member-item ${on ? 'online' : ''}"
-                 title="${_esc(u.name)}">
-      <div class="member-avatar" onclick="abrirDM(${u.id})" style="cursor:pointer">${_esc(_initials(u.name))}</div>
-      <span class="member-name" onclick="abrirDM(${u.id})" style="cursor:pointer">${_esc(u.name || u.email)}</span>
-      <button onclick="event.stopPropagation(); iniciarChamada(${u.id}, null, '${_esc(u.name || '')}')"
-              title="Ligar pra ${_esc(u.name || '')}"
-              style="background:transparent;border:none;color:var(--chat-accent);cursor:pointer;padding:4px 6px;font-size:0.95rem">
-        <i class="bi bi-telephone-fill"></i>
-      </button>
+                 onclick="abrirDM(${u.id})"
+                 style="cursor:pointer"
+                 title="Iniciar DM com ${_esc(u.name)}">
+      <div class="member-avatar">${_esc(_initials(u.name))}</div>
+      <span class="member-name">${_esc(u.name || u.email)}</span>
     </div>`;
   }).join('');
 }
