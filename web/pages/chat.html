@@ -34,7 +34,15 @@
       overflow: hidden;
     }
 
-    /* O nav.js injeta sidebar do sistema — escondemos no chat pra ter telao */
+    /* Chat ocupa a tela inteira — esconde navbar/sidebar do sistema (o
+       "Voltar ao sistema" no header do chat ja cumpre essa funcao) e
+       zera margens que reservavam espaco pro navbar fixed. */
+    #navbar-container { display: none !important; }
+    .container-main {
+      margin-top: 0 !important;
+      height: 100vh !important;
+    }
+    .container-main > #sidebar-container,
     .container-main > .sidebar { display: none !important; }
     .main-content { margin-left: 0 !important; }
     .top-bar { display: none !important; }
