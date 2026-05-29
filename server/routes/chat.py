@@ -59,7 +59,8 @@ class ChatConnectionManager:
     async def connect(self, user_id: int, ws: WebSocket):
         await ws.accept()
         self._conns.setdefault(user_id, set()).add(ws)
-        logger.info(f"[CHAT-WS] +user {user_id} (total conexoes do user: {len(self._conns[user_id])})")
+        logger.warning(f"[CHAT-WS] +user {user_id} (conexoes_do_user={len(self._conns[user_id])} "
+                       f"total_users_online={len(self._conns)})")
         self._set_presence(user_id, "online")
 
     def disconnect(self, user_id: int, ws: WebSocket):
@@ -69,7 +70,7 @@ class ChatConnectionManager:
                 del self._conns[user_id]
                 self._set_presence(user_id, "offline")
                 self._cleanup_voice_sessions(user_id)
-        logger.info(f"[CHAT-WS] -user {user_id}")
+        logger.warning(f"[CHAT-WS] -user {user_id} total_online={len(self._conns)}")
 
     @staticmethod
     def _cleanup_voice_sessions(user_id: int):
@@ -1168,6 +1169,21 @@ def voice_peers(channel_id: int, request: Request):
 
 
 # =====================================================================
+# DEBUG: quem esta conectado no WS agora (uso temporario pra diagnose)
+# =====================================================================
+@router.get("/_debug/online")
+def debug_online(request: Request):
+    user = _user_from_request(request)
+    return {
+        "success": True,
+        "me": user["id"],
+        "online_user_ids": manager.online_users(),
+        "total_online": len(manager.online_users()),
+        "pending_calls": list(_PENDING_CALLS.keys()),
+    }
+
+
+# =====================================================================
 # Sync canais por grupo do sistema (idempotente)
 # =====================================================================
 @router.post("/admin/sync-grupos")
@@ -1671,6 +1687,12 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
                     "from_user_id": user_id,
                     "from_user_name": user.get("name"),
                 }
+
+                # LOG explicito (warning pra aparecer em prod stderr)
+                online_agora = manager.online_users()
+                logger.warning(f"[CALL] {msg_type} from={user_id}({user.get('name')}) "
+                               f"to={target} online_count={len(online_agora)} "
+                               f"target_online={target in online_agora}")
 
                 # Estado em memoria das pending calls + push notification
                 if msg_type == "call_invite":
