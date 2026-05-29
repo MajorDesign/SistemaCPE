@@ -1608,6 +1608,13 @@ def cleanup_imagens_antigas(request: Request, dias: int = Query(_CLEANUP_DIAS, g
 # =====================================================================
 # WebSocket: /api/chat/ws?token=...
 # =====================================================================
+@router.websocket("/ws-debug")
+async def chat_ws_debug(websocket: WebSocket):
+    await websocket.accept()
+    await websocket.send_text("hello from chat router debug")
+    await websocket.close()
+
+
 @router.websocket("/ws")
 async def chat_ws(websocket: WebSocket, token: str = Query(...)):
     user_id = parse_session_token(token)
