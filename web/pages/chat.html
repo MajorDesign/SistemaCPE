@@ -618,6 +618,89 @@
     }
     .chat-reply-preview button:hover { color: var(--chat-text); }
 
+    /* ========== Fase 4: canal de voz ========== */
+    .chat-voice-peer-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 18px 4px 32px;
+      font-size: 0.78rem; color: var(--chat-muted);
+    }
+    .chat-voice-peer-row:hover { background: #2A2A2A; }
+
+    .voice-call-header-btn {
+      background: var(--chat-accent); color: #1A1A1A;
+      border: none; padding: 8px 16px; border-radius: 6px;
+      font-weight: 600; cursor: pointer; font-size: 0.85rem;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .voice-call-header-btn:hover { filter: brightness(1.1); }
+    .voice-call-header-btn.connected {
+      background: #DC2626; color: #fff;
+    }
+
+    .voice-room {
+      flex: 1; overflow-y: auto;
+      padding: 20px; background: var(--chat-bg-3);
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .voice-room-header {
+      font-size: 0.86rem; color: var(--chat-muted);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .voice-room-header i { color: var(--chat-accent); }
+    .voice-peers-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .voice-peer-card {
+      background: var(--chat-bg-2);
+      border-radius: 12px;
+      padding: 20px 16px;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      position: relative;
+      min-height: 180px;
+      border: 2px solid transparent;
+    }
+    .voice-peer-card.self { border-color: var(--chat-accent); }
+    .voice-peer-card .avatar-big {
+      width: 80px; height: 80px; border-radius: 50%;
+      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      color: #fff; font-weight: 700; font-size: 1.8rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .voice-peer-card.self .avatar-big {
+      background: linear-gradient(135deg, var(--chat-accent), var(--chat-accent-dim));
+      color: #1A1A1A;
+    }
+    .voice-peer-card .peer-name {
+      color: var(--chat-text); font-weight: 600; font-size: 0.92rem;
+      max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .voice-peer-card .peer-flags {
+      display: flex; gap: 6px; font-size: 0.92rem;
+    }
+    .voice-peer-card video {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; border-radius: 10px; background: #000;
+    }
+    .voice-controls {
+      display: flex; gap: 10px; justify-content: center;
+      padding-top: 10px;
+    }
+    .voice-controls button {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: var(--chat-bg-2); border: 1px solid var(--chat-border);
+      color: var(--chat-text); cursor: pointer; font-size: 1.1rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .voice-controls button:hover { background: var(--chat-bg-3); }
+    .voice-controls button.off  { background: #DC2626; color: #fff; }
+    .voice-controls button.active { background: var(--chat-accent); color: #1A1A1A; }
+    .voice-controls button.danger { background: #DC2626; color: #fff; }
+    .voice-controls button.danger:hover { background: #B91C1C; }
+
     /* ========== 2D: pin + busca ========== */
     .msg-group.is-pinned {
       background: rgba(255,193,7,0.04);
@@ -836,6 +919,7 @@
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
   <script src="/SistemaCPE/web/assests/js/pwa.js" defer></script>
+  <script src="/SistemaCPE/web/assests/js/chat-voice.js" defer></script>
   <script>pageGuard('CHAT');</script>
 </head>
 
@@ -891,6 +975,7 @@
             <p style="font-size:0.8rem;">As mensagens são em tempo real via WebSocket.</p>
           </div>
         </div>
+        <div class="voice-room" id="chatVoiceRoom" style="display:none"></div>
         <div class="chat-typing-bar" id="chatTypingBar"></div>
         <div class="chat-reply-preview" id="chatReplyPreview">
           <i class="bi bi-reply"></i>
@@ -943,6 +1028,33 @@
       <button class="chat-modal-close" onclick="fecharModalCriarCanal()">&times;</button>
     </div>
     <div class="chat-modal-body">
+      <div class="field">
+        <label>Tipo</label>
+        <div style="display:flex;gap:8px">
+          <label style="flex:1;cursor:pointer;padding:10px 12px;border:1px solid var(--chat-border);
+                        border-radius:6px;background:var(--chat-bg-3);display:flex;align-items:center;gap:8px"
+                 onclick="document.getElementById('canalTipoTexto').checked=true">
+            <input type="radio" name="canalTipo" id="canalTipoTexto" value="canal" checked
+                   style="accent-color:var(--chat-accent)">
+            <i class="bi bi-hash" style="font-size:1.1rem"></i>
+            <div>
+              <div style="font-size:0.86rem;font-weight:600;color:var(--chat-text)">Canal de texto</div>
+              <div style="font-size:0.72rem;color:var(--chat-muted)">Mensagens, anexos, mentions</div>
+            </div>
+          </label>
+          <label style="flex:1;cursor:pointer;padding:10px 12px;border:1px solid var(--chat-border);
+                        border-radius:6px;background:var(--chat-bg-3);display:flex;align-items:center;gap:8px"
+                 onclick="document.getElementById('canalTipoVoz').checked=true">
+            <input type="radio" name="canalTipo" id="canalTipoVoz" value="voz"
+                   style="accent-color:var(--chat-accent)">
+            <i class="bi bi-volume-up-fill" style="font-size:1.1rem"></i>
+            <div>
+              <div style="font-size:0.86rem;font-weight:600;color:var(--chat-text)">Canal de voz</div>
+              <div style="font-size:0.72rem;color:var(--chat-muted)">Voz + vídeo + tela (até 5 pessoas)</div>
+            </div>
+          </label>
+        </div>
+      </div>
       <div class="field">
         <label>Nome do canal *</label>
         <input type="text" id="canalNomeInput" placeholder="Ex: projeto-novo-site" maxlength="100">
@@ -1091,6 +1203,12 @@ let _baseTitle = 'Chat — CPE Control';
 let _replyToId = null;            // 2C: id da msg sendo respondida
 let _replyToInfo = null;
 let _mentionState = null;         // 2C: estado do autocomplete @mention {start, query, results, active}
+let _voicePeersPorCanal = {};     // Fase 4: {channel_id: [{user_id,name,peer_id,mic_on,...}]}
+
+// Expoe pra chat-voice.js
+window._chatApiCall = (m, p, b) => api(m, p, b);
+Object.defineProperty(window, '_ws', { get: () => _ws });
+Object.defineProperty(window, '_self', { get: () => _self });
 
 /* ============ helpers ============ */
 function _t() {
@@ -1178,18 +1296,17 @@ async function carregarCanais() {
 
 function renderListaCanais() {
   const box = document.getElementById('chatChannelsList');
-  const dms     = _canais.filter(c => c.tipo === 'dm');
-  const grupos  = _canais.filter(c => c.tipo === 'grupo_sistema');
-  const outros  = _canais.filter(c => c.tipo === 'canal');
+  const dms        = _canais.filter(c => c.tipo === 'dm');
+  const grupos     = _canais.filter(c => c.tipo === 'grupo_sistema');
+  const canaisText = _canais.filter(c => c.tipo === 'canal');
+  const canaisVoz  = _canais.filter(c => c.tipo === 'voz');
 
   let html = '';
 
-  // Canais por grupo do sistema
   if (grupos.length) {
     html += `<div class="chat-section-title">Canais do sistema</div>`;
     html += grupos.map(c => _renderItem(c, `<i class="bi bi-hash chan-icon"></i>`)).join('');
   }
-  // Canais customizados (criados pelos Responsaveis de Grupo / Admins)
   const podeCriarCanal = ['RESPONSAVEL_GRUPO','ADMIN','TI','MANAGER'].includes(_self.role || '');
   html += `<div class="chat-section-title">
     Canais
@@ -1197,12 +1314,22 @@ function renderListaCanais() {
       ? `<button onclick="abrirModalCriarCanal()" title="Criar novo canal"><i class="bi bi-plus-lg"></i></button>`
       : ''}
   </div>`;
-  if (outros.length) {
-    html += outros.map(c => _renderItem(c, `<i class="bi bi-hash chan-icon"></i>`)).join('');
+  if (canaisText.length) {
+    html += canaisText.map(c => _renderItem(c, `<i class="bi bi-hash chan-icon"></i>`)).join('');
   } else {
     html += `<div style="padding:6px 16px;color:var(--chat-muted);font-size:0.76rem">
       ${podeCriarCanal ? 'Nenhum canal ainda. Clique em + acima pra criar.' : 'Você ainda não foi adicionado em nenhum canal.'}
     </div>`;
+  }
+  // Canais de voz
+  if (canaisVoz.length || podeCriarCanal) {
+    html += `<div class="chat-section-title">Canais de voz</div>`;
+    if (canaisVoz.length) {
+      html += canaisVoz.map(c => _renderItemVoz(c)).join('');
+    } else if (podeCriarCanal) {
+      html += `<div style="padding:6px 16px;color:var(--chat-muted);font-size:0.76rem">
+        Crie um canal e marque "Canal de voz".</div>`;
+    }
   }
   // DMs
   html += `<div class="chat-section-title">
@@ -1235,11 +1362,33 @@ function _renderItem(c, iconHtml) {
   </div>`;
 }
 
+function _renderItemVoz(c) {
+  const ativo = _canalAtivo && _canalAtivo.id === c.id ? 'active' : '';
+  const peers = _voicePeersPorCanal[c.id] || [];
+  let html = `<div class="chat-channel-item ${ativo}" onclick="abrirCanal(${c.id})">
+    <i class="bi bi-volume-up-fill chan-icon"></i>
+    <span class="chan-name">${_esc(c.nome || '#' + c.id)}</span>
+    ${peers.length ? `<span style="font-size:0.7rem;color:var(--chat-accent);font-weight:600">${peers.length}</span>` : ''}
+  </div>`;
+  // Lista mini de quem ta na sala
+  if (peers.length) {
+    html += peers.map(p => `
+      <div class="chat-voice-peer-row" title="${_esc(p.name)}${p.mic_on ? '' : ' (mutado)'}">
+        <div class="chan-avatar" style="width:20px;height:20px;font-size:0.62rem">${_esc(_initials(p.name))}</div>
+        <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(p.name)}</span>
+        ${p.mic_on ? '<i class="bi bi-mic-fill" style="color:#10B981;font-size:0.75rem"></i>'
+                   : '<i class="bi bi-mic-mute-fill" style="color:#EF4444;font-size:0.75rem"></i>'}
+        ${p.cam_on ? '<i class="bi bi-camera-video-fill" style="color:#3B82F6;font-size:0.75rem"></i>' : ''}
+        ${p.share_on ? '<i class="bi bi-display-fill" style="color:#A855F7;font-size:0.75rem"></i>' : ''}
+      </div>`).join('');
+  }
+  return html;
+}
+
 async function abrirCanal(channelId) {
   const c = _canais.find(x => x.id === channelId);
   if (!c) return;
   _canalAtivo = c;
-  // Limpa unread localmente (otimista)
   if (_unread[channelId]) {
     delete _unread[channelId];
     atualizarTituloComUnread();
@@ -1248,27 +1397,59 @@ async function abrirCanal(channelId) {
 
   // Header
   const hdr = document.getElementById('chatMainHeader');
-  const icon = c.tipo === 'dm' ? 'bi-at' : 'bi-hash';
-  const podeConfigurar = c.tipo === 'canal';
+  const ehVoz = c.tipo === 'voz';
+  const icon = ehVoz ? 'bi-volume-up-fill' : (c.tipo === 'dm' ? 'bi-at' : 'bi-hash');
+  const podeConfigurar = c.tipo === 'canal' || c.tipo === 'voz';
+
+  // Botao de entrar/sair na chamada (so canais de voz)
+  const conectado = window._voiceState?.canalId === c.id;
+  const voiceBtn = ehVoz
+    ? `<button class="voice-call-header-btn ${conectado ? 'connected' : ''}" id="voiceJoinLeaveBtn"
+              onclick="${conectado ? 'voiceSair()' : `voiceEntrar(${c.id})`}">
+         <i class="bi ${conectado ? 'bi-telephone-x-fill' : 'bi-telephone-fill'}"></i>
+         ${conectado ? 'Sair da chamada' : 'Entrar na chamada'}
+       </button>`
+    : '';
+
   hdr.innerHTML = `
     <i class="bi ${icon} header-icon"></i>
     <h2>${_esc(c.nome || '#' + c.id)}</h2>
     ${c.descricao ? `<span class="header-desc">${_esc(c.descricao)}</span>` : ''}
     <div class="header-tools">
-      <button onclick="abrirModalPinadas(${c.id})" title="Mensagens fixadas">
-        <i class="bi bi-pin-angle-fill"></i>
-      </button>
-      <button onclick="abrirModalBusca(${c.id})" title="Buscar mensagens">
-        <i class="bi bi-search"></i>
-      </button>
+      ${voiceBtn}
+      ${!ehVoz ? `<button onclick="abrirModalPinadas(${c.id})" title="Mensagens fixadas">
+        <i class="bi bi-pin-angle-fill"></i></button>` : ''}
+      ${!ehVoz ? `<button onclick="abrirModalBusca(${c.id})" title="Buscar mensagens">
+        <i class="bi bi-search"></i></button>` : ''}
       ${podeConfigurar
         ? `<button onclick="abrirModalConfigCanal(${c.id})" title="Configurar canal">
-             <i class="bi bi-gear"></i>
-           </button>`
+             <i class="bi bi-gear"></i></button>`
         : ''}
     </div>
   `;
-  document.getElementById('chatInputArea').style.display = '';
+
+  // Esconde area de mensagens/input em canal de voz; mostra voice room
+  const msgsBox = document.getElementById('chatMessages');
+  const inputArea = document.getElementById('chatInputArea');
+  const voiceRoom = document.getElementById('chatVoiceRoom');
+  if (ehVoz) {
+    msgsBox.style.display = 'none';
+    inputArea.style.display = 'none';
+    voiceRoom.style.display = '';
+    // Carrega peers atuais (quem ja esta na sala)
+    try {
+      const r = await api('GET', `/channels/${channelId}/voice/peers`);
+      _voicePeersPorCanal[channelId] = r.peers || [];
+      renderListaCanais();   // pra mostrar peers embaixo do canal
+    } catch (e) {
+      console.warn('[voice peers]', e);
+    }
+    return;
+  }
+  // Canal de texto/DM/grupo: comportamento normal
+  msgsBox.style.display = '';
+  inputArea.style.display = '';
+  if (voiceRoom) voiceRoom.style.display = 'none';
   document.getElementById('chatInput').focus();
   _renderTypingBar();
 
@@ -1586,6 +1767,15 @@ function conectarWebSocket() {
       if (_canalAtivo && data.channel_id === _canalAtivo.id) {
         aplicarPinNaUI(data.message_id, data.pinned);
       }
+    } else if (data.type === 'voice_join' || data.type === 'voice_leave' ||
+               data.type === 'voice_state') {
+      // Atualiza cache de peers do canal
+      _atualizarCachePeersVoz(data);
+      // Repassa pro modulo de voice se relevante
+      if (typeof window.onVoiceSignal === 'function') window.onVoiceSignal(data);
+    } else if (data.type === 'voice_offer' || data.type === 'voice_answer' ||
+               data.type === 'voice_ice') {
+      if (typeof window.onVoiceSignal === 'function') window.onVoiceSignal(data);
     } else if (data.type === 'pong') {
       // keepalive ok
     } else if (data.type === 'error') {
@@ -2281,6 +2471,7 @@ function fecharModalCriarCanal() {
 async function confirmarCriarCanal() {
   const nome = document.getElementById('canalNomeInput').value.trim();
   const desc = document.getElementById('canalDescInput').value.trim();
+  const tipo = document.getElementById('canalTipoVoz').checked ? 'voz' : 'canal';
   if (!nome || nome.length < 2) { alert('Nome do canal precisa ter ao menos 2 caracteres.'); return; }
   const btn = document.getElementById('canalCriarBtn');
   btn.disabled = true;
@@ -2289,6 +2480,7 @@ async function confirmarCriarCanal() {
       nome,
       descricao: desc || null,
       member_ids: [..._selecionadosCriar],
+      tipo,
     });
     fecharModalCriarCanal();
     await carregarCanais();
@@ -2623,6 +2815,34 @@ function _pularParaMsg(msgId) {
     // Por enquanto: avisa.
     alert('Esta mensagem não está carregada na tela. Role pra cima pra carregar o histórico mais antigo.');
   }
+}
+
+/* =====================================================================
+   Fase 4: cache de peers em canais de voz (pra mostrar embaixo do canal)
+   ===================================================================== */
+function _atualizarCachePeersVoz(data) {
+  const cid = data.channel_id;
+  if (!cid) return;
+  if (!_voicePeersPorCanal[cid]) _voicePeersPorCanal[cid] = [];
+  const arr = _voicePeersPorCanal[cid];
+  if (data.type === 'voice_join') {
+    if (!arr.find(p => p.user_id === data.user_id)) {
+      arr.push({
+        user_id: data.user_id,
+        name: data.user_name || `Usuário #${data.user_id}`,
+        peer_id: data.peer_id,
+        mic_on: true, cam_on: false, share_on: false,
+      });
+    }
+  } else if (data.type === 'voice_leave') {
+    _voicePeersPorCanal[cid] = arr.filter(p => p.user_id !== data.user_id);
+  } else if (data.type === 'voice_state') {
+    const p = arr.find(x => x.user_id === data.user_id);
+    if (p) {
+      p.mic_on = !!data.mic_on; p.cam_on = !!data.cam_on; p.share_on = !!data.share_on;
+    }
+  }
+  renderListaCanais();
 }
 
 /* =====================================================================

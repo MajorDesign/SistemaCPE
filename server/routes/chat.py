@@ -68,7 +68,40 @@ class ChatConnectionManager:
             if not self._conns[user_id]:
                 del self._conns[user_id]
                 self._set_presence(user_id, "offline")
+                self._cleanup_voice_sessions(user_id)
         logger.info(f"[CHAT-WS] -user {user_id}")
+
+    @staticmethod
+    def _cleanup_voice_sessions(user_id: int):
+        """Quando user perde TODAS as conexoes WS, tira ele das salas de voz
+        (sem isso, peers ficariam tentando conectar com fantasma)."""
+        try:
+            conn = get_chat_db_or_404()
+            cur = conn.cursor(dictionary=True)
+            cur.execute(
+                "SELECT channel_id FROM chat_voice_sessions WHERE user_id=%s",
+                (user_id,))
+            channels = [r["channel_id"] for r in cur.fetchall()]
+            if channels:
+                cur.execute(
+                    "DELETE FROM chat_voice_sessions WHERE user_id=%s", (user_id,))
+                conn.commit()
+            cur.close(); conn.close()
+            # Avisa os outros peers em cada canal
+            if channels:
+                asyncio.create_task(_broadcast_voice_leaves(user_id, channels))
+        except Exception as e:
+            logger.warning(f"[CHAT-WS] cleanup voice fail user={user_id}: {e}")
+
+
+async def _broadcast_voice_leaves(user_id: int, channel_ids: List[int]):
+    for ch_id in channel_ids:
+        membros = _listar_membros_canal(ch_id)
+        await manager.send_to_users(membros, {
+            "type": "voice_leave",
+            "channel_id": ch_id,
+            "user_id": user_id,
+        })
 
     async def send_to_users(self, user_ids: List[int], payload: dict):
         """Broadcast pra todos os WSs de uma lista de users."""
@@ -524,6 +557,8 @@ class CanalCreate(BaseModel):
     nome: str = Field(..., min_length=2, max_length=100)
     descricao: Optional[str] = Field(None, max_length=255)
     member_ids: List[int] = Field(default_factory=list)
+    tipo: str = Field("canal", pattern=r"^(canal|voz)$",
+                      description="canal de texto ou voz")
 
 
 class CanalEdit(BaseModel):
@@ -593,8 +628,8 @@ async def criar_canal(body: CanalCreate, request: Request):
     try:
         ccur.execute("""
             INSERT INTO chat_channels (tipo, nome, descricao, criado_por)
-            VALUES ('canal', %s, %s, %s)
-        """, (nome, body.descricao, user["id"]))
+            VALUES (%s, %s, %s, %s)
+        """, (body.tipo, nome, body.descricao, user["id"]))
         channel_id = ccur.lastrowid
 
         # Owner + members
@@ -987,6 +1022,105 @@ def _enviar_push_async(user_ids: List[int], titulo: str, corpo: str, url: str, t
             conn.commit()
         finally:
             cur.close(); conn.close()
+
+
+# =====================================================================
+# Fase 4: Canais de voz (WebRTC mesh P2P)
+# - Quem "entra" abre uma sessao em chat_voice_sessions
+# - Lista de peers e propagada via WS (voice_join / voice_leave)
+# - Signaling (offer/answer/ice) tambem via WS, roteado 1-a-1 por peer_id
+# =====================================================================
+class VoiceJoinBody(BaseModel):
+    peer_id: str = Field(..., min_length=4, max_length=40)
+
+
+@router.post("/channels/{channel_id}/voice/join")
+async def voice_join(channel_id: int, body: VoiceJoinBody, request: Request):
+    """Marca user como ativo na sala. Retorna outros peers + suas configs."""
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro deste canal")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            INSERT INTO chat_voice_sessions (channel_id, user_id, peer_id)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE peer_id=VALUES(peer_id), entrou_em=NOW(),
+                                    mic_on=1, cam_on=0, share_on=0
+        """, (channel_id, user["id"], body.peer_id))
+        conn.commit()
+        # Lista outros peers
+        cur.execute("""
+            SELECT user_id, peer_id, mic_on, cam_on, share_on
+            FROM chat_voice_sessions
+            WHERE channel_id=%s AND user_id != %s
+        """, (channel_id, user["id"]))
+        peers = cur.fetchall()
+    finally:
+        cur.close(); conn.close()
+
+    # Enriquece com nomes
+    users_map = _enriquecer_users([p["user_id"] for p in peers])
+    for p in peers:
+        u = users_map.get(p["user_id"], {})
+        p["name"] = u.get("name") or f"Usuario #{p['user_id']}"
+
+    # Notifica todos os membros do canal (inclusive os ja na sala) que ele entrou
+    membros = _listar_membros_canal(channel_id)
+    await manager.send_to_users(membros, {
+        "type": "voice_join",
+        "channel_id": channel_id,
+        "user_id": user["id"],
+        "user_name": user.get("name"),
+        "peer_id": body.peer_id,
+    })
+    return {"success": True, "peers": peers}
+
+
+@router.post("/channels/{channel_id}/voice/leave")
+async def voice_leave(channel_id: int, request: Request):
+    user = _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM chat_voice_sessions WHERE channel_id=%s AND user_id=%s",
+                    (channel_id, user["id"]))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+    membros = _listar_membros_canal(channel_id)
+    await manager.send_to_users(membros, {
+        "type": "voice_leave",
+        "channel_id": channel_id,
+        "user_id": user["id"],
+    })
+    return {"success": True}
+
+
+@router.get("/channels/{channel_id}/voice/peers")
+def voice_peers(channel_id: int, request: Request):
+    """Quem esta AGORA na sala."""
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro deste canal")
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT user_id, peer_id, mic_on, cam_on, share_on, entrou_em
+            FROM chat_voice_sessions WHERE channel_id=%s
+            ORDER BY entrou_em
+        """, (channel_id,))
+        peers = cur.fetchall()
+    finally:
+        cur.close(); conn.close()
+    users_map = _enriquecer_users([p["user_id"] for p in peers])
+    for p in peers:
+        u = users_map.get(p["user_id"], {})
+        p["name"] = u.get("name") or f"Usuario #{p['user_id']}"
+    return {"success": True, "peers": peers}
 
 
 # =====================================================================
@@ -1464,6 +1598,42 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
                     user_name=user.get("name"), content=content,
                     reply_to_id=reply_id,
                 )
+            elif msg_type in ("voice_offer", "voice_answer", "voice_ice"):
+                # Signaling 1-a-1 entre peers. Frontend manda {to_user_id, ...}
+                target_uid = data.get("to_user_id")
+                if not target_uid:
+                    continue
+                await manager.send_to_users([int(target_uid)], {
+                    **data,
+                    "from_user_id": user_id,
+                })
+            elif msg_type == "voice_state":
+                # Toggle mic/cam/share — propaga pra todos os membros do canal
+                ch_id = data.get("channel_id")
+                if not ch_id:
+                    continue
+                mic   = 1 if data.get("mic_on") else 0
+                cam   = 1 if data.get("cam_on") else 0
+                share = 1 if data.get("share_on") else 0
+                try:
+                    conn = get_chat_db_or_404()
+                    cur  = conn.cursor()
+                    cur.execute("""
+                        UPDATE chat_voice_sessions
+                        SET mic_on=%s, cam_on=%s, share_on=%s
+                        WHERE channel_id=%s AND user_id=%s
+                    """, (mic, cam, share, ch_id, user_id))
+                    conn.commit()
+                    cur.close(); conn.close()
+                except Exception as e:
+                    logger.warning(f"[VOICE] update state fail: {e}")
+                membros = _listar_membros_canal(ch_id)
+                await manager.send_to_users(membros, {
+                    "type": "voice_state",
+                    "channel_id": ch_id,
+                    "user_id": user_id,
+                    "mic_on": bool(mic), "cam_on": bool(cam), "share_on": bool(share),
+                })
             elif msg_type == "typing":
                 # Broadcast pros OUTROS membros (exclui o proprio)
                 channel_id = data.get("channel_id")
