@@ -1168,6 +1168,53 @@ def voice_peers(channel_id: int, request: Request):
 
 
 # =====================================================================
+# Status manual (Disponivel / Ausente / DND / Invisivel)
+# =====================================================================
+class StatusBody(BaseModel):
+    status: str = Field(..., pattern=r"^(online|ausente|dnd|invisivel)$")
+
+
+@router.post("/presence")
+async def set_status_manual(body: StatusBody, request: Request):
+    """Define status manual do user (sobrepoe o automatico online/offline)."""
+    user = _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO chat_presence (user_id, status, status_manual, ultima_atividade)
+            VALUES (%s, %s, %s, NOW())
+            ON DUPLICATE KEY UPDATE status=VALUES(status), status_manual=VALUES(status_manual),
+                                    ultima_atividade=NOW()
+        """, (user["id"], body.status, body.status))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+    await manager.send_to_users(manager.online_users(), {
+        "type": "presence_update",
+        "user_id": user["id"],
+        "status": body.status,
+    })
+    return {"success": True, "status": body.status}
+
+
+@router.get("/presence")
+def get_all_presence(request: Request):
+    """Retorna status atual de todos os users com presenca registrada."""
+    _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT user_id, COALESCE(status_manual, status) AS status, ultima_atividade
+            FROM chat_presence
+        """)
+        return {"success": True, "presence": cur.fetchall()}
+    finally:
+        cur.close(); conn.close()
+
+
+# =====================================================================
 # DEBUG: quem esta conectado no WS agora (uso temporario pra diagnose)
 # =====================================================================
 @router.get("/_debug/online")

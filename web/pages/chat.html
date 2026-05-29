@@ -618,6 +618,160 @@
     }
     .chat-reply-preview button:hover { color: var(--chat-text); }
 
+    /* ========== Footer Discord-like ========== */
+    .chat-sidebar-footer {
+      flex-direction: column !important;
+      gap: 0 !important;
+      padding: 6px 8px !important;
+      align-items: stretch !important;
+      position: relative;
+    }
+    .chat-footer-row {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%;
+    }
+    .chat-footer-self {
+      display: flex; align-items: center; gap: 8px;
+      flex: 1; min-width: 0;
+      padding: 4px 6px; border-radius: 6px;
+      cursor: pointer; transition: background 0.1s;
+    }
+    .chat-footer-self:hover { background: rgba(255,255,255,0.04); }
+    .chat-footer-avatar {
+      position: relative;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--chat-accent), var(--chat-accent-dim));
+      color: #1A1A1A; display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.78rem; flex-shrink: 0;
+    }
+    .chat-footer-avatar .status-dot {
+      position: absolute; bottom: -2px; right: -2px;
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #6B7280; border: 2px solid var(--chat-bg-1);
+    }
+    .chat-footer-avatar .status-dot.online    { background: #10B981; }
+    .chat-footer-avatar .status-dot.ausente   { background: #F59E0B; }
+    .chat-footer-avatar .status-dot.dnd       { background: #EF4444; }
+    .chat-footer-avatar .status-dot.invisivel,
+    .chat-footer-avatar .status-dot.offline   { background: #6B7280; }
+    .chat-footer-info { flex: 1; min-width: 0; }
+    .chat-footer-name {
+      color: var(--chat-text); font-weight: 600; font-size: 0.82rem;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .chat-footer-status { font-size: 0.7rem; color: var(--chat-muted); }
+    .chat-footer-actions { display: flex; gap: 2px; flex-shrink: 0; }
+    .chat-footer-actions button {
+      background: transparent; border: none; color: var(--chat-muted);
+      cursor: pointer; padding: 6px; border-radius: 4px;
+      font-size: 0.95rem; width: 30px; height: 30px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .chat-footer-actions button:hover {
+      background: rgba(255,255,255,0.06); color: var(--chat-text);
+    }
+    .chat-footer-actions button.off { color: #EF4444; }
+
+    .status-popup {
+      position: absolute;
+      bottom: 70px; left: 12px;
+      background: var(--chat-bg-1);
+      border: 1px solid var(--chat-border);
+      border-radius: 8px;
+      padding: 6px;
+      width: 220px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      z-index: 200;
+      display: none;
+    }
+    .status-popup.open { display: block; }
+    .status-option {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 4px; cursor: pointer;
+      font-size: 0.85rem; color: var(--chat-text);
+    }
+    .status-option:hover { background: var(--chat-bg-3); }
+    .status-option .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .status-option .dot.online    { background: #10B981; }
+    .status-option .dot.ausente   { background: #F59E0B; }
+    .status-option .dot.dnd       { background: #EF4444; }
+    .status-option .dot.invisivel { background: #6B7280; }
+    .status-option .info { flex: 1; }
+    .status-option .desc {
+      display: block; font-size: 0.7rem; color: var(--chat-muted); margin-top: 1px;
+    }
+
+    /* ========== Modal Configuracoes (tipo Discord) ========== */
+    .cfg-modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 5500;
+      background: rgba(0,0,0,0.85);
+      align-items: center; justify-content: center;
+    }
+    .cfg-modal-overlay.open { display: flex; }
+    .cfg-modal {
+      background: var(--chat-bg-3);
+      width: min(900px, 95%); height: 88vh;
+      border-radius: 12px;
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+    }
+    .cfg-sidebar { background: var(--chat-bg-2); padding: 24px 0; overflow-y: auto; }
+    .cfg-sidebar-section {
+      padding: 8px 16px; font-size: 0.68rem; color: var(--chat-muted);
+      text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700;
+    }
+    .cfg-sidebar-item {
+      padding: 8px 16px; cursor: pointer; font-size: 0.88rem;
+      color: var(--chat-muted); border-left: 3px solid transparent;
+    }
+    .cfg-sidebar-item:hover { background: rgba(255,255,255,0.04); color: var(--chat-text); }
+    .cfg-sidebar-item.active {
+      background: var(--chat-bg-3); color: var(--chat-text);
+      border-left-color: var(--chat-accent);
+    }
+    .cfg-content { padding: 28px 36px; overflow-y: auto; position: relative; }
+    .cfg-content h2 {
+      font-size: 1.2rem; font-weight: 700; color: var(--chat-text); margin: 0 0 18px;
+    }
+    .cfg-content h3 {
+      font-size: 0.78rem; font-weight: 700; color: var(--chat-muted);
+      text-transform: uppercase; letter-spacing: 0.06em; margin: 22px 0 8px;
+    }
+    .cfg-close {
+      position: absolute; top: 18px; right: 18px;
+      background: transparent; border: 1px solid var(--chat-border);
+      color: var(--chat-muted); border-radius: 50%;
+      width: 32px; height: 32px; cursor: pointer; font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .cfg-close:hover { color: var(--chat-text); border-color: var(--chat-text); }
+    .cfg-field {
+      background: var(--chat-bg-2); border-radius: 6px;
+      padding: 12px 14px; margin-bottom: 8px;
+    }
+    .cfg-field-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .cfg-field-label { color: var(--chat-text); font-size: 0.86rem; }
+    .cfg-field-value { color: var(--chat-muted); font-size: 0.85rem; }
+    .cfg-select {
+      width: 100%; background: var(--chat-bg-input);
+      border: 1px solid var(--chat-border); border-radius: 6px;
+      color: var(--chat-text); padding: 8px 10px; font-size: 0.86rem;
+    }
+    .cfg-select:focus { outline: none; border-color: var(--chat-accent); }
+    .cfg-slider { width: 100%; accent-color: var(--chat-accent); }
+    .cfg-vu {
+      height: 8px; background: var(--chat-bg-input); border-radius: 4px;
+      overflow: hidden; margin-top: 8px;
+    }
+    .cfg-vu-bar {
+      height: 100%; background: linear-gradient(90deg, #10B981, #FFC107 70%, #EF4444);
+      width: 0%; transition: width 0.05s;
+    }
+
     /* ========== Chamadas 1-a-1 (incoming/outgoing modais) ========== */
     .call-modal-overlay {
       display: none; position: fixed; inset: 0; z-index: 6000;
@@ -1015,21 +1169,67 @@
           <div class="chat-section-title">Carregando...</div>
         </div>
         <div class="chat-sidebar-footer">
-          <div class="chat-self-avatar" id="chatSelfAvatar">?</div>
-          <div class="chat-self-info">
-            <div class="chat-self-name" id="chatSelfName">—</div>
-            <div class="chat-conn-status offline" id="chatConnStatus">conectando...</div>
+          <!-- Popup de seleção de status (acima do footer) -->
+          <div class="status-popup" id="statusPopup">
+            <div class="status-option" onclick="setStatus('online')">
+              <span class="dot online"></span>
+              <span class="info">Disponível
+                <span class="desc">Pronto pra conversar</span></span>
+            </div>
+            <div class="status-option" onclick="setStatus('ausente')">
+              <span class="dot ausente"></span>
+              <span class="info">Ausente
+                <span class="desc">Volto já</span></span>
+            </div>
+            <div class="status-option" onclick="setStatus('dnd')">
+              <span class="dot dnd"></span>
+              <span class="info">Não perturbar
+                <span class="desc">Não receberá sons ou notificações</span></span>
+            </div>
+            <div class="status-option" onclick="setStatus('invisivel')">
+              <span class="dot invisivel"></span>
+              <span class="info">Invisível
+                <span class="desc">Aparece offline pros outros, mas continua online</span></span>
+            </div>
           </div>
-          <div style="display:flex;gap:4px">
+
+          <div class="chat-footer-row">
+            <div class="chat-footer-self" onclick="toggleStatusPopup(event)" title="Mudar status">
+              <div class="chat-footer-avatar" id="chatSelfAvatar">
+                ?
+                <span class="status-dot offline" id="chatSelfStatusDot"></span>
+              </div>
+              <div class="chat-footer-info">
+                <div class="chat-footer-name" id="chatSelfName">—</div>
+                <div class="chat-footer-status" id="chatSelfStatusText">conectando...</div>
+              </div>
+            </div>
+            <div class="chat-footer-actions">
+              <button id="btnMicMute" onclick="toggleMicMute()" title="Microfone (mute global)">
+                <i class="bi bi-mic-fill" id="iconMicMute"></i>
+              </button>
+              <button id="btnDeafen" onclick="toggleDeafen()" title="Silenciar tudo (deafen)">
+                <i class="bi bi-headphones" id="iconDeafen"></i>
+              </button>
+              <button onclick="abrirCfgModal()" title="Configurações">
+                <i class="bi bi-gear-fill"></i>
+              </button>
+            </div>
+          </div>
+          <!-- Status real do WebSocket — menor, em cima da linha -->
+          <div class="chat-conn-status offline" id="chatConnStatus"
+               style="text-align:center;font-size:0.66rem;padding:2px">conectando...</div>
+          <!-- Botões legados de PWA/push (escondidos por padrão; aparecem inline se relevante) -->
+          <div style="display:flex;gap:4px;justify-content:center">
             <button id="btnInstallPwa" onclick="acaoInstalarPwa()" title="Instalar como app"
                     style="display:none;background:transparent;border:none;color:var(--chat-muted);
-                           cursor:pointer;font-size:1.05rem;padding:4px 6px;border-radius:6px">
-              <i class="bi bi-download"></i>
+                           cursor:pointer;font-size:0.85rem;padding:2px 6px;border-radius:6px">
+              <i class="bi bi-download"></i> Instalar
             </button>
             <button id="btnAtivarPush" onclick="acaoToggleNotifPush()" title="Notificações no celular/desktop"
                     style="background:transparent;border:none;color:var(--chat-muted);
-                           cursor:pointer;font-size:1.05rem;padding:4px 6px;border-radius:6px">
-              <i class="bi bi-bell"></i>
+                           cursor:pointer;font-size:0.85rem;padding:2px 6px;border-radius:6px">
+              <i class="bi bi-bell"></i> Notif
             </button>
           </div>
         </div>
@@ -1219,6 +1419,108 @@
   </div>
 </div>
 
+<!-- Modal: Configurações do usuário -->
+<div class="cfg-modal-overlay" id="cfgModal" onclick="if(event.target===this) fecharCfgModal()">
+  <div class="cfg-modal">
+    <div class="cfg-sidebar">
+      <div class="cfg-sidebar-section">Configurações de usuário</div>
+      <div class="cfg-sidebar-item active" data-section="conta" onclick="cfgMostrar('conta')">Conta</div>
+      <div class="cfg-sidebar-item"        data-section="voz"   onclick="cfgMostrar('voz')">Voz e vídeo</div>
+      <div class="cfg-sidebar-item"        data-section="notif" onclick="cfgMostrar('notif')">Notificações</div>
+      <div class="cfg-sidebar-section">Sistema</div>
+      <div class="cfg-sidebar-item"        data-section="sobre" onclick="cfgMostrar('sobre')">Sobre</div>
+    </div>
+    <div class="cfg-content">
+      <button class="cfg-close" onclick="fecharCfgModal()"><i class="bi bi-x-lg"></i></button>
+
+      <div class="cfg-section" data-section="conta">
+        <h2>Conta</h2>
+        <h3>Informações</h3>
+        <div class="cfg-field">
+          <div class="cfg-field-row">
+            <span class="cfg-field-label">Nome</span>
+            <span class="cfg-field-value" id="cfgNome">—</span>
+          </div>
+        </div>
+        <div class="cfg-field">
+          <div class="cfg-field-row">
+            <span class="cfg-field-label">E-mail</span>
+            <span class="cfg-field-value" id="cfgEmail">—</span>
+          </div>
+        </div>
+        <div class="cfg-field">
+          <div class="cfg-field-row">
+            <span class="cfg-field-label">Função no sistema</span>
+            <span class="cfg-field-value" id="cfgRole">—</span>
+          </div>
+        </div>
+        <p style="font-size:0.8rem;color:var(--chat-muted);margin-top:14px">
+          Pra alterar senha, nome ou e-mail, vá até <strong>Sistema → Usuários</strong>.
+        </p>
+      </div>
+
+      <div class="cfg-section" data-section="voz" style="display:none">
+        <h2>Voz e vídeo</h2>
+
+        <h3>Dispositivo de entrada (microfone)</h3>
+        <select class="cfg-select" id="cfgMicSelect" onchange="cfgSalvarMic()">
+          <option value="">Carregando...</option>
+        </select>
+        <div class="cfg-vu"><div class="cfg-vu-bar" id="cfgVuBar"></div></div>
+        <button class="chat-btn chat-btn-secondary" style="margin-top:10px" onclick="cfgTestarMic()">
+          <i class="bi bi-mic-fill"></i> <span id="cfgTestBtnLabel">Testar microfone</span>
+        </button>
+
+        <h3>Dispositivo de saída (alto-falante / fone)</h3>
+        <select class="cfg-select" id="cfgSpeakerSelect" onchange="cfgSalvarSpeaker()">
+          <option value="">Carregando...</option>
+        </select>
+        <p style="font-size:0.75rem;color:var(--chat-muted);margin-top:4px">
+          O navegador escolhe automaticamente o dispositivo padrão do Windows quando não selecionado.
+        </p>
+
+        <h3>Câmera</h3>
+        <select class="cfg-select" id="cfgCamSelect" onchange="cfgSalvarCam()">
+          <option value="">Carregando...</option>
+        </select>
+      </div>
+
+      <div class="cfg-section" data-section="notif" style="display:none">
+        <h2>Notificações</h2>
+        <h3>Push notifications (celular/desktop)</h3>
+        <div class="cfg-field">
+          <div class="cfg-field-row">
+            <span class="cfg-field-label">Receber notificações fora do chat</span>
+            <button class="chat-btn chat-btn-primary" onclick="acaoToggleNotifPush()">
+              <i class="bi bi-bell-fill"></i> Configurar
+            </button>
+          </div>
+        </div>
+
+        <h3>Instalar como aplicativo</h3>
+        <div class="cfg-field">
+          <div class="cfg-field-row">
+            <span class="cfg-field-label">Adicionar à tela inicial / desktop</span>
+            <button class="chat-btn chat-btn-secondary" onclick="acaoInstalarPwa()">
+              <i class="bi bi-download"></i> Instalar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="cfg-section" data-section="sobre" style="display:none">
+        <h2>Sobre</h2>
+        <p style="color:var(--chat-muted);font-size:0.86rem">
+          <strong>CPE Control — Chat</strong><br>
+          Versão integrada do sistema de chat realtime.<br>
+          Funcionalidades: mensagens diretas, canais por grupo, canais customizados,
+          chamadas 1-a-1, canais de voz, compartilhamento de tela.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Chamada (incoming OU outgoing) -->
 <div class="call-modal-overlay" id="callModal">
   <div class="call-modal" id="callModalBox">
@@ -1338,8 +1640,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
   _baseTitle = document.title;
-  document.getElementById('chatSelfAvatar').textContent = _initials(_self.name);
-  document.getElementById('chatSelfName').textContent   = _self.name || _self.email;
+  // Avatar: textContent substitui TUDO, então preservo o dot via innerHTML.
+  const av = document.getElementById('chatSelfAvatar');
+  if (av) av.innerHTML = _esc(_initials(_self.name)) +
+    '<span class="status-dot offline" id="chatSelfStatusDot"></span>';
+  document.getElementById('chatSelfName').textContent = _self.name || _self.email;
+  // Carrega status manual salvo no localStorage
+  const statusSalvo = localStorage.getItem('cpe_chat_status') || 'online';
+  _aplicarStatusVisual(statusSalvo);
+  // Sincroniza com backend
+  api('POST', '/presence', { status: statusSalvo }).catch(() => {});
 
   // Pede permissao de notificacao desktop (silencioso se ja negado/aceito)
   if ('Notification' in window && Notification.permission === 'default') {
@@ -1871,6 +2181,8 @@ function conectarWebSocket() {
     } else if (data.type === 'voice_offer' || data.type === 'voice_answer' ||
                data.type === 'voice_ice') {
       if (typeof window.onVoiceSignal === 'function') window.onVoiceSignal(data);
+    } else if (data.type === 'presence_update') {
+      _onPresenceUpdate(data);
     } else if (data.type === 'call_invite') {
       _onCallInvite(data);
     } else if (data.type === 'call_accept') {
@@ -3173,6 +3485,206 @@ document.addEventListener('keydown', (e) => {
   if (_callState.direction === 'in') atenderChamada(false);
   else cancelarChamada();
 });
+
+/* =====================================================================
+   FOOTER DISCORD-LIKE — status, mic mute, deafen, configurações
+   ===================================================================== */
+let _statusAtual = 'online';
+let _micMuted = false;
+let _deafened = false;
+
+function _aplicarStatusVisual(status) {
+  _statusAtual = status;
+  const dot = document.getElementById('chatSelfStatusDot');
+  const txt = document.getElementById('chatSelfStatusText');
+  if (dot) dot.className = 'status-dot ' + status;
+  if (txt) {
+    const labels = {
+      online: 'Disponível', ausente: 'Ausente',
+      dnd: 'Não perturbar', invisivel: 'Invisível',
+      offline: 'Offline'
+    };
+    txt.textContent = labels[status] || status;
+  }
+}
+
+function toggleStatusPopup(e) {
+  e?.stopPropagation();
+  document.getElementById('statusPopup')?.classList.toggle('open');
+}
+// Fecha popup ao clicar fora
+document.addEventListener('click', (e) => {
+  const pop = document.getElementById('statusPopup');
+  if (!pop?.classList.contains('open')) return;
+  if (e.target.closest('.chat-footer-self') || e.target.closest('.status-popup')) return;
+  pop.classList.remove('open');
+});
+
+async function setStatus(status) {
+  _aplicarStatusVisual(status);
+  localStorage.setItem('cpe_chat_status', status);
+  document.getElementById('statusPopup')?.classList.remove('open');
+  try {
+    await api('POST', '/presence', { status });
+  } catch (e) {
+    console.warn('setStatus erro:', e.message);
+  }
+}
+
+function toggleMicMute() {
+  _micMuted = !_micMuted;
+  const btn = document.getElementById('btnMicMute');
+  const ico = document.getElementById('iconMicMute');
+  if (_micMuted) {
+    btn.classList.add('off');
+    ico.className = 'bi bi-mic-mute-fill';
+  } else {
+    btn.classList.remove('off');
+    ico.className = 'bi bi-mic-fill';
+  }
+  // Se estiver em chamada de voz, aplica direto
+  if (window._voiceState?.canalId && window.voiceToggleMic) {
+    if (window._voiceState.micOn === !_micMuted) return;  // já alinhado
+    window.voiceToggleMic();
+  }
+}
+
+function toggleDeafen() {
+  _deafened = !_deafened;
+  const btn = document.getElementById('btnDeafen');
+  const ico = document.getElementById('iconDeafen');
+  ico.className = _deafened ? 'bi bi-headphones' : 'bi bi-headphones';
+  if (_deafened) btn.classList.add('off'); else btn.classList.remove('off');
+  // Silencia todos os <audio> remotos
+  document.querySelectorAll('audio').forEach(a => { a.muted = _deafened; });
+  // Se deafened, também muta o mic
+  if (_deafened && !_micMuted) toggleMicMute();
+}
+
+/* =====================================================================
+   MODAL CONFIGURAÇÕES (Conta / Voz e vídeo / Notif / Sobre)
+   ===================================================================== */
+function abrirCfgModal() {
+  // Popula campos de Conta
+  document.getElementById('cfgNome').textContent  = _self.name || '—';
+  document.getElementById('cfgEmail').textContent = _self.email || '—';
+  document.getElementById('cfgRole').textContent  = _self.role || '—';
+  document.getElementById('cfgModal').classList.add('open');
+  cfgMostrar('conta');
+}
+function fecharCfgModal() {
+  document.getElementById('cfgModal').classList.remove('open');
+  cfgPararTesteMic();
+}
+function cfgMostrar(secao) {
+  document.querySelectorAll('.cfg-sidebar-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.section === secao);
+  });
+  document.querySelectorAll('.cfg-section').forEach(el => {
+    el.style.display = el.dataset.section === secao ? '' : 'none';
+  });
+  if (secao === 'voz') cfgListarDispositivos();
+  else cfgPararTesteMic();
+}
+
+async function cfgListarDispositivos() {
+  // Solicita permissão de mic primeiro pra liberar labels
+  try {
+    const tmp = await navigator.mediaDevices.getUserMedia({ audio: true });
+    tmp.getTracks().forEach(t => t.stop());
+  } catch (e) { /* ok — só perde labels */ }
+
+  let devices = [];
+  try {
+    devices = await navigator.mediaDevices.enumerateDevices();
+  } catch (e) {
+    console.warn('enumerateDevices fail', e);
+    return;
+  }
+
+  const mics      = devices.filter(d => d.kind === 'audioinput');
+  const speakers  = devices.filter(d => d.kind === 'audiooutput');
+  const cams      = devices.filter(d => d.kind === 'videoinput');
+
+  const savedMic     = localStorage.getItem('cpe_chat_micId')     || '';
+  const savedSpeaker = localStorage.getItem('cpe_chat_speakerId') || '';
+  const savedCam     = localStorage.getItem('cpe_chat_camId')     || '';
+
+  const fmt = (list, saved, defaultLabel) => {
+    let html = `<option value="">${defaultLabel}</option>`;
+    list.forEach((d, i) => {
+      const sel = d.deviceId === saved ? 'selected' : '';
+      html += `<option value="${d.deviceId}" ${sel}>${_esc(d.label || `Dispositivo ${i+1}`)}</option>`;
+    });
+    return html;
+  };
+  document.getElementById('cfgMicSelect').innerHTML     = fmt(mics, savedMic, 'Padrão do sistema');
+  document.getElementById('cfgSpeakerSelect').innerHTML = fmt(speakers, savedSpeaker, 'Padrão do sistema');
+  document.getElementById('cfgCamSelect').innerHTML     = fmt(cams, savedCam, 'Nenhuma (usar só quando ligar)');
+}
+
+function cfgSalvarMic() {
+  localStorage.setItem('cpe_chat_micId', document.getElementById('cfgMicSelect').value);
+}
+function cfgSalvarSpeaker() {
+  localStorage.setItem('cpe_chat_speakerId', document.getElementById('cfgSpeakerSelect').value);
+  // Aplica em todos os <audio> que estiverem tocando agora
+  const sid = document.getElementById('cfgSpeakerSelect').value;
+  if (!sid) return;
+  document.querySelectorAll('audio').forEach(a => {
+    if (typeof a.setSinkId === 'function') a.setSinkId(sid).catch(() => {});
+  });
+}
+function cfgSalvarCam() {
+  localStorage.setItem('cpe_chat_camId', document.getElementById('cfgCamSelect').value);
+}
+
+/* Teste de microfone — VU meter */
+let _testStream = null, _testCtx = null, _testRaf = null;
+async function cfgTestarMic() {
+  if (_testStream) { cfgPararTesteMic(); return; }
+  const deviceId = document.getElementById('cfgMicSelect').value;
+  const constraints = { audio: deviceId ? { deviceId: { exact: deviceId } } : true };
+  try {
+    _testStream = await navigator.mediaDevices.getUserMedia(constraints);
+  } catch (e) {
+    alert('Erro: ' + e.message);
+    return;
+  }
+  _testCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const src = _testCtx.createMediaStreamSource(_testStream);
+  const analyser = _testCtx.createAnalyser();
+  analyser.fftSize = 256;
+  src.connect(analyser);
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  const bar = document.getElementById('cfgVuBar');
+  document.getElementById('cfgTestBtnLabel').textContent = 'Parar teste';
+  const loop = () => {
+    analyser.getByteFrequencyData(data);
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) sum += data[i];
+    const avg = sum / data.length;
+    bar.style.width = Math.min(100, (avg / 128) * 100) + '%';
+    _testRaf = requestAnimationFrame(loop);
+  };
+  loop();
+}
+function cfgPararTesteMic() {
+  if (_testRaf) cancelAnimationFrame(_testRaf);
+  if (_testStream) _testStream.getTracks().forEach(t => t.stop());
+  if (_testCtx) _testCtx.close();
+  _testStream = null; _testCtx = null; _testRaf = null;
+  const bar = document.getElementById('cfgVuBar'); if (bar) bar.style.width = '0%';
+  const lbl = document.getElementById('cfgTestBtnLabel'); if (lbl) lbl.textContent = 'Testar microfone';
+}
+
+// Status change vindo via WS
+function _onPresenceUpdate(data) {
+  if (data.user_id === _self.id) {
+    _aplicarStatusVisual(data.status);
+  }
+  // Pra outros users, poderia atualizar a lista lateral (futuro)
+}
 
 /* =====================================================================
    Fase 4: cache de peers em canais de voz (pra mostrar embaixo do canal)
