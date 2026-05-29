@@ -825,8 +825,17 @@
     }
   </style>
 
+  <!-- PWA -->
+  <link rel="manifest" href="/SistemaCPE/web/manifest.json">
+  <meta name="theme-color" content="#1A1A1A">
+  <link rel="apple-touch-icon" href="/SistemaCPE/web/assests/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CPE Chat">
+
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js"></script>
+  <script src="/SistemaCPE/web/assests/js/pwa.js" defer></script>
   <script>pageGuard('CHAT');</script>
 </head>
 
@@ -853,6 +862,18 @@
           <div class="chat-self-info">
             <div class="chat-self-name" id="chatSelfName">—</div>
             <div class="chat-conn-status offline" id="chatConnStatus">conectando...</div>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button id="btnInstallPwa" onclick="acaoInstalarPwa()" title="Instalar como app"
+                    style="display:none;background:transparent;border:none;color:var(--chat-muted);
+                           cursor:pointer;font-size:1.05rem;padding:4px 6px;border-radius:6px">
+              <i class="bi bi-download"></i>
+            </button>
+            <button id="btnAtivarPush" onclick="acaoToggleNotifPush()" title="Notificações no celular/desktop"
+                    style="background:transparent;border:none;color:var(--chat-muted);
+                           cursor:pointer;font-size:1.05rem;padding:4px 6px;border-radius:6px">
+              <i class="bi bi-bell"></i>
+            </button>
           </div>
         </div>
       </div>
@@ -2603,6 +2624,56 @@ function _pularParaMsg(msgId) {
     alert('Esta mensagem não está carregada na tela. Role pra cima pra carregar o histórico mais antigo.');
   }
 }
+
+/* =====================================================================
+   Fase 3: PWA install + push notifications (usa pwa.js)
+   ===================================================================== */
+window.addEventListener('pwa:installable', () => {
+  const btn = document.getElementById('btnInstallPwa');
+  if (btn) btn.style.display = '';
+});
+
+async function acaoInstalarPwa() {
+  if (typeof window.pwaInstall !== 'function') return;
+  const ok = await window.pwaInstall();
+  if (ok) {
+    const btn = document.getElementById('btnInstallPwa');
+    if (btn) btn.style.display = 'none';
+  }
+}
+
+async function acaoToggleNotifPush() {
+  if (typeof window.pwaIsSubscribed !== 'function') {
+    alert('PWA não está pronta. Recarregue a página.');
+    return;
+  }
+  const subscrito = await window.pwaIsSubscribed();
+  if (subscrito) {
+    if (!confirm('Desativar notificações push neste dispositivo?')) return;
+    await window.pwaPushUnsubscribe();
+    _atualizarBtnPush();
+    alert('Notificações push desativadas neste dispositivo.');
+  } else {
+    const ok = await window.pwaPushSubscribe();
+    _atualizarBtnPush();
+    if (ok) alert('✓ Notificações ativadas! Você vai receber mesmo com o navegador fechado.');
+  }
+}
+
+async function _atualizarBtnPush() {
+  const btn = document.getElementById('btnAtivarPush');
+  if (!btn || typeof window.pwaIsSubscribed !== 'function') return;
+  try {
+    const sub = await window.pwaIsSubscribed();
+    btn.innerHTML = sub ? '<i class="bi bi-bell-fill"></i>' : '<i class="bi bi-bell"></i>';
+    btn.title = sub ? 'Notificações ativas (clique pra desativar)' : 'Ativar notificações no celular/desktop';
+    btn.style.color = sub ? 'var(--chat-accent)' : 'var(--chat-muted)';
+  } catch {}
+}
+// Atualiza icone do botao no init
+window.addEventListener('load', () => {
+  setTimeout(_atualizarBtnPush, 800);
+});
 </script>
 </body>
 </html>
