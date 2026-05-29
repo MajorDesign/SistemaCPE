@@ -47,15 +47,17 @@
     if (st.canalId === channelId) return;        // ja conectado
     if (st.canalId) await window.voiceSair();    // sai do anterior primeiro
 
-    // 1) Tenta capturar mic. Usa 'audio: true' simples pra deixar o browser
-    //    escolher o dispositivo PADRAO do sistema (Windows: Configuracoes
-    //    -> Som -> Entrada). Browser ja aplica eco-cancel/AGC por padrao.
-    //    Se falhar (PC sem mic / mic em uso / permissao negada), pergunta
-    //    se quer entrar como "so escuta".
+    // 1) Tenta capturar mic. Se o user escolheu dispositivo especifico em
+    //    Configuracoes -> Voz e video, usa ele; senao 'audio: true' simples
+    //    deixa o browser escolher o PADRAO do sistema.
     let local = null;
     let micDisponivel = true;
+    const savedMicId = localStorage.getItem('cpe_chat_micId') || '';
+    const audioConstraints = savedMicId
+      ? { deviceId: { exact: savedMicId } }
+      : true;
     try {
-      local = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      local = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints, video: false });
     } catch (e) {
       micDisponivel = false;
       const nome = e.name || '';
@@ -224,6 +226,11 @@
         entry.audioEl = el;
       }
       el.srcObject = stream;
+      // Aplica speaker selecionado em Configuracoes (se browser suportar setSinkId)
+      const speakerId = localStorage.getItem('cpe_chat_speakerId') || '';
+      if (speakerId && typeof el.setSinkId === 'function') {
+        el.setSinkId(speakerId).catch(() => {});
+      }
     } else if (track.kind === 'video') {
       // Pode ser camera OU tela; render dentro do card do peer
       _aplicarVideoNoCard(peer_id, stream);
