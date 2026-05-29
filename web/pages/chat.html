@@ -1351,6 +1351,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!document.hidden) pararFlashTitle();
   });
 
+  _verificarIncomingCallNaURL();
   await carregarCanais();
   await carregarUsuariosSistema();
   conectarWebSocket();
@@ -3073,7 +3074,6 @@ function _finalizarChamada(keepState = false) {
 
 /* ----- WS handlers ----- */
 function _onCallInvite(data) {
-  // Se ja tem uma chamada em andamento, auto-rejeita (ocupado)
   if (_callState) {
     _wsSendChat({ type: 'call_reject', to_user_id: data.from_user_id });
     return;
@@ -3084,13 +3084,24 @@ function _onCallInvite(data) {
     channel_id: data.channel_id,
     timeout: setTimeout(() => atenderChamada(false), CALL_TIMEOUT_MS),
   };
+
+  // Se veio de push (auto-answer/reject), age sem mostrar modal
+  if (window._autoAnswerOnInvite) {
+    window._autoAnswerOnInvite = false;
+    atenderChamada(true); return;
+  }
+  if (window._autoRejectOnInvite) {
+    window._autoRejectOnInvite = false;
+    atenderChamada(false); return;
+  }
+
   _mostrarCallModal({
     direction: 'in',
     peerName: data.from_user_name || `Usuário #${data.from_user_id}`,
     peerId: data.from_user_id,
   });
   _tocarRingtone('incoming');
-  // Notificacao desktop (caso a aba esteja em background)
+  // Fallback in-tab (caso permissao concedida + aba background)
   if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
     try {
       const n = new Notification('📞 Chamada recebida', {
@@ -3102,6 +3113,30 @@ function _onCallInvite(data) {
       n.onclick = () => { window.focus(); n.close(); };
     } catch {}
   }
+}
+
+// Detecta query string ?incoming_call=ID&auto_answer=1 ao carregar (push notif click)
+function _verificarIncomingCallNaURL() {
+  const params = new URLSearchParams(location.search);
+  const fromId = parseInt(params.get('incoming_call'));
+  if (!fromId) return;
+  history.replaceState({}, '', location.pathname);  // limpa URL
+  if (params.get('auto_answer') === '1') window._autoAnswerOnInvite = true;
+  if (params.get('auto_reject') === '1') window._autoRejectOnInvite = true;
+  // O backend faz REPLAY automatico do invite ativo no WS connect — entao
+  // basta esperar o WS abrir; o _onCallInvite vai ser chamado e agira
+  // conforme as flags acima.
+}
+
+// Recebe postMessage do service worker (clique em notif com chat ja aberto)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (ev) => {
+    const m = ev.data;
+    if (!m || m.type !== 'incoming_call_action') return;
+    if (m.action === 'answer' && _callState?.direction === 'in') atenderChamada(true);
+    else if (m.action === 'reject' && _callState?.direction === 'in') atenderChamada(false);
+    else window.focus();
+  });
 }
 
 function _onCallAccept(data) {
