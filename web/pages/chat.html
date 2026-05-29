@@ -618,6 +618,67 @@
     }
     .chat-reply-preview button:hover { color: var(--chat-text); }
 
+    /* ========== 2D: pin + busca ========== */
+    .msg-group.is-pinned {
+      background: rgba(255,193,7,0.04);
+      border-left: 2px solid rgba(255,193,7,0.4);
+      padding-left: 10px; margin-left: -12px;
+      border-radius: 0 4px 4px 0;
+    }
+    .msg-pin-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 0.68rem;
+      background: rgba(255,193,7,0.15); color: var(--chat-accent);
+      padding: 1px 8px; border-radius: 10px;
+      margin-left: 6px; font-weight: 600;
+    }
+    .chat-main-header .header-tools {
+      margin-left: auto; display: flex; gap: 4px;
+    }
+    .chat-main-header .header-tools button {
+      background: transparent; border: none; color: var(--chat-muted);
+      cursor: pointer; font-size: 1rem; padding: 6px 10px; border-radius: 6px;
+    }
+    .chat-main-header .header-tools button:hover {
+      color: var(--chat-accent); background: var(--chat-bg-2);
+    }
+    .chat-search-input {
+      width: 100%; background: var(--chat-bg-input);
+      border: 1px solid var(--chat-border); border-radius: 6px;
+      padding: 10px 14px; color: var(--chat-text);
+      font-family: inherit; font-size: 0.92rem;
+      box-sizing: border-box; margin-bottom: 12px;
+    }
+    .chat-search-input:focus { outline: none; border-color: var(--chat-accent); }
+    .chat-search-results {
+      max-height: 420px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .chat-search-result {
+      padding: 10px 12px; background: var(--chat-bg-3); border-radius: 8px;
+      cursor: pointer; border-left: 3px solid transparent;
+    }
+    .chat-search-result:hover {
+      background: var(--chat-bg-2); border-left-color: var(--chat-accent);
+    }
+    .chat-search-result .meta {
+      display: flex; gap: 8px; font-size: 0.78rem;
+      color: var(--chat-muted); margin-bottom: 4px;
+    }
+    .chat-search-result .meta .author { color: var(--chat-text); font-weight: 600; }
+    .chat-search-result .body {
+      font-size: 0.88rem; color: var(--chat-text);
+      max-height: 80px; overflow: hidden;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+    }
+    .chat-search-result mark {
+      background: rgba(255,193,7,0.35); color: var(--chat-text);
+      padding: 0 2px; border-radius: 2px;
+    }
+    .chat-empty-search {
+      text-align: center; padding: 30px; color: var(--chat-muted); font-size: 0.86rem;
+    }
+
     /* ========== Modal generico (criar/configurar canal) ========== */
     .chat-modal-overlay {
       display: none; position: fixed; inset: 0; z-index: 5000;
@@ -952,6 +1013,24 @@
   </div>
 </div>
 
+<!-- Modal: Pinadas / Busca -->
+<div class="chat-modal-overlay" id="modalListaMsgs" onclick="if(event.target===this) fecharModalListaMsgs()">
+  <div class="chat-modal">
+    <div class="chat-modal-header">
+      <h3 id="modalListaMsgsTitulo"><i class="bi bi-pin-angle-fill"></i> Mensagens fixadas</h3>
+      <button class="chat-modal-close" onclick="fecharModalListaMsgs()">&times;</button>
+    </div>
+    <div class="chat-modal-body">
+      <input type="text" class="chat-search-input" id="modalSearchInput"
+             placeholder="Buscar nas mensagens deste canal..." style="display:none"
+             oninput="_buscarDebounced(this.value)">
+      <div class="chat-search-results" id="modalListaMsgsConteudo">
+        <div class="chat-empty-search">Carregando...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Lightbox global pra ampliar imagens -->
 <div class="chat-img-lightbox" id="chatImgLightbox" onclick="fecharImgLightbox()">
   <button class="chat-img-lightbox-close" onclick="fecharImgLightbox()" title="Fechar (Esc)">
@@ -1149,19 +1228,24 @@ async function abrirCanal(channelId) {
   // Header
   const hdr = document.getElementById('chatMainHeader');
   const icon = c.tipo === 'dm' ? 'bi-at' : 'bi-hash';
-  // So canais customizados podem ter o engrenagem (DM/grupo_sistema nao)
   const podeConfigurar = c.tipo === 'canal';
   hdr.innerHTML = `
     <i class="bi ${icon} header-icon"></i>
     <h2>${_esc(c.nome || '#' + c.id)}</h2>
     ${c.descricao ? `<span class="header-desc">${_esc(c.descricao)}</span>` : ''}
-    ${podeConfigurar
-      ? `<button onclick="abrirModalConfigCanal(${c.id})" title="Configurar canal"
-                 style="margin-left:auto;background:transparent;border:none;color:var(--chat-muted);
-                        cursor:pointer;font-size:1.05rem;padding:4px 8px;border-radius:6px">
-           <i class="bi bi-gear"></i>
-         </button>`
-      : ''}
+    <div class="header-tools">
+      <button onclick="abrirModalPinadas(${c.id})" title="Mensagens fixadas">
+        <i class="bi bi-pin-angle-fill"></i>
+      </button>
+      <button onclick="abrirModalBusca(${c.id})" title="Buscar mensagens">
+        <i class="bi bi-search"></i>
+      </button>
+      ${podeConfigurar
+        ? `<button onclick="abrirModalConfigCanal(${c.id})" title="Configurar canal">
+             <i class="bi bi-gear"></i>
+           </button>`
+        : ''}
+    </div>
   `;
   document.getElementById('chatInputArea').style.display = '';
   document.getElementById('chatInput').focus();
@@ -1232,11 +1316,15 @@ function _msgHtml(m) {
     ? `<span class="msg-edited" title="Editada em ${_fmtHora(m.editado_em)}">(editada)</span>`
     : '';
 
-  // Acoes: reagir/responder (todos) + editar (so autor) + apagar (autor ou admin)
+  // Acoes: reagir/responder/pin (todos) + editar (so autor) + apagar (autor ou admin)
+  const isPinned = !!m.pinned_at;
   const acoes = !isDel
     ? `<div class="msg-actions">
          <button title="Reagir" onclick="abrirReacaoPicker(${m.id}, event)"><i class="bi bi-emoji-smile"></i></button>
          <button title="Responder" onclick="iniciarReply(${m.id})"><i class="bi bi-reply"></i></button>
+         <button title="${isPinned ? 'Desfixar' : 'Fixar no canal'}" onclick="togglePinMsg(${m.id})">
+           <i class="bi ${isPinned ? 'bi-pin-angle-fill' : 'bi-pin-angle'}"></i>
+         </button>
          ${own ? `<button title="Editar" onclick="iniciarEdicao(${m.id})"><i class="bi bi-pencil"></i></button>` : ''}
          ${canManage ? `<button class="danger" title="Apagar" onclick="apagarMsg(${m.id})"><i class="bi bi-trash"></i></button>` : ''}
        </div>`
@@ -1268,8 +1356,10 @@ function _msgHtml(m) {
 
   // Highlight quando sou mencionado
   const selfMentionClass = (m.mentions && m.mentions.includes(_self.id)) ? 'has-self-mention' : '';
+  const pinnedClass = isPinned ? 'is-pinned' : '';
+  const pinTag = isPinned ? `<span class="msg-pin-tag"><i class="bi bi-pin-angle-fill"></i> fixada</span>` : '';
 
-  return `<div class="msg-group ${isDel ? 'msg-deleted' : ''} ${selfMentionClass}" id="msg-${m.id}" data-content="${_esc(m.content)}">
+  return `<div class="msg-group ${isDel ? 'msg-deleted' : ''} ${selfMentionClass} ${pinnedClass}" id="msg-${m.id}" data-content="${_esc(m.content)}">
     <div class="msg-avatar ${own ? 'own' : ''}">${_esc(av)}</div>
     <div class="msg-content">
       ${replyBanner}
@@ -1277,6 +1367,7 @@ function _msgHtml(m) {
         <span class="msg-author">${_esc(m.author?.name || 'Usuário')}</span>
         <span class="msg-time">${_fmtHora(m.criado_em)}</span>
         ${editedTag}
+        ${pinTag}
       </div>
       <div class="msg-body">${corpo}</div>
       ${anexos}
@@ -1470,6 +1561,10 @@ function conectarWebSocket() {
     } else if (data.type === 'channel_members_changed') {
       // Se o modal de config esta aberto pro mesmo canal, atualiza
       if (_configCanalId === data.channel_id) _recarregarMembrosConfig();
+    } else if (data.type === 'pin_changed') {
+      if (_canalAtivo && data.channel_id === _canalAtivo.id) {
+        aplicarPinNaUI(data.message_id, data.pinned);
+      }
     } else if (data.type === 'pong') {
       // keepalive ok
     } else if (data.type === 'error') {
@@ -2359,8 +2454,155 @@ document.addEventListener('keydown', (e) => {
     fecharModalCriarCanal();
   } else if (document.getElementById('modalConfigCanal')?.classList.contains('open')) {
     fecharModalConfigCanal();
+  } else if (document.getElementById('modalListaMsgs')?.classList.contains('open')) {
+    fecharModalListaMsgs();
   }
 });
+
+/* =====================================================================
+   2D: Pin de mensagem + Busca
+   ===================================================================== */
+
+async function togglePinMsg(msgId) {
+  try {
+    await api('POST', `/messages/${msgId}/pin`);
+    // UI atualiza via WS broadcast (pin_changed)
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+function aplicarPinNaUI(msgId, pinned) {
+  const el = document.getElementById('msg-' + msgId);
+  if (!el) return;
+  el.classList.toggle('is-pinned', pinned);
+  // Adiciona/remove tag "fixada" no header
+  const hdr = el.querySelector('.msg-header');
+  if (!hdr) return;
+  const existing = hdr.querySelector('.msg-pin-tag');
+  if (pinned && !existing) {
+    const tag = document.createElement('span');
+    tag.className = 'msg-pin-tag';
+    tag.innerHTML = '<i class="bi bi-pin-angle-fill"></i> fixada';
+    hdr.appendChild(tag);
+  } else if (!pinned && existing) {
+    existing.remove();
+  }
+  // Troca icone do botao no menu hover (se ainda existir)
+  const btn = el.querySelector('.msg-actions button[title^="Fixar"], .msg-actions button[title^="Desfixar"]');
+  if (btn) {
+    btn.title = pinned ? 'Desfixar' : 'Fixar no canal';
+    btn.innerHTML = `<i class="bi ${pinned ? 'bi-pin-angle-fill' : 'bi-pin-angle'}"></i>`;
+  }
+}
+
+async function abrirModalPinadas(channelId) {
+  _modalCanalId = channelId;
+  _modalModo = 'pinned';
+  document.getElementById('modalListaMsgsTitulo').innerHTML =
+    '<i class="bi bi-pin-angle-fill"></i> Mensagens fixadas';
+  document.getElementById('modalSearchInput').style.display = 'none';
+  document.getElementById('modalListaMsgsConteudo').innerHTML =
+    '<div class="chat-empty-search">Carregando...</div>';
+  document.getElementById('modalListaMsgs').classList.add('open');
+  try {
+    const r = await api('GET', `/channels/${channelId}/pinned`);
+    _renderListaMsgsModal(r.messages || [], null);
+  } catch (e) {
+    document.getElementById('modalListaMsgsConteudo').innerHTML =
+      `<div class="chat-empty-search">Erro: ${_esc(e.message)}</div>`;
+  }
+}
+
+async function abrirModalBusca(channelId) {
+  _modalCanalId = channelId;
+  _modalModo = 'search';
+  document.getElementById('modalListaMsgsTitulo').innerHTML =
+    '<i class="bi bi-search"></i> Buscar mensagens';
+  const input = document.getElementById('modalSearchInput');
+  input.style.display = '';
+  input.value = '';
+  document.getElementById('modalListaMsgsConteudo').innerHTML =
+    '<div class="chat-empty-search">Digite ao menos 2 caracteres pra buscar.</div>';
+  document.getElementById('modalListaMsgs').classList.add('open');
+  setTimeout(() => input.focus(), 100);
+}
+
+function fecharModalListaMsgs() {
+  document.getElementById('modalListaMsgs').classList.remove('open');
+  _modalCanalId = null;
+  _modalModo = null;
+}
+
+let _modalCanalId = null;
+let _modalModo = null;       // 'pinned' | 'search'
+let _buscaTimer = null;
+
+function _buscarDebounced(q) {
+  if (_buscaTimer) clearTimeout(_buscaTimer);
+  _buscaTimer = setTimeout(() => _executarBusca(q), 280);
+}
+
+async function _executarBusca(q) {
+  q = (q || '').trim();
+  if (!_modalCanalId) return;
+  if (q.length < 2) {
+    document.getElementById('modalListaMsgsConteudo').innerHTML =
+      '<div class="chat-empty-search">Digite ao menos 2 caracteres pra buscar.</div>';
+    return;
+  }
+  document.getElementById('modalListaMsgsConteudo').innerHTML =
+    '<div class="chat-empty-search">Buscando...</div>';
+  try {
+    const r = await api('GET',
+      `/channels/${_modalCanalId}/search?q=${encodeURIComponent(q)}`);
+    _renderListaMsgsModal(r.messages || [], q);
+  } catch (e) {
+    document.getElementById('modalListaMsgsConteudo').innerHTML =
+      `<div class="chat-empty-search">Erro: ${_esc(e.message)}</div>`;
+  }
+}
+
+function _renderListaMsgsModal(msgs, query) {
+  const box = document.getElementById('modalListaMsgsConteudo');
+  if (!msgs.length) {
+    box.innerHTML = `<div class="chat-empty-search">
+      ${_modalModo === 'pinned'
+        ? 'Nenhuma mensagem fixada neste canal ainda.'
+        : 'Nenhum resultado pra essa busca.'}
+    </div>`;
+    return;
+  }
+  const highlight = (s) => {
+    let txt = _esc(s);
+    if (query) {
+      const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+      txt = txt.replace(re, '<mark>$1</mark>');
+    }
+    return txt;
+  };
+  box.innerHTML = msgs.map(m => `
+    <div class="chat-search-result" onclick="_pularParaMsg(${m.id})">
+      <div class="meta">
+        <span class="author">${_esc(m.author?.name || 'Usuário')}</span>
+        <span>${_fmtHora(m.criado_em)}</span>
+        ${m.pinned_at ? '<span style="color:var(--chat-accent)"><i class="bi bi-pin-angle-fill"></i></span>' : ''}
+      </div>
+      <div class="body">${highlight(m.content || '(anexo)')}</div>
+    </div>`).join('');
+}
+
+function _pularParaMsg(msgId) {
+  fecharModalListaMsgs();
+  const el = document.getElementById('msg-' + msgId);
+  if (el) {
+    rolarParaMsg(msgId);
+  } else {
+    // Msg fora da janela visivel — TODO: carregar histórico até ela.
+    // Por enquanto: avisa.
+    alert('Esta mensagem não está carregada na tela. Role pra cima pra carregar o histórico mais antigo.');
+  }
+}
 </script>
 </body>
 </html>
