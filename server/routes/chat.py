@@ -1610,25 +1610,26 @@ def cleanup_imagens_antigas(request: Request, dias: int = Query(_CLEANUP_DIAS, g
 # =====================================================================
 @router.websocket("/ws")
 async def chat_ws(websocket: WebSocket):
-    # Le token via query_params manualmente. Usar `token: str = Query(...)`
-    # como parametro de handler WS estava causando rejeicao 403 silenciosa
-    # em prod (FastAPI 0.115.0 + uvicorn 0.30.6 + websockets 13.1). Bug
-    # diagnosticado em 2026-05-29 — handshake era rejeitado ANTES de chamar
-    # o handler, sem nenhum log.
+    # CRITICO: sempre fazer accept() PRIMEIRO. Chamar close() antes do
+    # accept faz o Starlette mandar HTTP 403 no handshake (cliente ve
+    # WS rejeitado, nao consegue ler reason). Esse era o bug que
+    # rejeitava WSs em prod ate 2026-05-29.
+    await websocket.accept()
+
     token = websocket.query_params.get("token", "")
-    if not token:
-        await websocket.close(code=4401, reason="Token ausente")
-        return
-    user_id = parse_session_token(token)
-    if not user_id:
-        await websocket.close(code=4401, reason="Token invalido")
-        return
-    user = get_user_by_id(user_id)
+    user_id = parse_session_token(token) if token else None
+    user = get_user_by_id(user_id) if user_id else None
     if not user:
-        await websocket.close(code=4401, reason="Usuario nao encontrado")
+        await websocket.send_text(json.dumps(
+            {"type": "error", "detail": "Token ausente ou invalido"}))
+        await websocket.close(code=4401, reason="Auth invalida")
         return
 
-    await manager.connect(user_id, websocket)
+    # Registra no manager. Nao chama manager.connect() pq esse faz accept de novo.
+    manager._conns.setdefault(user_id, set()).add(websocket)
+    logger.warning(f"[CHAT-WS] +user {user_id} (conexoes={len(manager._conns[user_id])} "
+                   f"total_users={len(manager._conns)})")
+    manager._set_presence(user_id, "online")
     try:
         # Envia hello inicial
         await websocket.send_text(json.dumps({
