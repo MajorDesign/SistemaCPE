@@ -70,19 +70,41 @@
     }
     .peers-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
       gap: 12px;
-      height: 100%;
+      align-content: start;
     }
     .peer-card {
       background: var(--bg-2); border-radius: 12px;
       position: relative;
-      min-height: 220px;
+      aspect-ratio: 1/1;          /* QUADRADO */
       border: 2px solid transparent;
       overflow: hidden;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
     }
     .peer-card.self { border-color: var(--accent); }
+    .peer-card.screen-card {
+      border-color: var(--purple);
+      cursor: pointer;
+      background: #050505;
+    }
+    .peer-card.screen-card:hover { border-color: #C084FC; }
+    .peer-card.screen-card::before {
+      content: '🖥️ Tela'; position: absolute; top: 8px; left: 8px;
+      background: var(--purple); color: #fff;
+      padding: 3px 9px; border-radius: 12px;
+      font-size: 0.7rem; font-weight: 700;
+      z-index: 3;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+    .peer-card.screen-card .peer-avatar { display: none; }
+    .peer-card.screen-card .screen-empty {
+      color: var(--muted); text-align: center; padding: 12px;
+      font-size: 0.84rem;
+    }
+    .peer-card.screen-card .screen-empty i {
+      font-size: 2.4rem; display: block; margin-bottom: 6px;
+    }
     .peer-avatar {
       width: 84px; height: 84px; border-radius: 50%;
       background: linear-gradient(135deg, #6366F1, #8B5CF6);
@@ -94,10 +116,11 @@
       color: #1A1A1A;
     }
     .peer-name {
-      position: absolute; bottom: 10px; left: 12px;
+      position: absolute; bottom: 10px; left: 12px; right: 12px;
       font-weight: 600; font-size: 0.86rem;
       color: #fff; z-index: 2;
       text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .peer-flags {
       position: absolute; top: 10px; right: 12px;
@@ -109,6 +132,75 @@
       position: absolute; inset: 0; width: 100%; height: 100%;
       object-fit: cover; background: #000; z-index: 1;
     }
+    .peer-card.screen-card video {
+      object-fit: contain;       /* tela compartilhada: nao corta */
+      background: #000;
+    }
+
+    /* Modal maximizar tela */
+    .screen-modal {
+      position: fixed; inset: 0; z-index: 1100;
+      background: rgba(0,0,0,0.95);
+      display: none; align-items: center; justify-content: center;
+      padding: 40px;
+    }
+    .screen-modal.open { display: flex; }
+    .screen-modal video {
+      max-width: 100%; max-height: 100%;
+      object-fit: contain;
+      background: #000;
+      border-radius: 8px;
+    }
+    .screen-modal-close {
+      position: absolute; top: 16px; right: 16px;
+      background: rgba(0,0,0,0.7); color: #fff;
+      border: 1px solid rgba(255,255,255,0.25);
+      width: 44px; height: 44px; border-radius: 50%;
+      font-size: 1.2rem; cursor: pointer;
+    }
+    .screen-modal-close:hover { background: var(--red); border-color: var(--red); }
+    .screen-modal-title {
+      position: absolute; top: 16px; left: 16px;
+      background: rgba(0,0,0,0.7); color: #fff;
+      padding: 8px 14px; border-radius: 20px; font-size: 0.86rem; font-weight: 600;
+    }
+
+    /* Modal configurações na sala */
+    .settings-modal {
+      position: fixed; inset: 0; z-index: 1050;
+      background: rgba(0,0,0,0.7);
+      display: none; align-items: center; justify-content: center;
+    }
+    .settings-modal.open { display: flex; }
+    .settings-box {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: 14px; padding: 22px;
+      width: 420px; max-width: 92vw;
+    }
+    .settings-box h2 {
+      margin: 0 0 14px; font-size: 1.1rem;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .settings-box label {
+      display: block; color: var(--muted); font-size: 0.74rem;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      margin: 12px 0 5px; font-weight: 600;
+    }
+    .settings-box select {
+      width: 100%; padding: 9px 11px;
+      background: var(--bg-3); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      font-size: 0.92rem;
+    }
+    .settings-box .actions {
+      margin-top: 16px; display: flex; justify-content: flex-end; gap: 8px;
+    }
+    .settings-box button {
+      padding: 9px 18px; border-radius: 8px; cursor: pointer;
+      font-weight: 600; border: 1px solid var(--border);
+    }
+    .settings-box .cancel { background: transparent; color: var(--muted); }
+    .settings-box .save { background: var(--accent); color: #1A1A1A; border-color: var(--accent); }
 
     /* Lateral: pendente de aprovação (só host) */
     .meet-pending {
@@ -441,10 +533,41 @@
     <button id="btnMic" onclick="toggleMic()" title="Microfone"><i class="bi bi-mic-fill"></i></button>
     <button id="btnCam" onclick="toggleCam()" title="Câmera"><i class="bi bi-camera-video-off-fill"></i></button>
     <button id="btnShare" onclick="toggleShare()" title="Compartilhar tela"><i class="bi bi-display"></i></button>
+    <button id="btnSettings" onclick="abrirSettings()" title="Configurações"><i class="bi bi-gear-fill"></i></button>
     <button class="leave" onclick="sairSala()" title="Sair">
       <i class="bi bi-telephone-x-fill"></i> Sair
     </button>
   </footer>
+</div>
+
+<!-- Modal: Maximizar tela compartilhada -->
+<div class="screen-modal" id="screenModal" onclick="if(event.target===this) fecharScreenMax()">
+  <button class="screen-modal-close" onclick="fecharScreenMax()" title="Fechar (Esc)">
+    <i class="bi bi-x-lg"></i>
+  </button>
+  <div class="screen-modal-title" id="screenModalTitle">—</div>
+</div>
+
+<!-- Modal: Configurações na sala -->
+<div class="settings-modal" id="settingsModal" onclick="if(event.target===this) fecharSettings()">
+  <div class="settings-box">
+    <h2><i class="bi bi-gear-fill" style="color:var(--accent)"></i> Configurações</h2>
+    <label>🎤 Microfone</label>
+    <select id="setMicSel" onchange="aplicarTrocaMic()">
+      <option value="">Padrão do sistema</option>
+    </select>
+    <label>🔊 Saída de áudio</label>
+    <select id="setSpkSel" onchange="aplicarTrocaSpk()">
+      <option value="">Padrão do sistema</option>
+    </select>
+    <label>📷 Câmera</label>
+    <select id="setCamSel" onchange="aplicarTrocaCam()">
+      <option value="">Padrão do sistema</option>
+    </select>
+    <div class="actions">
+      <button class="cancel" onclick="fecharSettings()">Fechar</button>
+    </div>
+  </div>
 </div>
 
 <script src="/SistemaCPE/web/assests/js/config.js"></script>
@@ -988,7 +1111,8 @@ function _criarPeer(peerInfo, initiator) {
     shareOn: peerInfo.share_on ?? false,
     pc,
     audioEl: null,
-    remoteStreams: new Map(),  // stream.id -> stream (video)
+    remoteCamStream: null,
+    remoteScreenStream: null,
   };
   _state.peers.set(peerInfo.peer_id, entry);
 
@@ -1071,14 +1195,24 @@ function _onRemoteTrack(peer_id, ev) {
     }
     el.srcObject = stream;
   } else if (track.kind === 'video') {
-    entry.remoteStreams.set(stream.id, stream);
+    // Heuristica de distincao cam vs screen:
+    //   1) primeira stream de video que chega = camera
+    //   2) demais = tela compartilhada
+    //   Quando o stream da tela termina, libera o slot pra proximo.
+    if (!entry.remoteCamStream || entry.remoteCamStream.id === stream.id) {
+      entry.remoteCamStream = stream;
+    } else if (entry.remoteScreenStream?.id !== stream.id) {
+      entry.remoteScreenStream = stream;
+    }
     track.onended = () => {
-      entry.remoteStreams.delete(stream.id);
+      if (entry.remoteCamStream?.id === stream.id)   entry.remoteCamStream = null;
+      if (entry.remoteScreenStream?.id === stream.id) entry.remoteScreenStream = null;
       _renderGrid();
     };
     stream.onremovetrack = () => {
       if (stream.getVideoTracks().length === 0) {
-        entry.remoteStreams.delete(stream.id);
+        if (entry.remoteCamStream?.id === stream.id)   entry.remoteCamStream = null;
+        if (entry.remoteScreenStream?.id === stream.id) entry.remoteScreenStream = null;
         _renderGrid();
       }
     };
@@ -1241,58 +1375,112 @@ function _renderGrid() {
   const grid = document.getElementById('grid');
   if (!grid) return;
   const peers = [...(_state.peers || new Map()).values()];
-  // Card self primeiro
-  const selfCard = `<div class="peer-card self" data-peer="${_esc(_state.peerId)}">
-    <div class="peer-avatar">${_esc(_initials(_state.displayName))}</div>
-    <div class="peer-name">Você (${_esc(_state.displayName)})</div>
-    <div class="peer-flags">
-      ${_state.micOn ? '<i class="bi bi-mic-fill" style="color:#10B981"></i>' : '<i class="bi bi-mic-mute-fill" style="color:#EF4444"></i>'}
-      ${_state.camOn ? '<i class="bi bi-camera-video-fill" style="color:#3B82F6"></i>' : ''}
-      ${_state.shareOn ? '<i class="bi bi-display-fill" style="color:#A855F7"></i>' : ''}
-    </div>
-  </div>`;
-  const peersCards = peers.map(p => `<div class="peer-card" data-peer="${_esc(p.peer_id)}">
-    <div class="peer-avatar">${_esc(_initials(p.name))}</div>
-    <div class="peer-name">${_esc(p.name)}</div>
-    <div class="peer-flags">
-      ${p.micOn ? '<i class="bi bi-mic-fill" style="color:#10B981"></i>' : '<i class="bi bi-mic-mute-fill" style="color:#EF4444"></i>'}
-      ${p.camOn ? '<i class="bi bi-camera-video-fill" style="color:#3B82F6"></i>' : ''}
-      ${p.shareOn ? '<i class="bi bi-display-fill" style="color:#A855F7"></i>' : ''}
-    </div>
-  </div>`).join('');
-  grid.innerHTML = selfCard + peersCards;
+  const cards = [];
+
+  // Self — card principal
+  cards.push({
+    self: true, peer_id: _state.peerId, kind: 'main',
+    displayName: 'Você (' + _state.displayName + ')',
+    avatarSrc: _state.displayName,
+    micOn: _state.micOn, camOn: _state.camOn, shareOn: _state.shareOn,
+  });
+  // Self — card adicional pra tela (se compartilhando)
+  if (_state.shareOn) {
+    cards.push({
+      self: true, peer_id: _state.peerId + '__screen', kind: 'screen',
+      displayName: 'Sua tela',
+    });
+  }
+  // Peers
+  for (const p of peers) {
+    cards.push({
+      self: false, peer_id: p.peer_id, kind: 'main',
+      displayName: p.name,
+      avatarSrc: p.name,
+      micOn: p.micOn, camOn: p.camOn, shareOn: p.shareOn,
+    });
+    if (p.shareOn || p.remoteScreenStream) {
+      cards.push({
+        self: false, peer_id: p.peer_id + '__screen', kind: 'screen',
+        displayName: 'Tela de ' + p.name,
+      });
+    }
+  }
+
+  grid.innerHTML = cards.map(c => {
+    if (c.kind === 'screen') {
+      return `<div class="peer-card screen-card ${c.self ? 'self' : ''}"
+                   data-peer="${_esc(c.peer_id)}" data-kind="screen"
+                   onclick="maximizarTela('${_esc(c.peer_id)}', '${_esc(c.displayName)}')">
+        <div class="screen-empty">
+          <i class="bi bi-display-fill"></i>
+          ${c.self ? 'Sua tela' : 'Aguardando vídeo...'}<br>
+          <small style="opacity:0.7">Clique pra maximizar</small>
+        </div>
+        <div class="peer-name">${_esc(c.displayName)}</div>
+      </div>`;
+    }
+    return `<div class="peer-card ${c.self ? 'self' : ''}"
+                 data-peer="${_esc(c.peer_id)}" data-kind="main">
+      <div class="peer-avatar">${_esc(_initials(c.avatarSrc))}</div>
+      <div class="peer-name">${_esc(c.displayName)}</div>
+      <div class="peer-flags">
+        ${c.micOn ? '<i class="bi bi-mic-fill" style="color:#10B981"></i>' : '<i class="bi bi-mic-mute-fill" style="color:#EF4444"></i>'}
+        ${c.camOn ? '<i class="bi bi-camera-video-fill" style="color:#3B82F6"></i>' : ''}
+        ${c.shareOn ? '<i class="bi bi-display-fill" style="color:#A855F7"></i>' : ''}
+      </div>
+    </div>`;
+  }).join('');
   _aplicarVideos();
 }
 
 function _aplicarVideos() {
-  // Self
-  const cardSelf = document.querySelector('.peer-card.self');
+  // Self — card principal: camera
+  const cardSelf = document.querySelector('.peer-card.self[data-kind="main"]');
   if (cardSelf) {
     if (_state.camOn && _state.localStream) {
       const camTrack = _state.localStream.getVideoTracks().find(
         t => !/screen|display|window|tab/i.test(t.label || ''));
-      if (camTrack) _ensureVideo(cardSelf, 'cam', new MediaStream([camTrack]), true);
+      if (camTrack) {
+        _ensureVideo(cardSelf, 'cam', new MediaStream([camTrack]), true);
+        cardSelf.querySelector('.peer-avatar').style.display = 'none';
+      }
     } else {
       cardSelf.querySelector('video[data-vk="cam"]')?.remove();
+      const av = cardSelf.querySelector('.peer-avatar');
+      if (av) av.style.display = '';
     }
-    if (_state.shareOn && _state.screenStream) {
-      _ensureVideo(cardSelf, 'screen', _state.screenStream, true);
-    } else {
-      cardSelf.querySelector('video[data-vk="screen"]')?.remove();
-    }
-    _layoutVideos(cardSelf);
   }
-  // Peers
+  // Self — card screen: localScreenStream
+  const cardSelfScreen = document.querySelector(`.peer-card.self[data-kind="screen"]`);
+  if (cardSelfScreen) {
+    if (_state.shareOn && _state.screenStream) {
+      _ensureVideo(cardSelfScreen, 'screen', _state.screenStream, true);
+      cardSelfScreen.querySelector('.screen-empty')?.remove();
+    }
+  }
+  // Peers — main card: remoteCamStream
   for (const p of _state.peers.values()) {
-    const card = document.querySelector(`.peer-card[data-peer="${CSS.escape(p.peer_id)}"]`);
-    if (!card) continue;
-    const ids = new Set(p.remoteStreams.keys());
-    card.querySelectorAll('video[data-vk^="r-"]').forEach(v => {
-      const id = v.dataset.vk.replace('r-', '');
-      if (!ids.has(id)) v.remove();
-    });
-    p.remoteStreams.forEach((s, id) => _ensureVideo(card, `r-${id}`, s, false));
-    _layoutVideos(card);
+    const card = document.querySelector(
+      `.peer-card[data-peer="${CSS.escape(p.peer_id)}"][data-kind="main"]`);
+    if (card) {
+      if (p.remoteCamStream) {
+        _ensureVideo(card, 'cam', p.remoteCamStream, false);
+        const av = card.querySelector('.peer-avatar');
+        if (av) av.style.display = 'none';
+      } else {
+        card.querySelector('video[data-vk="cam"]')?.remove();
+        const av = card.querySelector('.peer-avatar');
+        if (av) av.style.display = '';
+      }
+    }
+    // Peers — screen card: remoteScreenStream
+    const cardScreen = document.querySelector(
+      `.peer-card[data-peer="${CSS.escape(p.peer_id)}__screen"][data-kind="screen"]`);
+    if (cardScreen && p.remoteScreenStream) {
+      _ensureVideo(cardScreen, 'screen', p.remoteScreenStream, false);
+      cardScreen.querySelector('.screen-empty')?.remove();
+    }
   }
 }
 
@@ -1308,18 +1496,139 @@ function _ensureVideo(card, key, stream, muted) {
   return v;
 }
 
-function _layoutVideos(card) {
-  const vs = card.querySelectorAll('video');
-  vs.forEach((v, i) => {
-    if (vs.length === 1) {
-      v.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;z-index:1';
-    } else {
-      const left = i === 0 ? '0' : '50%';
-      v.style.cssText = `position:absolute;top:0;left:${left};width:50%;height:100%;object-fit:cover;background:#000;z-index:1`;
+/* ============ Maximizar tela ============ */
+function maximizarTela(peerId, titulo) {
+  // peerId tem sufixo '__screen' — pega o peer real
+  const realId = peerId.replace(/__screen$/, '');
+  let stream = null;
+  if (realId === _state.peerId) {
+    stream = _state.screenStream;
+  } else {
+    const peer = _state.peers.get(realId);
+    stream = peer?.remoteScreenStream;
+  }
+  if (!stream) { alert('A tela compartilhada ainda não chegou. Aguarde alguns segundos.'); return; }
+  const modal = document.getElementById('screenModal');
+  document.getElementById('screenModalTitle').textContent = titulo || 'Tela compartilhada';
+  // Cria/atualiza video dentro do modal
+  let v = modal.querySelector('video');
+  if (!v) {
+    v = document.createElement('video');
+    v.autoplay = true; v.playsInline = true; v.controls = false;
+    modal.appendChild(v);
+  }
+  v.srcObject = stream;
+  modal.classList.add('open');
+}
+
+function fecharScreenMax() {
+  const modal = document.getElementById('screenModal');
+  modal.classList.remove('open');
+  const v = modal.querySelector('video');
+  if (v) v.srcObject = null;
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    fecharScreenMax();
+    if (document.getElementById('settingsModal').classList.contains('open')) fecharSettings();
+  }
+});
+
+/* ============ Modal: Configurações na sala (troca dispositivo on-the-fly) ============ */
+async function abrirSettings() {
+  // Popula selects com devices atuais e marca os escolhidos
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const mics = devs.filter(d => d.kind === 'audioinput'  && d.deviceId);
+    const spks = devs.filter(d => d.kind === 'audiooutput' && d.deviceId);
+    const cams = devs.filter(d => d.kind === 'videoinput'  && d.deviceId);
+    _popularSel('setMicSel', mics, 'Microfone');
+    _popularSel('setSpkSel', spks, 'Saída');
+    _popularSel('setCamSel', cams, 'Câmera');
+    document.getElementById('setMicSel').value = localStorage.getItem('cpe_chat_micId') || '';
+    document.getElementById('setSpkSel').value = localStorage.getItem('cpe_chat_speakerId') || '';
+    document.getElementById('setCamSel').value = localStorage.getItem('cpe_chat_camId') || '';
+  } catch (e) { console.warn('[MEET] enumerateDevices fail', e); }
+  document.getElementById('settingsModal').classList.add('open');
+}
+
+function fecharSettings() {
+  document.getElementById('settingsModal').classList.remove('open');
+}
+
+function _popularSel(id, devices, fallback) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = '<option value="">Padrão do sistema</option>' +
+    devices.map((d, i) =>
+      `<option value="${_esc(d.deviceId)}">${_esc(d.label || fallback + ' ' + (i+1))}</option>`
+    ).join('');
+}
+
+async function aplicarTrocaMic() {
+  const micId = document.getElementById('setMicSel').value;
+  if (micId) localStorage.setItem('cpe_chat_micId', micId);
+  else localStorage.removeItem('cpe_chat_micId');
+  if (!_state.localStream) return;
+  // Para track antigo
+  const old = _state.localStream.getAudioTracks();
+  if (!old.length) return;  // sem audio ligado, troca so na proxima vez
+  try {
+    const audioConstr = micId ? { deviceId: { exact: micId } } : true;
+    const s = await navigator.mediaDevices.getUserMedia({ audio: audioConstr, video: false });
+    const newTrack = s.getAudioTracks()[0];
+    // Substitui nos peers via replaceTrack
+    for (const p of _state.peers.values()) {
+      const sender = p.pc.getSenders().find(s => s.track && s.track.kind === 'audio');
+      if (sender) await sender.replaceTrack(newTrack);
     }
-  });
-  const av = card.querySelector('.peer-avatar');
-  if (av) av.style.display = vs.length ? 'none' : '';
+    // Atualiza localStream
+    old.forEach(t => { t.stop(); _state.localStream.removeTrack(t); });
+    _state.localStream.addTrack(newTrack);
+    newTrack.enabled = _state.micOn;
+  } catch (e) {
+    alert('🎤 Erro ao trocar microfone: ' + (e.message || e.name));
+  }
+}
+
+async function aplicarTrocaSpk() {
+  const spkId = document.getElementById('setSpkSel').value;
+  if (spkId) localStorage.setItem('cpe_chat_speakerId', spkId);
+  else localStorage.removeItem('cpe_chat_speakerId');
+  // Aplica em todos os audio elements de peers
+  for (const p of _state.peers.values()) {
+    if (p.audioEl && typeof p.audioEl.setSinkId === 'function') {
+      try { await p.audioEl.setSinkId(spkId); } catch (e) {
+        console.warn('[MEET] setSinkId fail:', e);
+      }
+    }
+  }
+}
+
+async function aplicarTrocaCam() {
+  const camId = document.getElementById('setCamSel').value;
+  if (camId) localStorage.setItem('cpe_chat_camId', camId);
+  else localStorage.removeItem('cpe_chat_camId');
+  if (!_state.camOn) return;  // camera off, troca so na proxima vez
+  try {
+    const videoConstr = camId ? { deviceId: { exact: camId } } : true;
+    const s = await navigator.mediaDevices.getUserMedia({ video: videoConstr, audio: false });
+    const newTrack = s.getVideoTracks()[0];
+    // Substitui nos peers
+    for (const p of _state.peers.values()) {
+      const sender = p.pc.getSenders().find(s => s.track && s.track.kind === 'video'
+                                                 && !/screen|display|window|tab/i.test(s.track.label||''));
+      if (sender) await sender.replaceTrack(newTrack);
+    }
+    // Substitui no localStream
+    const oldCams = _state.localStream.getVideoTracks().filter(
+      t => !/screen|display|window|tab/i.test(t.label || ''));
+    oldCams.forEach(t => { t.stop(); _state.localStream.removeTrack(t); });
+    _state.localStream.addTrack(newTrack);
+    _renderGrid();
+  } catch (e) {
+    alert('📷 Erro ao trocar câmera: ' + (e.message || e.name));
+  }
 }
 
 /* ============ UI: pending list (só host) ============ */
