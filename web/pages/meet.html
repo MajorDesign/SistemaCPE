@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reunião — CPE Control</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg-1: #141414;
+      --bg-2: #1F1F1F;
+      --bg-3: #2A2A2A;
+      --border: #353535;
+      --text: #E5E5E5;
+      --muted: #9CA3AF;
+      --accent: #FFC107;
+      --accent-dim: #B8870C;
+      --green: #10B981;
+      --red: #EF4444;
+      --purple: #A855F7;
+      --blue: #3B82F6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg-1); color: var(--text); overflow: hidden;
+      height: 100vh; width: 100vw;
+    }
+
+    .meet-layout {
+      display: grid;
+      grid-template-rows: 56px 1fr 80px;
+      height: 100vh;
+    }
+    .meet-header {
+      background: var(--bg-2);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 14px;
+      padding: 0 18px;
+    }
+    .meet-title { flex: 1; font-weight: 700; font-size: 1.05rem; }
+    .meet-status {
+      font-size: 0.78rem; color: var(--muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .meet-status .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted);
+    }
+    .meet-status.connected .dot { background: var(--green); }
+    .meet-copy-btn {
+      background: var(--bg-3); border: 1px solid var(--border); color: var(--text);
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.82rem;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .meet-copy-btn:hover { background: var(--accent); color: #1A1A1A; }
+
+    .meet-body {
+      display: grid;
+      grid-template-columns: 1fr;
+      overflow: hidden;
+    }
+    .meet-body.with-pending {
+      grid-template-columns: 1fr 280px;
+    }
+    .meet-stage {
+      padding: 16px; overflow: auto;
+      background: var(--bg-1);
+    }
+    .peers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
+      height: 100%;
+    }
+    .peer-card {
+      background: var(--bg-2); border-radius: 12px;
+      position: relative;
+      min-height: 220px;
+      border: 2px solid transparent;
+      overflow: hidden;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .peer-card.self { border-color: var(--accent); }
+    .peer-avatar {
+      width: 84px; height: 84px; border-radius: 50%;
+      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      color: #fff; font-weight: 700; font-size: 2rem;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .peer-card.self .peer-avatar {
+      background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+      color: #1A1A1A;
+    }
+    .peer-name {
+      position: absolute; bottom: 10px; left: 12px;
+      font-weight: 600; font-size: 0.86rem;
+      color: #fff; z-index: 2;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+    }
+    .peer-flags {
+      position: absolute; top: 10px; right: 12px;
+      display: flex; gap: 6px; z-index: 2;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+      font-size: 0.92rem;
+    }
+    .peer-card video {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      object-fit: cover; background: #000; z-index: 1;
+    }
+
+    /* Lateral: pendente de aprovação (só host) */
+    .meet-pending {
+      background: var(--bg-2);
+      border-left: 1px solid var(--border);
+      padding: 14px;
+      overflow-y: auto;
+    }
+    .meet-pending h3 {
+      font-size: 0.74rem; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--muted);
+      margin: 0 0 10px;
+    }
+    .pending-card {
+      background: var(--bg-3); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px;
+      margin-bottom: 8px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .pending-card .av {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--blue); color: #fff; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; font-size: 0.78rem;
+    }
+    .pending-card .info { flex: 1; min-width: 0; }
+    .pending-card .nome {
+      font-weight: 600; font-size: 0.86rem;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .pending-card .ext {
+      font-size: 0.7rem; color: var(--muted); margin-top: 2px;
+    }
+    .pending-card .acts {
+      display: flex; gap: 4px;
+    }
+    .pending-card .acts button {
+      background: none; border: none; cursor: pointer;
+      width: 30px; height: 30px; border-radius: 50%;
+      color: #fff; display: flex; align-items: center; justify-content: center;
+    }
+    .pending-card .acts .accept { background: var(--green); }
+    .pending-card .acts .reject { background: var(--red); }
+    .pending-empty {
+      color: var(--muted); font-size: 0.8rem; padding: 12px;
+      text-align: center;
+    }
+
+    /* Controles */
+    .meet-controls {
+      background: var(--bg-2);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+    }
+    .meet-controls button {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--bg-3); border: 1px solid var(--border); color: var(--text);
+      cursor: pointer; font-size: 1.2rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .meet-controls button:hover { background: #3A3A3A; }
+    .meet-controls button.off { background: var(--red); color: #fff; }
+    .meet-controls button.active { background: var(--accent); color: #1A1A1A; }
+    .meet-controls .leave {
+      width: auto; padding: 0 22px; background: var(--red); color: #fff;
+      font-weight: 700; gap: 8px;
+    }
+    .meet-controls .leave:hover { background: #B91C1C; }
+
+    /* Modal de entrada do guest */
+    .gate-overlay {
+      position: fixed; inset: 0; z-index: 1000;
+      background: rgba(0,0,0,0.85);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .gate-box {
+      background: var(--bg-2);
+      border: 1px solid var(--border); border-radius: 14px;
+      padding: 28px 30px; width: 420px; max-width: 90vw;
+      text-align: center;
+    }
+    .gate-box h1 {
+      font-size: 1.4rem; margin: 0 0 6px; color: var(--accent);
+    }
+    .gate-box .sub { color: var(--muted); margin-bottom: 18px; font-size: 0.88rem; }
+    .gate-box input {
+      width: 100%; padding: 12px 14px; font-size: 1rem;
+      background: var(--bg-3); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .gate-box button {
+      width: 100%; padding: 12px;
+      background: var(--accent); color: #1A1A1A;
+      border: none; border-radius: 8px;
+      font-weight: 700; font-size: 0.95rem;
+      cursor: pointer;
+    }
+    .gate-box button:hover { background: var(--accent-dim); color: #fff; }
+    .gate-box button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .gate-warn {
+      font-size: 0.78rem; color: var(--muted); margin-top: 14px;
+    }
+    .gate-host-tag {
+      display: inline-block; background: var(--bg-3);
+      padding: 4px 10px; border-radius: 12px; font-size: 0.78rem;
+      color: var(--accent); margin-bottom: 14px;
+    }
+
+    /* Lobby (aguardando aprovacao) */
+    .lobby {
+      position: fixed; inset: 0; z-index: 999;
+      background: rgba(20,20,20,0.95);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 18px;
+    }
+    .lobby .pulser {
+      width: 100px; height: 100px; border-radius: 50%;
+      background: var(--accent); color: #1A1A1A;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.6rem;
+      animation: pulse 1.6s ease-out infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(255,193,7,0.5); }
+      70% { box-shadow: 0 0 0 24px rgba(255,193,7,0); }
+      100% { box-shadow: 0 0 0 0 rgba(255,193,7,0); }
+    }
+    .lobby h2 { margin: 0; font-size: 1.4rem; }
+    .lobby p { color: var(--muted); margin: 0; }
+    .lobby button {
+      background: var(--bg-3); border: 1px solid var(--border); color: var(--text);
+      padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600;
+    }
+    .lobby button:hover { background: var(--red); border-color: var(--red); color: #fff; }
+
+    /* Mensagem de erro fullscreen */
+    .err {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 12px; padding: 24px; text-align: center;
+    }
+    .err i { font-size: 3rem; color: var(--red); }
+    .err h2 { margin: 0; }
+    .err a {
+      color: var(--accent); text-decoration: none;
+      padding: 10px 20px; background: var(--bg-3); border-radius: 8px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Gate: nome do guest -->
+<div class="gate-overlay" id="gate" style="display:none">
+  <div class="gate-box">
+    <span class="gate-host-tag" id="gateHostTag">Reunião CPE</span>
+    <h1 id="gateNome">Reunião</h1>
+    <div class="sub" id="gateSub">Host vai aprovar sua entrada</div>
+    <input type="text" id="gateInput" placeholder="Digite seu nome" maxlength="80"
+           onkeydown="if(event.key==='Enter') entrarComoGuest()">
+    <button onclick="entrarComoGuest()" id="gateBtn">
+      <i class="bi bi-camera-video-fill"></i> Pedir entrada
+    </button>
+    <div class="gate-warn">
+      <i class="bi bi-info-circle"></i> O dono da sala precisa aprovar você antes de entrar.
+    </div>
+  </div>
+</div>
+
+<!-- Lobby (aguardando aprovação) -->
+<div class="lobby" id="lobby" style="display:none">
+  <div class="pulser"><i class="bi bi-hourglass-split"></i></div>
+  <h2 id="lobbyTitle">Aguardando aprovação...</h2>
+  <p id="lobbySub">O host foi notificado.</p>
+  <button onclick="sairLobby()">Cancelar</button>
+</div>
+
+<!-- Erro -->
+<div class="err" id="errBox" style="display:none">
+  <i class="bi bi-exclamation-triangle-fill"></i>
+  <h2 id="errMsg">Sala não encontrada</h2>
+  <a href="/SistemaCPE/index.html">← Voltar ao início</a>
+</div>
+
+<!-- Layout principal -->
+<div class="meet-layout" id="layout" style="display:none">
+  <header class="meet-header">
+    <i class="bi bi-camera-video-fill" style="color:var(--accent);font-size:1.3rem"></i>
+    <div class="meet-title" id="headerTitle">—</div>
+    <div class="meet-status" id="connStatus"><span class="dot"></span> Conectando...</div>
+    <button class="meet-copy-btn" onclick="copiarLink()" title="Copiar link da sala">
+      <i class="bi bi-clipboard"></i> Copiar link
+    </button>
+  </header>
+  <div class="meet-body" id="body">
+    <div class="meet-stage">
+      <div class="peers-grid" id="grid"></div>
+    </div>
+    <aside class="meet-pending" id="pendingPanel" style="display:none">
+      <h3>Aguardando aprovação</h3>
+      <div id="pendingList"></div>
+    </aside>
+  </div>
+  <footer class="meet-controls">
+    <button id="btnMic" onclick="toggleMic()" title="Microfone"><i class="bi bi-mic-fill"></i></button>
+    <button id="btnCam" onclick="toggleCam()" title="Câmera"><i class="bi bi-camera-video-off-fill"></i></button>
+    <button id="btnShare" onclick="toggleShare()" title="Compartilhar tela"><i class="bi bi-display"></i></button>
+    <button class="leave" onclick="sairSala()" title="Sair">
+      <i class="bi bi-telephone-x-fill"></i> Sair
+    </button>
+  </footer>
+</div>
+
+<script src="/SistemaCPE/web/assests/js/config.js"></script>
+<script>
+/* =====================================================================
+   Meet — sala temporaria com link externo
+   ===================================================================== */
+const STUN_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
+
+const _params = new URLSearchParams(location.search);
+const _code = _params.get('code') || '';
+
+let _state = {
+  meetingId: null,
+  meetingNome: '',
+  peerId: null,
+  guestToken: null,
+  status: null,        // 'aguardando' | 'dentro'
+  souHost: false,
+  displayName: '',
+  ws: null,
+  localStream: null,
+  screenStream: null,
+  peers: new Map(),    // peer_id -> {pc, name, micOn, camOn, shareOn, remoteStreams: Map}
+  micOn: false,
+  camOn: false,
+  shareOn: false,
+  pending: [],         // host: [{peer_id, guest_name}]
+};
+
+function _esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _initials(name) {
+  if (!name) return '?';
+  const p = name.trim().split(/\s+/);
+  return ((p[0]?.[0] || '') + (p[p.length-1]?.[0] || '')).toUpperCase() || '?';
+}
+function _tok() {
+  return localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token') || '';
+}
+async function _apiRest(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include' };
+  const t = _tok();
+  if (t) opts.headers['X-Auth-Token'] = t;
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(`${API_BASE}/api/meetings${path}`, opts);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+function _erro(msg) {
+  document.getElementById('errBox').style.display = '';
+  document.getElementById('errMsg').textContent = msg;
+}
+
+/* ============ INIT ============ */
+(async function init() {
+  if (!_code) { _erro('Link inválido (sem código)'); return; }
+  let info;
+  try {
+    info = await _apiRest('GET', `/info/${_code}`);
+  } catch (e) {
+    _erro('Sala não encontrada');
+    return;
+  }
+  const m = info.meeting;
+  if (m.encerrada) {
+    _erro(`A sala "${m.nome}" foi encerrada.`);
+    return;
+  }
+  document.title = `${m.nome} — Reunião`;
+  if (m.logado) {
+    // Interno: pula gate, vai direto pra request-entry
+    await pedirEntrada(null);
+  } else {
+    // Externo: mostra gate pra digitar nome
+    document.getElementById('gateNome').textContent = m.nome;
+    document.getElementById('gateHostTag').textContent =
+      '🎥 Reunião de ' + (m.host_nome || 'um usuário CPE');
+    document.getElementById('gate').style.display = '';
+    document.getElementById('gateInput').focus();
+  }
+})();
+
+async function entrarComoGuest() {
+  const nome = document.getElementById('gateInput').value.trim();
+  if (!nome || nome.length < 2) { alert('Digite seu nome (mín 2 caracteres).'); return; }
+  document.getElementById('gateBtn').disabled = true;
+  await pedirEntrada(nome);
+}
+
+async function pedirEntrada(guestName) {
+  try {
+    const r = await _apiRest('POST', `/${_code}/request-entry`,
+                              guestName ? { guest_name: guestName } : {});
+    _state.peerId      = r.peer_id;
+    _state.guestToken  = r.guest_token;
+    _state.status      = r.status;
+    _state.souHost     = !!r.sou_host;
+    _state.displayName = r.display_name;
+    _state.meetingId   = r.meeting_id;
+    _state.meetingNome = r.meeting_nome;
+    document.getElementById('gate').style.display = 'none';
+    if (r.status === 'aguardando') {
+      document.getElementById('lobby').style.display = '';
+      document.getElementById('lobbyTitle').textContent = 'Aguardando aprovação...';
+      document.getElementById('lobbySub').textContent =
+        'O host foi notificado que você está esperando.';
+      // Abre WS pra esperar evento 'meeting_join_approved'
+      _conectarWS();
+    } else {
+      // Entrou direto — abre WS e começa
+      _entrarNaSala();
+    }
+  } catch (e) {
+    alert('Erro: ' + e.message);
+    document.getElementById('gateBtn').disabled = false;
+  }
+}
+
+function sairLobby() {
+  if (_state.peerId) {
+    _apiRest('POST', `/${_code}/leave/${_state.peerId}`).catch(() => {});
+  }
+  location.href = '/SistemaCPE/index.html';
+}
+
+/* ============ Entrar na sala (depois de aprovado) ============ */
+async function _entrarNaSala() {
+  document.getElementById('lobby').style.display = 'none';
+  document.getElementById('layout').style.display = '';
+  document.getElementById('headerTitle').textContent = _state.meetingNome;
+  if (_state.souHost) {
+    document.getElementById('body').classList.add('with-pending');
+    document.getElementById('pendingPanel').style.display = '';
+    _renderPending();
+  }
+
+  // Captura mic (entrada padrão)
+  try {
+    _state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    _state.micOn = true;
+  } catch (e) {
+    console.warn('Sem mic', e);
+    _state.localStream = new MediaStream();
+    _state.micOn = false;
+    alert('⚠️ Não foi possível acessar o microfone. Você vai entrar como "só escuta".\n\nDetalhe: ' + e.message);
+  }
+
+  _atualizarBotoes();
+  if (!_state.ws) _conectarWS();
+  _renderGrid();
+}
+
+/* ============ WebSocket ============ */
+function _conectarWS() {
+  const API = (typeof API_BASE !== 'undefined' && API_BASE) ? API_BASE : '';
+  const wsBase = API && API.startsWith('http')
+    ? API.replace(/^http/, 'ws')
+    : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host;
+  const qs = new URLSearchParams({
+    code: _code,
+    peer_id: _state.peerId,
+  });
+  if (_state.guestToken) qs.set('guest_token', _state.guestToken);
+  else qs.set('token', _tok());
+  const url = `${wsBase}/api/meetings/ws?${qs.toString()}`;
+  _state.ws = new WebSocket(url);
+  _state.ws.addEventListener('open', () => {
+    _setStatus(true);
+    console.log('[MEET] WS aberto');
+  });
+  _state.ws.addEventListener('message', (ev) => {
+    let data; try { data = JSON.parse(ev.data); } catch { return; }
+    _onWsEvent(data);
+  });
+  _state.ws.addEventListener('close', () => {
+    _setStatus(false);
+    console.warn('[MEET] WS fechado');
+  });
+  _state.ws.addEventListener('error', () => {});
+}
+
+function _wsSend(msg) {
+  if (_state.ws?.readyState === WebSocket.OPEN) {
+    _state.ws.send(JSON.stringify(msg));
+  }
+}
+
+function _setStatus(connected) {
+  const st = document.getElementById('connStatus');
+  if (!st) return;
+  st.classList.toggle('connected', connected);
+  st.lastElementChild?.remove();
+  const txt = document.createTextNode(connected ? ' Conectado' : ' Desconectado');
+  st.appendChild(txt);
+  // Garante o dot
+  if (!st.querySelector('.dot')) {
+    const d = document.createElement('span'); d.className = 'dot';
+    st.prepend(d);
+  }
+}
+
+async function _onWsEvent(data) {
+  console.log('[MEET] WS event:', data.type, data);
+  switch (data.type) {
+    case 'hello':
+      // Lista de participantes já dentro
+      for (const p of (data.participantes || [])) {
+        _criarPeer({ peer_id: p.peer_id, name: p.display_name,
+                     mic_on: p.mic_on, cam_on: p.cam_on, share_on: p.share_on },
+                   /* initiator */ true);
+      }
+      break;
+    case 'meeting_pending_list':
+      _state.pending = data.pending || [];
+      _renderPending();
+      break;
+    case 'meeting_join_request':
+      // Sou host: alguém pediu pra entrar
+      _state.pending.push({ peer_id: data.peer_id, guest_name: data.guest_name });
+      _renderPending();
+      _tocarBip();
+      break;
+    case 'meeting_join_approved':
+      // Eu sou guest que foi aprovado — entra de fato
+      _state.status = 'dentro';
+      _entrarNaSala();
+      break;
+    case 'meeting_join_rejected':
+      alert('❌ O host não aprovou sua entrada.');
+      location.href = '/SistemaCPE/index.html';
+      break;
+    case 'meeting_participant_joined':
+      // Novo peer entrou (status='dentro'); ele vai mandar offer pros existentes.
+      // Como eu já estou na sala, AGUARDO a offer dele.
+      // Mas pra ele criar peer connection comigo, eu preciso ser conhecido.
+      // O `hello` que ele recebeu já tem minha entrada. Então ele faz a offer.
+      break;
+    case 'meeting_participant_left':
+      _removerPeer(data.peer_id);
+      break;
+    case 'meeting_state':
+      const peer = _state.peers.get(data.peer_id);
+      if (peer) {
+        peer.micOn = data.mic_on; peer.camOn = data.cam_on; peer.shareOn = data.share_on;
+        _renderGrid();
+      }
+      break;
+    case 'meeting_offer':
+      _onRemoteOffer(data);
+      break;
+    case 'meeting_answer':
+      _onRemoteAnswer(data);
+      break;
+    case 'meeting_ice':
+      _onRemoteIce(data);
+      break;
+    case 'meeting_ended':
+      alert('🚪 O host encerrou a sala.');
+      location.href = '/SistemaCPE/index.html';
+      break;
+  }
+}
+
+/* ============ PeerConnection ============ */
+function _criarPeer(peerInfo, initiator) {
+  if (_state.peers.has(peerInfo.peer_id)) return;
+  const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+  const entry = {
+    peer_id: peerInfo.peer_id,
+    name: peerInfo.name || 'Convidado',
+    micOn: peerInfo.mic_on ?? true,
+    camOn: peerInfo.cam_on ?? false,
+    shareOn: peerInfo.share_on ?? false,
+    pc,
+    audioEl: null,
+    remoteStreams: new Map(),  // stream.id -> stream (video)
+  };
+  _state.peers.set(peerInfo.peer_id, entry);
+
+  // Adiciona meus tracks
+  if (_state.localStream) {
+    for (const t of _state.localStream.getTracks()) pc.addTrack(t, _state.localStream);
+  }
+  if (_state.screenStream) {
+    for (const t of _state.screenStream.getTracks()) pc.addTrack(t, _state.screenStream);
+  }
+
+  pc.onicecandidate = (ev) => {
+    if (ev.candidate) {
+      _wsSend({ type: 'meeting_ice', to_peer_id: peerInfo.peer_id,
+                candidate: ev.candidate.toJSON() });
+    }
+  };
+  pc.ontrack = (ev) => _onRemoteTrack(peerInfo.peer_id, ev);
+  pc.onconnectionstatechange = () => {
+    if (['failed','closed','disconnected'].includes(pc.connectionState)) {
+      // Mantem peer registrado mas marca visualmente; cleanup definitivo
+      // vem via meeting_participant_left
+    }
+    _renderGrid();
+  };
+
+  if (initiator) {
+    pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
+      _wsSend({ type: 'meeting_offer', to_peer_id: peerInfo.peer_id,
+                sdp: pc.localDescription });
+    }).catch(e => console.error('[MEET] offer fail', e));
+  }
+  _renderGrid();
+}
+
+async function _onRemoteOffer(data) {
+  let entry = _state.peers.get(data.from_peer_id);
+  if (!entry) {
+    _criarPeer({ peer_id: data.from_peer_id, name: 'Convidado' }, false);
+    entry = _state.peers.get(data.from_peer_id);
+  }
+  try {
+    await entry.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    const ans = await entry.pc.createAnswer();
+    await entry.pc.setLocalDescription(ans);
+    _wsSend({ type: 'meeting_answer', to_peer_id: data.from_peer_id,
+              sdp: entry.pc.localDescription });
+  } catch (e) { console.error('[MEET] answer fail', e); }
+}
+
+async function _onRemoteAnswer(data) {
+  const entry = _state.peers.get(data.from_peer_id);
+  if (!entry) return;
+  try {
+    await entry.pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+  } catch (e) { console.error('[MEET] setRemoteDesc fail', e); }
+}
+
+async function _onRemoteIce(data) {
+  const entry = _state.peers.get(data.from_peer_id);
+  if (!entry) return;
+  try {
+    await entry.pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+  } catch (e) { console.warn('[MEET] addIceCandidate fail', e); }
+}
+
+function _onRemoteTrack(peer_id, ev) {
+  const entry = _state.peers.get(peer_id);
+  if (!entry) return;
+  const stream = ev.streams[0];
+  if (!stream) return;
+  const track = ev.track;
+  if (track.kind === 'audio') {
+    let el = entry.audioEl;
+    if (!el) {
+      el = document.createElement('audio');
+      el.autoplay = true; el.playsInline = true;
+      document.body.appendChild(el);
+      entry.audioEl = el;
+    }
+    el.srcObject = stream;
+  } else if (track.kind === 'video') {
+    entry.remoteStreams.set(stream.id, stream);
+    track.onended = () => {
+      entry.remoteStreams.delete(stream.id);
+      _renderGrid();
+    };
+    stream.onremovetrack = () => {
+      if (stream.getVideoTracks().length === 0) {
+        entry.remoteStreams.delete(stream.id);
+        _renderGrid();
+      }
+    };
+  }
+  _renderGrid();
+}
+
+function _removerPeer(peer_id) {
+  const e = _state.peers.get(peer_id);
+  if (!e) return;
+  try { e.pc.close(); } catch {}
+  e.audioEl?.remove();
+  _state.peers.delete(peer_id);
+  _renderGrid();
+}
+
+async function _renegociar(peer_id) {
+  const entry = _state.peers.get(peer_id);
+  if (!entry) return;
+  try {
+    const offer = await entry.pc.createOffer();
+    await entry.pc.setLocalDescription(offer);
+    _wsSend({ type: 'meeting_offer', to_peer_id: peer_id, sdp: entry.pc.localDescription });
+  } catch (e) { console.error('[MEET] renegociar fail', e); }
+}
+
+/* ============ Controles ============ */
+async function toggleMic() {
+  if (!_state.localStream) return;
+  // Se nao tem audio track ainda, tenta pegar
+  let audioTracks = _state.localStream.getAudioTracks();
+  if (!audioTracks.length) {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const t = s.getAudioTracks()[0];
+      _state.localStream.addTrack(t);
+      for (const p of _state.peers.values()) {
+        p.pc.addTrack(t, _state.localStream);
+        _renegociar(p.peer_id);
+      }
+      _state.micOn = true;
+    } catch (e) { alert('🎤 Microfone: ' + e.message); return; }
+  } else {
+    _state.micOn = !_state.micOn;
+    audioTracks.forEach(t => t.enabled = _state.micOn);
+  }
+  _state.atualizar?.();
+  _atualizarBotoes();
+  _renderGrid();
+  _wsSend({ type: 'meeting_state', mic_on: _state.micOn,
+            cam_on: _state.camOn, share_on: _state.shareOn });
+}
+
+async function toggleCam() {
+  if (_state.camOn) {
+    _state.localStream.getVideoTracks().filter(t => !/screen|display|window|tab/i.test(t.label||''))
+      .forEach(t => { t.stop(); _state.localStream.removeTrack(t); });
+    for (const p of _state.peers.values()) {
+      const sender = p.pc.getSenders().find(s => s.track && s.track.kind === 'video'
+                                                 && !/screen|display|window|tab/i.test(s.track.label||''));
+      if (sender) { try { p.pc.removeTrack(sender); } catch {} }
+      _renegociar(p.peer_id);
+    }
+    _state.camOn = false;
+  } else {
+    try {
+      const camStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      const track = camStream.getVideoTracks()[0];
+      _state.localStream.addTrack(track);
+      for (const p of _state.peers.values()) {
+        p.pc.addTrack(track, _state.localStream);
+        _renegociar(p.peer_id);
+      }
+      track.onended = () => { if (_state.camOn) toggleCam(); };
+      _state.camOn = true;
+    } catch (e) {
+      alert('📷 Câmera: ' + (e.message || e.name));
+      return;
+    }
+  }
+  _atualizarBotoes(); _renderGrid();
+  _wsSend({ type: 'meeting_state', mic_on: _state.micOn,
+            cam_on: _state.camOn, share_on: _state.shareOn });
+}
+
+async function toggleShare() {
+  if (_state.shareOn) {
+    _state.screenStream?.getTracks().forEach(t => t.stop());
+    for (const p of _state.peers.values()) {
+      const senders = p.pc.getSenders().filter(s => s.track && s.track.kind === 'video'
+                                                     && /screen|display|window|tab/i.test(s.track.label||''));
+      senders.forEach(s => { try { p.pc.removeTrack(s); } catch {} });
+      _renegociar(p.peer_id);
+    }
+    _state.screenStream = null; _state.shareOn = false;
+  } else {
+    if (!window.isSecureContext) {
+      alert('🖥️ Compartilhar tela requer HTTPS.'); return;
+    }
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      alert('Seu navegador não suporta compartilhar tela.'); return;
+    }
+    try {
+      const screen = await navigator.mediaDevices.getDisplayMedia({
+        video: { cursor: 'always' }, audio: false,
+      });
+      _state.screenStream = screen;
+      const track = screen.getVideoTracks()[0];
+      for (const p of _state.peers.values()) {
+        p.pc.addTrack(track, screen);
+        _renegociar(p.peer_id);
+      }
+      track.onended = () => { if (_state.shareOn) toggleShare(); };
+      _state.shareOn = true;
+    } catch (e) {
+      if (e.name !== 'NotAllowedError') alert('🖥️ Compartilhar tela: ' + e.message);
+      return;
+    }
+  }
+  _atualizarBotoes(); _renderGrid();
+  _wsSend({ type: 'meeting_state', mic_on: _state.micOn,
+            cam_on: _state.camOn, share_on: _state.shareOn });
+}
+
+function _atualizarBotoes() {
+  const btnMic = document.getElementById('btnMic');
+  btnMic.className = _state.micOn ? '' : 'off';
+  btnMic.innerHTML = _state.micOn
+    ? '<i class="bi bi-mic-fill"></i>'
+    : '<i class="bi bi-mic-mute-fill"></i>';
+  const btnCam = document.getElementById('btnCam');
+  btnCam.className = _state.camOn ? 'active' : '';
+  btnCam.innerHTML = _state.camOn
+    ? '<i class="bi bi-camera-video-fill"></i>'
+    : '<i class="bi bi-camera-video-off-fill"></i>';
+  const btnShare = document.getElementById('btnShare');
+  btnShare.className = _state.shareOn ? 'active' : '';
+}
+
+async function sairSala() {
+  if (!confirm('Sair da sala?')) return;
+  try {
+    if (_state.souHost && confirm('Você é o HOST. Quer ENCERRAR a sala pra todos? (Cancelar = só você sai)')) {
+      await _apiRest('DELETE', `/${_code}`);
+    } else if (_state.peerId) {
+      await _apiRest('POST', `/${_code}/leave/${_state.peerId}`);
+    }
+  } catch {}
+  try { _state.ws?.close(); } catch {}
+  _state.localStream?.getTracks().forEach(t => t.stop());
+  _state.screenStream?.getTracks().forEach(t => t.stop());
+  location.href = '/SistemaCPE/index.html';
+}
+
+/* ============ UI: grid de peers ============ */
+function _renderGrid() {
+  const grid = document.getElementById('grid');
+  if (!grid) return;
+  const peers = [...(_state.peers || new Map()).values()];
+  // Card self primeiro
+  const selfCard = `<div class="peer-card self" data-peer="${_esc(_state.peerId)}">
+    <div class="peer-avatar">${_esc(_initials(_state.displayName))}</div>
+    <div class="peer-name">Você (${_esc(_state.displayName)})</div>
+    <div class="peer-flags">
+      ${_state.micOn ? '<i class="bi bi-mic-fill" style="color:#10B981"></i>' : '<i class="bi bi-mic-mute-fill" style="color:#EF4444"></i>'}
+      ${_state.camOn ? '<i class="bi bi-camera-video-fill" style="color:#3B82F6"></i>' : ''}
+      ${_state.shareOn ? '<i class="bi bi-display-fill" style="color:#A855F7"></i>' : ''}
+    </div>
+  </div>`;
+  const peersCards = peers.map(p => `<div class="peer-card" data-peer="${_esc(p.peer_id)}">
+    <div class="peer-avatar">${_esc(_initials(p.name))}</div>
+    <div class="peer-name">${_esc(p.name)}</div>
+    <div class="peer-flags">
+      ${p.micOn ? '<i class="bi bi-mic-fill" style="color:#10B981"></i>' : '<i class="bi bi-mic-mute-fill" style="color:#EF4444"></i>'}
+      ${p.camOn ? '<i class="bi bi-camera-video-fill" style="color:#3B82F6"></i>' : ''}
+      ${p.shareOn ? '<i class="bi bi-display-fill" style="color:#A855F7"></i>' : ''}
+    </div>
+  </div>`).join('');
+  grid.innerHTML = selfCard + peersCards;
+  _aplicarVideos();
+}
+
+function _aplicarVideos() {
+  // Self
+  const cardSelf = document.querySelector('.peer-card.self');
+  if (cardSelf) {
+    if (_state.camOn && _state.localStream) {
+      const camTrack = _state.localStream.getVideoTracks().find(
+        t => !/screen|display|window|tab/i.test(t.label || ''));
+      if (camTrack) _ensureVideo(cardSelf, 'cam', new MediaStream([camTrack]), true);
+    } else {
+      cardSelf.querySelector('video[data-vk="cam"]')?.remove();
+    }
+    if (_state.shareOn && _state.screenStream) {
+      _ensureVideo(cardSelf, 'screen', _state.screenStream, true);
+    } else {
+      cardSelf.querySelector('video[data-vk="screen"]')?.remove();
+    }
+    _layoutVideos(cardSelf);
+  }
+  // Peers
+  for (const p of _state.peers.values()) {
+    const card = document.querySelector(`.peer-card[data-peer="${CSS.escape(p.peer_id)}"]`);
+    if (!card) continue;
+    const ids = new Set(p.remoteStreams.keys());
+    card.querySelectorAll('video[data-vk^="r-"]').forEach(v => {
+      const id = v.dataset.vk.replace('r-', '');
+      if (!ids.has(id)) v.remove();
+    });
+    p.remoteStreams.forEach((s, id) => _ensureVideo(card, `r-${id}`, s, false));
+    _layoutVideos(card);
+  }
+}
+
+function _ensureVideo(card, key, stream, muted) {
+  let v = card.querySelector(`video[data-vk="${key}"]`);
+  if (!v) {
+    v = document.createElement('video');
+    v.autoplay = true; v.playsInline = true; v.muted = !!muted;
+    v.dataset.vk = key;
+    card.appendChild(v);
+  }
+  if (v.srcObject !== stream) v.srcObject = stream;
+  return v;
+}
+
+function _layoutVideos(card) {
+  const vs = card.querySelectorAll('video');
+  vs.forEach((v, i) => {
+    if (vs.length === 1) {
+      v.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;z-index:1';
+    } else {
+      const left = i === 0 ? '0' : '50%';
+      v.style.cssText = `position:absolute;top:0;left:${left};width:50%;height:100%;object-fit:cover;background:#000;z-index:1`;
+    }
+  });
+  const av = card.querySelector('.peer-avatar');
+  if (av) av.style.display = vs.length ? 'none' : '';
+}
+
+/* ============ UI: pending list (só host) ============ */
+function _renderPending() {
+  const list = document.getElementById('pendingList');
+  if (!list) return;
+  if (!_state.pending.length) {
+    list.innerHTML = `<div class="pending-empty">
+      Ninguém aguardando aprovação.</div>`;
+    return;
+  }
+  list.innerHTML = _state.pending.map(p => `
+    <div class="pending-card">
+      <div class="av">${_esc(_initials(p.guest_name))}</div>
+      <div class="info">
+        <div class="nome">${_esc(p.guest_name)}</div>
+        <div class="ext">externo</div>
+      </div>
+      <div class="acts">
+        <button class="accept" onclick="aprovarGuest('${_esc(p.peer_id)}')" title="Aprovar">
+          <i class="bi bi-check-lg"></i>
+        </button>
+        <button class="reject" onclick="rejeitarGuest('${_esc(p.peer_id)}')" title="Rejeitar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function aprovarGuest(peerId) {
+  try {
+    await _apiRest('POST', `/${_code}/approve/${peerId}`);
+    _state.pending = _state.pending.filter(p => p.peer_id !== peerId);
+    _renderPending();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+async function rejeitarGuest(peerId) {
+  try {
+    await _apiRest('POST', `/${_code}/reject/${peerId}`);
+    _state.pending = _state.pending.filter(p => p.peer_id !== peerId);
+    _renderPending();
+  } catch (e) { alert('Erro: ' + e.message); }
+}
+
+function _tocarBip() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.value = 660;
+    g.gain.setValueAtTime(0, ctx.currentTime);
+    g.gain.linearRampToValueAtTime(0.15, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + 0.3);
+  } catch {}
+}
+
+function copiarLink() {
+  const url = `${location.origin}/SistemaCPE/web/pages/meet.html?code=${_code}`;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.querySelector('.meet-copy-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-check-lg"></i> Copiado!';
+    setTimeout(() => { btn.innerHTML = orig; }, 1500);
+  }).catch(() => alert('Link: ' + url));
+}
+
+// Beforeunload: tenta limpar (best-effort)
+window.addEventListener('beforeunload', () => {
+  if (_state.peerId && _state.code) {
+    navigator.sendBeacon?.(`${API_BASE}/api/meetings/${_code}/leave/${_state.peerId}`);
+  }
+});
+</script>
+
+</body>
+</html>

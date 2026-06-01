@@ -1366,6 +1366,12 @@
           <a href="/SistemaCPE/index.html">
             <i class="bi bi-arrow-left"></i> Voltar ao sistema
           </a>
+          <button onclick="abrirModalNovaReuniao()" title="Criar reunião com link externo"
+                  style="background:var(--chat-accent);color:#1A1A1A;border:none;border-radius:6px;
+                         padding:5px 10px;cursor:pointer;font-size:0.78rem;font-weight:600;
+                         display:flex;align-items:center;gap:5px">
+            <i class="bi bi-camera-video-fill"></i> Reunião
+          </button>
         </div>
         <div class="chat-channels-list" id="chatChannelsList">
           <div class="chat-section-title">Carregando...</div>
@@ -1491,6 +1497,58 @@
         </div>
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Nova Reunião (link externo) -->
+<div class="chat-modal-overlay" id="modalNovaReuniao" onclick="if(event.target===this) fecharModalNovaReuniao()">
+  <div class="chat-modal">
+    <div class="chat-modal-header">
+      <h3><i class="bi bi-camera-video-fill"></i> Nova reunião</h3>
+      <button class="chat-modal-close" onclick="fecharModalNovaReuniao()">&times;</button>
+    </div>
+    <div class="chat-modal-body">
+      <div id="reuniaoFormBox">
+        <div class="field">
+          <label>Nome da reunião *</label>
+          <input type="text" id="reuniaoNome" placeholder="Ex: Alinhamento com cliente X" maxlength="120">
+        </div>
+        <div style="padding:10px;background:var(--chat-bg-3);border-radius:6px;
+                    font-size:0.82rem;color:var(--chat-muted);margin-top:8px">
+          <i class="bi bi-info-circle" style="color:var(--chat-accent)"></i>
+          Será gerado um link público. Você (host) vai aprovar a entrada de qualquer pessoa
+          externa. Usuários internos do CPE entram direto. A sala fica ativa até você encerrar.
+        </div>
+      </div>
+      <div id="reuniaoLinkBox" style="display:none">
+        <label style="display:block;color:var(--chat-muted);font-size:0.78rem;
+               text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">
+          Link da reunião — compartilhe com quem precisa entrar
+        </label>
+        <div style="display:flex;gap:6px;align-items:stretch">
+          <input type="text" id="reuniaoLinkOut" readonly onclick="this.select()"
+                 style="flex:1;padding:9px 10px;background:var(--chat-bg-3);
+                        color:var(--chat-accent);border:1px solid var(--chat-border);
+                        border-radius:6px;font-family:ui-monospace,Menlo,monospace;font-size:0.82rem">
+          <button class="chat-btn chat-btn-primary" onclick="copiarLinkReuniao()" title="Copiar">
+            <i class="bi bi-clipboard"></i> Copiar
+          </button>
+        </div>
+        <div style="font-size:0.78rem;color:var(--chat-muted);margin-top:10px">
+          <i class="bi bi-exclamation-triangle" style="color:#FFC107"></i>
+          Os participantes externos vão aparecer na <strong>sala de espera</strong>; você precisa aprovar a entrada deles.
+        </div>
+      </div>
+    </div>
+    <div class="chat-modal-footer">
+      <button class="chat-btn chat-btn-secondary" onclick="fecharModalNovaReuniao()" id="reuniaoBtnCancelar">Cancelar</button>
+      <button class="chat-btn chat-btn-primary" id="reuniaoBtnGerar" onclick="gerarReuniao()">
+        <i class="bi bi-plus-lg"></i> Criar e gerar link
+      </button>
+      <button class="chat-btn chat-btn-primary" id="reuniaoBtnAbrir" onclick="abrirReuniaoAgora()" style="display:none">
+        <i class="bi bi-box-arrow-up-right"></i> Entrar agora
+      </button>
     </div>
   </div>
 </div>
@@ -3172,6 +3230,80 @@ async function copiarLinkInvite() {
     input.select(); document.execCommand('copy');
     alert('Link copiado.');
   }
+}
+
+/* ============ Modal Nova Reunião (link externo) ============ */
+let _reuniaoUrl = null;
+let _reuniaoCode = null;
+
+function abrirModalNovaReuniao() {
+  _reuniaoUrl = null;
+  _reuniaoCode = null;
+  document.getElementById('reuniaoNome').value = '';
+  document.getElementById('reuniaoFormBox').style.display = '';
+  document.getElementById('reuniaoLinkBox').style.display = 'none';
+  document.getElementById('reuniaoBtnGerar').style.display = '';
+  document.getElementById('reuniaoBtnAbrir').style.display = 'none';
+  document.getElementById('reuniaoBtnCancelar').textContent = 'Cancelar';
+  document.getElementById('modalNovaReuniao').classList.add('open');
+  setTimeout(() => document.getElementById('reuniaoNome').focus(), 100);
+}
+
+function fecharModalNovaReuniao() {
+  document.getElementById('modalNovaReuniao').classList.remove('open');
+}
+
+async function gerarReuniao() {
+  const nome = document.getElementById('reuniaoNome').value.trim();
+  if (!nome || nome.length < 2) { alert('Nome da reunião precisa ter ao menos 2 caracteres.'); return; }
+  const btn = document.getElementById('reuniaoBtnGerar');
+  btn.disabled = true;
+  try {
+    const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                   credentials: 'include' };
+    if (_token) opts.headers['X-Auth-Token'] = _token;
+    opts.body = JSON.stringify({ nome });
+    const res = await fetch(`${API_BASE}/api/meetings/`, opts);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    const r = await res.json();
+    _reuniaoUrl  = `${window.location.origin}${r.url_path}`;
+    _reuniaoCode = r.codigo;
+    document.getElementById('reuniaoLinkOut').value = _reuniaoUrl;
+    document.getElementById('reuniaoFormBox').style.display = 'none';
+    document.getElementById('reuniaoLinkBox').style.display = '';
+    document.getElementById('reuniaoBtnGerar').style.display = 'none';
+    document.getElementById('reuniaoBtnAbrir').style.display = '';
+    document.getElementById('reuniaoBtnCancelar').textContent = 'Fechar';
+  } catch (e) {
+    alert('Erro ao criar reunião: ' + e.message);
+    btn.disabled = false;
+  }
+}
+
+async function copiarLinkReuniao() {
+  if (!_reuniaoUrl) return;
+  try {
+    await navigator.clipboard.writeText(_reuniaoUrl);
+    const btn = event?.currentTarget;
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<i class="bi bi-check-lg"></i> Copiado!';
+      setTimeout(() => { btn.innerHTML = orig; }, 1500);
+    }
+  } catch {
+    document.getElementById('reuniaoLinkOut').select();
+    document.execCommand('copy');
+    alert('Link copiado.');
+  }
+}
+
+function abrirReuniaoAgora() {
+  if (!_reuniaoUrl) return;
+  window.open(_reuniaoUrl, '_blank');
+  fecharModalNovaReuniao();
 }
 
 async function _carregarInvitesAtivos(serverId) {
