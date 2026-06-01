@@ -5,7 +5,7 @@
    push notifications e click em notif.
    ===================================================================== */
 
-const SW_VERSION = 'cpe-sw-v1';
+const SW_VERSION = 'cpe-sw-v2';
 
 self.addEventListener('install', (ev) => {
   // ativa imediatamente sem esperar refresh
@@ -23,22 +23,35 @@ self.addEventListener('push', (ev) => {
   try { data = ev.data.json(); } catch { data = { title: 'CPE', body: ev.data.text() }; }
   const title = data.title || 'CPE Chat';
 
-  // Chamada recebida (tag começa com 'cpe-call-') tem tratamento especial:
-  // requireInteraction fixa a notif na tela ate user agir, vibracao mais
-  // forte, e 2 botoes (Atender / Rejeitar) que abrem o sistema na acao certa.
-  const isCall = (data.tag || '').startsWith('cpe-call-');
+  // Tipos especiais por tag:
+  //  - 'cpe-call-*'          : chamada de voz (botoes atender/rejeitar)
+  //  - 'cpe-chatmention-*'   : @mention em canal (urgente, fica fixa)
+  //  - 'cpe-chatdm-*'        : DM (semi-urgente, vibra mais forte)
+  //  - 'cpe-chat-*'          : msg comum em canal (suave)
+  const tag = data.tag || 'cpe-chat';
+  const isCall    = tag.startsWith('cpe-call-');
+  const isMention = tag.startsWith('cpe-chatmention-');
+  const isDm      = tag.startsWith('cpe-chatdm-');
+
   const opts = {
     body: data.body || '',
     icon: '/SistemaCPE/web/assests/icons/icon-192.png',
     badge: '/SistemaCPE/web/assests/icons/icon-96.png',
-    tag: data.tag || 'cpe-chat',
+    tag,
     data: { url: data.url || '/SistemaCPE/web/pages/chat.html', isCall },
-    requireInteraction: isCall,
-    vibrate: isCall ? [400, 200, 400, 200, 400, 200, 400] : [200, 100, 200],
+    // Fixa na tela ate clique pra chamadas e mentions
+    requireInteraction: isCall || isMention,
+    vibrate:
+      isCall    ? [400, 200, 400, 200, 400, 200, 400]
+      : isMention ? [300, 150, 300, 150, 300]
+      : isDm      ? [250, 120, 250]
+      :           [200, 100, 200],
     silent: false,
     actions: isCall ? [
       { action: 'answer',  title: '📞 Atender' },
       { action: 'reject',  title: '📵 Rejeitar' },
+    ] : (isMention || isDm) ? [
+      { action: 'open',  title: '💬 Abrir chat' },
     ] : [],
   };
   ev.waitUntil(self.registration.showNotification(title, opts));

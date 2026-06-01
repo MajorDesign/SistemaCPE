@@ -47,12 +47,185 @@
     .main-content { margin-left: 0 !important; }
     .top-bar { display: none !important; }
 
-    /* ===== Layout 3 colunas Discord-like ===== */
+    /* ===== Layout 4 colunas Discord-like ===== */
     .chat-app {
       display: grid;
-      grid-template-columns: 260px 1fr 220px;
+      grid-template-columns: 72px 260px 1fr 220px;
       height: 100vh;
       overflow: hidden;
+    }
+
+    /* ----- Coluna 0: barra de servidores (estilo Discord) ----- */
+    .chat-servers-bar {
+      background: #141414;
+      border-right: 1px solid var(--chat-border);
+      display: flex; flex-direction: column; align-items: center;
+      padding: 10px 0 8px;
+      gap: 6px;
+      overflow-y: auto;
+      min-height: 0;
+    }
+    .chat-servers-bar::-webkit-scrollbar { width: 0; }
+    .chat-server-pill {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: #2B2B2B; color: var(--chat-text);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 1rem; cursor: pointer;
+      transition: border-radius 0.15s, background 0.12s, color 0.12s;
+      position: relative;
+      border: none; padding: 0; overflow: hidden;
+    }
+    .chat-server-pill::before {
+      content: ''; position: absolute; left: -10px; top: 50%;
+      width: 4px; height: 0; background: var(--chat-accent);
+      transform: translateY(-50%);
+      border-radius: 0 4px 4px 0;
+      transition: height 0.15s;
+    }
+    .chat-server-pill:hover { border-radius: 16px; background: var(--chat-accent-dim); color: #1A1A1A; }
+    .chat-server-pill:hover::before { height: 20px; }
+    .chat-server-pill.active { border-radius: 16px; background: var(--chat-accent); color: #1A1A1A; }
+    .chat-server-pill.active::before { height: 36px; }
+    .chat-server-pill .badge-dot {
+      position: absolute; top: 2px; right: 2px;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #EF4444; border: 2px solid #141414;
+    }
+    .chat-server-pill img {
+      width: 100%; height: 100%; object-fit: cover;
+      display: block;
+    }
+    .chat-servers-sep {
+      width: 32px; height: 2px; background: var(--chat-border); border-radius: 1px;
+      margin: 4px 0;
+    }
+    .chat-server-create {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: transparent; color: var(--chat-online);
+      border: 2px dashed #3A3A3A;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: all 0.12s; font-size: 1.1rem;
+    }
+    .chat-server-create:hover {
+      border-radius: 16px; border-style: solid;
+      background: var(--chat-online); color: #fff;
+    }
+
+    /* ----- Cabecalho do server selecionado (acima da lista) ----- */
+    .chat-server-header {
+      padding: 12px 14px;
+      background: var(--chat-bg-1);
+      border-bottom: 1px solid var(--chat-border);
+      display: flex; align-items: center; gap: 10px;
+      cursor: pointer;
+    }
+    .chat-server-header:hover { background: #1f1f1f; }
+    .chat-server-header .name {
+      flex: 1; font-weight: 700; font-size: 0.95rem;
+      color: var(--chat-text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .chat-server-header .menu {
+      color: var(--chat-muted); font-size: 1rem;
+    }
+    .chat-server-header:hover .menu { color: var(--chat-accent); }
+
+    /* ----- Menu dropdown do server ----- */
+    .chat-server-menu {
+      position: absolute;
+      top: 56px; left: 80px;
+      background: var(--chat-bg-2);
+      border: 1px solid var(--chat-border);
+      border-radius: 8px;
+      padding: 6px 0;
+      min-width: 220px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.45);
+      z-index: 100;
+      display: none;
+    }
+    .chat-server-menu.active { display: block; }
+    .chat-server-menu .item {
+      padding: 9px 14px;
+      font-size: 0.85rem;
+      color: var(--chat-text);
+      display: flex; align-items: center; gap: 10px;
+      cursor: pointer;
+    }
+    .chat-server-menu .item:hover { background: #2F2F2F; color: var(--chat-accent); }
+    .chat-server-menu .item.danger { color: #EF4444; }
+    .chat-server-menu .item.danger:hover { background: rgba(239,68,68,0.1); }
+    .chat-server-menu .sep {
+      height: 1px; background: var(--chat-border); margin: 4px 0;
+    }
+
+    /* ----- Categoria header (collapse) ----- */
+    .chat-category {
+      padding: 10px 12px 4px;
+      display: flex; align-items: center; gap: 4px;
+      font-size: 0.66rem; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--chat-muted);
+      font-weight: 700; cursor: pointer;
+    }
+    .chat-category:hover { color: var(--chat-text); }
+    .chat-category .caret {
+      transition: transform 0.15s;
+      display: inline-block; font-size: 0.7rem;
+    }
+    .chat-category.collapsed .caret { transform: rotate(-90deg); }
+    .chat-category .nome {
+      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .chat-category .acts {
+      display: none; gap: 4px;
+    }
+    .chat-category:hover .acts { display: flex; }
+    .chat-category .acts button {
+      background: none; border: none; color: var(--chat-muted);
+      cursor: pointer; padding: 0 4px; font-size: 0.85rem;
+    }
+    .chat-category .acts button:hover { color: var(--chat-accent); }
+
+    /* Canal nao-membro (precisa pedir/aceitar pra entrar) */
+    .chat-channel-item.locked {
+      opacity: 0.6; font-style: italic;
+    }
+    .chat-channel-item.locked .chan-name::after {
+      content: ' (entrar)';
+      font-size: 0.7rem; color: var(--chat-accent); font-style: normal;
+    }
+
+    /* ----- Context menu (right-click) ----- */
+    .chat-context-menu {
+      position: fixed;
+      background: var(--chat-bg-2);
+      border: 1px solid var(--chat-border);
+      border-radius: 8px;
+      padding: 6px 0;
+      min-width: 200px;
+      box-shadow: 0 8px 22px rgba(0,0,0,0.45);
+      z-index: 1000;
+      display: none;
+    }
+    .chat-context-menu.active { display: block; }
+    .chat-context-menu .item {
+      padding: 9px 14px;
+      font-size: 0.85rem;
+      color: var(--chat-text);
+      display: flex; align-items: center; gap: 10px;
+      cursor: pointer; white-space: nowrap;
+    }
+    .chat-context-menu .item i { width: 16px; text-align: center; }
+    .chat-context-menu .item:hover { background: #2F2F2F; color: var(--chat-accent); }
+    .chat-context-menu .item.danger { color: #EF4444; }
+    .chat-context-menu .item.danger:hover { background: rgba(239,68,68,0.1); }
+    .chat-context-menu .sep { height:1px; background: var(--chat-border); margin: 4px 0; }
+
+    /* ----- Modal de invite (link gerado) ----- */
+    #inviteLinkOutput {
+      flex: 1; padding: 9px 10px;
+      background: var(--chat-bg-3); color: var(--chat-accent);
+      border: 1px solid var(--chat-border); border-radius: 6px;
+      font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.82rem;
     }
 
     /* ----- Coluna 1: canais ----- */
@@ -1158,9 +1331,38 @@
 
     <div class="chat-app" id="chatApp">
 
+      <!-- COLUNA 0: barra de servidores (Discord-like) -->
+      <div class="chat-servers-bar" id="chatServersBar">
+        <button class="chat-server-pill active" id="chatServerHome" onclick="selecionarServer(null)"
+                title="Mensagens diretas e canais soltos">
+          <i class="bi bi-house-door-fill"></i>
+        </button>
+        <div class="chat-servers-sep"></div>
+        <div id="chatServersList" style="display:flex;flex-direction:column;gap:6px;align-items:center"></div>
+        <button class="chat-server-create" id="chatServerCreate" onclick="abrirModalCriarServer()"
+                title="Criar novo servidor" style="display:none">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+      </div>
+
+      <!-- Context menu (right-click) — populado dinamicamente -->
+      <div class="chat-context-menu" id="chatContextMenu"></div>
+
+      <!-- Menu dropdown do servidor selecionado -->
+      <div class="chat-server-menu" id="chatServerMenu">
+        <div class="item" onclick="abrirModalCriarCategoria()"><i class="bi bi-folder-plus"></i> Criar categoria</div>
+        <div class="item" onclick="abrirModalCriarCanalNoServer()"><i class="bi bi-plus-square"></i> Criar canal</div>
+        <div class="sep"></div>
+        <div class="item" onclick="abrirModalMembrosServer()"><i class="bi bi-people-fill"></i> Gerenciar membros</div>
+        <div class="item" onclick="abrirModalCargos()"><i class="bi bi-shield-fill"></i> Cargos</div>
+        <div class="item" id="serverMenuEditar" onclick="abrirModalEditarServer()"><i class="bi bi-pencil-square"></i> Editar servidor</div>
+        <div class="sep"></div>
+        <div class="item danger" id="serverMenuArquivar" onclick="arquivarServer()"><i class="bi bi-archive-fill"></i> Arquivar servidor</div>
+      </div>
+
       <!-- COLUNA 1: Canais -->
       <div class="chat-sidebar">
-        <div class="chat-sidebar-header">
+        <div class="chat-sidebar-header" id="chatSidebarHeader">
           <a href="/SistemaCPE/index.html">
             <i class="bi bi-arrow-left"></i> Voltar ao sistema
           </a>
@@ -1293,6 +1495,292 @@
   </div>
 </div>
 
+<!-- Modal: Criar Invite -->
+<div class="chat-modal-overlay" id="modalCriarInvite" onclick="if(event.target===this) fecharModalCriarInvite()">
+  <div class="chat-modal">
+    <div class="chat-modal-header">
+      <h3><i class="bi bi-link-45deg"></i> Convidar pessoas</h3>
+      <button class="chat-modal-close" onclick="fecharModalCriarInvite()">&times;</button>
+    </div>
+    <div class="chat-modal-body">
+      <div id="inviteContext" style="padding:8px 10px;background:var(--chat-bg-3);
+           border:1px solid var(--chat-border);border-radius:6px;font-size:0.85rem;
+           color:var(--chat-text);margin-bottom:14px">
+        <i class="bi bi-server" style="color:var(--chat-muted)"></i>
+        Servidor: <strong id="inviteCtxServer" style="color:var(--chat-accent)"></strong>
+        <span id="inviteCtxCanalWrap" style="display:none">
+          · <i class="bi bi-hash" style="color:var(--chat-muted)"></i>
+          Canal: <strong id="inviteCtxCanal" style="color:var(--chat-accent)"></strong>
+        </span>
+      </div>
+      <div class="field">
+        <label>Expira em</label>
+        <select id="inviteExpira"
+                style="width:100%;padding:9px 10px;background:var(--chat-bg-3);
+                       color:var(--chat-text);border:1px solid var(--chat-border);border-radius:6px">
+          <option value="24">1 dia</option>
+          <option value="168" selected>7 dias</option>
+          <option value="720">30 dias</option>
+          <option value="">Nunca</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Limite de usos</label>
+        <select id="inviteMaxUsos"
+                style="width:100%;padding:9px 10px;background:var(--chat-bg-3);
+                       color:var(--chat-text);border:1px solid var(--chat-border);border-radius:6px">
+          <option value="">Sem limite</option>
+          <option value="1">1 uso</option>
+          <option value="5">5 usos</option>
+          <option value="10">10 usos</option>
+          <option value="25">25 usos</option>
+          <option value="50">50 usos</option>
+        </select>
+      </div>
+      <div id="inviteGerado" style="display:none;margin-top:14px">
+        <label style="display:block;color:var(--chat-muted);font-size:0.78rem;
+               text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">
+          Link de convite
+        </label>
+        <div style="display:flex;gap:6px;align-items:stretch">
+          <input type="text" id="inviteLinkOutput" readonly onclick="this.select()">
+          <button class="chat-btn chat-btn-primary" onclick="copiarLinkInvite()" title="Copiar">
+            <i class="bi bi-clipboard"></i> Copiar
+          </button>
+        </div>
+        <div id="inviteInfoExpira" style="font-size:0.76rem;color:var(--chat-muted);margin-top:8px"></div>
+      </div>
+      <div id="inviteAtivos" style="margin-top:18px"></div>
+    </div>
+    <div class="chat-modal-footer">
+      <button class="chat-btn chat-btn-secondary" onclick="fecharModalCriarInvite()">Fechar</button>
+      <button class="chat-btn chat-btn-primary" id="inviteGerarBtn" onclick="gerarInvite()">
+        <i class="bi bi-link"></i> Gerar link
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Criar Servidor -->
+<div class="chat-modal-overlay" id="modalCriarServer" onclick="if(event.target===this) fecharModalCriarServer()">
+  <div class="chat-modal">
+    <div class="chat-modal-header">
+      <h3><i class="bi bi-server"></i> Criar servidor</h3>
+      <button class="chat-modal-close" onclick="fecharModalCriarServer()">&times;</button>
+    </div>
+    <div class="chat-modal-body">
+      <div class="field">
+        <label>Nome do servidor *</label>
+        <input type="text" id="serverNomeInput" placeholder="Ex: CPE" maxlength="100">
+      </div>
+      <div class="field">
+        <label>Descrição (opcional)</label>
+        <textarea id="serverDescInput" placeholder="Pra que serve este servidor?" maxlength="255"></textarea>
+      </div>
+      <div class="field">
+        <label>Ícone (emoji ou inicial — opcional)</label>
+        <input type="text" id="serverIconeInput" placeholder="🏢 ou C" maxlength="4"
+               style="font-size:1.4rem;text-align:center">
+      </div>
+      <div class="field">
+        <label>Adicionar membros iniciais (você vira owner)</label>
+        <div class="chat-user-search">
+          <input type="text" id="serverMembrosBusca" placeholder="Buscar por nome ou email..."
+                 oninput="_filtrarUsuariosDisponiveis(this.value, 'criarServer')">
+        </div>
+        <div class="chat-user-list" id="serverMembrosList">
+          <div style="padding:14px;text-align:center;color:var(--chat-muted)">Carregando usuários...</div>
+        </div>
+        <div style="font-size:0.75rem;color:var(--chat-muted);margin-top:6px">
+          <span id="serverMembrosCount">0 selecionados</span>
+        </div>
+      </div>
+    </div>
+    <div class="chat-modal-footer">
+      <button class="chat-btn chat-btn-secondary" onclick="fecharModalCriarServer()">Cancelar</button>
+      <button class="chat-btn chat-btn-primary" id="serverCriarBtn" onclick="confirmarCriarServer()">
+        <i class="bi bi-plus-lg"></i> Criar servidor
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Criar Categoria -->
+<div class="chat-modal-overlay" id="modalCriarCategoria" onclick="if(event.target===this) fecharModalCriarCategoria()">
+  <div class="chat-modal">
+    <div class="chat-modal-header">
+      <h3><i class="bi bi-folder-plus"></i> Criar categoria</h3>
+      <button class="chat-modal-close" onclick="fecharModalCriarCategoria()">&times;</button>
+    </div>
+    <div class="chat-modal-body">
+      <div class="field">
+        <label>Nome da categoria *</label>
+        <input type="text" id="catNomeInput" placeholder="Ex: Geral, Voz, Projetos" maxlength="100">
+      </div>
+      <div class="field" style="color:var(--chat-muted);font-size:0.8rem">
+        <i class="bi bi-info-circle"></i> Categorias servem só pra agrupar canais visualmente.
+        Você pode mover canais entre elas depois.
+      </div>
+    </div>
+    <div class="chat-modal-footer">
+      <button class="chat-btn chat-btn-secondary" onclick="fecharModalCriarCategoria()">Cancelar</button>
+      <button class="chat-btn chat-btn-primary" id="catCriarBtn" onclick="confirmarCriarCategoria()">
+        <i class="bi bi-plus-lg"></i> Criar categoria
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Gerenciar Membros do Servidor -->
+<div class="chat-modal-overlay" id="modalMembrosServer" onclick="if(event.target===this) fecharModalMembrosServer()">
+  <div class="chat-modal">
+    <div class="chat-modal-header">
+      <h3><i class="bi bi-people-fill"></i> Membros do servidor</h3>
+      <button class="chat-modal-close" onclick="fecharModalMembrosServer()">&times;</button>
+    </div>
+    <div class="chat-modal-body">
+      <div class="field">
+        <label>Membros atuais</label>
+        <div class="chat-user-list" id="srvMembrosLista">
+          <div style="padding:14px;text-align:center;color:var(--chat-muted)">Carregando...</div>
+        </div>
+      </div>
+      <hr style="border:0;border-top:1px solid var(--chat-border);margin:14px 0">
+      <div class="field">
+        <label>Adicionar mais membros</label>
+        <div class="chat-user-search">
+          <input type="text" id="srvAddBusca" placeholder="Buscar por nome ou email..."
+                 oninput="_filtrarUsuariosDisponiveis(this.value, 'srvAdd')">
+        </div>
+        <div class="chat-user-list" id="srvAddList">
+          <div style="padding:14px;text-align:center;color:var(--chat-muted)">Buscando...</div>
+        </div>
+        <div style="margin-top:8px;text-align:right">
+          <button class="chat-btn chat-btn-primary" onclick="confirmarAddMembrosServer()">
+            <i class="bi bi-person-plus"></i> Adicionar selecionados
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Editar Servidor -->
+<!-- Modal: Cargos do Servidor -->
+<div class="chat-modal-overlay" id="modalCargos" onclick="if(event.target===this) fecharModalCargos()">
+  <div class="chat-modal" style="max-width:920px;width:92vw">
+    <div class="chat-modal-header">
+      <h3><i class="bi bi-shield-fill"></i> Cargos do servidor</h3>
+      <button class="chat-modal-close" onclick="fecharModalCargos()">&times;</button>
+    </div>
+    <div class="chat-modal-body" style="display:flex;gap:14px;min-height:480px">
+      <!-- Lista de cargos (esquerda) -->
+      <div style="width:280px;border-right:1px solid var(--chat-border);padding-right:12px;display:flex;flex-direction:column">
+        <button class="chat-btn chat-btn-primary" onclick="novoCargo()" style="margin-bottom:8px">
+          <i class="bi bi-plus-lg"></i> Novo cargo
+        </button>
+        <div id="cargosLista" style="flex:1;overflow-y:auto"></div>
+      </div>
+      <!-- Edicao do cargo selecionado (direita) -->
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column" id="cargoEditPanel">
+        <div id="cargoEditEmpty" style="margin:auto;color:var(--chat-muted);font-size:0.9rem;text-align:center">
+          <i class="bi bi-shield" style="font-size:2rem;display:block;margin-bottom:8px;opacity:0.4"></i>
+          Selecione um cargo à esquerda<br>ou crie um novo.
+        </div>
+        <div id="cargoEditForm" style="display:none;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:10px;align-items:center">
+            <input type="text" id="cargoEditNome" placeholder="Nome do cargo"
+                   style="flex:1;padding:9px 10px;background:var(--chat-bg-3);
+                          color:var(--chat-text);border:1px solid var(--chat-border);
+                          border-radius:6px;font-size:0.95rem;font-weight:600">
+            <input type="color" id="cargoEditCor" title="Cor"
+                   style="width:48px;height:42px;cursor:pointer;background:transparent;
+                          border:1px solid var(--chat-border);border-radius:6px">
+            <button onclick="cargoLimparCor()" title="Sem cor"
+                    style="background:none;border:1px solid var(--chat-border);
+                           color:var(--chat-muted);padding:8px 10px;border-radius:6px;cursor:pointer">
+              <i class="bi bi-x-circle"></i>
+            </button>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <label style="font-size:0.8rem;color:var(--chat-muted)">Ordem (maior = hierarquia mais alta)</label>
+            <input type="number" id="cargoEditOrdem" min="0" max="9999"
+                   style="width:80px;padding:6px 8px;background:var(--chat-bg-3);
+                          color:var(--chat-text);border:1px solid var(--chat-border);border-radius:6px">
+          </div>
+
+          <div style="margin-top:6px">
+            <label style="display:block;color:var(--chat-muted);font-size:0.78rem;
+                   text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px">
+              Permissões deste cargo
+            </label>
+            <div id="cargoPermsBox" style="display:grid;grid-template-columns:1fr 1fr;gap:6px"></div>
+          </div>
+
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px">
+            <button class="chat-btn chat-btn-secondary" onclick="excluirCargoAtual()"
+                    id="cargoBtnExcluir" style="color:#EF4444">
+              <i class="bi bi-trash"></i> Excluir cargo
+            </button>
+            <button class="chat-btn chat-btn-primary" onclick="salvarCargo()">
+              <i class="bi bi-check-lg"></i> Salvar
+            </button>
+          </div>
+
+          <hr style="border:0;border-top:1px solid var(--chat-border);margin:8px 0">
+
+          <label style="display:block;color:var(--chat-muted);font-size:0.78rem;
+                 text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">
+            Membros deste cargo
+          </label>
+          <div id="cargoMembrosLista"
+               style="border:1px solid var(--chat-border);border-radius:6px;background:var(--chat-bg-3);
+                      max-height:160px;overflow-y:auto;padding:4px"></div>
+          <div style="margin-top:6px">
+            <input type="text" id="cargoAddBusca" placeholder="Adicionar membro ao cargo: buscar..."
+                   oninput="_filtrarMembrosPraCargo(this.value)"
+                   style="width:100%;padding:8px 10px;background:var(--chat-bg-3);
+                          color:var(--chat-text);border:1px solid var(--chat-border);border-radius:6px">
+            <div id="cargoAddList"
+                 style="border:1px solid var(--chat-border);border-radius:6px;background:var(--chat-bg-3);
+                        max-height:180px;overflow-y:auto;margin-top:6px;display:none"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="chat-modal-overlay" id="modalEditarServer" onclick="if(event.target===this) fecharModalEditarServer()">
+  <div class="chat-modal">
+    <div class="chat-modal-header">
+      <h3><i class="bi bi-pencil-square"></i> Editar servidor</h3>
+      <button class="chat-modal-close" onclick="fecharModalEditarServer()">&times;</button>
+    </div>
+    <div class="chat-modal-body">
+      <div class="field">
+        <label>Nome</label>
+        <input type="text" id="editServerNome" maxlength="100">
+      </div>
+      <div class="field">
+        <label>Descrição</label>
+        <textarea id="editServerDesc" maxlength="255"></textarea>
+      </div>
+      <div class="field">
+        <label>Ícone (emoji ou inicial)</label>
+        <input type="text" id="editServerIcone" maxlength="4"
+               style="font-size:1.4rem;text-align:center">
+      </div>
+    </div>
+    <div class="chat-modal-footer">
+      <button class="chat-btn chat-btn-secondary" onclick="fecharModalEditarServer()">Cancelar</button>
+      <button class="chat-btn chat-btn-primary" onclick="confirmarEditarServer()">
+        <i class="bi bi-check-lg"></i> Salvar
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Criar Canal -->
 <div class="chat-modal-overlay" id="modalCriarCanal" onclick="if(event.target===this) fecharModalCriarCanal()">
   <div class="chat-modal">
@@ -1326,6 +1814,29 @@
               <div style="font-size:0.72rem;color:var(--chat-muted)">Voz + vídeo + tela (até 5 pessoas)</div>
             </div>
           </label>
+        </div>
+      </div>
+      <div class="field" id="canalServerCtx" style="display:none;
+           padding:8px 10px;background:var(--chat-bg-3);border:1px solid var(--chat-border);
+           border-radius:6px;font-size:0.82rem;color:var(--chat-muted)">
+        <i class="bi bi-server"></i> Criando dentro do servidor:
+        <strong id="canalServerCtxNome" style="color:var(--chat-accent)"></strong>
+      </div>
+      <div class="field" id="canalCategoriaWrap" style="display:none">
+        <label>Categoria (opcional)</label>
+        <select id="canalCategoriaSel"
+                style="width:100%;padding:9px 10px;background:var(--chat-bg-3);
+                       color:var(--chat-text);border:1px solid var(--chat-border);border-radius:6px">
+          <option value="">— Sem categoria (no topo do servidor) —</option>
+        </select>
+      </div>
+      <div class="field" id="canalCargosWrap" style="display:none">
+        <label>Cargos com acesso (opcional)</label>
+        <div id="canalCargosList"
+             style="border:1px solid var(--chat-border);border-radius:6px;background:var(--chat-bg-3);
+                    padding:6px;max-height:140px;overflow-y:auto"></div>
+        <div style="font-size:0.72rem;color:var(--chat-muted);margin-top:4px">
+          Deixe vazio pra liberar pra todos os membros do servidor. Marque um ou mais cargos pra restringir.
         </div>
       </div>
       <div class="field">
@@ -1435,6 +1946,22 @@
 
       <div class="cfg-section" data-section="conta">
         <h2>Conta</h2>
+        <h3>Foto de perfil</h3>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px">
+          <div id="cfgAvatarPreview"
+               style="width:80px;height:80px;border-radius:50%;
+                      background:linear-gradient(135deg,var(--chat-accent),var(--chat-accent-dim));
+                      color:#1A1A1A;display:flex;align-items:center;justify-content:center;
+                      font-weight:700;font-size:1.6rem;overflow:hidden;flex-shrink:0">?</div>
+          <div style="flex:1">
+            <button class="chat-btn chat-btn-primary" onclick="mudarFotoMe()">
+              <i class="bi bi-camera-fill"></i> Mudar foto
+            </button>
+            <div style="font-size:0.75rem;color:var(--chat-muted);margin-top:6px">
+              JPG, PNG, WebP ou GIF · máx 2 MB
+            </div>
+          </div>
+        </div>
         <h3>Informações</h3>
         <div class="cfg-field">
           <div class="cfg-field-row">
@@ -1613,6 +2140,19 @@ function _initials(name) {
   const parts = name.trim().split(/\s+/);
   return ((parts[0]?.[0] || '') + (parts[parts.length-1]?.[0] || '')).toUpperCase() || '?';
 }
+
+// Renderiza conteudo interno de um avatar: <img> se tiver avatar_url,
+// senao texto com iniciais. NAO inclui o container externo — caller
+// decide o tamanho/classe.
+function _avatarConteudo(user) {
+  if (!user) return '?';
+  if (user.avatar_url) {
+    const url = user.avatar_url;
+    return `<img src="${_esc(url)}" alt=""
+                 style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+  }
+  return _esc(_initials(user.name || user.email || ''));
+}
 function _fmtHora(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -1662,9 +2202,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   _verificarIncomingCallNaURL();
+  // Busca dados enriquecidos do user atual (inclui avatar_url) e aplica no footer
+  try {
+    const me = await api('GET', '/me');
+    if (me?.user) {
+      _self.avatar_url = me.user.avatar_url;
+      _aplicarAvatarSelfNoFooter();
+    }
+  } catch { /* sem foto OK */ }
+  await carregarServers();
   await carregarCanais();
   await carregarUsuariosSistema();
   conectarWebSocket();
+  // Processa convite via URL (?invite=CODE) — depois de carregar servers/canais
+  _verificarInviteNaURL();
   _setupDragDrop();
 
   // Limpa typings expirados a cada 1s
@@ -1704,12 +2255,1028 @@ async function _carregarPeersDosCanaisVoz() {
   renderListaCanais();
 }
 
+/* ============ Servidores (Discord-like) ============ */
+let _servers       = [];           // [{id,nome,descricao,icone,role}]
+let _serverAtivo   = null;         // null = view "Home" (DMs + canais soltos)
+let _serverArvore  = { server: null, categories: [], channels: [] };
+let _categoriasCollapsed = new Set();  // ids de categoria colapsadas (UI state)
+let _serverMembrosCache = [];      // pra modal gerenciar membros
+
+async function carregarServers() {
+  try {
+    const r = await api('GET', '/servers');
+    _servers = r.servers || [];
+  } catch (e) {
+    console.warn('[chat] erro carregando servers', e);
+    _servers = [];
+  }
+  renderServersBar();
+}
+
+function renderServersBar() {
+  const box = document.getElementById('chatServersList');
+  if (!box) return;
+  box.innerHTML = _servers.map(s => {
+    const ativo = _serverAtivo === s.id ? 'active' : '';
+    // icone pode ser URL de imagem (uploaded) ou texto curto (emoji/inicial)
+    const ehImg = s.icone && /^(https?:)?\/[^\s]+\.(jpe?g|png|webp|gif)(\?[^\s]*)?$/i.test(s.icone);
+    const conteudo = ehImg
+      ? `<img src="${_esc(s.icone)}" alt="${_esc(s.nome)}">`
+      : _esc(s.icone || _initials(s.nome));
+    return `<button class="chat-server-pill ${ativo}" title="${_esc(s.nome)}"
+                    onclick="selecionarServer(${s.id})"
+                    oncontextmenu="event.preventDefault(); mostrarContextMenuServer(event, ${s.id})"
+                    >${conteudo}</button>`;
+  }).join('');
+
+  // Estado do "Home"
+  const home = document.getElementById('chatServerHome');
+  if (home) home.classList.toggle('active', _serverAtivo === null);
+
+  // Botao criar — visivel pra ADMIN/TI/MANAGER
+  const podeCriarServer = ['ADMIN','TI','MANAGER'].includes(_self.role || '');
+  const btnCreate = document.getElementById('chatServerCreate');
+  if (btnCreate) btnCreate.style.display = podeCriarServer ? '' : 'none';
+}
+
+async function selecionarServer(serverId) {
+  _serverAtivo = serverId;
+  // Fecha menu dropdown se aberto
+  document.getElementById('chatServerMenu')?.classList.remove('active');
+  renderServersBar();
+  if (serverId === null) {
+    _serverArvore = { server: null, categories: [], channels: [] };
+    renderListaCanais();
+    return;
+  }
+  // Carrega árvore do server (categorias + canais)
+  try {
+    const r = await api('GET', `/servers/${serverId}`);
+    _serverArvore = {
+      server: r.server,
+      categories: r.categories || [],
+      channels: r.channels || [],
+    };
+  } catch (e) {
+    _serverArvore = { server: null, categories: [], channels: [] };
+    document.getElementById('chatChannelsList').innerHTML =
+      `<div style="padding:14px;color:#EF4444;font-size:0.82rem">Erro: ${_esc(e.message)}</div>`;
+    return;
+  }
+  renderListaCanais();
+}
+
+function _renderArvoreServer() {
+  const srv = _serverArvore.server;
+  if (!srv) return '<div style="padding:14px;color:var(--chat-muted)">Carregando...</div>';
+
+  const podeAdmin = ['owner','admin'].includes(srv.my_role);
+  // Cabecalho do servidor (clicavel → abre menu)
+  let html = `<div class="chat-server-header" onclick="toggleServerMenu(event)">
+    <span class="name">${_esc(srv.nome)}</span>
+    <i class="bi bi-chevron-down menu"></i>
+  </div>`;
+
+  // Habilita/desabilita itens do menu via classes (feito em toggleServerMenu)
+  // Canais sem categoria (raiz do servidor)
+  const sCanaisRaiz = _serverArvore.channels.filter(c => c.categoria_id === null);
+  if (sCanaisRaiz.length) {
+    html += sCanaisRaiz.map(c => _renderItemCanalServer(c)).join('');
+  }
+
+  // Categorias com seus canais
+  for (const cat of _serverArvore.categories) {
+    const collapsed = _categoriasCollapsed.has(cat.id) ? 'collapsed' : '';
+    html += `<div class="chat-category ${collapsed}" onclick="toggleCategoria(${cat.id})">
+      <span class="caret">▾</span>
+      <span class="nome">${_esc(cat.nome)}</span>
+      ${podeAdmin
+        ? `<span class="acts">
+             <button onclick="event.stopPropagation(); abrirModalCriarCanalNaCategoria(${cat.id})"
+                     title="Criar canal nesta categoria"><i class="bi bi-plus-lg"></i></button>
+             <button onclick="event.stopPropagation(); excluirCategoria(${cat.id})"
+                     title="Excluir categoria"><i class="bi bi-trash"></i></button>
+           </span>`
+        : ''}
+    </div>`;
+    if (!_categoriasCollapsed.has(cat.id)) {
+      const filhos = _serverArvore.channels.filter(c => c.categoria_id === cat.id);
+      html += filhos.map(c => _renderItemCanalServer(c)).join('');
+      if (!filhos.length) {
+        html += `<div style="padding:4px 16px;color:var(--chat-muted);font-size:0.74rem">
+          Nenhum canal nesta categoria.</div>`;
+      }
+    }
+  }
+
+  if (!_serverArvore.categories.length && !sCanaisRaiz.length) {
+    html += `<div style="padding:14px;color:var(--chat-muted);font-size:0.82rem;text-align:center">
+      Servidor vazio.
+      ${podeAdmin ? '<br>Clique no nome do servidor pra criar categoria/canal.' : ''}
+    </div>`;
+  }
+  return html;
+}
+
+function _renderItemCanalServer(c) {
+  const ativo = _canalAtivo && _canalAtivo.id === c.id ? 'active' : '';
+  const locked = c.sou_membro ? '' : 'locked';
+  const icon = c.tipo === 'voz'
+    ? '<i class="bi bi-volume-up-fill chan-icon"></i>'
+    : '<i class="bi bi-hash chan-icon"></i>';
+  const handler = c.sou_membro
+    ? `abrirCanal(${c.id})`
+    : `entrarNoCanalDoServer(${c.id})`;
+  const dbl = c.tipo === 'voz' && c.sou_membro
+    ? `ondblclick="event.preventDefault(); window.voiceEntrar && window.voiceEntrar(${c.id})"`
+    : '';
+  return `<div class="chat-channel-item ${ativo} ${locked}" onclick="${handler}" ${dbl}
+       oncontextmenu="event.preventDefault(); mostrarContextMenuCanal(event, ${c.id})">
+    ${icon}
+    <span class="chan-name">${_esc(c.nome || '#' + c.id)}</span>
+  </div>`;
+}
+
+function toggleCategoria(catId) {
+  if (_categoriasCollapsed.has(catId)) _categoriasCollapsed.delete(catId);
+  else _categoriasCollapsed.add(catId);
+  renderListaCanais();
+}
+
+function toggleServerMenu(ev) {
+  ev?.stopPropagation();
+  const menu = document.getElementById('chatServerMenu');
+  if (!menu) return;
+  const srv = _serverArvore.server;
+  if (!srv) return;
+  const podeAdmin = ['owner','admin'].includes(srv.my_role);
+  const ehOwner = srv.my_role === 'owner';
+  // Mostra/esconde itens conforme role
+  menu.querySelectorAll('.item').forEach(it => {
+    it.style.display = podeAdmin ? '' : 'none';
+  });
+  // Só owner edita/arquiva
+  const editar   = document.getElementById('serverMenuEditar');
+  const arquivar = document.getElementById('serverMenuArquivar');
+  if (editar)   editar.style.display   = ehOwner ? '' : 'none';
+  if (arquivar) arquivar.style.display = ehOwner ? '' : 'none';
+  menu.classList.toggle('active');
+}
+// Fecha menu ao clicar fora
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('chatServerMenu');
+  if (!menu || !menu.classList.contains('active')) return;
+  if (e.target.closest('.chat-server-header') || e.target.closest('.chat-server-menu')) return;
+  menu.classList.remove('active');
+});
+
+async function entrarNoCanalDoServer(channelId) {
+  // Adesão manual: chama /channels/{id}/members com o próprio user_id
+  try {
+    await api('POST', `/channels/${channelId}/members`, { user_ids: [_self.id] });
+    // Recarrega tudo
+    await carregarCanais();
+    if (_serverAtivo) await selecionarServer(_serverAtivo);
+    abrirCanal(channelId);
+  } catch (e) {
+    alert('Erro ao entrar no canal: ' + e.message);
+  }
+}
+
+/* ----- Modais: servidor ----- */
+async function abrirModalCriarServer() {
+  _resetSel('criarServer');
+  document.getElementById('serverNomeInput').value = '';
+  document.getElementById('serverDescInput').value = '';
+  document.getElementById('serverIconeInput').value = '';
+  document.getElementById('serverMembrosBusca').value = '';
+  document.getElementById('modalCriarServer').classList.add('open');
+  await _carregarUsuariosDisponiveis();
+  _renderUserSelector('serverMembrosList', 'criarServer');
+}
+function fecharModalCriarServer() {
+  document.getElementById('modalCriarServer').classList.remove('open');
+}
+async function confirmarCriarServer() {
+  const nome  = document.getElementById('serverNomeInput').value.trim();
+  const desc  = document.getElementById('serverDescInput').value.trim();
+  const icone = document.getElementById('serverIconeInput').value.trim();
+  if (!nome || nome.length < 2) { alert('Nome do servidor precisa ter ao menos 2 caracteres.'); return; }
+  const btn = document.getElementById('serverCriarBtn');
+  btn.disabled = true;
+  try {
+    const r = await api('POST', '/servers', {
+      nome, descricao: desc || null, icone: icone || null,
+      member_ids: [..._selecionadosCriarServer],
+    });
+    fecharModalCriarServer();
+    await carregarServers();
+    if (r.server_id) selecionarServer(r.server_id);
+  } catch (e) {
+    alert('Erro ao criar servidor: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* ----- Modal: criar categoria ----- */
+function abrirModalCriarCategoria() {
+  if (!_serverAtivo) return;
+  document.getElementById('catNomeInput').value = '';
+  document.getElementById('modalCriarCategoria').classList.add('open');
+  document.getElementById('chatServerMenu')?.classList.remove('active');
+}
+function fecharModalCriarCategoria() {
+  document.getElementById('modalCriarCategoria').classList.remove('open');
+}
+async function confirmarCriarCategoria() {
+  if (!_serverAtivo) return;
+  const nome = document.getElementById('catNomeInput').value.trim();
+  if (!nome) { alert('Nome obrigatório.'); return; }
+  const btn = document.getElementById('catCriarBtn');
+  btn.disabled = true;
+  try {
+    await api('POST', `/servers/${_serverAtivo}/categories`, { nome });
+    fecharModalCriarCategoria();
+    await selecionarServer(_serverAtivo);
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+async function excluirCategoria(catId) {
+  if (!confirm('Excluir esta categoria? Os canais ficarão no topo do servidor.')) return;
+  try {
+    await api('DELETE', `/categories/${catId}`);
+    await selecionarServer(_serverAtivo);
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+/* ----- Modal: criar canal dentro do server ----- */
+async function abrirModalCriarCanalNoServer() {
+  if (!_serverAtivo) return;
+  await abrirModalCriarCanal();
+  _configurarModalCanalParaServer(null);
+  document.getElementById('chatServerMenu')?.classList.remove('active');
+}
+async function abrirModalCriarCanalNaCategoria(catId) {
+  if (!_serverAtivo) return;
+  await abrirModalCriarCanal();
+  _configurarModalCanalParaServer(catId);
+}
+async function _configurarModalCanalParaServer(catId) {
+  const ctx  = document.getElementById('canalServerCtx');
+  const nome = document.getElementById('canalServerCtxNome');
+  const wrap = document.getElementById('canalCategoriaWrap');
+  const sel  = document.getElementById('canalCategoriaSel');
+  if (!ctx || !_serverArvore.server) return;
+  ctx.style.display = '';
+  nome.textContent = _serverArvore.server.nome;
+  wrap.style.display = '';
+  // Popula categorias
+  sel.innerHTML = '<option value="">— Sem categoria (no topo do servidor) —</option>' +
+    _serverArvore.categories.map(c =>
+      `<option value="${c.id}" ${c.id === catId ? 'selected' : ''}>${_esc(c.nome)}</option>`
+    ).join('');
+  // Popula cargos do servidor (whitelist opcional)
+  const cargosWrap = document.getElementById('canalCargosWrap');
+  const cargosList = document.getElementById('canalCargosList');
+  cargosWrap.style.display = '';
+  cargosList.innerHTML = '<div style="padding:6px;color:var(--chat-muted);font-size:0.78rem">Carregando cargos...</div>';
+  try {
+    const r = await api('GET', `/servers/${_serverAtivo}/roles`);
+    const cargos = r.roles || [];
+    if (!cargos.length) {
+      cargosList.innerHTML = `<div style="padding:6px;color:var(--chat-muted);font-size:0.78rem">
+        Nenhum cargo criado neste servidor. Crie cargos primeiro pra poder restringir canais.</div>`;
+    } else {
+      cargosList.innerHTML = cargos.map(c => `
+        <label style="display:flex;align-items:center;gap:6px;padding:4px 6px;cursor:pointer">
+          <input type="checkbox" data-role-id="${c.id}" style="accent-color:var(--chat-accent)">
+          ${c.cor ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${_esc(c.cor)}"></span>` : ''}
+          <span style="color:${c.cor ? _esc(c.cor) : 'var(--chat-text)'};font-size:0.85rem">${_esc(c.nome)}</span>
+        </label>
+      `).join('');
+    }
+  } catch (e) {
+    cargosList.innerHTML = `<div style="padding:6px;color:#EF4444;font-size:0.78rem">Erro: ${_esc(e.message)}</div>`;
+  }
+}
+
+/* ----- Modal: gerenciar membros do servidor ----- */
+async function abrirModalMembrosServer() {
+  if (!_serverAtivo) return;
+  document.getElementById('chatServerMenu')?.classList.remove('active');
+  _resetSel('srvAdd');
+  document.getElementById('srvAddBusca').value = '';
+  document.getElementById('modalMembrosServer').classList.add('open');
+  await _carregarUsuariosDisponiveis();
+  await _recarregarMembrosServer();
+}
+function fecharModalMembrosServer() {
+  document.getElementById('modalMembrosServer').classList.remove('open');
+  _serverMembrosCache = [];
+}
+async function _recarregarMembrosServer() {
+  if (!_serverAtivo) return;
+  try {
+    const r = await api('GET', `/servers/${_serverAtivo}/members`);
+    _serverMembrosCache = r.members || [];
+    _renderMembrosServer();
+    _renderUserSelector('srvAddList', 'srvAdd',
+      new Set(_serverMembrosCache.map(m => m.user_id)));
+  } catch (e) {
+    document.getElementById('srvMembrosLista').innerHTML =
+      `<div style="padding:14px;color:#EF4444">Erro: ${_esc(e.message)}</div>`;
+  }
+}
+function _renderMembrosServer() {
+  const box = document.getElementById('srvMembrosLista');
+  if (!box) return;
+  const meuRole = _serverArvore.server?.my_role;
+  const ehOwner = meuRole === 'owner';
+  box.innerHTML = _serverMembrosCache.map(m => {
+    const roleClass = m.role === 'owner' ? 'owner' : m.role === 'admin' ? 'admin' : '';
+    const podeRemover = (ehOwner || meuRole === 'admin') && m.role !== 'owner' && m.user_id !== _self.id;
+    const podePromover = ehOwner && m.role !== 'owner';
+    // Cor do nome = cargo de maior ordem (cor != null), se houver
+    const corNome = (m.roles || []).find(r => r.cor)?.cor || 'var(--chat-text)';
+    const rolesBadges = (m.roles || []).map(r => {
+      const bg = r.cor ? r.cor + '33' : '#3A3A3A';
+      const fg = r.cor || 'var(--chat-text)';
+      const bd = r.cor || 'var(--chat-border)';
+      return `<span style="display:inline-block;padding:1px 6px;border-radius:10px;
+              font-size:0.66rem;font-weight:600;background:${bg};color:${fg};
+              border:1px solid ${bd};margin-right:3px;white-space:nowrap">
+              ${_esc(r.nome)}</span>`;
+    }).join('');
+    return `<div class="chat-member-row">
+      <div class="av" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#8B5CF6);
+                color:#fff;font-weight:700;font-size:0.72rem;display:flex;align-items:center;justify-content:center;overflow:hidden">
+        ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="color:${corNome};font-weight:500">${_esc(m.name || m.email)}</div>
+        <div style="font-size:0.74rem;color:var(--chat-muted)">${_esc(m.email || '')}</div>
+        ${rolesBadges ? `<div style="margin-top:4px">${rolesBadges}</div>` : ''}
+      </div>
+      <span class="role-badge ${roleClass}">${m.role}</span>
+      ${podePromover
+        ? `<button class="remove-btn" onclick="alterarRoleSrv(${m.user_id}, '${m.role === 'admin' ? 'member' : 'admin'}')"
+                   title="${m.role === 'admin' ? 'Rebaixar a member' : 'Promover a admin'}">
+             <i class="bi bi-shield-${m.role === 'admin' ? 'minus' : 'plus'}"></i>
+           </button>`
+        : ''}
+      ${podeRemover
+        ? `<button class="remove-btn" onclick="removerMembroSrv(${m.user_id})" title="Remover do servidor">
+             <i class="bi bi-x-circle"></i>
+           </button>`
+        : ''}
+    </div>`;
+  }).join('');
+}
+async function confirmarAddMembrosServer() {
+  if (!_serverAtivo) return;
+  const ids = [..._selecionadosSrvAdd];
+  if (!ids.length) { alert('Selecione pelo menos um usuário.'); return; }
+  try {
+    await api('POST', `/servers/${_serverAtivo}/members`, { user_ids: ids, role: 'member' });
+    _resetSel('srvAdd');
+    await _recarregarMembrosServer();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+async function removerMembroSrv(userId) {
+  if (!confirm('Remover este membro do servidor?')) return;
+  try {
+    await api('DELETE', `/servers/${_serverAtivo}/members/${userId}`);
+    await _recarregarMembrosServer();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+async function alterarRoleSrv(userId, novoRole) {
+  try {
+    await api('PATCH', `/servers/${_serverAtivo}/members/${userId}`, { role: novoRole });
+    await _recarregarMembrosServer();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+/* ----- Modal: editar/arquivar servidor ----- */
+function abrirModalEditarServer() {
+  if (!_serverAtivo || !_serverArvore.server) return;
+  const s = _serverArvore.server;
+  document.getElementById('editServerNome').value  = s.nome || '';
+  document.getElementById('editServerDesc').value  = s.descricao || '';
+  document.getElementById('editServerIcone').value = s.icone || '';
+  document.getElementById('modalEditarServer').classList.add('open');
+  document.getElementById('chatServerMenu')?.classList.remove('active');
+}
+function fecharModalEditarServer() {
+  document.getElementById('modalEditarServer').classList.remove('open');
+}
+async function confirmarEditarServer() {
+  if (!_serverAtivo) return;
+  const nome  = document.getElementById('editServerNome').value.trim();
+  const desc  = document.getElementById('editServerDesc').value.trim();
+  const icone = document.getElementById('editServerIcone').value.trim();
+  try {
+    await api('PATCH', `/servers/${_serverAtivo}`, {
+      nome: nome || null,
+      descricao: desc,
+      icone: icone,
+    });
+    fecharModalEditarServer();
+    await carregarServers();
+    await selecionarServer(_serverAtivo);
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+/* ============ Modal: Cargos do servidor ============ */
+let _cargos = [];                 // [{id, nome, cor, ordem, perm_*, membros}]
+let _cargoSel = null;             // role atualmente selecionado pra editar
+let _cargoMembrosCache = [];      // [{user_id,name,email,avatar_url}]
+const _CARGO_PERMS = [
+  { key: 'perm_manage_server',    label: 'Gerenciar servidor',        desc: 'editar nome/foto/arquivar' },
+  { key: 'perm_manage_roles',     label: 'Gerenciar cargos',          desc: 'criar/editar/atribuir' },
+  { key: 'perm_manage_channels',  label: 'Gerenciar canais',          desc: 'criar/editar/excluir + whitelist' },
+  { key: 'perm_manage_members',   label: 'Gerenciar membros',         desc: 'convidar/remover do servidor' },
+  { key: 'perm_manage_messages',  label: 'Apagar mensagens',          desc: 'apagar msgs de outros' },
+  { key: 'perm_create_invite',    label: 'Criar convites',            desc: 'gerar link de convite' },
+  { key: 'perm_mention_everyone', label: 'Mencionar @everyone/@here', desc: 'reservado pra futuro' },
+];
+
+async function abrirModalCargos() {
+  if (!_serverAtivo) return;
+  document.getElementById('chatServerMenu')?.classList.remove('active');
+  document.getElementById('modalCargos').classList.add('open');
+  _cargoSel = null;
+  _renderCargoEditPanel();
+  await _carregarCargos();
+}
+function fecharModalCargos() {
+  document.getElementById('modalCargos').classList.remove('open');
+  _cargos = []; _cargoSel = null; _cargoMembrosCache = [];
+}
+
+async function _carregarCargos() {
+  if (!_serverAtivo) return;
+  try {
+    const r = await api('GET', `/servers/${_serverAtivo}/roles`);
+    _cargos = r.roles || [];
+    _renderCargosLista();
+  } catch (e) {
+    document.getElementById('cargosLista').innerHTML =
+      `<div style="padding:14px;color:#EF4444">Erro: ${_esc(e.message)}</div>`;
+  }
+}
+
+function _renderCargosLista() {
+  const box = document.getElementById('cargosLista');
+  if (!box) return;
+  if (!_cargos.length) {
+    box.innerHTML = `<div style="padding:14px;text-align:center;color:var(--chat-muted);font-size:0.85rem">
+      Nenhum cargo. Crie um pra organizar membros.</div>`;
+    return;
+  }
+  box.innerHTML = _cargos.map(r => {
+    const ativo = _cargoSel === r.id ? 'background:#2F2F2F;' : '';
+    const dot = r.cor
+      ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${_esc(r.cor)};margin-right:6px"></span>`
+      : `<i class="bi bi-shield" style="color:var(--chat-muted);margin-right:6px"></i>`;
+    return `<div class="cargo-item" onclick="_selecionarCargo(${r.id})"
+                 style="padding:9px 10px;border-radius:6px;cursor:pointer;
+                        display:flex;align-items:center;${ativo}">
+      ${dot}
+      <span style="flex:1;color:${r.cor ? _esc(r.cor) : 'var(--chat-text)'};font-weight:600;
+                   white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_esc(r.nome)}</span>
+      <span style="font-size:0.72rem;color:var(--chat-muted)">${r.membros || 0}</span>
+    </div>`;
+  }).join('');
+}
+
+function novoCargo() {
+  // Cria um cargo placeholder local, salva via API
+  api('POST', `/servers/${_serverAtivo}/roles`, {
+    nome: 'Novo cargo', cor: '#99AAB5', ordem: 0,
+  }).then(r => {
+    _carregarCargos().then(() => _selecionarCargo(r.role_id));
+  }).catch(e => alert('Erro: ' + e.message));
+}
+
+async function _selecionarCargo(roleId) {
+  _cargoSel = roleId;
+  _renderCargosLista();
+  _renderCargoEditPanel();
+  // Carrega membros do cargo
+  try {
+    const r = await api('GET', `/roles/${roleId}/members`);
+    _cargoMembrosCache = r.members || [];
+    _renderCargoMembros();
+  } catch (e) {
+    document.getElementById('cargoMembrosLista').innerHTML =
+      `<div style="padding:8px;color:#EF4444">Erro: ${_esc(e.message)}</div>`;
+  }
+}
+
+function _renderCargoEditPanel() {
+  const empty = document.getElementById('cargoEditEmpty');
+  const form  = document.getElementById('cargoEditForm');
+  if (!form) return;
+  if (!_cargoSel) {
+    empty.style.display = '';
+    form.style.display = 'none';
+    return;
+  }
+  const r = _cargos.find(x => x.id === _cargoSel);
+  if (!r) return;
+  empty.style.display = 'none';
+  form.style.display = 'flex';
+  document.getElementById('cargoEditNome').value = r.nome || '';
+  document.getElementById('cargoEditCor').value  = r.cor || '#99aab5';
+  document.getElementById('cargoEditOrdem').value = r.ordem || 0;
+  // Permissoes
+  const permsBox = document.getElementById('cargoPermsBox');
+  permsBox.innerHTML = _CARGO_PERMS.map(p => `
+    <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;
+                  background:var(--chat-bg-3);border:1px solid var(--chat-border);
+                  border-radius:6px;cursor:pointer">
+      <input type="checkbox" id="${p.key}" ${r[p.key] ? 'checked' : ''}
+             style="accent-color:var(--chat-accent)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:0.84rem;color:var(--chat-text);font-weight:500">${_esc(p.label)}</div>
+        <div style="font-size:0.7rem;color:var(--chat-muted)">${_esc(p.desc)}</div>
+      </div>
+    </label>
+  `).join('');
+}
+
+function cargoLimparCor() {
+  if (!_cargoSel) return;
+  document.getElementById('cargoEditCor').value = '#99aab5';
+  // Vai mandar cor=null no salvar
+}
+
+async function salvarCargo() {
+  if (!_cargoSel) return;
+  const body = {
+    nome: document.getElementById('cargoEditNome').value.trim(),
+    cor:  document.getElementById('cargoEditCor').value,
+    ordem: parseInt(document.getElementById('cargoEditOrdem').value || '0', 10),
+  };
+  _CARGO_PERMS.forEach(p => {
+    body[p.key] = document.getElementById(p.key)?.checked || false;
+  });
+  try {
+    await api('PATCH', `/roles/${_cargoSel}`, body);
+    await _carregarCargos();
+    _renderCargoEditPanel();
+  } catch (e) {
+    alert('Erro ao salvar: ' + e.message);
+  }
+}
+
+async function excluirCargoAtual() {
+  if (!_cargoSel) return;
+  if (!confirm('Excluir este cargo? Os membros perdem essa designação.')) return;
+  try {
+    await api('DELETE', `/roles/${_cargoSel}`);
+    _cargoSel = null;
+    _cargoMembrosCache = [];
+    _renderCargoEditPanel();
+    await _carregarCargos();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+function _renderCargoMembros() {
+  const box = document.getElementById('cargoMembrosLista');
+  if (!box) return;
+  if (!_cargoMembrosCache.length) {
+    box.innerHTML = `<div style="padding:8px;color:var(--chat-muted);font-size:0.8rem">
+      Nenhum membro com este cargo.</div>`;
+    return;
+  }
+  box.innerHTML = _cargoMembrosCache.map(m => `
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;
+                border-bottom:1px solid var(--chat-border);font-size:0.85rem">
+      <div style="width:24px;height:24px;border-radius:50%;background:#6366F1;color:#fff;
+                  display:flex;align-items:center;justify-content:center;font-size:0.7rem;
+                  font-weight:700;overflow:hidden">
+        ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
+      </div>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        ${_esc(m.name || m.email)}
+      </span>
+      <button onclick="removerCargoDoUser(${m.user_id})"
+              style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:1rem"
+              title="Remover deste cargo"><i class="bi bi-x-circle"></i></button>
+    </div>
+  `).join('');
+}
+
+async function removerCargoDoUser(userId) {
+  if (!_cargoSel) return;
+  try {
+    await api('DELETE', `/roles/${_cargoSel}/members/${userId}`);
+    _cargoMembrosCache = _cargoMembrosCache.filter(m => m.user_id !== userId);
+    _renderCargoMembros();
+    await _carregarCargos();  // atualiza count
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function _filtrarMembrosPraCargo(q) {
+  const box = document.getElementById('cargoAddList');
+  if (!box) return;
+  const query = (q || '').toLowerCase().trim();
+  if (!query) { box.style.display = 'none'; return; }
+  // Lista membros do server que NAO tem esse cargo
+  if (!_serverMembrosCache.length) {
+    try {
+      const r = await api('GET', `/servers/${_serverAtivo}/members`);
+      _serverMembrosCache = r.members || [];
+    } catch {}
+  }
+  const jaTem = new Set(_cargoMembrosCache.map(m => m.user_id));
+  const candidatos = _serverMembrosCache
+    .filter(m => !jaTem.has(m.user_id))
+    .filter(m =>
+      (m.name || '').toLowerCase().includes(query) ||
+      (m.email || '').toLowerCase().includes(query));
+  if (!candidatos.length) {
+    box.innerHTML = `<div style="padding:8px;color:var(--chat-muted);font-size:0.78rem">
+      Nenhum membro encontrado.</div>`;
+    box.style.display = '';
+    return;
+  }
+  box.innerHTML = candidatos.slice(0, 30).map(m => `
+    <div onclick="atribuirCargoAoUser(${m.user_id})"
+         style="padding:6px 8px;cursor:pointer;display:flex;align-items:center;gap:8px;
+                border-bottom:1px solid var(--chat-border);font-size:0.85rem">
+      <div style="width:22px;height:22px;border-radius:50%;background:#6366F1;color:#fff;
+                  display:flex;align-items:center;justify-content:center;font-size:0.65rem;
+                  font-weight:700;overflow:hidden">
+        ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
+      </div>
+      <span style="flex:1">${_esc(m.name || m.email)}</span>
+      <i class="bi bi-plus-circle" style="color:var(--chat-accent)"></i>
+    </div>
+  `).join('');
+  box.style.display = '';
+}
+
+async function atribuirCargoAoUser(userId) {
+  if (!_cargoSel) return;
+  try {
+    await api('POST', `/roles/${_cargoSel}/members`, { user_ids: [userId] });
+    document.getElementById('cargoAddBusca').value = '';
+    document.getElementById('cargoAddList').style.display = 'none';
+    await _selecionarCargo(_cargoSel);  // recarrega membros do cargo
+    await _carregarCargos();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function arquivarServer() {
+  if (!_serverAtivo) return;
+  if (!confirm('Arquivar este servidor? Categorias e canais ficarão indisponíveis pros membros.')) return;
+  document.getElementById('chatServerMenu')?.classList.remove('active');
+  try {
+    await api('DELETE', `/servers/${_serverAtivo}`);
+    _serverAtivo = null;
+    await carregarServers();
+    renderListaCanais();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+/* ============ Context menu (right-click) ============ */
+function mostrarContextMenu(x, y, items) {
+  const menu = document.getElementById('chatContextMenu');
+  if (!menu) return;
+  menu.innerHTML = items.map(it => {
+    if (it.sep) return '<div class="sep"></div>';
+    const cls = it.danger ? 'item danger' : 'item';
+    const icon = it.icon ? `<i class="${it.icon}"></i>` : '';
+    // handler eh expressao JS — fecha menu depois de executar
+    return `<div class="${cls}" onclick="(function(){${it.handler}})(); fecharContextMenu()">
+              ${icon}<span>${_esc(it.label)}</span>
+            </div>`;
+  }).join('');
+  menu.style.left = x + 'px';
+  menu.style.top  = y + 'px';
+  menu.classList.add('active');
+  // Reposiciona se sair da tela
+  const r = menu.getBoundingClientRect();
+  if (r.right  > window.innerWidth)  menu.style.left = (window.innerWidth  - r.width  - 8) + 'px';
+  if (r.bottom > window.innerHeight) menu.style.top  = (window.innerHeight - r.height - 8) + 'px';
+}
+function fecharContextMenu() {
+  document.getElementById('chatContextMenu')?.classList.remove('active');
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.chat-context-menu')) fecharContextMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') fecharContextMenu();
+});
+
+function mostrarContextMenuServer(ev, serverId) {
+  const s = _servers.find(x => x.id === serverId);
+  if (!s) return;
+  const ehOwner = s.role === 'owner';
+
+  // Membros enxergam tudo; owner ganha sep + editar/arquivar
+  const items = [
+    { icon: 'bi bi-link-45deg', label: 'Convidar pessoas',
+      handler: `abrirModalCriarInvite(${serverId}, null)` },
+    { icon: 'bi bi-people-fill', label: 'Gerenciar membros',
+      handler: `_selecionarEAbrirModalServer(${serverId}, 'membros')` },
+  ];
+  // Owner/admin pode mudar foto
+  if (['owner','admin'].includes(s.role)) {
+    items.push({ icon: 'bi bi-image', label: 'Mudar foto do servidor',
+      handler: `mudarFotoServer(${serverId})` });
+  }
+  if (ehOwner) {
+    items.push({ sep: true });
+    items.push({ icon: 'bi bi-pencil-square', label: 'Editar servidor',
+      handler: `_selecionarEAbrirModalServer(${serverId}, 'editar')` });
+    items.push({ icon: 'bi bi-archive-fill', label: 'Arquivar servidor',
+      handler: `_selecionarEAbrirModalServer(${serverId}, 'arquivar')`, danger: true });
+  }
+  mostrarContextMenu(ev.clientX, ev.clientY, items);
+}
+
+// Trigger nativo de file input + upload via FormData
+function mudarFotoServer(serverId) {
+  // Cria input file invisivel "on demand" (limpo a cada chamada)
+  let input = document.getElementById('_srvAvatarInput');
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'file';
+    input.id = '_srvAvatarInput';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+  }
+  // Reseta handler pra capturar o serverId atual
+  input.value = '';
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Imagem maior que 2 MB. Use uma menor.');
+      return;
+    }
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const headers = {};
+      if (_token) headers['X-Auth-Token'] = _token;
+      const res = await fetch(`${API_BASE}/api/chat/servers/${serverId}/avatar`, {
+        method: 'POST', headers, credentials: 'include', body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const r = await res.json();
+      // Atualiza cache local + UI imediatamente (cache-bust com timestamp)
+      const s = _servers.find(x => x.id === serverId);
+      if (s) s.icone = r.icone + '?t=' + Date.now();
+      if (_serverArvore.server && _serverArvore.server.id === serverId) {
+        _serverArvore.server.icone = s ? s.icone : r.icone;
+      }
+      renderServersBar();
+    } catch (e) {
+      alert('Erro ao enviar foto: ' + e.message);
+    }
+  };
+  input.click();
+}
+
+// Helper: garante que o server esteja selecionado (carrega arvore) antes
+// de abrir o modal apropriado.
+async function _selecionarEAbrirModalServer(serverId, action) {
+  if (_serverAtivo !== serverId) {
+    await selecionarServer(serverId);
+  }
+  if (action === 'membros')  abrirModalMembrosServer();
+  else if (action === 'editar')   abrirModalEditarServer();
+  else if (action === 'arquivar') arquivarServer();
+}
+function mostrarContextMenuCanal(ev, channelId) {
+  if (!_serverAtivo) return;  // canais soltos nao tem invite
+  mostrarContextMenu(ev.clientX, ev.clientY, [
+    { icon: 'bi bi-link-45deg', label: 'Convidar para este canal',
+      handler: `abrirModalCriarInvite(${_serverAtivo}, ${channelId})` },
+  ]);
+}
+
+/* ============ Modal: criar invite ============ */
+let _inviteCtx = { serverId: null, channelId: null };
+
+async function abrirModalCriarInvite(serverId, channelId) {
+  if (!serverId) return;
+  _inviteCtx = { serverId, channelId };
+  // Reseta estado
+  document.getElementById('inviteGerado').style.display = 'none';
+  document.getElementById('inviteAtivos').innerHTML = '';
+  const btn = document.getElementById('inviteGerarBtn');
+  btn.style.display = '';
+  btn.disabled = false;
+
+  // Popula contexto
+  const srv = _servers.find(s => s.id === serverId) ||
+              (_serverArvore.server && _serverArvore.server.id === serverId ? _serverArvore.server : null);
+  document.getElementById('inviteCtxServer').textContent = srv?.nome || `#${serverId}`;
+  if (channelId) {
+    const canal = (_serverArvore.channels || []).find(c => c.id === channelId)
+                || _canais.find(c => c.id === channelId);
+    document.getElementById('inviteCtxCanalWrap').style.display = '';
+    document.getElementById('inviteCtxCanal').textContent = canal?.nome || `#${channelId}`;
+  } else {
+    document.getElementById('inviteCtxCanalWrap').style.display = 'none';
+  }
+
+  document.getElementById('modalCriarInvite').classList.add('open');
+
+  // Carrega invites ativos do server (informativo)
+  _carregarInvitesAtivos(serverId);
+}
+
+function fecharModalCriarInvite() {
+  document.getElementById('modalCriarInvite').classList.remove('open');
+  _inviteCtx = { serverId: null, channelId: null };
+}
+
+async function gerarInvite() {
+  if (!_inviteCtx.serverId) return;
+  const expira  = document.getElementById('inviteExpira').value;
+  const maxUsos = document.getElementById('inviteMaxUsos').value;
+  const body = {};
+  if (_inviteCtx.channelId) body.channel_id = _inviteCtx.channelId;
+  if (expira)  body.duracao_horas = parseInt(expira, 10);
+  if (maxUsos) body.max_usos      = parseInt(maxUsos, 10);
+
+  const btn = document.getElementById('inviteGerarBtn');
+  btn.disabled = true;
+  try {
+    const r = await api('POST', `/servers/${_inviteCtx.serverId}/invites`, body);
+    const url = `${window.location.origin}/SistemaCPE/web/pages/chat.html?invite=${r.code}`;
+    document.getElementById('inviteLinkOutput').value = url;
+    document.getElementById('inviteGerado').style.display = '';
+    btn.style.display = 'none';
+
+    const info = r.expira_em
+      ? `Expira em ${new Date(r.expira_em).toLocaleString('pt-BR')}`
+      : 'Não expira';
+    const usos = r.max_usos
+      ? ` · ${r.max_usos} uso${r.max_usos > 1 ? 's' : ''}`
+      : ' · usos ilimitados';
+    document.getElementById('inviteInfoExpira').textContent = info + usos;
+    // Atualiza lista de ativos
+    _carregarInvitesAtivos(_inviteCtx.serverId);
+  } catch (e) {
+    alert('Erro ao gerar link: ' + e.message);
+    btn.disabled = false;
+  }
+}
+
+async function copiarLinkInvite() {
+  const input = document.getElementById('inviteLinkOutput');
+  const url = input.value;
+  try {
+    await navigator.clipboard.writeText(url);
+    // Visual feedback rapido
+    const btn = event?.currentTarget;
+    if (btn) {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<i class="bi bi-check-lg"></i> Copiado!';
+      setTimeout(() => { btn.innerHTML = orig; }, 1500);
+    }
+  } catch {
+    input.select(); document.execCommand('copy');
+    alert('Link copiado.');
+  }
+}
+
+async function _carregarInvitesAtivos(serverId) {
+  const box = document.getElementById('inviteAtivos');
+  if (!box) return;
+  try {
+    const r = await api('GET', `/servers/${serverId}/invites`);
+    const lista = r.invites || [];
+    if (!lista.length) { box.innerHTML = ''; return; }
+    box.innerHTML = `<label style="display:block;color:var(--chat-muted);font-size:0.78rem;
+           text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">
+           Convites ativos (${lista.length})
+         </label>
+         <div style="max-height:160px;overflow-y:auto;border:1px solid var(--chat-border);
+                     border-radius:6px;background:var(--chat-bg-3)">` +
+      lista.map(i => {
+        const exp = i.expira_em
+          ? new Date(i.expira_em).toLocaleString('pt-BR')
+          : 'Nunca';
+        const lim = i.max_usos ? `${i.usos}/${i.max_usos}` : `${i.usos} usos`;
+        const alvo = i.channel_nome ? `#${_esc(i.channel_nome)}` : 'servidor';
+        return `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;
+                            border-bottom:1px solid var(--chat-border);font-size:0.8rem">
+          <code style="color:var(--chat-accent);font-family:ui-monospace,Menlo,monospace">${_esc(i.code)}</code>
+          <span style="color:var(--chat-muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            ${alvo} · ${_esc(i.criado_por_name || '')} · ${lim} · expira ${exp}
+          </span>
+          <button onclick="revogarInvite(${i.id})"
+                  style="background:none;border:none;color:#EF4444;cursor:pointer;padding:2px 6px"
+                  title="Revogar"><i class="bi bi-x-circle"></i></button>
+        </div>`;
+      }).join('') + '</div>';
+  } catch (e) {
+    box.innerHTML = `<div style="font-size:0.78rem;color:#EF4444">Erro listando convites: ${_esc(e.message)}</div>`;
+  }
+}
+
+async function revogarInvite(inviteId) {
+  if (!confirm('Revogar este convite? Quem ainda não usou não vai mais conseguir.')) return;
+  try {
+    await api('DELETE', `/invites/${inviteId}`);
+    if (_inviteCtx.serverId) _carregarInvitesAtivos(_inviteCtx.serverId);
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+/* ============ Handler de ?invite=CODE na URL ============ */
+async function _verificarInviteNaURL() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('invite');
+  if (!code) return;
+
+  // Sempre remove o invite da URL pra nao re-disparar em F5
+  const limpaUrl = () => {
+    const u = new URL(window.location);
+    u.searchParams.delete('invite');
+    window.history.replaceState({}, '', u);
+  };
+
+  try {
+    const r = await api('GET', `/invites/${code}`);
+    const inv = r.invite;
+    if (!inv.valido) {
+      alert(`Convite inválido: ${inv.motivo_invalido}`);
+      limpaUrl();
+      return;
+    }
+    const tipo = inv.channel_nome
+      ? (inv.channel_tipo === 'voz' ? 'o canal de voz' : 'o canal')
+      : 'o servidor';
+    const alvoNome = inv.channel_nome
+      ? `#${inv.channel_nome} (servidor "${inv.server_nome}")`
+      : `"${inv.server_nome}"`;
+    const quem = inv.criado_por_name || 'Alguém';
+    const jaMsg = inv.ja_membro ? '\n(Você já é membro deste servidor — vai só entrar no canal se for o caso.)' : '';
+    const ok = confirm(`${quem} te convidou para ${tipo} ${alvoNome}.${jaMsg}\n\nAceitar?`);
+    if (!ok) { limpaUrl(); return; }
+
+    await api('POST', `/invites/${code}/accept`);
+    await carregarServers();
+    await carregarCanais();
+    if (inv.server_id) await selecionarServer(inv.server_id);
+    if (inv.channel_id) abrirCanal(inv.channel_id);
+  } catch (e) {
+    alert('Erro ao processar convite: ' + e.message);
+  } finally {
+    limpaUrl();
+  }
+}
+
 function renderListaCanais() {
   const box = document.getElementById('chatChannelsList');
+
+  // Se um servidor está selecionado, renderiza a árvore dele
+  if (_serverAtivo !== null) {
+    box.innerHTML = _renderArvoreServer();
+    return;
+  }
+
+  // View "Home" — DMs + grupos + canais SOLTOS (server_id IS NULL)
   const dms        = _canais.filter(c => c.tipo === 'dm');
   const grupos     = _canais.filter(c => c.tipo === 'grupo_sistema');
-  const canaisText = _canais.filter(c => c.tipo === 'canal');
-  const canaisVoz  = _canais.filter(c => c.tipo === 'voz');
+  const canaisText = _canais.filter(c => c.tipo === 'canal' && !c.server_id);
+  const canaisVoz  = _canais.filter(c => c.tipo === 'voz'   && !c.server_id);
 
   let html = '';
 
@@ -1905,7 +3472,7 @@ function renderMensagens(msgs) {
 
 function _msgHtml(m) {
   const own = m.author?.id === _self.id;
-  const av  = _initials(m.author?.name);
+  const avHtml = _avatarConteudo(m.author);
   const isDel = !!m.deletado_em;
   const isEdit = !!m.editado_em && !isDel;
   const canManage = own || _isAdmin();
@@ -1987,7 +3554,7 @@ function _msgHtml(m) {
   const pinTag = isPinned ? `<span class="msg-pin-tag"><i class="bi bi-pin-angle-fill"></i> fixada</span>` : '';
 
   return `<div class="msg-group ${isDel ? 'msg-deleted' : ''} ${selfMentionClass} ${pinnedClass}" id="msg-${m.id}" data-content="${_esc(m.content)}">
-    <div class="msg-avatar ${own ? 'own' : ''}">${_esc(av)}</div>
+    <div class="msg-avatar ${own ? 'own' : ''}" style="overflow:hidden">${avHtml}</div>
     <div class="msg-content">
       ${replyBanner}
       <div class="msg-header">
@@ -2176,6 +3743,54 @@ function conectarWebSocket() {
                data.type === 'channel_updated') {
       // Lista de canais mudou — recarrega
       carregarCanais();
+      // Se afetou o servidor aberto, recarrega árvore
+      if (data.server_id && _serverAtivo === data.server_id) {
+        selecionarServer(_serverAtivo);
+      }
+    } else if (data.type === 'server_created' ||
+               data.type === 'server_added'   ||
+               data.type === 'server_updated' ||
+               data.type === 'server_archived' ||
+               data.type === 'server_removed') {
+      carregarServers();
+      // Se eu fui removido/server arquivado e estou olhando ele, volta pra home
+      if ((data.type === 'server_removed' || data.type === 'server_archived') &&
+          _serverAtivo === data.server_id) {
+        selecionarServer(null);
+      }
+    } else if (data.type === 'category_created' ||
+               data.type === 'category_updated' ||
+               data.type === 'category_deleted' ||
+               data.type === 'server_tree_changed' ||
+               data.type === 'channel_access_changed') {
+      if (_serverAtivo === data.server_id) selecionarServer(_serverAtivo);
+      // Lista de canais (sidebar) tambem pode ter mudado de visibilidade
+      if (data.type === 'channel_access_changed') carregarCanais();
+    } else if (data.type === 'role_created' ||
+               data.type === 'role_updated' ||
+               data.type === 'role_deleted' ||
+               data.type === 'role_assigned' ||
+               data.type === 'role_revoked') {
+      // Cargos mudaram — pode afetar acesso a canais e UI
+      if (_serverAtivo === data.server_id) selecionarServer(_serverAtivo);
+      // Se modal de cargos esta aberto, recarrega
+      if (document.getElementById('modalCargos')?.classList.contains('open')) {
+        _carregarCargos();
+        if (_cargoSel && data.role_id === _cargoSel) _selecionarCargo(_cargoSel);
+      }
+      // Recarrega lista de canais (whitelist pode ter mudado pra mim)
+      carregarCanais();
+    } else if (data.type === 'user_avatar_changed') {
+      // Atualiza cache local (se houver) e re-renderiza onde aparece
+      if (data.user_id === _self.id) {
+        _self.avatar_url = data.avatar_url + '?t=' + Date.now();
+        _aplicarAvatarSelfNoFooter();
+      }
+      // Patch nos caches de users
+      _usuariosSistema.forEach(u => { if (u.id === data.user_id) u.avatar_url = data.avatar_url; });
+      _allUsersDisponiveis.forEach(u => { if (u.id === data.user_id) u.avatar_url = data.avatar_url; });
+      renderColunaUsuarios();
+      if (_canalAtivo) abrirCanal(_canalAtivo.id);
     } else if (data.type === 'removed_from_channel') {
       // Voce foi removido. Se era o canal aberto, volta pra empty state
       if (_canalAtivo && _canalAtivo.id === data.channel_id) {
@@ -2305,8 +3920,8 @@ async function _renderMembrosDoCanal(c) {
         : '';
       return `<div class="member-item ${on ? 'online' : ''}"
                    title="${_esc(m.name)}${m.email ? ' · ' + _esc(m.email) : ''}">
-        <div class="member-avatar" onclick="abrirDM(${m.user_id})" style="cursor:pointer">
-          ${_esc(_initials(m.name))}
+        <div class="member-avatar" onclick="abrirDM(${m.user_id})" style="cursor:pointer;overflow:hidden">
+          ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
         </div>
         <span class="member-name" onclick="abrirDM(${m.user_id})" style="cursor:pointer">
           ${_esc(m.name || m.email)}
@@ -2338,7 +3953,7 @@ function renderUsuariosSistema() {
                  onclick="abrirDM(${u.id})"
                  style="cursor:pointer"
                  title="Iniciar DM com ${_esc(u.name)}">
-      <div class="member-avatar">${_esc(_initials(u.name))}</div>
+      <div class="member-avatar" style="overflow:hidden">${_avatarConteudo(u)}</div>
       <span class="member-name">${_esc(u.name || u.email)}</span>
     </div>`;
   }).join('');
@@ -2844,7 +4459,7 @@ function _renderMentionPopover() {
     <div class="chat-mention-item ${i === selected ? 'active' : ''}"
          onmouseenter="_mentionState.selected=${i}; _renderMentionPopover()"
          onmousedown="event.preventDefault(); _mentionSelecionar(${i})">
-      <div class="av">${_esc(_initials(u.name))}</div>
+      <div class="av" style="overflow:hidden">${_avatarConteudo(u)}</div>
       <span>${_esc(u.name || u.email)}</span>
     </div>`).join('');
   pop.innerHTML = html;
@@ -2886,9 +4501,38 @@ function _fecharMentionPopover() {
    ===================================================================== */
 
 let _allUsersDisponiveis = [];     // cache de users (carregado on demand)
-let _selecionadosCriar   = new Set();
-let _selecionadosAdd     = new Set();
+let _selecionadosCriar       = new Set();
+let _selecionadosAdd         = new Set();
+let _selecionadosCriarServer = new Set();
+let _selecionadosSrvAdd      = new Set();
 let _configCanalId       = null;   // canal sendo configurado
+
+// Mapa central — modo -> {buscaId, listId, countId}.
+// O Set vive em variavel `let` (closure); accessor abaixo usa getter/reset
+// porque `let` no top-level NAO vira propriedade de window.
+const _MODOS_SELECAO = {
+  criar:       { buscaId: 'canalMembrosBusca',  listId: 'canalMembrosList',   countId: 'canalMembrosCount'  },
+  config:      { buscaId: 'configAddBusca',     listId: 'configCanalAddList', countId: null                 },
+  criarServer: { buscaId: 'serverMembrosBusca', listId: 'serverMembrosList',  countId: 'serverMembrosCount' },
+  srvAdd:      { buscaId: 'srvAddBusca',        listId: 'srvAddList',         countId: null                 },
+};
+
+function _selSet(modo) {
+  switch (modo) {
+    case 'criar':       return _selecionadosCriar;
+    case 'config':      return _selecionadosAdd;
+    case 'criarServer': return _selecionadosCriarServer;
+    case 'srvAdd':      return _selecionadosSrvAdd;
+  }
+}
+function _resetSel(modo) {
+  switch (modo) {
+    case 'criar':       _selecionadosCriar       = new Set(); break;
+    case 'config':      _selecionadosAdd         = new Set(); break;
+    case 'criarServer': _selecionadosCriarServer = new Set(); break;
+    case 'srvAdd':      _selecionadosSrvAdd      = new Set(); break;
+  }
+}
 
 async function _carregarUsuariosDisponiveis() {
   if (_allUsersDisponiveis.length) return _allUsersDisponiveis;
@@ -2903,11 +4547,12 @@ async function _carregarUsuariosDisponiveis() {
 }
 
 function _renderUserSelector(containerId, modo, excluirIds = new Set()) {
-  // modo = 'criar' | 'config'
-  const container = document.getElementById(containerId);
+  const cfg = _MODOS_SELECAO[modo];
+  if (!cfg) { console.warn('[chat] modo selecao invalido:', modo); return; }
+  const container = document.getElementById(containerId || cfg.listId);
   if (!container) return;
-  const sel = modo === 'criar' ? _selecionadosCriar : _selecionadosAdd;
-  const query = (document.getElementById(modo === 'criar' ? 'canalMembrosBusca' : 'configAddBusca')?.value || '').toLowerCase();
+  const sel = _selSet(modo);
+  const query = (document.getElementById(cfg.buscaId)?.value || '').toLowerCase();
   const filtered = _allUsersDisponiveis
     .filter(u => !excluirIds.has(u.id))
     .filter(u => !query ||
@@ -2923,7 +4568,7 @@ function _renderUserSelector(containerId, modo, excluirIds = new Set()) {
     const selClass = sel.has(u.id) ? 'selected' : '';
     return `<label class="chat-user-row ${selClass}">
       <input type="checkbox" ${checked} onchange="_toggleUserSelected(${u.id}, '${modo}', this.checked)">
-      <div class="av">${_esc(_initials(u.name))}</div>
+      <div class="av" style="overflow:hidden">${_avatarConteudo(u)}</div>
       <div class="info">
         <div class="name">${_esc(u.name || u.email)}</div>
         <div class="email">${_esc(u.email || '')}</div>
@@ -2934,28 +4579,32 @@ function _renderUserSelector(containerId, modo, excluirIds = new Set()) {
 }
 
 function _toggleUserSelected(userId, modo, checked) {
-  const sel = modo === 'criar' ? _selecionadosCriar : _selecionadosAdd;
+  const sel = _selSet(modo);
+  if (!sel) return;
   if (checked) sel.add(userId); else sel.delete(userId);
   _atualizarContadorSelecao(modo);
-  // Atualiza visual da linha sem re-renderizar tudo
   const row = event?.target?.closest('.chat-user-row');
   if (row) row.classList.toggle('selected', checked);
 }
 
 function _atualizarContadorSelecao(modo) {
-  const sel = modo === 'criar' ? _selecionadosCriar : _selecionadosAdd;
-  const cont = document.getElementById(modo === 'criar' ? 'canalMembrosCount' : null);
+  const cfg = _MODOS_SELECAO[modo];
+  if (!cfg || !cfg.countId) return;
+  const sel = _selSet(modo);
+  const cont = document.getElementById(cfg.countId);
   if (cont) cont.textContent = `${sel.size} selecionado${sel.size === 1 ? '' : 's'}`;
 }
 
 function _filtrarUsuariosDisponiveis(q, modo) {
-  if (modo === 'criar') {
-    _renderUserSelector('canalMembrosList', 'criar');
-  } else {
-    // No config, exclui quem ja eh membro
-    const jaMembros = new Set(_configMembrosCache.map(m => m.user_id));
-    _renderUserSelector('configCanalAddList', 'config', jaMembros);
+  const cfg = _MODOS_SELECAO[modo];
+  if (!cfg) return;
+  let excluir = new Set();
+  if (modo === 'config') {
+    excluir = new Set(_configMembrosCache.map(m => m.user_id));
+  } else if (modo === 'srvAdd') {
+    excluir = new Set(_serverMembrosCache.map(m => m.user_id));
   }
+  _renderUserSelector(cfg.listId, modo, excluir);
 }
 
 /* ----- Modal criar canal ----- */
@@ -2964,6 +4613,11 @@ async function abrirModalCriarCanal() {
   document.getElementById('canalNomeInput').value = '';
   document.getElementById('canalDescInput').value = '';
   document.getElementById('canalMembrosBusca').value = '';
+  // Reset contexto de servidor — sera reativado por _configurarModalCanalParaServer se chamado
+  document.getElementById('canalServerCtx').style.display = 'none';
+  document.getElementById('canalCategoriaWrap').style.display = 'none';
+  const cw = document.getElementById('canalCargosWrap');
+  if (cw) cw.style.display = 'none';
   document.getElementById('modalCriarCanal').classList.add('open');
   await _carregarUsuariosDisponiveis();
   _renderUserSelector('canalMembrosList', 'criar');
@@ -2978,6 +4632,18 @@ async function confirmarCriarCanal() {
   const desc = document.getElementById('canalDescInput').value.trim();
   const tipo = document.getElementById('canalTipoVoz').checked ? 'voz' : 'canal';
   if (!nome || nome.length < 2) { alert('Nome do canal precisa ter ao menos 2 caracteres.'); return; }
+  // Detecta contexto de servidor pelo display do ctx
+  const ehNoServer = document.getElementById('canalServerCtx').style.display !== 'none';
+  const serverId = ehNoServer ? _serverAtivo : null;
+  const catSel = document.getElementById('canalCategoriaSel');
+  const catId  = (ehNoServer && catSel && catSel.value) ? parseInt(catSel.value, 10) : null;
+  // Coleta cargos marcados (whitelist) — só faz sentido em canal de server
+  let cargosWhitelist = [];
+  if (ehNoServer) {
+    cargosWhitelist = Array.from(
+      document.querySelectorAll('#canalCargosList input[type=checkbox]:checked')
+    ).map(el => parseInt(el.dataset.roleId, 10)).filter(Boolean);
+  }
   const btn = document.getElementById('canalCriarBtn');
   btn.disabled = true;
   try {
@@ -2986,9 +4652,20 @@ async function confirmarCriarCanal() {
       descricao: desc || null,
       member_ids: [..._selecionadosCriar],
       tipo,
+      server_id: serverId,
+      categoria_id: catId,
     });
+    // Aplica whitelist se houver cargos marcados
+    if (r.channel_id && cargosWhitelist.length) {
+      try {
+        await api('PUT', `/channels/${r.channel_id}/roles`, { role_ids: cargosWhitelist });
+      } catch (e) {
+        console.warn('[chat] erro setando whitelist:', e);
+      }
+    }
     fecharModalCriarCanal();
     await carregarCanais();
+    if (serverId) await selecionarServer(serverId);
     if (r.channel_id) abrirCanal(r.channel_id);
   } catch (e) {
     alert('Erro ao criar canal: ' + e.message);
@@ -3057,8 +4734,8 @@ function _renderMembrosConfig() {
     const canRemove = podeRemover && m.role_no_canal !== 'owner' && m.user_id !== _self.id;
     return `<div class="chat-member-row">
       <div class="av" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#8B5CF6);
-                color:#fff;font-weight:700;font-size:0.72rem;display:flex;align-items:center;justify-content:center">
-        ${_esc(_initials(m.name))}
+                color:#fff;font-weight:700;font-size:0.72rem;display:flex;align-items:center;justify-content:center;overflow:hidden">
+        ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
       </div>
       <div style="flex:1;min-width:0">
         <div style="color:var(--chat-text);font-weight:500">${_esc(m.name || m.email)}</div>
@@ -3466,11 +5143,22 @@ function _entrarSalaChamada(channelId) {
 }
 
 function _finalizarChamada(keepState = false) {
+  const peerId = _callState?.peer?.user_id;
   if (_callState?.timeout) clearTimeout(_callState.timeout);
   _pararRingtone();
   _fecharCallModal();
   if (!keepState) _callState = null;
   else _callState = null;
+  if (peerId) _fecharNotifChamadaChat(peerId);
+}
+
+async function _fecharNotifChamadaChat(fromUserId) {
+  try {
+    const reg = await (navigator.serviceWorker?.ready);
+    if (!reg || !reg.getNotifications) return;
+    const notifs = await reg.getNotifications({ tag: `cpe-call-${fromUserId}` });
+    notifs.forEach(n => { try { n.close(); } catch {} });
+  } catch {}
 }
 
 /* ----- WS handlers ----- */
@@ -3504,18 +5192,47 @@ function _onCallInvite(data) {
     peerId: data.from_user_id,
   });
   _tocarRingtone('incoming');
-  // Fallback in-tab (caso permissao concedida + aba background)
-  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
-    try {
-      const n = new Notification('📞 Chamada recebida', {
-        body: `${data.from_user_name || 'Alguém'} está te ligando...`,
+  // Notif desktop nativa (SW.showNotification suporta actions Atender/Rejeitar)
+  // Sempre tenta mostrar — `tag` igual ao do PWA push evita duplicar.
+  _notifDesktopChamadaChat(data);
+}
+
+async function _notifDesktopChamadaChat(data) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const reg = await (navigator.serviceWorker?.ready);
+    if (reg && reg.showNotification) {
+      const from = data.from_user_id;
+      await reg.showNotification(`📞 ${data.from_user_name || 'Alguém'} está te ligando`, {
+        body: 'Toque pra atender',
         icon: '/SistemaCPE/web/assests/icons/icon-192.png',
-        tag: 'cpe-call-' + data.from_user_id,
+        badge: '/SistemaCPE/web/assests/icons/icon-96.png',
+        tag: `cpe-call-${from}`,
         requireInteraction: true,
+        vibrate: [400, 200, 400, 200, 400, 200, 400],
+        actions: [
+          { action: 'answer', title: '📞 Atender' },
+          { action: 'reject', title: '📵 Rejeitar' },
+        ],
+        data: {
+          url: `/SistemaCPE/web/pages/chat.html?incoming_call=${from}`,
+          isCall: true,
+        },
+        renotify: true,
       });
-      n.onclick = () => { window.focus(); n.close(); };
-    } catch {}
-  }
+      return;
+    }
+  } catch {}
+  // Fallback: Notification simples
+  try {
+    const n = new Notification('📞 Chamada recebida', {
+      body: `${data.from_user_name || 'Alguém'} está te ligando...`,
+      icon: '/SistemaCPE/web/assests/icons/icon-192.png',
+      tag: 'cpe-call-' + data.from_user_id,
+      requireInteraction: true,
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch {}
 }
 
 // Detecta query string ?incoming_call=ID&auto_answer=1 ao carregar (push notif click)
@@ -3652,8 +5369,78 @@ function abrirCfgModal() {
   document.getElementById('cfgNome').textContent  = _self.name || '—';
   document.getElementById('cfgEmail').textContent = _self.email || '—';
   document.getElementById('cfgRole').textContent  = _self.role || '—';
+  _renderCfgAvatarPreview();
   document.getElementById('cfgModal').classList.add('open');
   cfgMostrar('conta');
+}
+
+function _renderCfgAvatarPreview() {
+  const box = document.getElementById('cfgAvatarPreview');
+  if (!box) return;
+  if (_self.avatar_url) {
+    const url = _self.avatar_url + (_self.avatar_url.includes('?') ? '' : `?t=${Date.now()}`);
+    box.innerHTML = `<img src="${_esc(url)}" alt="" style="width:100%;height:100%;object-fit:cover">`;
+  } else {
+    box.textContent = _initials(_self.name);
+  }
+}
+
+// Upload de foto do user logado — endpoint POST /api/chat/me/avatar
+function mudarFotoMe() {
+  let input = document.getElementById('_userAvatarInput');
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'file';
+    input.id = '_userAvatarInput';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+  }
+  input.value = '';
+  input.onchange = async () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { alert('Imagem maior que 2 MB.'); return; }
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const headers = {};
+      if (_token) headers['X-Auth-Token'] = _token;
+      const res = await fetch(`${API_BASE}/api/chat/me/avatar`, {
+        method: 'POST', headers, credentials: 'include', body: form,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const r = await res.json();
+      _self.avatar_url = r.avatar_url + '?t=' + Date.now();
+      _renderCfgAvatarPreview();
+      _aplicarAvatarSelfNoFooter();
+      // Re-render onde quer que o user atual apareca
+      renderColunaUsuarios();
+      if (_canalAtivo) abrirCanal(_canalAtivo.id);  // recarrega msgs do canal aberto
+    } catch (e) {
+      alert('Erro ao enviar foto: ' + e.message);
+    }
+  };
+  input.click();
+}
+
+function _aplicarAvatarSelfNoFooter() {
+  const av = document.getElementById('chatSelfAvatar');
+  if (!av) return;
+  const dotHtml = '<span class="status-dot offline" id="chatSelfStatusDot"></span>';
+  if (_self.avatar_url) {
+    const url = _self.avatar_url + (_self.avatar_url.includes('?') ? '' : `?t=${Date.now()}`);
+    av.innerHTML = `<img src="${_esc(url)}" alt=""
+                       style="width:100%;height:100%;border-radius:50%;object-fit:cover">` + dotHtml;
+  } else {
+    av.innerHTML = _esc(_initials(_self.name)) + dotHtml;
+  }
+  // Reaplica status visual (cor do dot)
+  const statusSalvo = localStorage.getItem('cpe_chat_status') || 'online';
+  _aplicarStatusVisual(statusSalvo);
 }
 function fecharCfgModal() {
   document.getElementById('cfgModal').classList.remove('open');

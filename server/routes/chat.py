@@ -220,30 +220,43 @@ def _user_from_request(request: Request) -> dict:
 
 
 def _listar_membros_canal(channel_id: int) -> List[int]:
-    """IDs dos users membros de um canal."""
-    conn = get_chat_db_or_404()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT user_id FROM chat_channel_members WHERE channel_id=%s", (channel_id,))
-        return [r[0] for r in cur.fetchall()]
-    finally:
-        cur.close(); conn.close()
+    """IDs dos users com acesso ao canal.
 
-
-def _usuario_pertence_ao_canal(user_id: int, channel_id: int) -> bool:
+    - Canais SOLTOS (server_id IS NULL): chat_channel_members (adesao manual).
+    - Canais DE SERVER: todos os membros do server que tem acesso (owner OU
+      canal sem whitelist OU possui cargo da whitelist).
+    """
     conn = get_chat_db_or_404()
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT 1 FROM chat_channel_members WHERE channel_id=%s AND user_id=%s LIMIT 1",
-            (channel_id, user_id))
-        return cur.fetchone() is not None
+            "SELECT server_id FROM chat_channels WHERE id=%s", (channel_id,))
+        r = cur.fetchone()
+        if not r:
+            return []
+        server_id = r[0]
     finally:
         cur.close(); conn.close()
+    if server_id is None:
+        conn = get_chat_db_or_404()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                "SELECT user_id FROM chat_channel_members WHERE channel_id=%s",
+                (channel_id,))
+            return [row[0] for row in cur.fetchall()]
+        finally:
+            cur.close(); conn.close()
+    return _listar_membros_canal_server(channel_id, server_id)
+
+
+def _usuario_pertence_ao_canal(user_id: int, channel_id: int) -> bool:
+    """Compatibilidade: alias do _can_view_channel mas inverte ordem dos args."""
+    return _can_view_channel(channel_id, user_id)
 
 
 def _enriquecer_users(user_ids: List[int]) -> Dict[int, dict]:
-    """Pega dados de cpe_plus.users em uma query (nome, email, group)."""
+    """Pega dados de cpe_plus.users em uma query (nome, email, group, avatar)."""
     if not user_ids:
         return {}
     conn = get_db_or_404()
@@ -251,7 +264,8 @@ def _enriquecer_users(user_ids: List[int]) -> Dict[int, dict]:
     try:
         placeholders = ",".join(["%s"] * len(user_ids))
         cur.execute(
-            f"SELECT id, name, email, role, group_id FROM users WHERE id IN ({placeholders})",
+            f"SELECT id, name, email, role, group_id, avatar_url "
+            f"FROM users WHERE id IN ({placeholders})",
             user_ids)
         return {r["id"]: r for r in cur.fetchall()}
     finally:
@@ -270,8 +284,14 @@ def listar_canais(request: Request):
     conn = get_chat_db_or_404()
     cur = conn.cursor(dictionary=True)
     try:
+        # Parte 1: canais SOLTOS/DM/grupo onde o user esta em chat_channel_members
+        # Parte 2: canais DE SERVER visiveis ao user (via owner/whitelist).
+        # LEFT JOIN com members nos canais de server pra reaproveitar
+        # ultima_msg_lida_id quando existe (cria-se quando o user marca lido).
+        uid = user["id"]
         cur.execute("""
-            SELECT c.id, c.tipo, c.nome, c.descricao, c.grupo_id, c.criado_em,
+            SELECT c.id, c.tipo, c.nome, c.descricao, c.grupo_id,
+                   c.server_id, c.categoria_id, c.criado_em,
                    m.ultima_msg_lida_id,
                    (SELECT COUNT(*) FROM chat_messages msg
                       WHERE msg.channel_id = c.id
@@ -281,9 +301,40 @@ def listar_canais(request: Request):
                    ) AS unread_count
             FROM chat_channels c
             INNER JOIN chat_channel_members m ON m.channel_id = c.id
-            WHERE m.user_id = %s AND c.arquivado_em IS NULL
-            ORDER BY c.tipo, c.nome
-        """, (user["id"], user["id"]))
+            WHERE m.user_id = %s
+              AND c.arquivado_em IS NULL
+              AND c.server_id IS NULL
+            UNION ALL
+            SELECT c.id, c.tipo, c.nome, c.descricao, c.grupo_id,
+                   c.server_id, c.categoria_id, c.criado_em,
+                   m.ultima_msg_lida_id,
+                   (SELECT COUNT(*) FROM chat_messages msg
+                      WHERE msg.channel_id = c.id
+                        AND msg.deletado_em IS NULL
+                        AND msg.user_id != %s
+                        AND msg.id > COALESCE(m.ultima_msg_lida_id, 0)
+                   ) AS unread_count
+            FROM chat_channels c
+            INNER JOIN chat_server_members sm
+              ON sm.server_id = c.server_id AND sm.user_id = %s
+            LEFT JOIN chat_channel_members m
+              ON m.channel_id = c.id AND m.user_id = %s
+            WHERE c.server_id IS NOT NULL
+              AND c.arquivado_em IS NULL
+              AND (
+                sm.role = 'owner'
+                OR NOT EXISTS (
+                  SELECT 1 FROM chat_channel_role_access cra WHERE cra.channel_id = c.id
+                )
+                OR EXISTS (
+                  SELECT 1 FROM chat_channel_role_access cra
+                  INNER JOIN chat_role_members rm
+                    ON rm.role_id = cra.role_id AND rm.user_id = %s
+                  WHERE cra.channel_id = c.id
+                )
+              )
+            ORDER BY tipo, nome
+        """, (uid, uid, uid, uid, uid, uid))
         canais = cur.fetchall()
 
         # Pra DMs, deriva o "nome" do outro membro (pra UI mostrar)
@@ -385,7 +436,7 @@ def listar_mensagens(channel_id: int, request: Request,
         users_map = _enriquecer_users(list({m["user_id"] for m in msgs}))
         for m in msgs:
             u = users_map.get(m["user_id"], {})
-            m["author"] = {"id": m["user_id"], "name": u.get("name"), "email": u.get("email")}
+            m["author"] = {"id": m["user_id"], "name": u.get("name"), "email": u.get("email"), "avatar_url": u.get("avatar_url")}
 
         # Anexa attachments + reactions + mentions + reply_to (1 query cada)
         if msgs:
@@ -590,9 +641,1421 @@ async def deletar_mensagem(message_id: int, request: Request):
 
 
 # =====================================================================
+# Servers — workspaces estilo Discord (Servidor -> Categoria -> Canal)
+# =====================================================================
+_ROLES_CRIAR_SERVER = ("ADMIN", "TI", "MANAGER")
+
+
+class ServerCreate(BaseModel):
+    nome: str = Field(..., min_length=2, max_length=100)
+    descricao: Optional[str] = Field(None, max_length=255)
+    icone: Optional[str] = Field(None, max_length=255)
+    member_ids: List[int] = Field(default_factory=list)
+
+
+class ServerEdit(BaseModel):
+    nome: Optional[str] = Field(None, min_length=2, max_length=100)
+    descricao: Optional[str] = Field(None, max_length=255)
+    icone: Optional[str] = Field(None, max_length=255)
+
+
+class CategoryCreate(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=100)
+    ordem: int = 0
+
+
+class CategoryEdit(BaseModel):
+    nome: Optional[str] = Field(None, min_length=1, max_length=100)
+    ordem: Optional[int] = None
+
+
+class ServerMemberAdd(BaseModel):
+    user_ids: List[int]
+    role: str = Field("member", pattern=r"^(admin|member)$")
+
+
+class ServerMemberRoleEdit(BaseModel):
+    role: str = Field(..., pattern=r"^(admin|member)$")
+
+
+def _role_no_server(server_id: int, user_id: int) -> Optional[str]:
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT role FROM chat_server_members WHERE server_id=%s AND user_id=%s",
+                    (server_id, user_id))
+        r = cur.fetchone()
+        return r[0] if r else None
+    finally:
+        cur.close(); conn.close()
+
+
+def _server_existe(server_id: int) -> bool:
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT 1 FROM chat_servers WHERE id=%s AND arquivado_em IS NULL", (server_id,))
+        return cur.fetchone() is not None
+    finally:
+        cur.close(); conn.close()
+
+
+def _server_de_categoria(category_id: int) -> Optional[int]:
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT server_id FROM chat_categories WHERE id=%s", (category_id,))
+        r = cur.fetchone()
+        return r[0] if r else None
+    finally:
+        cur.close(); conn.close()
+
+
+def _listar_membros_server(server_id: int) -> List[int]:
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT user_id FROM chat_server_members WHERE server_id=%s", (server_id,))
+        return [r[0] for r in cur.fetchall()]
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/servers")
+def listar_servers(request: Request):
+    """Lista os servidores que o user atual eh membro."""
+    user = _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT s.id, s.nome, s.descricao, s.icone, s.criado_em, sm.role
+            FROM chat_servers s
+            INNER JOIN chat_server_members sm ON sm.server_id = s.id
+            WHERE sm.user_id = %s AND s.arquivado_em IS NULL
+            ORDER BY s.nome
+        """, (user["id"],))
+        return {"success": True, "servers": cur.fetchall()}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/servers/{server_id}")
+def detalhar_server(server_id: int, request: Request):
+    """Detalhe do server + categorias + canais (todos os canais do server, com flag sou_membro)."""
+    user = _user_from_request(request)
+    role = _role_no_server(server_id, user["id"])
+    if not role:
+        raise HTTPException(status_code=403, detail="Voce nao eh membro deste servidor")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT id, nome, descricao, icone, criado_em
+            FROM chat_servers WHERE id=%s AND arquivado_em IS NULL
+        """, (server_id,))
+        srv = cur.fetchone()
+        if not srv:
+            raise HTTPException(status_code=404, detail="Servidor nao encontrado")
+        srv["my_role"] = role
+
+        cur.execute("""
+            SELECT id, nome, ordem
+            FROM chat_categories WHERE server_id=%s
+            ORDER BY ordem, nome
+        """, (server_id,))
+        cats = cur.fetchall()
+
+        # Canais VISIVEIS pro user — aplica a regra de cargo/whitelist.
+        # Owner ve tudo; member ve canais sem whitelist OU com algum cargo
+        # da whitelist.
+        cur.execute("""
+            SELECT c.id, c.tipo, c.nome, c.descricao, c.categoria_id, c.ordem,
+                   EXISTS (SELECT 1 FROM chat_channel_role_access cra
+                           WHERE cra.channel_id = c.id) AS tem_whitelist
+            FROM chat_channels c
+            WHERE c.server_id=%s
+              AND c.arquivado_em IS NULL
+              AND (
+                %s = 'owner'
+                OR NOT EXISTS (
+                  SELECT 1 FROM chat_channel_role_access cra WHERE cra.channel_id = c.id
+                )
+                OR EXISTS (
+                  SELECT 1 FROM chat_channel_role_access cra
+                  INNER JOIN chat_role_members rm
+                    ON rm.role_id = cra.role_id AND rm.user_id = %s
+                  WHERE cra.channel_id = c.id
+                )
+              )
+            ORDER BY (c.categoria_id IS NULL) DESC, c.categoria_id, c.ordem, c.nome
+        """, (server_id, role, user["id"]))
+        cans = cur.fetchall()
+        for c in cans:
+            c["sou_membro"] = True  # se chegou aqui, ve o canal
+            c["tem_whitelist"] = bool(c["tem_whitelist"])
+
+        # Cargos do user nesse server (pra UI pintar nome/badge)
+        cur.execute("""
+            SELECT r.id, r.nome, r.cor, r.ordem
+            FROM chat_roles r
+            INNER JOIN chat_role_members rm ON rm.role_id = r.id
+            WHERE r.server_id = %s AND rm.user_id = %s
+            ORDER BY r.ordem DESC, r.nome
+        """, (server_id, user["id"]))
+        my_roles = cur.fetchall()
+        srv["my_roles"] = my_roles
+
+        return {"success": True, "server": srv, "categories": cats, "channels": cans}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/servers")
+async def criar_server(body: ServerCreate, request: Request):
+    """Cria servidor. Apenas ADMIN/TI/MANAGER do sistema."""
+    user = _user_from_request(request)
+    if user.get("role") not in _ROLES_CRIAR_SERVER:
+        raise HTTPException(status_code=403,
+                            detail="So Admin/TI/Manager podem criar servidor")
+
+    member_ids = list({int(x) for x in body.member_ids if x and int(x) != user["id"]})
+    validos: List[int] = []
+    if member_ids:
+        plus = get_db_or_404()
+        pcur = plus.cursor(dictionary=True)
+        try:
+            placeholders = ",".join(["%s"] * len(member_ids))
+            pcur.execute(
+                f"SELECT id FROM users WHERE id IN ({placeholders}) AND is_active=1",
+                member_ids)
+            validos = [r["id"] for r in pcur.fetchall()]
+        finally:
+            pcur.close(); plus.close()
+
+    chat = get_chat_db_or_404()
+    cur = chat.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO chat_servers (nome, descricao, icone, criado_por)
+            VALUES (%s, %s, %s, %s)
+        """, (body.nome.strip(), body.descricao, body.icone, user["id"]))
+        server_id = cur.lastrowid
+
+        rows = [(server_id, user["id"], "owner")]
+        rows += [(server_id, uid, "member") for uid in validos]
+        cur.executemany("""
+            INSERT INTO chat_server_members (server_id, user_id, role)
+            VALUES (%s, %s, %s)
+        """, rows)
+        chat.commit()
+    finally:
+        cur.close(); chat.close()
+
+    await manager.send_to_users([user["id"]] + validos, {
+        "type": "server_created",
+        "server_id": server_id,
+        "nome": body.nome.strip(),
+    })
+    return {"success": True, "server_id": server_id, "members_added": len(validos)}
+
+
+@router.patch("/servers/{server_id}")
+async def editar_server(server_id: int, body: ServerEdit, request: Request):
+    user = _user_from_request(request)
+    role = _role_no_server(server_id, user["id"])
+    if role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Sem permissao no servidor")
+
+    sets, params = [], []
+    if body.nome is not None:
+        sets.append("nome=%s"); params.append(body.nome.strip())
+    if body.descricao is not None:
+        sets.append("descricao=%s"); params.append(body.descricao)
+    if body.icone is not None:
+        sets.append("icone=%s"); params.append(body.icone)
+    if not sets:
+        return {"success": True, "noop": True}
+    params.append(server_id)
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE chat_servers SET {', '.join(sets)} WHERE id=%s", params)
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    membros = _listar_membros_server(server_id)
+    await manager.send_to_users(membros, {
+        "type": "server_updated", "server_id": server_id,
+    })
+    return {"success": True}
+
+
+@router.delete("/servers/{server_id}")
+async def arquivar_server(server_id: int, request: Request):
+    user = _user_from_request(request)
+    role = _role_no_server(server_id, user["id"])
+    if role != "owner" and user.get("role") not in ("ADMIN", "TI"):
+        raise HTTPException(status_code=403, detail="So o owner ou Admin/TI podem arquivar")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE chat_servers SET arquivado_em=NOW() WHERE id=%s", (server_id,))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    membros = _listar_membros_server(server_id)
+    await manager.send_to_users(membros, {
+        "type": "server_archived", "server_id": server_id,
+    })
+    return {"success": True}
+
+
+# =====================================================================
+# Upload de avatar do servidor: POST /servers/{id}/avatar (multipart)
+# Salva em web/uploads/server-avatars/<id>-<uuid>.<ext> e atualiza
+# chat_servers.icone com a URL. Owner/admin do server apenas.
+# =====================================================================
+_UPLOAD_SRV_AVATAR_ROOT     = Path(__file__).resolve().parents[2] / "web" / "uploads" / "server-avatars"
+_UPLOAD_SRV_AVATAR_URL_BASE = "/SistemaCPE/web/uploads/server-avatars"
+_MAX_SRV_AVATAR_MB = 2
+
+
+@router.post("/servers/{server_id}/avatar")
+async def upload_avatar_server(server_id: int, request: Request,
+                                file: UploadFile = File(...)):
+    user = _user_from_request(request)
+    role = _role_no_server(server_id, user["id"])
+    if role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="So owner/admin do servidor podem mudar a foto")
+    if not _server_existe(server_id):
+        raise HTTPException(status_code=404, detail="Servidor nao encontrado")
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in _CHAT_IMG_EXTS:
+        raise HTTPException(status_code=400,
+                            detail=f"Extensao nao permitida ({ext}). Use: {', '.join(sorted(_CHAT_IMG_EXTS))}")
+
+    _UPLOAD_SRV_AVATAR_ROOT.mkdir(parents=True, exist_ok=True)
+    filename = f"srv{server_id}_{_uuid.uuid4().hex[:14]}{ext}"
+    destino = _UPLOAD_SRV_AVATAR_ROOT / filename
+    size = 0
+    limit = _MAX_SRV_AVATAR_MB * 1024 * 1024
+    with open(destino, "wb") as out:
+        while True:
+            chunk = await file.read(64 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > limit:
+                out.close()
+                destino.unlink(missing_ok=True)
+                raise HTTPException(status_code=413,
+                                    detail=f"Imagem maior que {_MAX_SRV_AVATAR_MB} MB")
+            out.write(chunk)
+
+    icone_url = f"{_UPLOAD_SRV_AVATAR_URL_BASE}/{filename}"
+
+    # Apaga avatar anterior se for arquivo nosso (evita lixo). Ignora se
+    # `icone` era emoji/texto curto.
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT icone FROM chat_servers WHERE id=%s", (server_id,))
+        anterior = cur.fetchone()
+        if anterior and anterior[0] and anterior[0].startswith(_UPLOAD_SRV_AVATAR_URL_BASE):
+            try:
+                rel = anterior[0].replace(_UPLOAD_SRV_AVATAR_URL_BASE + "/", "")
+                (_UPLOAD_SRV_AVATAR_ROOT / rel).unlink(missing_ok=True)
+            except Exception:
+                pass
+        cur.execute("UPDATE chat_servers SET icone=%s WHERE id=%s", (icone_url, server_id))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    membros = _listar_membros_server(server_id)
+    await manager.send_to_users(membros, {
+        "type": "server_updated", "server_id": server_id, "icone": icone_url,
+    })
+    return {"success": True, "icone": icone_url}
+
+
+# =====================================================================
+# Avatar do usuario logado: GET /me e POST /me/avatar
+# - GET retorna dados enriquecidos do user (inclui avatar_url) pra UI
+# - POST faz upload e atualiza cpe_plus.users.avatar_url
+# Arquivo fica em web/uploads/user-avatars/u<id>_<uuid>.<ext>
+# =====================================================================
+_UPLOAD_USER_AVATAR_ROOT     = Path(__file__).resolve().parents[2] / "web" / "uploads" / "user-avatars"
+_UPLOAD_USER_AVATAR_URL_BASE = "/SistemaCPE/web/uploads/user-avatars"
+_MAX_USER_AVATAR_MB = 2
+
+
+@router.get("/me")
+def me(request: Request):
+    """Retorna dados do user atual incluindo avatar_url (front usa pra
+    renderizar foto)."""
+    user = _user_from_request(request)
+    enr = _enriquecer_users([user["id"]]).get(user["id"], {})
+    return {
+        "success": True,
+        "user": {
+            "id":         user["id"],
+            "name":       enr.get("name") or user.get("name"),
+            "email":      enr.get("email") or user.get("email"),
+            "role":       enr.get("role") or user.get("role"),
+            "group_id":   enr.get("group_id"),
+            "avatar_url": enr.get("avatar_url"),
+        },
+    }
+
+
+@router.post("/me/avatar")
+async def upload_avatar_user(request: Request, file: UploadFile = File(...)):
+    """Upload da foto de perfil do user logado. Salva e atualiza
+    cpe_plus.users.avatar_url. Notifica todos os WS conectados pra
+    atualizarem a foto onde quer que esteja sendo exibida."""
+    user = _user_from_request(request)
+    uid  = user["id"]
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in _CHAT_IMG_EXTS:
+        raise HTTPException(status_code=400,
+                            detail=f"Extensao nao permitida ({ext}). Use: {', '.join(sorted(_CHAT_IMG_EXTS))}")
+
+    _UPLOAD_USER_AVATAR_ROOT.mkdir(parents=True, exist_ok=True)
+    filename = f"u{uid}_{_uuid.uuid4().hex[:14]}{ext}"
+    destino = _UPLOAD_USER_AVATAR_ROOT / filename
+    size = 0
+    limit = _MAX_USER_AVATAR_MB * 1024 * 1024
+    with open(destino, "wb") as out:
+        while True:
+            chunk = await file.read(64 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > limit:
+                out.close()
+                destino.unlink(missing_ok=True)
+                raise HTTPException(status_code=413,
+                                    detail=f"Imagem maior que {_MAX_USER_AVATAR_MB} MB")
+            out.write(chunk)
+
+    avatar_url = f"{_UPLOAD_USER_AVATAR_URL_BASE}/{filename}"
+
+    plus = get_db_or_404()
+    cur = plus.cursor()
+    try:
+        # Apaga avatar anterior (se for arquivo nosso)
+        cur.execute("SELECT avatar_url FROM users WHERE id=%s", (uid,))
+        row = cur.fetchone()
+        if row and row[0] and row[0].startswith(_UPLOAD_USER_AVATAR_URL_BASE):
+            try:
+                rel = row[0].replace(_UPLOAD_USER_AVATAR_URL_BASE + "/", "")
+                (_UPLOAD_USER_AVATAR_ROOT / rel).unlink(missing_ok=True)
+            except Exception:
+                pass
+        cur.execute("UPDATE users SET avatar_url=%s WHERE id=%s", (avatar_url, uid))
+        plus.commit()
+    finally:
+        cur.close(); plus.close()
+
+    await manager.send_to_users(manager.online_users(), {
+        "type": "user_avatar_changed",
+        "user_id": uid,
+        "avatar_url": avatar_url,
+    })
+    return {"success": True, "avatar_url": avatar_url}
+
+
+@router.get("/servers/{server_id}/members")
+def listar_membros_server_endpoint(server_id: int, request: Request):
+    user = _user_from_request(request)
+    if not _role_no_server(server_id, user["id"]):
+        raise HTTPException(status_code=403, detail="Voce nao eh membro deste servidor")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT user_id, role, entrou_em FROM chat_server_members
+            WHERE server_id=%s
+        """, (server_id,))
+        membros = cur.fetchall()
+    finally:
+        cur.close(); conn.close()
+
+    users_map = _enriquecer_users([m["user_id"] for m in membros])
+
+    # Carrega cargos por user (uma query agregada)
+    roles_por_user: Dict[int, List[dict]] = {}
+    if membros:
+        conn = get_chat_db_or_404()
+        cur = conn.cursor(dictionary=True)
+        try:
+            cur.execute("""
+                SELECT rm.user_id, r.id, r.nome, r.cor, r.ordem
+                FROM chat_role_members rm
+                INNER JOIN chat_roles r ON r.id = rm.role_id
+                WHERE r.server_id = %s
+                ORDER BY r.ordem DESC, r.nome
+            """, (server_id,))
+            for r in cur.fetchall():
+                roles_por_user.setdefault(r["user_id"], []).append({
+                    "id": r["id"], "nome": r["nome"], "cor": r["cor"], "ordem": r["ordem"],
+                })
+        finally:
+            cur.close(); conn.close()
+
+    for m in membros:
+        u = users_map.get(m["user_id"], {})
+        m["name"] = u.get("name")
+        m["email"] = u.get("email")
+        m["avatar_url"] = u.get("avatar_url")
+        m["roles"] = roles_por_user.get(m["user_id"], [])
+    return {"success": True, "members": membros}
+
+
+@router.post("/servers/{server_id}/members")
+async def adicionar_membros_server(server_id: int, body: ServerMemberAdd, request: Request):
+    user = _user_from_request(request)
+    role = _role_no_server(server_id, user["id"])
+    if role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Sem permissao no servidor")
+
+    user_ids = list({int(x) for x in body.user_ids if x})
+    if not user_ids:
+        return {"success": True, "added": 0}
+
+    plus = get_db_or_404()
+    pcur = plus.cursor(dictionary=True)
+    try:
+        placeholders = ",".join(["%s"] * len(user_ids))
+        pcur.execute(
+            f"SELECT id FROM users WHERE id IN ({placeholders}) AND is_active=1",
+            user_ids)
+        validos = [r["id"] for r in pcur.fetchall()]
+    finally:
+        pcur.close(); plus.close()
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        rows = [(server_id, uid, body.role) for uid in validos]
+        cur.executemany("""
+            INSERT IGNORE INTO chat_server_members (server_id, user_id, role)
+            VALUES (%s, %s, %s)
+        """, rows)
+        conn.commit()
+        added = cur.rowcount
+    finally:
+        cur.close(); conn.close()
+
+    await manager.send_to_users(validos, {
+        "type": "server_added", "server_id": server_id,
+    })
+    return {"success": True, "added": added}
+
+
+@router.delete("/servers/{server_id}/members/{user_id}")
+async def remover_membro_server(server_id: int, user_id: int, request: Request):
+    user = _user_from_request(request)
+    role = _role_no_server(server_id, user["id"])
+    if user["id"] != user_id and role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Sem permissao")
+
+    target_role = _role_no_server(server_id, user_id)
+    if target_role == "owner":
+        raise HTTPException(status_code=400, detail="Owner nao pode ser removido — transfira ownership primeiro")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM chat_server_members WHERE server_id=%s AND user_id=%s",
+                    (server_id, user_id))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    await manager.send_to_users([user_id], {
+        "type": "server_removed", "server_id": server_id,
+    })
+    return {"success": True}
+
+
+@router.patch("/servers/{server_id}/members/{user_id}")
+async def editar_role_membro_server(server_id: int, user_id: int, body: ServerMemberRoleEdit, request: Request):
+    user = _user_from_request(request)
+    role = _role_no_server(server_id, user["id"])
+    if role != "owner":
+        raise HTTPException(status_code=403, detail="So o owner pode mudar roles")
+
+    target_role = _role_no_server(server_id, user_id)
+    if not target_role:
+        raise HTTPException(status_code=404, detail="User nao eh membro do servidor")
+    if target_role == "owner":
+        raise HTTPException(status_code=400, detail="Nao da pra mudar role do owner")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE chat_server_members SET role=%s WHERE server_id=%s AND user_id=%s",
+                    (body.role, server_id, user_id))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+    return {"success": True}
+
+
+@router.post("/servers/{server_id}/categories")
+async def criar_categoria(server_id: int, body: CategoryCreate, request: Request):
+    user = _user_from_request(request)
+    role = _role_no_server(server_id, user["id"])
+    if role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Sem permissao no servidor")
+    if not _server_existe(server_id):
+        raise HTTPException(status_code=404, detail="Servidor nao encontrado")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO chat_categories (server_id, nome, ordem, criado_por)
+            VALUES (%s, %s, %s, %s)
+        """, (server_id, body.nome.strip(), body.ordem, user["id"]))
+        category_id = cur.lastrowid
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    membros = _listar_membros_server(server_id)
+    await manager.send_to_users(membros, {
+        "type": "category_created", "server_id": server_id,
+        "category_id": category_id, "nome": body.nome.strip(),
+    })
+    return {"success": True, "category_id": category_id}
+
+
+@router.patch("/categories/{category_id}")
+async def editar_categoria(category_id: int, body: CategoryEdit, request: Request):
+    user = _user_from_request(request)
+    server_id = _server_de_categoria(category_id)
+    if not server_id:
+        raise HTTPException(status_code=404, detail="Categoria nao encontrada")
+    role = _role_no_server(server_id, user["id"])
+    if role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Sem permissao no servidor")
+
+    sets, params = [], []
+    if body.nome is not None:
+        sets.append("nome=%s"); params.append(body.nome.strip())
+    if body.ordem is not None:
+        sets.append("ordem=%s"); params.append(int(body.ordem))
+    if not sets:
+        return {"success": True, "noop": True}
+    params.append(category_id)
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE chat_categories SET {', '.join(sets)} WHERE id=%s", params)
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    membros = _listar_membros_server(server_id)
+    await manager.send_to_users(membros, {
+        "type": "category_updated", "server_id": server_id, "category_id": category_id,
+    })
+    return {"success": True}
+
+
+@router.delete("/categories/{category_id}")
+async def excluir_categoria(category_id: int, request: Request):
+    user = _user_from_request(request)
+    server_id = _server_de_categoria(category_id)
+    if not server_id:
+        raise HTTPException(status_code=404, detail="Categoria nao encontrada")
+    role = _role_no_server(server_id, user["id"])
+    if role not in ("owner", "admin"):
+        raise HTTPException(status_code=403, detail="Sem permissao no servidor")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM chat_categories WHERE id=%s", (category_id,))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    membros = _listar_membros_server(server_id)
+    await manager.send_to_users(membros, {
+        "type": "category_deleted", "server_id": server_id, "category_id": category_id,
+    })
+    return {"success": True}
+
+
+# =====================================================================
+# Invites — links de convite estilo Discord
+# Qualquer membro do server pode gerar invite (configuravel: duracao, max_usos)
+# =====================================================================
+import secrets as _secrets
+
+_INVITE_CODE_LEN = 8
+_INVITE_ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789ABCDEFGHJKLMNPQRSTUVWXYZ"  # sem 0/O/l/I/1
+
+
+class InviteCreate(BaseModel):
+    channel_id: Optional[int] = None
+    duracao_horas: Optional[int] = Field(None, ge=1, le=24*365,
+                                          description="Horas ate expirar (NULL = nunca)")
+    max_usos: Optional[int] = Field(None, ge=1, le=10000,
+                                     description="Limite de aceites (NULL = ilimitado)")
+
+
+def _gerar_codigo_invite(cur, tentativas: int = 8) -> str:
+    """Gera um code aleatorio unico em chat_invites.code."""
+    for _ in range(tentativas):
+        code = "".join(_secrets.choice(_INVITE_ALPHABET) for _ in range(_INVITE_CODE_LEN))
+        cur.execute("SELECT 1 FROM chat_invites WHERE code=%s LIMIT 1", (code,))
+        if not cur.fetchone():
+            return code
+    raise HTTPException(status_code=500, detail="Nao foi possivel gerar code unico")
+
+
+def _invite_valido(invite: dict) -> Optional[str]:
+    """Retorna None se ok, ou string de motivo se invalido."""
+    if invite.get("revogado_em"):
+        return "Convite revogado"
+    if invite.get("expira_em") and invite["expira_em"] < datetime.utcnow():
+        return "Convite expirado"
+    if invite.get("max_usos") is not None and invite["usos"] >= invite["max_usos"]:
+        return "Convite atingiu o limite de usos"
+    return None
+
+
+@router.post("/servers/{server_id}/invites")
+async def criar_invite(server_id: int, body: InviteCreate, request: Request):
+    """Cria link de convite. Qualquer membro do server pode gerar.
+    Se channel_id setado, valida que o canal pertence ao server."""
+    user = _user_from_request(request)
+    if not _role_no_server(server_id, user["id"]):
+        raise HTTPException(status_code=403, detail="Voce nao eh membro deste servidor")
+    if not _server_existe(server_id):
+        raise HTTPException(status_code=404, detail="Servidor nao encontrado")
+
+    # Valida channel_id se setado
+    if body.channel_id:
+        conn = get_chat_db_or_404()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT server_id FROM chat_channels
+                WHERE id=%s AND arquivado_em IS NULL
+            """, (body.channel_id,))
+            r = cur.fetchone()
+            if not r:
+                raise HTTPException(status_code=404, detail="Canal nao encontrado")
+            if r[0] != server_id:
+                raise HTTPException(status_code=400, detail="Canal nao pertence a este servidor")
+        finally:
+            cur.close(); conn.close()
+
+    expira_em = None
+    if body.duracao_horas:
+        expira_em = datetime.utcnow() + timedelta(hours=body.duracao_horas)
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        code = _gerar_codigo_invite(cur)
+        cur.execute("""
+            INSERT INTO chat_invites
+              (code, server_id, channel_id, criado_por, expira_em, max_usos)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (code, server_id, body.channel_id, user["id"], expira_em, body.max_usos))
+        invite_id = cur.lastrowid
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    return {
+        "success": True,
+        "invite_id": invite_id,
+        "code": code,
+        "expira_em": expira_em,
+        "max_usos": body.max_usos,
+        "channel_id": body.channel_id,
+    }
+
+
+@router.get("/servers/{server_id}/invites")
+def listar_invites(server_id: int, request: Request):
+    """Lista invites ativos (nao revogados, nao expirados) do server.
+    Qualquer membro do server pode ver."""
+    user = _user_from_request(request)
+    if not _role_no_server(server_id, user["id"]):
+        raise HTTPException(status_code=403, detail="Voce nao eh membro deste servidor")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT i.id, i.code, i.channel_id, i.criado_por, i.criado_em,
+                   i.expira_em, i.max_usos, i.usos,
+                   ch.nome AS channel_nome
+            FROM chat_invites i
+            LEFT JOIN chat_channels ch ON ch.id = i.channel_id
+            WHERE i.server_id=%s
+              AND i.revogado_em IS NULL
+              AND (i.expira_em IS NULL OR i.expira_em > NOW())
+              AND (i.max_usos IS NULL OR i.usos < i.max_usos)
+            ORDER BY i.criado_em DESC
+        """, (server_id,))
+        invites = cur.fetchall()
+    finally:
+        cur.close(); conn.close()
+
+    users_map = _enriquecer_users(list({i["criado_por"] for i in invites}))
+    for i in invites:
+        u = users_map.get(i["criado_por"], {})
+        i["criado_por_name"] = u.get("name")
+    return {"success": True, "invites": invites}
+
+
+@router.delete("/invites/{invite_id}")
+async def revogar_invite(invite_id: int, request: Request):
+    """Revoga (soft-delete) um invite. So criador ou owner/admin do server."""
+    user = _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT id, server_id, criado_por, revogado_em
+            FROM chat_invites WHERE id=%s
+        """, (invite_id,))
+        inv = cur.fetchone()
+        if not inv:
+            raise HTTPException(status_code=404, detail="Convite nao encontrado")
+        if inv["revogado_em"]:
+            return {"success": True, "noop": True}
+
+        # Permissao
+        role = _role_no_server(inv["server_id"], user["id"])
+        if inv["criado_por"] != user["id"] and role not in ("owner", "admin"):
+            raise HTTPException(status_code=403, detail="Sem permissao pra revogar")
+
+        cur.execute("UPDATE chat_invites SET revogado_em=NOW() WHERE id=%s", (invite_id,))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+    return {"success": True}
+
+
+@router.get("/invites/{code}")
+def info_invite(code: str, request: Request):
+    """Preview do convite (precisa estar logado). Mostra nome do server,
+    canal opcional, quem convidou. NAO consome o invite."""
+    user = _user_from_request(request)  # exige login (qualquer um logado pode ver preview)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT i.id, i.code, i.server_id, i.channel_id, i.criado_por,
+                   i.criado_em, i.expira_em, i.max_usos, i.usos, i.revogado_em,
+                   s.nome AS server_nome, s.icone AS server_icone,
+                   ch.nome AS channel_nome, ch.tipo AS channel_tipo
+            FROM chat_invites i
+            INNER JOIN chat_servers s ON s.id = i.server_id
+            LEFT JOIN chat_channels ch ON ch.id = i.channel_id
+            WHERE i.code=%s
+        """, (code,))
+        inv = cur.fetchone()
+        if not inv:
+            raise HTTPException(status_code=404, detail="Convite nao encontrado")
+
+        motivo = _invite_valido(inv)
+
+        # Ja eh membro?
+        cur.execute(
+            "SELECT 1 FROM chat_server_members WHERE server_id=%s AND user_id=%s LIMIT 1",
+            (inv["server_id"], user["id"]))
+        ja_membro = cur.fetchone() is not None
+    finally:
+        cur.close(); conn.close()
+
+    users_map = _enriquecer_users([inv["criado_por"]])
+    return {
+        "success": True,
+        "invite": {
+            "code": inv["code"],
+            "server_id": inv["server_id"],
+            "server_nome": inv["server_nome"],
+            "server_icone": inv["server_icone"],
+            "channel_id": inv["channel_id"],
+            "channel_nome": inv["channel_nome"],
+            "channel_tipo": inv["channel_tipo"],
+            "criado_por": inv["criado_por"],
+            "criado_por_name": users_map.get(inv["criado_por"], {}).get("name"),
+            "expira_em": inv["expira_em"],
+            "max_usos": inv["max_usos"],
+            "usos": inv["usos"],
+            "valido": motivo is None,
+            "motivo_invalido": motivo,
+            "ja_membro": ja_membro,
+        },
+    }
+
+
+@router.post("/invites/{code}/accept")
+async def aceitar_invite(code: str, request: Request):
+    """Aceita o convite — adiciona ao server (se ainda nao for membro) e
+    opcionalmente ao canal alvo. Incrementa usos."""
+    user = _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT id, server_id, channel_id, expira_em, max_usos, usos, revogado_em
+            FROM chat_invites WHERE code=%s FOR UPDATE
+        """, (code,))
+        inv = cur.fetchone()
+        if not inv:
+            raise HTTPException(status_code=404, detail="Convite nao encontrado")
+        motivo = _invite_valido(inv)
+        if motivo:
+            raise HTTPException(status_code=410, detail=motivo)
+
+        # Adiciona ao server (se nao for ja)
+        cur.execute("""
+            INSERT IGNORE INTO chat_server_members (server_id, user_id, role)
+            VALUES (%s, %s, 'member')
+        """, (inv["server_id"], user["id"]))
+        server_added = cur.rowcount > 0
+
+        # Adiciona ao canal alvo (se houver)
+        channel_added = False
+        if inv["channel_id"]:
+            cur.execute("""
+                INSERT IGNORE INTO chat_channel_members (channel_id, user_id, role)
+                VALUES (%s, %s, 'member')
+            """, (inv["channel_id"], user["id"]))
+            channel_added = cur.rowcount > 0
+
+        # Incrementa usos
+        cur.execute("UPDATE chat_invites SET usos = usos + 1 WHERE id=%s", (inv["id"],))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    # WS: notifica o user pra recarregar servers/canais
+    await manager.send_to_users([user["id"]], {
+        "type": "server_added",
+        "server_id": inv["server_id"],
+    })
+    if inv["channel_id"]:
+        await manager.send_to_users([user["id"]], {
+            "type": "added_to_channel",
+            "channel_id": inv["channel_id"],
+        })
+        # E notifica membros existentes do canal pra atualizarem lista de membros
+        membros = _listar_membros_canal(inv["channel_id"])
+        await manager.send_to_users([uid for uid in membros if uid != user["id"]], {
+            "type": "channel_members_changed",
+            "channel_id": inv["channel_id"],
+        })
+
+    return {
+        "success": True,
+        "server_id": inv["server_id"],
+        "channel_id": inv["channel_id"],
+        "server_added": server_added,
+        "channel_added": channel_added,
+    }
+
+
+# =====================================================================
+# Roles (cargos por servidor) — estilo Discord
+#
+# - chat_roles                : nome/cor/ordem + permissoes binarias
+# - chat_role_members         : N:N user x role (multi-cargo)
+# - chat_channel_role_access  : whitelist de cargos por canal
+#
+# Owner do server bypassa tudo. Admin (chat_server_members.role='admin')
+# tambem bypassa tudo (compat). Member com cargo que tem `perm_X=1`
+# tambem pode realizar a acao X.
+# =====================================================================
+
+# Permissoes validas (espelha colunas perm_* da tabela)
+_VALID_PERMS = (
+    "manage_server",
+    "manage_roles",
+    "manage_channels",
+    "manage_members",
+    "manage_messages",
+    "create_invite",
+    "mention_everyone",
+)
+
+
+class RoleCreate(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=80)
+    cor: Optional[str] = Field(None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    ordem: int = 0
+    perm_manage_server: bool = False
+    perm_manage_roles: bool = False
+    perm_manage_channels: bool = False
+    perm_manage_members: bool = False
+    perm_manage_messages: bool = False
+    perm_create_invite: bool = True
+    perm_mention_everyone: bool = False
+
+
+class RoleEdit(BaseModel):
+    nome: Optional[str] = Field(None, min_length=1, max_length=80)
+    cor: Optional[str] = Field(None, pattern=r"^(#[0-9A-Fa-f]{6})?$")  # vazia = remove cor
+    ordem: Optional[int] = None
+    perm_manage_server:    Optional[bool] = None
+    perm_manage_roles:     Optional[bool] = None
+    perm_manage_channels:  Optional[bool] = None
+    perm_manage_members:   Optional[bool] = None
+    perm_manage_messages:  Optional[bool] = None
+    perm_create_invite:    Optional[bool] = None
+    perm_mention_everyone: Optional[bool] = None
+
+
+class RoleMembersBody(BaseModel):
+    user_ids: List[int]
+
+
+class ChannelRolesBody(BaseModel):
+    role_ids: List[int]
+
+
+def _role_server_id(role_id: int) -> Optional[int]:
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT server_id FROM chat_roles WHERE id=%s", (role_id,))
+        r = cur.fetchone()
+        return r[0] if r else None
+    finally:
+        cur.close(); conn.close()
+
+
+def _pode_no_server(server_id: int, user_id: int, perm: str) -> bool:
+    """True se o user pode realizar a acao `perm` no servidor.
+    - owner ou admin (chat_server_members.role) = bypass
+    - member com algum chat_role onde perm_X=1 = ok
+    """
+    if perm not in _VALID_PERMS:
+        return False
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT role FROM chat_server_members WHERE server_id=%s AND user_id=%s",
+            (server_id, user_id))
+        r = cur.fetchone()
+        if not r:
+            return False
+        if r[0] in ("owner", "admin"):
+            return True
+        cur.execute(f"""
+            SELECT 1 FROM chat_roles r
+            INNER JOIN chat_role_members rm ON rm.role_id = r.id
+            WHERE r.server_id = %s AND rm.user_id = %s AND r.perm_{perm} = 1
+            LIMIT 1
+        """, (server_id, user_id))
+        return cur.fetchone() is not None
+    finally:
+        cur.close(); conn.close()
+
+
+def _can_view_channel(channel_id: int, user_id: int) -> bool:
+    """True se o user pode ver/participar do canal.
+
+    Canais SOLTOS (server_id IS NULL): usa chat_channel_members (adesao manual).
+    Canais DE SERVER: precisa ser membro do server E:
+      - owner OR
+      - canal sem whitelist (sem entradas em chat_channel_role_access) OR
+      - tem algum cargo da whitelist
+    """
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT server_id FROM chat_channels WHERE id=%s AND arquivado_em IS NULL",
+            (channel_id,))
+        row = cur.fetchone()
+        if not row:
+            return False
+        server_id = row[0]
+        if server_id is None:
+            cur.execute(
+                "SELECT 1 FROM chat_channel_members WHERE channel_id=%s AND user_id=%s LIMIT 1",
+                (channel_id, user_id))
+            return cur.fetchone() is not None
+        # Canal de server
+        cur.execute(
+            "SELECT role FROM chat_server_members WHERE server_id=%s AND user_id=%s",
+            (server_id, user_id))
+        srv = cur.fetchone()
+        if not srv:
+            return False
+        if srv[0] == "owner":
+            return True
+        cur.execute(
+            "SELECT 1 FROM chat_channel_role_access WHERE channel_id=%s LIMIT 1",
+            (channel_id,))
+        if not cur.fetchone():
+            return True  # sem whitelist = todos do server veem
+        cur.execute("""
+            SELECT 1 FROM chat_channel_role_access cra
+            INNER JOIN chat_role_members rm ON rm.role_id = cra.role_id
+            WHERE cra.channel_id = %s AND rm.user_id = %s
+            LIMIT 1
+        """, (channel_id, user_id))
+        return cur.fetchone() is not None
+    finally:
+        cur.close(); conn.close()
+
+
+def _listar_membros_canal_server(channel_id: int, server_id: int) -> List[int]:
+    """Lista user_ids que tem acesso a um canal DE SERVER (owner + sem
+    whitelist OR sem whitelist apenas todos OR com cargos da whitelist)."""
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT 1 FROM chat_channel_role_access WHERE channel_id=%s LIMIT 1",
+            (channel_id,))
+        has_wl = cur.fetchone() is not None
+        if not has_wl:
+            cur.execute(
+                "SELECT user_id FROM chat_server_members WHERE server_id=%s",
+                (server_id,))
+            return [r[0] for r in cur.fetchall()]
+        cur.execute("""
+            SELECT DISTINCT sm.user_id
+            FROM chat_server_members sm
+            WHERE sm.server_id = %s
+              AND (
+                sm.role = 'owner'
+                OR EXISTS (
+                  SELECT 1 FROM chat_channel_role_access cra
+                  INNER JOIN chat_role_members rm
+                    ON rm.role_id = cra.role_id AND rm.user_id = sm.user_id
+                  WHERE cra.channel_id = %s
+                )
+              )
+        """, (server_id, channel_id))
+        return [r[0] for r in cur.fetchall()]
+    finally:
+        cur.close(); conn.close()
+
+
+@router.get("/servers/{server_id}/roles")
+def listar_roles(server_id: int, request: Request):
+    """Lista cargos do servidor com contagem de membros."""
+    user = _user_from_request(request)
+    if not _role_no_server(server_id, user["id"]):
+        raise HTTPException(status_code=403, detail="Voce nao eh membro deste servidor")
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT r.id, r.nome, r.cor, r.ordem,
+                   r.perm_manage_server, r.perm_manage_roles, r.perm_manage_channels,
+                   r.perm_manage_members, r.perm_manage_messages,
+                   r.perm_create_invite, r.perm_mention_everyone,
+                   r.criado_em,
+                   (SELECT COUNT(*) FROM chat_role_members rm WHERE rm.role_id = r.id) AS membros
+            FROM chat_roles r
+            WHERE r.server_id = %s
+            ORDER BY r.ordem DESC, r.nome
+        """, (server_id,))
+        return {"success": True, "roles": cur.fetchall()}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/servers/{server_id}/roles")
+async def criar_role(server_id: int, body: RoleCreate, request: Request):
+    user = _user_from_request(request)
+    if not _pode_no_server(server_id, user["id"], "manage_roles"):
+        raise HTTPException(status_code=403, detail="Sem permissao pra gerenciar cargos")
+    if not _server_existe(server_id):
+        raise HTTPException(status_code=404, detail="Servidor nao encontrado")
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO chat_roles
+              (server_id, nome, cor, ordem,
+               perm_manage_server, perm_manage_roles, perm_manage_channels,
+               perm_manage_members, perm_manage_messages,
+               perm_create_invite, perm_mention_everyone, criado_por)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (server_id, body.nome.strip(), body.cor, body.ordem,
+              int(body.perm_manage_server), int(body.perm_manage_roles),
+              int(body.perm_manage_channels), int(body.perm_manage_members),
+              int(body.perm_manage_messages), int(body.perm_create_invite),
+              int(body.perm_mention_everyone), user["id"]))
+        role_id = cur.lastrowid
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    membros = _listar_membros_server(server_id)
+    await manager.send_to_users(membros, {
+        "type": "role_created", "server_id": server_id, "role_id": role_id,
+    })
+    return {"success": True, "role_id": role_id}
+
+
+@router.patch("/roles/{role_id}")
+async def editar_role(role_id: int, body: RoleEdit, request: Request):
+    user = _user_from_request(request)
+    server_id = _role_server_id(role_id)
+    if not server_id:
+        raise HTTPException(status_code=404, detail="Cargo nao encontrado")
+    if not _pode_no_server(server_id, user["id"], "manage_roles"):
+        raise HTTPException(status_code=403, detail="Sem permissao pra gerenciar cargos")
+
+    sets, params = [], []
+    if body.nome is not None:
+        sets.append("nome=%s"); params.append(body.nome.strip())
+    if body.cor is not None:
+        sets.append("cor=%s"); params.append(body.cor or None)
+    if body.ordem is not None:
+        sets.append("ordem=%s"); params.append(int(body.ordem))
+    for f in ("perm_manage_server","perm_manage_roles","perm_manage_channels",
+              "perm_manage_members","perm_manage_messages","perm_create_invite",
+              "perm_mention_everyone"):
+        v = getattr(body, f)
+        if v is not None:
+            sets.append(f"{f}=%s"); params.append(int(v))
+    if not sets:
+        return {"success": True, "noop": True}
+    params.append(role_id)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"UPDATE chat_roles SET {', '.join(sets)} WHERE id=%s", params)
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    membros = _listar_membros_server(server_id)
+    await manager.send_to_users(membros, {
+        "type": "role_updated", "server_id": server_id, "role_id": role_id,
+    })
+    return {"success": True}
+
+
+@router.delete("/roles/{role_id}")
+async def excluir_role(role_id: int, request: Request):
+    user = _user_from_request(request)
+    server_id = _role_server_id(role_id)
+    if not server_id:
+        raise HTTPException(status_code=404, detail="Cargo nao encontrado")
+    if not _pode_no_server(server_id, user["id"], "manage_roles"):
+        raise HTTPException(status_code=403, detail="Sem permissao pra gerenciar cargos")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("DELETE FROM chat_roles WHERE id=%s", (role_id,))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    membros = _listar_membros_server(server_id)
+    await manager.send_to_users(membros, {
+        "type": "role_deleted", "server_id": server_id, "role_id": role_id,
+    })
+    return {"success": True}
+
+
+@router.get("/roles/{role_id}/members")
+def listar_role_members(role_id: int, request: Request):
+    user = _user_from_request(request)
+    server_id = _role_server_id(role_id)
+    if not server_id:
+        raise HTTPException(status_code=404, detail="Cargo nao encontrado")
+    if not _role_no_server(server_id, user["id"]):
+        raise HTTPException(status_code=403, detail="Voce nao eh membro deste servidor")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT user_id, atribuido_em FROM chat_role_members WHERE role_id=%s
+        """, (role_id,))
+        rows = cur.fetchall()
+    finally:
+        cur.close(); conn.close()
+    enr = _enriquecer_users([r["user_id"] for r in rows])
+    for r in rows:
+        u = enr.get(r["user_id"], {})
+        r["name"] = u.get("name"); r["email"] = u.get("email")
+        r["avatar_url"] = u.get("avatar_url")
+    return {"success": True, "members": rows}
+
+
+@router.post("/roles/{role_id}/members")
+async def add_role_members(role_id: int, body: RoleMembersBody, request: Request):
+    user = _user_from_request(request)
+    server_id = _role_server_id(role_id)
+    if not server_id:
+        raise HTTPException(status_code=404, detail="Cargo nao encontrado")
+    if not _pode_no_server(server_id, user["id"], "manage_roles"):
+        raise HTTPException(status_code=403, detail="Sem permissao pra gerenciar cargos")
+
+    # Filtra: precisa ser membro do server
+    uids = list({int(x) for x in body.user_ids if x})
+    if not uids:
+        return {"success": True, "added": 0}
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        ph = ",".join(["%s"] * len(uids))
+        cur.execute(
+            f"SELECT user_id FROM chat_server_members WHERE server_id=%s AND user_id IN ({ph})",
+            (server_id, *uids))
+        validos = [r[0] for r in cur.fetchall()]
+        rows = [(role_id, uid) for uid in validos]
+        cur.executemany(
+            "INSERT IGNORE INTO chat_role_members (role_id, user_id) VALUES (%s, %s)",
+            rows)
+        added = cur.rowcount
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    await manager.send_to_users(validos, {
+        "type": "role_assigned", "server_id": server_id, "role_id": role_id,
+    })
+    return {"success": True, "added": added}
+
+
+@router.delete("/roles/{role_id}/members/{user_id}")
+async def remove_role_member(role_id: int, user_id: int, request: Request):
+    user = _user_from_request(request)
+    server_id = _role_server_id(role_id)
+    if not server_id:
+        raise HTTPException(status_code=404, detail="Cargo nao encontrado")
+    if not _pode_no_server(server_id, user["id"], "manage_roles"):
+        raise HTTPException(status_code=403, detail="Sem permissao pra gerenciar cargos")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "DELETE FROM chat_role_members WHERE role_id=%s AND user_id=%s",
+            (role_id, user_id))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+    await manager.send_to_users([user_id], {
+        "type": "role_revoked", "server_id": server_id, "role_id": role_id,
+    })
+    return {"success": True}
+
+
+@router.get("/channels/{channel_id}/roles")
+def listar_channel_roles(channel_id: int, request: Request):
+    """Lista IDs dos cargos com acesso a este canal (whitelist)."""
+    user = _user_from_request(request)
+    if not _can_view_channel(channel_id, user["id"]):
+        raise HTTPException(status_code=403, detail="Sem acesso ao canal")
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT role_id FROM chat_channel_role_access WHERE channel_id=%s",
+            (channel_id,))
+        ids = [r[0] for r in cur.fetchall()]
+    finally:
+        cur.close(); conn.close()
+    return {"success": True, "role_ids": ids}
+
+
+@router.put("/channels/{channel_id}/roles")
+async def set_channel_roles(channel_id: int, body: ChannelRolesBody, request: Request):
+    """Substitui a whitelist de cargos do canal. Lista vazia = sem
+    restricao (todos os membros do server veem)."""
+    user = _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT server_id FROM chat_channels WHERE id=%s AND arquivado_em IS NULL",
+            (channel_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Canal nao encontrado")
+        server_id = row[0]
+        if server_id is None:
+            raise HTTPException(status_code=400, detail="Canal nao pertence a um servidor")
+    finally:
+        cur.close(); conn.close()
+
+    if not _pode_no_server(server_id, user["id"], "manage_channels"):
+        raise HTTPException(status_code=403, detail="Sem permissao pra gerenciar canais")
+
+    # Filtra role_ids que pertencem ao server
+    role_ids = list({int(x) for x in body.role_ids if x})
+    validos: List[int] = []
+    if role_ids:
+        conn = get_chat_db_or_404()
+        cur = conn.cursor()
+        try:
+            ph = ",".join(["%s"] * len(role_ids))
+            cur.execute(
+                f"SELECT id FROM chat_roles WHERE server_id=%s AND id IN ({ph})",
+                (server_id, *role_ids))
+            validos = [r[0] for r in cur.fetchall()]
+        finally:
+            cur.close(); conn.close()
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "DELETE FROM chat_channel_role_access WHERE channel_id=%s", (channel_id,))
+        if validos:
+            cur.executemany(
+                "INSERT INTO chat_channel_role_access (channel_id, role_id) VALUES (%s, %s)",
+                [(channel_id, rid) for rid in validos])
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    # Notifica todos os membros do server (a visibilidade do canal pode ter mudado)
+    membros = _listar_membros_server(server_id)
+    await manager.send_to_users(membros, {
+        "type": "channel_access_changed",
+        "server_id": server_id, "channel_id": channel_id,
+    })
+    return {"success": True, "role_ids": validos}
+
+
+# =====================================================================
 # Canais customizados — criados pelo Responsavel de Grupo (e ADMIN/TI/MANAGER)
 # Cross-grupo/cross-setor por design. Owner gerencia; admin pode adicionar
 # membros; member so conversa.
+#
+# Se server_id informado, o canal pertence aquele servidor — neste caso o
+# criador precisa ser owner/admin do servidor (em vez de RESPONSAVEL_GRUPO).
+# Quando categoria_id informado, valida que pertence ao mesmo server_id.
 # =====================================================================
 _ROLES_CRIAR_CANAL = ("RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER")
 
@@ -603,6 +2066,8 @@ class CanalCreate(BaseModel):
     member_ids: List[int] = Field(default_factory=list)
     tipo: str = Field("canal", pattern=r"^(canal|voz)$",
                       description="canal de texto ou voz")
+    server_id: Optional[int] = None
+    categoria_id: Optional[int] = None
 
 
 class CanalEdit(BaseModel):
@@ -642,15 +2107,39 @@ def _canal_existe_e_tipo(channel_id: int) -> tuple[bool, Optional[str]]:
 
 @router.post("/channels")
 async def criar_canal(body: CanalCreate, request: Request):
-    """Cria um canal customizado (tipo='canal'). Criador vira owner."""
+    """Cria um canal customizado (tipo='canal' ou 'voz'). Criador vira owner.
+
+    Dois modos:
+    - Canal SOLTO (server_id=NULL): requer role global RESPONSAVEL_GRUPO/ADMIN/TI/MANAGER.
+    - Canal dentro de SERVIDOR (server_id != NULL): requer owner/admin do servidor.
+      categoria_id eh opcional; se informado, precisa pertencer ao mesmo server.
+    """
     user = _user_from_request(request)
-    if user.get("role") not in _ROLES_CRIAR_CANAL:
-        raise HTTPException(status_code=403,
-                            detail="So Responsavel de Grupo, Manager, TI ou Admin podem criar canal")
 
     nome = body.nome.strip()
     if not nome:
         raise HTTPException(status_code=400, detail="Nome obrigatorio")
+
+    # Validacao de permissao + escopo do servidor
+    if body.server_id:
+        srv_role = _role_no_server(body.server_id, user["id"])
+        if srv_role not in ("owner", "admin"):
+            raise HTTPException(status_code=403,
+                                detail="So owner/admin do servidor podem criar canais dentro dele")
+        if not _server_existe(body.server_id):
+            raise HTTPException(status_code=404, detail="Servidor nao encontrado")
+        if body.categoria_id:
+            cat_srv = _server_de_categoria(body.categoria_id)
+            if cat_srv != body.server_id:
+                raise HTTPException(status_code=400,
+                                    detail="Categoria nao pertence ao servidor informado")
+    else:
+        if body.categoria_id:
+            raise HTTPException(status_code=400,
+                                detail="categoria_id requer server_id")
+        if user.get("role") not in _ROLES_CRIAR_CANAL:
+            raise HTTPException(status_code=403,
+                                detail="So Responsavel de Grupo, Manager, TI ou Admin podem criar canal solto")
 
     # Filtra member_ids — so users que existem e estao ativos
     member_ids = list({int(x) for x in body.member_ids if x and int(x) != user["id"]})
@@ -671,9 +2160,9 @@ async def criar_canal(body: CanalCreate, request: Request):
     ccur = chat.cursor()
     try:
         ccur.execute("""
-            INSERT INTO chat_channels (tipo, nome, descricao, criado_por)
-            VALUES (%s, %s, %s, %s)
-        """, (body.tipo, nome, body.descricao, user["id"]))
+            INSERT INTO chat_channels (tipo, server_id, categoria_id, nome, descricao, criado_por)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (body.tipo, body.server_id, body.categoria_id, nome, body.descricao, user["id"]))
         channel_id = ccur.lastrowid
 
         # Owner + members
@@ -687,12 +2176,25 @@ async def criar_canal(body: CanalCreate, request: Request):
     finally:
         ccur.close(); chat.close()
 
-    # Notifica todos os novos membros via WS pra atualizar lista de canais
-    await manager.send_to_users([user["id"]] + validos, {
+    # Notifica novos membros pra atualizar lista de canais.
+    # Se for canal de servidor, tambem notifica todos os membros do servidor
+    # (mesmo nao-membros do canal) pra atualizarem a arvore do servidor.
+    direct_targets = [user["id"]] + validos
+    await manager.send_to_users(direct_targets, {
         "type": "channel_created",
         "channel_id": channel_id,
         "nome": nome,
+        "server_id": body.server_id,
+        "categoria_id": body.categoria_id,
     })
+    if body.server_id:
+        srv_membros = _listar_membros_server(body.server_id)
+        outros = [uid for uid in srv_membros if uid not in direct_targets]
+        if outros:
+            await manager.send_to_users(outros, {
+                "type": "server_tree_changed",
+                "server_id": body.server_id,
+            })
 
     return {"success": True, "channel_id": channel_id, "members_added": len(validos)}
 
@@ -935,7 +2437,7 @@ def listar_users_disponiveis(request: Request, q: Optional[str] = Query(None)):
         if q:
             like = f"%{q.strip().lower()}%"
             cur.execute("""
-                SELECT id, name, email, role, group_id
+                SELECT id, name, email, role, group_id, avatar_url
                 FROM users
                 WHERE is_active=1
                   AND (LOWER(name) LIKE %s OR LOWER(email) LIKE %s)
@@ -943,7 +2445,7 @@ def listar_users_disponiveis(request: Request, q: Optional[str] = Query(None)):
             """, (like, like))
         else:
             cur.execute("""
-                SELECT id, name, email, role, group_id
+                SELECT id, name, email, role, group_id, avatar_url
                 FROM users WHERE is_active=1
                 ORDER BY name LIMIT 200
             """)
@@ -1285,6 +2787,77 @@ def sync_canais_grupos(request: Request):
 # =====================================================================
 # Helper: persistir mensagem + broadcast pros membros online
 # =====================================================================
+def _criar_notifs_sino(channel_id: int, author_id: int, author_name: Optional[str],
+                        content: str, attachments: List[dict],
+                        membros: List[int], mention_ids: List[int]) -> None:
+    """Cria notificacoes persistentes no sino (cpe_plus.notificacoes):
+    - Cada @mention: 1 notif tipo 'chat_mention'
+    - Em DM (canal tipo='dm'): 1 notif tipo 'chat_dm' pra cada destinatario
+    Tambem emit WS 'notification_new' pros destinatarios pra refresh imediato.
+    Mensagens em canais normais SEM mention NAO criam notif no sino (so badge).
+    """
+    # Tipo e nome do canal pra montar mensagem amigavel
+    chan_tipo = None
+    chan_nome = None
+    try:
+        conn = get_chat_db_or_404()
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT tipo, nome FROM chat_channels WHERE id=%s", (channel_id,))
+        ch = cur.fetchone()
+        cur.close(); conn.close()
+        if ch:
+            chan_tipo = ch["tipo"]; chan_nome = ch["nome"]
+    except Exception:
+        pass
+
+    preview = (content or "").strip()[:140]
+    if not preview and attachments:
+        preview = "📷 enviou uma imagem"
+
+    # Quem deve receber no sino?
+    alvos: List[tuple] = []  # [(user_id, mensagem, tipo)]
+    autor_nome = author_name or "Alguem"
+
+    if chan_tipo == "dm":
+        # DM: notifica todos os outros membros (geralmente so 1)
+        for uid in membros:
+            if uid == author_id:
+                continue
+            msg = f"{autor_nome}: {preview}" if preview else f"{autor_nome} te chamou"
+            alvos.append((uid, msg[:255], "chat_dm"))
+    elif mention_ids:
+        # Mentions em canal: notifica so quem foi mencionado
+        nome_canal = chan_nome or "canal"
+        for uid in mention_ids:
+            if uid == author_id:
+                continue
+            msg = f"{autor_nome} te mencionou em #{nome_canal}: {preview}"
+            alvos.append((uid, msg[:255], "chat_mention"))
+
+    if not alvos:
+        return
+
+    try:
+        plus = get_db_or_404()
+        cur = plus.cursor()
+        cur.executemany(
+            "INSERT INTO notificacoes (usuario_id, mensagem, tipo, lido) VALUES (%s, %s, %s, 0)",
+            alvos)
+        plus.commit()
+        cur.close(); plus.close()
+    except Exception as e:
+        logger.warning(f"[CHAT] erro inserindo notificacoes: {e}")
+        return
+
+    # WS push pra refresh imediato do sino nos destinatarios online
+    uids_alvo = list({uid for (uid, _, _) in alvos})
+    asyncio.create_task(manager.send_to_users(uids_alvo, {
+        "type": "notification_new",
+        "fonte": "chat",
+        "channel_id": channel_id,
+    }))
+
+
 async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str,
                                    content: str, reply_to_id: Optional[int],
                                    attachments: Optional[List[dict]] = None):
@@ -1350,41 +2923,80 @@ async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str
         "reply_to_id": reply_to_id,
         "reply_to": reply_to,
         "criado_em": datetime.utcnow().isoformat(),
-        "author": {"id": user_id, "name": user_name},
+        "author": {
+            "id": user_id,
+            "name": user_name,
+            "avatar_url": _enriquecer_users([user_id]).get(user_id, {}).get("avatar_url"),
+        },
         "attachments": atts_out,
         "mentions": mention_ids,
         "reactions": [],
     }
     await manager.send_to_users(membros, payload)
 
-    # Push notification pros membros OFFLINE (nao conectados ao WS) —
-    # quem esta online ja recebeu via WS + tem Notification API in-tab.
+    # Notificacao no SINO (cpe_plus.notificacoes) — persiste pra @mentions
+    # e pra mensagens de DM (entregue ao destinatario, mesmo se offline).
+    # Aparece na proxima iteracao do polling (15s) E imediatamente via WS
+    # `notification_new` que o nav.js escuta.
+    try:
+        _criar_notifs_sino(channel_id, user_id, user_name, content,
+                            atts_out, membros, mention_ids)
+    except Exception as e:
+        logger.warning(f"[CHAT] falha criando notificacao sino: {e}")
+
+    # Push notifications:
+    # - @mention / DM: SEMPRE (mesmo se online), porque a aba pode estar
+    #   em background ou minimizada. Tag 'cpe-chatmention-...' / 'cpe-chatdm-...'
+    #   pra UI destacar como urgente (vibrate + requireInteraction).
+    # - Mensagem comum em canal: so pros membros OFFLINE (online ve no toast/WS).
     if _PUSH_ENABLED:
         online = set(manager.online_users())
-        offline_targets = [uid for uid in membros if uid != user_id and uid not in online]
-        if offline_targets:
-            # Busca nome do canal pra titulo amigavel
-            cnome = "Mensagem"
-            try:
-                conn2 = get_chat_db_or_404()
-                cur2 = conn2.cursor(dictionary=True)
-                cur2.execute("SELECT tipo, nome FROM chat_channels WHERE id=%s", (channel_id,))
-                ch = cur2.fetchone()
-                cur2.close(); conn2.close()
-                if ch:
-                    if ch["tipo"] == "dm":
-                        titulo = user_name or "Mensagem"
-                    else:
-                        titulo = f"{user_name or 'Alguem'} em #{ch['nome'] or 'canal'}"
-                    cnome = titulo
-            except Exception:
-                cnome = user_name or "Mensagem"
-            preview = (content or "")[:140] or ("📷 Enviou uma imagem" if atts_out else "")
-            url = f"/SistemaCPE/web/pages/chat.html"
-            tag = f"cpe-chat-{channel_id}"
-            # Roda em executor pra nao bloquear event loop
+        # Descobre tipo/nome do canal pra construir mensagens amigaveis
+        chan_tipo = None; chan_nome = None
+        try:
+            conn2 = get_chat_db_or_404()
+            cur2 = conn2.cursor(dictionary=True)
+            cur2.execute("SELECT tipo, nome FROM chat_channels WHERE id=%s", (channel_id,))
+            ch = cur2.fetchone()
+            cur2.close(); conn2.close()
+            if ch:
+                chan_tipo = ch["tipo"]; chan_nome = ch["nome"]
+        except Exception:
+            pass
+
+        preview = (content or "")[:140] or ("📷 enviou uma imagem" if atts_out else "")
+        autor = user_name or "Alguem"
+        url = f"/SistemaCPE/web/pages/chat.html"
+
+        # 1) Push pros MENCIONADOS — destaque "@menção"
+        mention_targets = [uid for uid in mention_ids if uid != user_id]
+        if mention_targets:
+            tit = f"🔔 {autor} te mencionou"
+            sub = f"em #{chan_nome or 'canal'}: {preview}" if chan_tipo != "dm" else preview
             asyncio.create_task(asyncio.to_thread(
-                _enviar_push_async, offline_targets, cnome, preview, url, tag))
+                _enviar_push_async, mention_targets, tit, sub, url,
+                f"cpe-chatmention-{channel_id}"))
+
+        # 2) Push pra DM (todos os outros membros, geralmente 1)
+        if chan_tipo == "dm":
+            dm_targets = [uid for uid in membros
+                          if uid != user_id and uid not in mention_targets]
+            if dm_targets:
+                asyncio.create_task(asyncio.to_thread(
+                    _enviar_push_async, dm_targets, f"💬 {autor}", preview, url,
+                    f"cpe-chatdm-{channel_id}"))
+
+        # 3) Push pra membros OFFLINE em canal normal — apenas quem nao recebeu
+        #    mention/dm acima (evita push duplo)
+        if chan_tipo not in ("dm",):
+            urgent = set(mention_targets)
+            offline_targets = [uid for uid in membros
+                               if uid != user_id and uid not in online and uid not in urgent]
+            if offline_targets:
+                cnome = f"{autor} em #{chan_nome or 'canal'}"
+                asyncio.create_task(asyncio.to_thread(
+                    _enviar_push_async, offline_targets, cnome, preview, url,
+                    f"cpe-chat-{channel_id}"))
     return payload
 
 
@@ -1500,7 +3112,7 @@ def listar_pinadas(channel_id: int, request: Request):
         users_map = _enriquecer_users(list({m["user_id"] for m in msgs}))
         for m in msgs:
             u = users_map.get(m["user_id"], {})
-            m["author"] = {"id": m["user_id"], "name": u.get("name"), "email": u.get("email")}
+            m["author"] = {"id": m["user_id"], "name": u.get("name"), "email": u.get("email"), "avatar_url": u.get("avatar_url")}
         return {"success": True, "messages": msgs}
     finally:
         cur.close(); conn.close()
@@ -1543,7 +3155,7 @@ def buscar_mensagens(channel_id: int, request: Request,
         users_map = _enriquecer_users(list({m["user_id"] for m in msgs}))
         for m in msgs:
             u = users_map.get(m["user_id"], {})
-            m["author"] = {"id": m["user_id"], "name": u.get("name"), "email": u.get("email")}
+            m["author"] = {"id": m["user_id"], "name": u.get("name"), "email": u.get("email"), "avatar_url": u.get("avatar_url")}
         return {"success": True, "messages": msgs, "query": termo}
     finally:
         cur.close(); conn.close()

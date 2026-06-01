@@ -56,6 +56,10 @@
     if (!_self.id || !_token) return;  // nao logado
     _injetarUI();
     _conectarWS();
+    // Permissao de notif desktop — pede silenciosamente se ainda nao decidiu
+    if ('Notification' in window && Notification.permission === 'default') {
+      try { Notification.requestPermission().catch(() => {}); } catch {}
+    }
   });
 
   /* ============ UI INJETADA NO BODY ============ */
@@ -228,16 +232,55 @@
       _onChamadaRecebida(data);
     } else if (data.type === 'call_cancel') {
       _fecharPopupChamada();
+    } else if (data.type === 'notification_new') {
+      // Notificacao persistente (sino) — forca refresh imediato
+      if (typeof window.loadNotifications === 'function') {
+        try { window.loadNotifications(); } catch {}
+      }
     }
   }
 
-  /* ============ MENSAGEM NOVA → toast + badge + som ============ */
+  /* ============ MENSAGEM NOVA → toast + badge + som + notif desktop ============ */
   function _onMensagemNova(m) {
     if (m.author?.id === _self.id) return;  // nao notifica msg propria
     _unread++;
     _atualizarBadge();
     _tocarBip();
-    _mostrarToast(m);
+    const meMencionou = Array.isArray(m.mentions) && m.mentions.includes(_self.id);
+    _mostrarToast(m, meMencionou);
+    // Forca refresh do sino se houver mention (backend criou notif persistente)
+    if (meMencionou && typeof window.loadNotifications === 'function') {
+      try { window.loadNotifications(); } catch {}
+    }
+    // Notif desktop nativa quando aba esta em background (escondida)
+    // Pra mention SEMPRE; pra outras msgs so se tab nao esta visivel
+    _notifDesktop(m, meMencionou);
+  }
+
+  /* ============ Notification API (desktop) ============ */
+  function _notifDesktop(m, meMencionou) {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    // So mostra se aba nao esta focada/visivel ou se eh mention (sempre)
+    if (document.hasFocus() && !document.hidden && !meMencionou) return;
+    try {
+      const corpo = (m.content || '').slice(0, 160) ||
+        (m.attachments?.length ? '📷 enviou uma imagem' : '');
+      const tit = meMencionou
+        ? `🔔 ${m.author?.name || 'Alguém'} te mencionou`
+        : (m.author?.name || 'Nova mensagem');
+      const n = new Notification(tit, {
+        body: corpo,
+        icon: '/SistemaCPE/web/assests/icons/icon-192.png',
+        tag: `cpe-chat-${m.channel_id || 'msg'}`,
+        requireInteraction: !!meMencionou,
+      });
+      n.onclick = () => {
+        try { window.focus(); } catch {}
+        try { n.close(); } catch {}
+        window.location.href = '/SistemaCPE/web/pages/chat.html';
+      };
+    } catch { /* ignore */ }
   }
 
   function _atualizarBadge() {
@@ -251,15 +294,24 @@
     }
   }
 
-  function _mostrarToast(m) {
+  function _mostrarToast(m, mencionado) {
     const box = document.getElementById('cgnToastContainer');
     if (!box) return;
     const toast = document.createElement('div');
     toast.className = 'cgn-toast';
+    if (mencionado) {
+      toast.style.borderLeftColor = '#EF4444';
+      toast.style.borderLeftWidth = '4px';
+    }
+    const tag = mencionado
+      ? '<span style="background:#EF4444;color:#fff;font-size:0.62rem;font-weight:700;'
+        + 'padding:1px 6px;border-radius:8px;margin-right:6px;text-transform:uppercase">'
+        + '@menção</span>'
+      : '';
     toast.innerHTML = `
       <div class="cgn-toast-avatar">${_esc(_initials(m.author?.name))}</div>
       <div class="cgn-toast-body">
-        <div class="cgn-toast-author">${_esc(m.author?.name || 'Usuário')}</div>
+        <div class="cgn-toast-author">${tag}${_esc(m.author?.name || 'Usuário')}</div>
         <div class="cgn-toast-msg">${_esc((m.content || '').slice(0, 140) ||
           (m.attachments?.length ? '📷 Enviou uma imagem' : ''))}</div>
       </div>
@@ -271,7 +323,7 @@
     setTimeout(() => {
       toast.classList.add('cgn-closing');
       setTimeout(() => toast.remove(), 200);
-    }, 5000);
+    }, mencionado ? 8000 : 5000);
   }
 
   /* ============ SOM (Web Audio bip duplo) ============ */
@@ -296,7 +348,7 @@
     } catch (e) { /* sem som */ }
   }
 
-  /* ============ CHAMADA RECEBIDA → popup + ringtone ============ */
+  /* ============ CHAMADA RECEBIDA → popup + ringtone + notif desktop ============ */
   function _onChamadaRecebida(data) {
     if (_callState) return; // ja em outra
     _callState = data;
@@ -306,6 +358,65 @@
       data.from_user_name || 'Usuário';
     document.getElementById('cgnCallOverlay').classList.add('open');
     _tocarRingtone();
+    _notifDesktopChamada(data);
+  }
+
+  /* Notif desktop nativa de chamada via Service Worker.
+     Usa SW.showNotification() pra suportar actions Atender/Rejeitar
+     mesmo se a aba estiver minimizada. Tag igual ao push do PWA pra
+     que NAO duplique a notif caso ambas cheguem juntas. */
+  async function _notifDesktopChamada(data) {
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    try {
+      const reg = await (navigator.serviceWorker?.ready);
+      if (!reg || !reg.showNotification) return;
+      const from = data.from_user_id;
+      await reg.showNotification(`📞 ${data.from_user_name || 'Alguém'} está te ligando`, {
+        body: 'Toque pra atender',
+        icon: '/SistemaCPE/web/assests/icons/icon-192.png',
+        badge: '/SistemaCPE/web/assests/icons/icon-96.png',
+        tag: `cpe-call-${from}`,        // mesma tag do push do backend → substitui (sem duplicar)
+        requireInteraction: true,        // fica fixa ate user agir
+        vibrate: [400, 200, 400, 200, 400, 200, 400],
+        actions: [
+          { action: 'answer', title: '📞 Atender' },
+          { action: 'reject', title: '📵 Rejeitar' },
+        ],
+        data: {
+          url: `/SistemaCPE/web/pages/chat.html?incoming_call=${from}`,
+          isCall: true,
+        },
+        renotify: true,
+      });
+    } catch (e) {
+      // fallback: Notification simples sem actions (algum browser sem SW)
+      try {
+        const from = data.from_user_id;
+        const n = new Notification(`📞 ${data.from_user_name || 'Alguém'} está te ligando`, {
+          body: 'Clique pra atender',
+          icon: '/SistemaCPE/web/assests/icons/icon-192.png',
+          tag: `cpe-call-${from}`,
+          requireInteraction: true,
+        });
+        n.onclick = () => {
+          try { window.focus(); } catch {}
+          try { n.close(); } catch {}
+          window.location.href = `/SistemaCPE/web/pages/chat.html?incoming_call=${from}&auto_answer=1`;
+        };
+      } catch {}
+    }
+  }
+
+  /* Fecha notif desktop quando call_cancel ou usuario respondeu */
+  async function _fecharNotifChamada(fromUserId) {
+    try {
+      const reg = await (navigator.serviceWorker?.ready);
+      if (!reg || !reg.getNotifications) return;
+      const tag = `cpe-call-${fromUserId}`;
+      const notifs = await reg.getNotifications({ tag });
+      notifs.forEach(n => { try { n.close(); } catch {} });
+    } catch {}
   }
 
   function _tocarRingtone() {
@@ -339,9 +450,11 @@
   }
 
   function _fecharPopupChamada() {
+    const fromId = _callState?.from_user_id;
     document.getElementById('cgnCallOverlay')?.classList.remove('open');
     _pararRingtone();
     _callState = null;
+    if (fromId) _fecharNotifChamada(fromId);
   }
 
   /* ============ ATENDER / REJEITAR ============ */
