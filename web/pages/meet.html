@@ -544,16 +544,26 @@ let _gatePreviewStream = null;
   document.getElementById('gateSub').textContent =
     `Reunião criada por ${m.host_nome || 'usuário CPE'}`;
   const input = document.getElementById('gateInput');
+  const help  = document.getElementById('gateHelpExterno');
   if (m.logado) {
     input.value = m.meu_nome || '';
     input.disabled = true;
-    document.getElementById('gateBtnLabel').textContent = 'Entrar agora';
-    document.getElementById('gateHelpExterno').style.display = 'none';
+    if (m.sou_host) {
+      // Host entra direto sem aprovacao
+      document.getElementById('gateBtnLabel').textContent = 'Entrar agora';
+      help.style.display = 'none';
+    } else {
+      // Interno nao-host: tambem precisa de aprovacao
+      document.getElementById('gateBtnLabel').textContent = 'Pedir entrada';
+      help.innerHTML = '<i class="bi bi-info-circle"></i> O host precisa aprovar sua entrada na sala de espera.';
+      help.style.display = '';
+    }
   } else {
     input.value = '';
     input.disabled = false;
     document.getElementById('gateBtnLabel').textContent = 'Pedir entrada';
-    document.getElementById('gateHelpExterno').style.display = '';
+    help.innerHTML = '<i class="bi bi-info-circle"></i> Você é um convidado externo — o host vai aprovar sua entrada na sala de espera.';
+    help.style.display = '';
   }
   document.getElementById('gate').style.display = '';
   if (!input.disabled) input.focus();
@@ -824,10 +834,11 @@ function _conectarWS() {
   else qs.set('token', _tok());
   const url = `${wsBase}/api/meetings/ws?${qs.toString()}`;
   _state.ws = new WebSocket(url);
+  let openedAt = 0;
   _state.ws.addEventListener('open', () => {
     _setStatus(true);
+    openedAt = Date.now();
     console.log('[MEET] WS aberto');
-    _wsRetryMs = 1000;
     // Re-envia state atual (mic/cam/share) pros peers re-sincronizarem
     if (_state.status === 'dentro') {
       _wsSend({ type: 'meeting_state', mic_on: _state.micOn,
@@ -840,12 +851,16 @@ function _conectarWS() {
   });
   _state.ws.addEventListener('close', (ev) => {
     _setStatus(false);
-    console.warn('[MEET] WS fechado', ev.code, ev.reason);
+    const stable = openedAt && (Date.now() - openedAt > 5000);
+    console.warn('[MEET] WS fechado', ev.code, ev.reason, 'estavel=' + stable);
     if (_intentionalClose) return;
-    // 1008 = auth invalida / sala encerrada — nao adianta reconectar
+    // 1008 = auth invalida / sala encerrada / peer nao registrado — nao reconecta
     if (ev.code === 1008) return;
+    // So reseta backoff se a conexao ficou estavel por >5s. Se cair imediato,
+    // mantem backoff crescendo (evita loop rapido de reconnect).
+    if (stable) _wsRetryMs = 1000;
     setTimeout(_conectarWS, _wsRetryMs);
-    _wsRetryMs = Math.min(_wsRetryMs * 2, 15000);
+    _wsRetryMs = Math.min(_wsRetryMs * 2, 30000);
   });
   _state.ws.addEventListener('error', () => {});
 
