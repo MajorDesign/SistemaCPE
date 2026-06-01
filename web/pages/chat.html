@@ -3137,11 +3137,113 @@ async function _selecionarEAbrirModalServer(serverId, action) {
   else if (action === 'arquivar') arquivarServer();
 }
 function mostrarContextMenuCanal(ev, channelId) {
-  if (!_serverAtivo) return;  // canais soltos nao tem invite
-  mostrarContextMenu(ev.clientX, ev.clientY, [
-    { icon: 'bi bi-link-45deg', label: 'Convidar para este canal',
-      handler: `abrirModalCriarInvite(${_serverAtivo}, ${channelId})` },
-  ]);
+  const items = [];
+  const c = _canais.find(x => x.id === channelId);
+
+  // 1) Silenciar / desmutar — disponivel pra qualquer canal exceto DM
+  if (c && c.tipo !== 'dm') {
+    const mutado = !!(c.silenciado_ate && new Date(c.silenciado_ate) > new Date());
+    items.push({
+      icon: mutado ? 'bi bi-bell-fill' : 'bi bi-bell-slash-fill',
+      label: mutado ? 'Desmutar canal' : 'Silenciar canal',
+      handler: `toggleMuteCanal(${channelId})`,
+    });
+  }
+
+  // 2) Convidar — so dentro de servidor
+  if (_serverAtivo) {
+    items.push({ icon: 'bi bi-link-45deg', label: 'Convidar para este canal',
+                 handler: `abrirModalCriarInvite(${_serverAtivo}, ${channelId})` });
+  }
+
+  // 3) Sair do canal
+  if (c && (c.tipo === 'canal' || c.tipo === 'voz')) {
+    if (items.length) items.push({ sep: true });
+    items.push({ icon: 'bi bi-box-arrow-right', label: 'Sair do canal',
+                 handler: `sairCanalCtx(${channelId})` });
+  }
+
+  // 4) Excluir canal — backend valida permissao. Mostra item se for plausivel:
+  let podeExcluir = false;
+  if (c?.server_id) {
+    const myRole = _serverArvore.server?.my_role;
+    podeExcluir = ['owner','admin'].includes(myRole) ||
+                  ['ADMIN','TI','MANAGER'].includes(_self.role || '');
+  } else if (c && (c.tipo === 'canal' || c.tipo === 'voz')) {
+    podeExcluir = ['RESPONSAVEL_GRUPO','ADMIN','TI','MANAGER'].includes(_self.role || '');
+  }
+  if (podeExcluir) {
+    items.push({ icon: 'bi bi-trash-fill', label: 'Excluir canal',
+                 handler: `excluirCanalCtx(${channelId})`, danger: true });
+  }
+  if (!items.length) return;
+  mostrarContextMenu(ev.clientX, ev.clientY, items);
+}
+
+async function excluirCanalCtx(channelId) {
+  const c = _canais.find(x => x.id === channelId) ||
+            (_serverArvore.channels || []).find(x => x.id === channelId);
+  const nome = c?.nome || `#${channelId}`;
+  if (!confirm(`Excluir o canal "${nome}"? Esta ação não pode ser desfeita.`)) return;
+  try {
+    await api('DELETE', `/channels/${channelId}`);
+    if (_canalAtivo && _canalAtivo.id === channelId) {
+      _canalAtivo = null;
+      document.getElementById('chatMainHeader').innerHTML =
+        `<i class="bi bi-chat-dots header-icon"></i><h2>Selecione um canal</h2>`;
+      document.getElementById('chatMessages').innerHTML =
+        `<div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Canal excluído.</p></div>`;
+      document.getElementById('chatInputArea').style.display = 'none';
+    }
+    await carregarCanais();
+    if (_serverAtivo) await selecionarServer(_serverAtivo);
+  } catch (e) {
+    alert('Erro ao excluir canal: ' + e.message);
+  }
+}
+
+/* ============ Silenciar / Sair de canal ============ */
+async function toggleMuteCanal(channelId) {
+  const c = _canais.find(x => x.id === channelId);
+  const mutado = !!(c?.silenciado_ate && new Date(c.silenciado_ate) > new Date());
+  try {
+    if (mutado) {
+      await api('DELETE', `/channels/${channelId}/silenciar`);
+    } else {
+      await api('POST', `/channels/${channelId}/silenciar`, {});
+    }
+    await carregarCanais();
+    if (_canalAtivo?.id === channelId) abrirCanal(channelId); // re-render header
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+async function sairCanalCtx(channelId) {
+  const c = _canais.find(x => x.id === channelId);
+  if (!c) return;
+  // Canais de SERVER nao tem "sair" — saida vem de remover cargo via UI Cargos.
+  if (c.server_id) {
+    alert('Este canal pertence a um servidor e o acesso vem do seu cargo.\n\n'
+        + 'Pra sair, peça pra um admin remover seu cargo via menu Cargos do servidor.\n\n'
+        + 'Você pode silenciar o canal (botão sino) pra não receber notificações.');
+    return;
+  }
+  if (!confirm(`Sair do canal "${c.nome}"? Você não vai mais receber mensagens dele.`)) return;
+  try {
+    await api('DELETE', `/channels/${channelId}/members/${_self.id}`);
+    if (_canalAtivo?.id === channelId) {
+      _canalAtivo = null;
+      document.getElementById('chatMainHeader').innerHTML =
+        '<i class="bi bi-chat-dots header-icon"></i><h2>Selecione um canal</h2>';
+      document.getElementById('chatMessages').innerHTML =
+        '<div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Você saiu do canal.</p></div>';
+      document.getElementById('chatInputArea').style.display = 'none';
+    }
+    await carregarCanais();
+  } catch (e) {
+    alert('Erro: ' + e.message);
+  }
 }
 
 /* ============ Modal: criar invite ============ */
@@ -3464,7 +3566,12 @@ function _renderItem(c, iconHtml) {
   const badge = unread > 0
     ? `<span class="unread-badge">${unread > 99 ? '99+' : unread}</span>`
     : '';
-  return `<div class="${cls}" onclick="abrirCanal(${c.id})">
+  // Context menu so faz sentido pra canais customizados (tipo 'canal'),
+  // nao pra DM (tipo='dm') nem grupo do sistema.
+  const ctxHandler = (c.tipo === 'canal' || c.tipo === 'voz')
+    ? `oncontextmenu="event.preventDefault(); mostrarContextMenuCanal(event, ${c.id})"`
+    : '';
+  return `<div class="${cls}" onclick="abrirCanal(${c.id})" ${ctxHandler}>
     ${iconHtml}
     <span class="chan-name">${_esc(c.nome || '#' + c.id)}</span>
     ${badge}
@@ -3479,6 +3586,7 @@ function _renderItemVoz(c) {
   let html = `<div class="chat-channel-item ${ativo}"
        onclick="abrirCanal(${c.id})"
        ondblclick="event.preventDefault(); window.voiceEntrar && window.voiceEntrar(${c.id})"
+       oncontextmenu="event.preventDefault(); mostrarContextMenuCanal(event, ${c.id})"
        title="Click duplo: entrar na chamada">
     <i class="bi bi-volume-up-fill chan-icon"></i>
     <span class="chan-name">${_esc(c.nome || '#' + c.id)}</span>
@@ -3534,6 +3642,16 @@ async function abrirCanal(channelId) {
        </button>`
     : '';
 
+  // Mute toggle: silenciado_ate vem de listar_canais
+  const mutado = !!(c.silenciado_ate && new Date(c.silenciado_ate) > new Date());
+  const muteBtn = (c.tipo !== 'dm')
+    ? `<button onclick="toggleMuteCanal(${c.id})"
+              title="${mutado ? 'Desmutar canal' : 'Silenciar canal (sem notificação)'}"
+              style="${mutado ? 'background:var(--chat-accent);color:#1A1A1A' : ''}">
+         <i class="bi ${mutado ? 'bi-bell-slash-fill' : 'bi-bell'}"></i>
+       </button>`
+    : '';
+
   hdr.innerHTML = `
     <i class="bi ${icon} header-icon"></i>
     <h2>${_esc(c.nome || '#' + c.id)}</h2>
@@ -3541,6 +3659,7 @@ async function abrirCanal(channelId) {
     <div class="header-tools">
       ${dmCallBtn}
       ${voiceBtn}
+      ${muteBtn}
       ${!ehVoz ? `<button onclick="abrirModalPinadas(${c.id})" title="Mensagens fixadas">
         <i class="bi bi-pin-angle-fill"></i></button>` : ''}
       ${!ehVoz ? `<button onclick="abrirModalBusca(${c.id})" title="Buscar mensagens">
