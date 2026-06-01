@@ -219,9 +219,15 @@ tools/**/.venv/
 web/uploads/contratos/*
 web/uploads/fleet/*
 web/uploads/atendimentos/*
+web/uploads/chat/*
+web/uploads/server-avatars/*
+web/uploads/user-avatars/*
 !web/uploads/contratos/.gitkeep
 !web/uploads/fleet/.gitkeep
 !web/uploads/atendimentos/.gitkeep
+!web/uploads/chat/.gitkeep
+!web/uploads/server-avatars/.gitkeep
+!web/uploads/user-avatars/.gitkeep
 
 # Binarios gerados pelo PyInstaller (tools/termo_notebook)
 tools/**/dist/

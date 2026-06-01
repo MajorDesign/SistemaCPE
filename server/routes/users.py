@@ -287,7 +287,7 @@ async def list_users(
                 users_result = conn.execute(
                     text("""
                         SELECT id, name, email, username, role, sector, unit, is_active,
-                               department_id, group_id, created_at
+                               department_id, group_id, created_at, avatar_url
                         FROM users
                         WHERE group_id = :group_id
                         ORDER BY name ASC
@@ -302,7 +302,7 @@ async def list_users(
                 users_result = conn.execute(
                     text("""
                         SELECT id, name, email, username, role, sector, unit, is_active,
-                               department_id, group_id, created_at
+                               department_id, group_id, created_at, avatar_url
                         FROM users
                         ORDER BY name ASC
                     """)
