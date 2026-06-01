@@ -759,6 +759,7 @@ async function _entrarNaSala() {
     document.getElementById('body').classList.add('with-pending');
     document.getElementById('pendingPanel').style.display = '';
     _renderPending();
+    _iniciarPollingHost();
   }
 
   const prefs = window._gatePrefs || { micOn: true, camOn: false };
@@ -805,7 +806,12 @@ async function _entrarNaSala() {
 }
 
 /* ============ WebSocket ============ */
+let _wsRetryMs = 1000;       // backoff exponencial pra reconectar
+let _intentionalClose = false;
+
 function _conectarWS() {
+  if (!_state.peerId) return;
+  _intentionalClose = false;
   const API = (typeof API_BASE !== 'undefined' && API_BASE) ? API_BASE : '';
   const wsBase = API && API.startsWith('http')
     ? API.replace(/^http/, 'ws')
@@ -821,16 +827,61 @@ function _conectarWS() {
   _state.ws.addEventListener('open', () => {
     _setStatus(true);
     console.log('[MEET] WS aberto');
+    _wsRetryMs = 1000;
+    // Re-envia state atual (mic/cam/share) pros peers re-sincronizarem
+    if (_state.status === 'dentro') {
+      _wsSend({ type: 'meeting_state', mic_on: _state.micOn,
+                cam_on: _state.camOn, share_on: _state.shareOn });
+    }
   });
   _state.ws.addEventListener('message', (ev) => {
     let data; try { data = JSON.parse(ev.data); } catch { return; }
     _onWsEvent(data);
   });
-  _state.ws.addEventListener('close', () => {
+  _state.ws.addEventListener('close', (ev) => {
     _setStatus(false);
-    console.warn('[MEET] WS fechado');
+    console.warn('[MEET] WS fechado', ev.code, ev.reason);
+    if (_intentionalClose) return;
+    // 1008 = auth invalida / sala encerrada — nao adianta reconectar
+    if (ev.code === 1008) return;
+    setTimeout(_conectarWS, _wsRetryMs);
+    _wsRetryMs = Math.min(_wsRetryMs * 2, 15000);
   });
   _state.ws.addEventListener('error', () => {});
+
+  // Ping a cada 25s pra manter WS vivo (alguns proxies dropam idle WS)
+  if (!_state.pingTimer) {
+    _state.pingTimer = setInterval(() => {
+      if (_state.ws?.readyState === WebSocket.OPEN) {
+        _state.ws.send(JSON.stringify({ type: 'ping' }));
+      }
+    }, 25000);
+  }
+}
+
+// Polling fallback pro host: a cada 8s busca lista de participantes
+// (caso o broadcast WS de meeting_join_request seja perdido por algum
+// motivo, o host ainda descobre quem esta aguardando).
+function _iniciarPollingHost() {
+  if (_state.hostPollTimer) return;
+  _state.hostPollTimer = setInterval(async () => {
+    if (!_state.souHost) return;
+    try {
+      const r = await _apiRest('GET', `/${_code}/participants`);
+      const aguardando = (r.participants || [])
+        .filter(p => p.status === 'aguardando')
+        .map(p => ({ peer_id: p.peer_id, guest_name: p.display_name || p.guest_name }));
+      // Atualiza pending apenas se mudou
+      const antes = JSON.stringify(_state.pending.map(p => p.peer_id).sort());
+      const depois = JSON.stringify(aguardando.map(p => p.peer_id).sort());
+      if (antes !== depois) {
+        const novos = aguardando.filter(a => !_state.pending.some(p => p.peer_id === a.peer_id));
+        _state.pending = aguardando;
+        _renderPending();
+        if (novos.length) _tocarBip();
+      }
+    } catch { /* silencioso */ }
+  }, 8000);
 }
 
 function _wsSend(msg) {
@@ -843,14 +894,9 @@ function _setStatus(connected) {
   const st = document.getElementById('connStatus');
   if (!st) return;
   st.classList.toggle('connected', connected);
-  st.lastElementChild?.remove();
-  const txt = document.createTextNode(connected ? ' Conectado' : ' Desconectado');
-  st.appendChild(txt);
-  // Garante o dot
-  if (!st.querySelector('.dot')) {
-    const d = document.createElement('span'); d.className = 'dot';
-    st.prepend(d);
-  }
+  // Substitui o conteudo inteiro (antes acumulava text nodes a cada call —
+  // aparecia "Conectando... Conectado Desconectado" tudo junto)
+  st.innerHTML = `<span class="dot"></span>${connected ? ' Conectado' : ' Desconectado'}`;
 }
 
 async function _onWsEvent(data) {
@@ -1166,7 +1212,10 @@ async function sairSala() {
       await _apiRest('POST', `/${_code}/leave/${_state.peerId}`);
     }
   } catch {}
+  _intentionalClose = true;
   try { _state.ws?.close(); } catch {}
+  if (_state.pingTimer)    { clearInterval(_state.pingTimer);    _state.pingTimer = null; }
+  if (_state.hostPollTimer){ clearInterval(_state.hostPollTimer); _state.hostPollTimer = null; }
   _state.localStream?.getTracks().forEach(t => t.stop());
   _state.screenStream?.getTracks().forEach(t => t.stop());
   location.href = '/SistemaCPE/index.html';

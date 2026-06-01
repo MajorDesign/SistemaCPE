@@ -350,6 +350,10 @@ async def request_entry(code: str, body: RequestEntryBody, request: Request):
     finally:
         cur.close(); conn.close()
 
+    logger.warning(f"[MEET] request-entry code={code} peer={peer_id[:8]} "
+                   f"user_id={user_id} guest='{guest_name}' status={status} "
+                   f"sou_host={sou_host}")
+
     # Se externo (aguardando), notifica HOST se estiver online via WS
     if status == "aguardando":
         await manager.broadcast(m["id"], {
@@ -652,22 +656,27 @@ async def meeting_ws(websocket: WebSocket):
         logger.warning(f"[MEET-WS] erro peer={peer_id[:8]}: {e}")
     finally:
         manager.disconnect(m["id"], peer_id)
-        # Cleanup participante (se WS caiu sem leave explicito)
+        # Cleanup APENAS pra peer que ja estava 'dentro'. Pending ('aguardando')
+        # nao deleta — permite ao guest reabrir aba sem perder o pedido + nao
+        # remove do "pending" do host. Pra abandonar de fato, frontend chama
+        # POST /leave/{peer_id} explicito.
         try:
             conn = get_chat_db_or_404()
             cur = conn.cursor()
             cur.execute(
-                "DELETE FROM chat_meeting_participants WHERE meeting_id=%s AND peer_id=%s",
+                "DELETE FROM chat_meeting_participants "
+                "WHERE meeting_id=%s AND peer_id=%s AND status='dentro'",
                 (m["id"], peer_id))
             conn.commit()
             cur.close(); conn.close()
         except Exception:
             pass
-        # Notifica resto
-        try:
-            await manager.broadcast(m["id"], {
-                "type": "meeting_participant_left",
-                "peer_id": peer_id,
-            })
-        except Exception:
-            pass
+        # Notifica resto APENAS se era um participante 'dentro' que saiu
+        if part["status"] == "dentro":
+            try:
+                await manager.broadcast(m["id"], {
+                    "type": "meeting_participant_left",
+                    "peer_id": peer_id,
+                })
+            except Exception:
+                pass
