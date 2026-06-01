@@ -326,10 +326,14 @@ async def request_entry(code: str, body: RequestEntryBody, request: Request):
     user_id = None
     sou_host = False
 
+    # Regra: SO o host entra direto. Todos os outros (internos do CPE OU
+    # externos) ficam aguardando aprovacao na sala de espera. O host
+    # controla quem entra (consistente com a decisao "sala de espera com
+    # aprovacao do host").
     if user:
         user_id = user["id"]
         sou_host = (user["id"] == m["criado_por"])
-        status = "dentro"  # interno entra direto
+        status = "dentro" if sou_host else "aguardando"
     else:
         # Externo precisa de nome
         if not body.guest_name or not body.guest_name.strip():
@@ -350,9 +354,9 @@ async def request_entry(code: str, body: RequestEntryBody, request: Request):
     finally:
         cur.close(); conn.close()
 
-    logger.warning(f"[MEET] request-entry code={code} peer={peer_id[:8]} "
-                   f"user_id={user_id} guest='{guest_name}' status={status} "
-                   f"sou_host={sou_host}")
+    print(f"[MEET] request-entry code={code} peer={peer_id[:8]} "
+          f"user_id={user_id} guest='{guest_name}' status={status} "
+          f"sou_host={sou_host}", flush=True)
 
     # Se externo (aguardando), notifica HOST se estiver online via WS
     if status == "aguardando":
@@ -481,6 +485,8 @@ async def meeting_ws(websocket: WebSocket):
         or websocket.cookies.get("cpe_session", "")
     ).strip()
 
+    print(f"[MEET-WS] connect attempt code={code} peer={peer_id[:8] if peer_id else 'NONE'} "
+          f"has_session_tok={bool(session_token)} has_guest_tok={bool(guest_token)}", flush=True)
     await websocket.accept()
 
     if not code or not peer_id:
@@ -530,8 +536,12 @@ async def meeting_ws(websocket: WebSocket):
             auth_ok = True
 
     if not auth_ok:
+        print(f"[MEET-WS] auth FAIL peer={peer_id[:8]} "
+              f"part.user_id={part['user_id']} part.has_guest_token={bool(part['guest_token'])} "
+              f"recv_session={bool(session_token)} recv_guest={bool(guest_token)}", flush=True)
         await websocket.send_text(json.dumps({"type": "error", "detail": "Auth invalida"}))
         await websocket.close(code=1008); return
+    print(f"[MEET-WS] auth OK peer={peer_id[:8]} status={part['status']} user_id={part['user_id']}", flush=True)
 
     # Se eh externo e ainda esta 'aguardando', mantem WS aberta (lobby)
     # ate o host aprovar. Se rejeitado, recebe meeting_join_rejected e
@@ -651,9 +661,10 @@ async def meeting_ws(websocket: WebSocket):
                 await websocket.send_text(json.dumps({"type": "pong"}))
             # outros types sao ignorados silenciosamente
     except WebSocketDisconnect:
-        pass
+        print(f"[MEET-WS] disconnect normal peer={peer_id[:8]}", flush=True)
     except Exception as e:
-        logger.warning(f"[MEET-WS] erro peer={peer_id[:8]}: {e}")
+        import traceback
+        print(f"[MEET-WS] ERRO peer={peer_id[:8]}: {e}\n{traceback.format_exc()}", flush=True)
     finally:
         manager.disconnect(m["id"], peer_id)
         # Cleanup APENAS pra peer que ja estava 'dentro'. Pending ('aguardando')
