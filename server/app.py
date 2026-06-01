@@ -1526,6 +1526,16 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ REGISTRAR ROUTER DE MEETINGS (salas temporarias com link externo)
+try:
+    from routes.meetings import router as meetings_router
+    app.include_router(meetings_router)
+    logger.info("✅ Router de Meetings registrado: /api/meetings (REST + WS /ws)")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Meetings: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ REGISTRAR ROUTER DE TASKS (EXTERNO)
 try:
     from routes.tasks import tasks_router
