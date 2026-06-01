@@ -123,10 +123,11 @@ class MeetingConnManager:
         self._rooms: Dict[int, Dict[str, WebSocket]] = {}
 
     async def connect(self, meeting_id: int, peer_id: str, ws: WebSocket):
-        await ws.accept()
+        # NAO faz ws.accept() — o handler ja aceitou no inicio. Double-accept
+        # em Starlette dropa a conexao silenciosamente (causa loop 1006).
         self._rooms.setdefault(meeting_id, {})[peer_id] = ws
-        logger.warning(f"[MEET-WS] +peer {peer_id[:8]} meeting={meeting_id} "
-                       f"total_na_sala={len(self._rooms[meeting_id])}")
+        print(f"[MEET-WS] +peer {peer_id[:8]} meeting={meeting_id} "
+              f"total_na_sala={len(self._rooms[meeting_id])}", flush=True)
 
     def disconnect(self, meeting_id: int, peer_id: str):
         room = self._rooms.get(meeting_id)
@@ -134,7 +135,7 @@ class MeetingConnManager:
             del room[peer_id]
             if not room:
                 del self._rooms[meeting_id]
-        logger.warning(f"[MEET-WS] -peer {peer_id[:8]} meeting={meeting_id}")
+        print(f"[MEET-WS] -peer {peer_id[:8]} meeting={meeting_id}", flush=True)
 
     async def send_to_peer(self, meeting_id: int, peer_id: str, payload: dict):
         room = self._rooms.get(meeting_id) or {}
