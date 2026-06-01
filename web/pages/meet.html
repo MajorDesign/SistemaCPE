@@ -178,44 +178,123 @@
     }
     .meet-controls .leave:hover { background: #B91C1C; }
 
-    /* Modal de entrada do guest */
+    /* Gate de entrada (lobby pre-sala) — estilo Teams */
     .gate-overlay {
       position: fixed; inset: 0; z-index: 1000;
-      background: rgba(0,0,0,0.85);
+      background: var(--bg-1);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 24px;
+      overflow: auto;
+    }
+    .gate-header {
+      text-align: center; margin-bottom: 22px;
+    }
+    .gate-header .logo {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 56px; height: 56px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-dim));
+      color: #1A1A1A; font-size: 1.8rem; margin-bottom: 10px;
+    }
+    .gate-header h1 {
+      margin: 0; font-size: 1.5rem; font-weight: 700;
+    }
+    .gate-header .sub {
+      color: var(--muted); font-size: 0.86rem; margin-top: 4px;
+    }
+    .gate-grid {
+      display: grid;
+      grid-template-columns: minmax(320px, 540px) minmax(280px, 380px);
+      gap: 24px; align-items: start;
+      max-width: 980px; width: 100%;
+    }
+    @media (max-width: 820px) {
+      .gate-grid { grid-template-columns: 1fr; }
+    }
+    .gate-preview {
+      background: #000;
+      border-radius: 14px;
+      aspect-ratio: 16/9;
+      position: relative; overflow: hidden;
       display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border);
     }
-    .gate-box {
-      background: var(--bg-2);
-      border: 1px solid var(--border); border-radius: 14px;
-      padding: 28px 30px; width: 420px; max-width: 90vw;
-      text-align: center;
+    .gate-preview video {
+      width: 100%; height: 100%; object-fit: cover;
+      transform: scaleX(-1);  /* espelha como webcam Teams/Meet */
     }
-    .gate-box h1 {
-      font-size: 1.4rem; margin: 0 0 6px; color: var(--accent);
+    .gate-preview .placeholder {
+      color: var(--muted); text-align: center;
     }
-    .gate-box .sub { color: var(--muted); margin-bottom: 18px; font-size: 0.88rem; }
-    .gate-box input {
-      width: 100%; padding: 12px 14px; font-size: 1rem;
+    .gate-preview .placeholder i {
+      font-size: 3rem; display: block; margin-bottom: 6px;
+    }
+    .gate-preview .preview-controls {
+      position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 10px; z-index: 2;
+    }
+    .gate-preview .preview-controls button {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(0,0,0,0.65); color: #fff;
+      border: 1px solid rgba(255,255,255,0.25);
+      cursor: pointer; font-size: 1.05rem;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(6px);
+    }
+    .gate-preview .preview-controls button:hover { background: rgba(0,0,0,0.85); }
+    .gate-preview .preview-controls button.off {
+      background: var(--red); border-color: var(--red);
+    }
+    .gate-preview .preview-controls button.on {
+      background: var(--accent); color: #1A1A1A; border-color: var(--accent);
+    }
+
+    .gate-form {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 22px 22px 18px;
+    }
+    .gate-form label {
+      display: block; color: var(--muted); font-size: 0.74rem;
+      text-transform: uppercase; letter-spacing: 0.04em;
+      margin-bottom: 6px; margin-top: 12px; font-weight: 600;
+    }
+    .gate-form label:first-child { margin-top: 0; }
+    .gate-form input, .gate-form select {
+      width: 100%; padding: 10px 12px;
       background: var(--bg-3); color: var(--text);
       border: 1px solid var(--border); border-radius: 8px;
-      margin-bottom: 12px;
+      font-size: 0.92rem;
+      font-family: inherit;
     }
-    .gate-box button {
-      width: 100%; padding: 12px;
-      background: var(--accent); color: #1A1A1A;
-      border: none; border-radius: 8px;
-      font-weight: 700; font-size: 0.95rem;
-      cursor: pointer;
+    .gate-form input:focus, .gate-form select:focus {
+      outline: none; border-color: var(--accent);
     }
-    .gate-box button:hover { background: var(--accent-dim); color: #fff; }
-    .gate-box button:disabled { opacity: 0.6; cursor: not-allowed; }
-    .gate-warn {
-      font-size: 0.78rem; color: var(--muted); margin-top: 14px;
+    .gate-form input:disabled {
+      opacity: 0.7; cursor: not-allowed;
     }
-    .gate-host-tag {
-      display: inline-block; background: var(--bg-3);
-      padding: 4px 10px; border-radius: 12px; font-size: 0.78rem;
-      color: var(--accent); margin-bottom: 14px;
+    .gate-actions {
+      display: flex; gap: 10px; margin-top: 20px;
+    }
+    .gate-actions button {
+      flex: 1; padding: 11px 16px;
+      border: 1px solid var(--border); border-radius: 8px;
+      cursor: pointer; font-weight: 700; font-size: 0.92rem;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      transition: all 0.12s;
+    }
+    .gate-cancelar {
+      background: transparent; color: var(--muted);
+    }
+    .gate-cancelar:hover { background: var(--bg-3); color: var(--text); }
+    .gate-entrar {
+      background: var(--accent); color: #1A1A1A; border-color: var(--accent);
+    }
+    .gate-entrar:hover { background: var(--accent-dim); color: #fff; }
+    .gate-entrar:disabled { opacity: 0.6; cursor: not-allowed; }
+    .gate-help {
+      font-size: 0.76rem; color: var(--muted); margin-top: 12px;
+      padding: 8px 10px; background: var(--bg-3);
+      border-radius: 6px; border-left: 3px solid var(--accent);
     }
 
     /* Lobby (aguardando aprovacao) */
@@ -262,19 +341,64 @@
 </head>
 <body>
 
-<!-- Gate: nome do guest -->
+<!-- Gate: lobby pre-sala estilo Teams (preview + devices + nome) -->
 <div class="gate-overlay" id="gate" style="display:none">
-  <div class="gate-box">
-    <span class="gate-host-tag" id="gateHostTag">Reunião CPE</span>
-    <h1 id="gateNome">Reunião</h1>
-    <div class="sub" id="gateSub">Host vai aprovar sua entrada</div>
-    <input type="text" id="gateInput" placeholder="Digite seu nome" maxlength="80"
-           onkeydown="if(event.key==='Enter') entrarComoGuest()">
-    <button onclick="entrarComoGuest()" id="gateBtn">
-      <i class="bi bi-camera-video-fill"></i> Pedir entrada
-    </button>
-    <div class="gate-warn">
-      <i class="bi bi-info-circle"></i> O dono da sala precisa aprovar você antes de entrar.
+  <div class="gate-header">
+    <div class="logo"><i class="bi bi-camera-video-fill"></i></div>
+    <h1 id="gateNome">Reunião CPE</h1>
+    <div class="sub" id="gateSub">Configure seu microfone e câmera antes de entrar</div>
+  </div>
+  <div class="gate-grid">
+    <!-- Preview da camera -->
+    <div class="gate-preview" id="gatePreview">
+      <div class="placeholder" id="gatePlaceholder">
+        <i class="bi bi-camera-video-off"></i>
+        Câmera desligada
+      </div>
+      <div class="preview-controls">
+        <button id="gateBtnMic" class="on" onclick="gateToggleMic()" title="Microfone">
+          <i class="bi bi-mic-fill"></i>
+        </button>
+        <button id="gateBtnCam" class="off" onclick="gateToggleCam()" title="Câmera">
+          <i class="bi bi-camera-video-off-fill"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Formulario -->
+    <div class="gate-form">
+      <label for="gateInput">Seu nome</label>
+      <input type="text" id="gateInput" placeholder="Digite seu nome" maxlength="80"
+             onkeydown="if(event.key==='Enter') entrarNaReuniao()">
+
+      <label for="gateMicSel">🎤 Microfone</label>
+      <select id="gateMicSel" onchange="gateTrocarMic()">
+        <option value="">Padrão do sistema</option>
+      </select>
+
+      <label for="gateSpkSel">🔊 Saída de áudio</label>
+      <select id="gateSpkSel">
+        <option value="">Padrão do sistema</option>
+      </select>
+
+      <label for="gateCamSel">📷 Câmera</label>
+      <select id="gateCamSel" onchange="gateTrocarCam()">
+        <option value="">Padrão do sistema</option>
+      </select>
+
+      <div class="gate-actions">
+        <button class="gate-cancelar" onclick="gateCancelar()">
+          <i class="bi bi-x-lg"></i> Cancelar
+        </button>
+        <button class="gate-entrar" id="gateBtn" onclick="entrarNaReuniao()">
+          <i class="bi bi-camera-video-fill"></i> <span id="gateBtnLabel">Entrar agora</span>
+        </button>
+      </div>
+
+      <div class="gate-help" id="gateHelpExterno" style="display:none">
+        <i class="bi bi-info-circle"></i>
+        Você é um convidado externo — o host vai precisar aprovar sua entrada na sala de espera.
+      </div>
     </div>
   </div>
 </div>
@@ -328,6 +452,12 @@
 /* =====================================================================
    Meet — sala temporaria com link externo
    ===================================================================== */
+// API_BASE vem de config.js (API_BASE_URL). Em dominio publico = ''
+// (same-origin); em IP/localhost vira http://host:8000.
+const API_BASE = (typeof API_BASE_URL !== 'undefined')
+  ? API_BASE_URL
+  : 'http://127.0.0.1:8000';
+
 const STUN_SERVERS = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -384,6 +514,12 @@ function _erro(msg) {
 }
 
 /* ============ INIT ============ */
+// Estado do gate (lobby pre-sala)
+let _gateInfo = null;        // meta da sala vinda de /info
+let _gateMicOn = true;
+let _gateCamOn = false;
+let _gatePreviewStream = null;
+
 (async function init() {
   if (!_code) { _erro('Link inválido (sem código)'); return; }
   let info;
@@ -399,24 +535,182 @@ function _erro(msg) {
     return;
   }
   document.title = `${m.nome} — Reunião`;
+  _gateInfo = m;
+
+  // Mostra gate pra TODOS (interno e externo). Diferenca:
+  // - Interno: nome ja preenchido (e disabled), botao = "Entrar agora"
+  // - Externo: digita nome, botao = "Pedir entrada"
+  document.getElementById('gateNome').textContent = m.nome;
+  document.getElementById('gateSub').textContent =
+    `Reunião criada por ${m.host_nome || 'usuário CPE'}`;
+  const input = document.getElementById('gateInput');
   if (m.logado) {
-    // Interno: pula gate, vai direto pra request-entry
-    await pedirEntrada(null);
+    input.value = m.meu_nome || '';
+    input.disabled = true;
+    document.getElementById('gateBtnLabel').textContent = 'Entrar agora';
+    document.getElementById('gateHelpExterno').style.display = 'none';
   } else {
-    // Externo: mostra gate pra digitar nome
-    document.getElementById('gateNome').textContent = m.nome;
-    document.getElementById('gateHostTag').textContent =
-      '🎥 Reunião de ' + (m.host_nome || 'um usuário CPE');
-    document.getElementById('gate').style.display = '';
-    document.getElementById('gateInput').focus();
+    input.value = '';
+    input.disabled = false;
+    document.getElementById('gateBtnLabel').textContent = 'Pedir entrada';
+    document.getElementById('gateHelpExterno').style.display = '';
   }
+  document.getElementById('gate').style.display = '';
+  if (!input.disabled) input.focus();
+
+  // Inicializa mic (preview do nivel) + popula devices
+  await _gateInitDispositivos();
 })();
 
-async function entrarComoGuest() {
+/* ============ Gate: preview de devices ============ */
+async function _gateInitDispositivos() {
+  // Pede mic primeiro (cobre o caso de ainda nao ter permissao). NAO pede
+  // camera — usuario habilita manualmente.
+  try {
+    const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    s.getTracks().forEach(t => t.stop()); // so pra disparar permissao
+  } catch { /* tudo bem, segue */ }
+  await _gateListarDispositivos();
+}
+
+async function _gateListarDispositivos() {
+  try {
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const mics = devs.filter(d => d.kind === 'audioinput'  && d.deviceId);
+    const spks = devs.filter(d => d.kind === 'audiooutput' && d.deviceId);
+    const cams = devs.filter(d => d.kind === 'videoinput'  && d.deviceId);
+    _gatePopularSelect('gateMicSel', mics, 'Microfone');
+    _gatePopularSelect('gateSpkSel', spks, 'Saída');
+    _gatePopularSelect('gateCamSel', cams, 'Câmera');
+    // Restaura escolhas salvas (consistente com Configurações do chat)
+    const savedMic = localStorage.getItem('cpe_chat_micId') || '';
+    const savedSpk = localStorage.getItem('cpe_chat_speakerId') || '';
+    const savedCam = localStorage.getItem('cpe_chat_camId') || '';
+    if (savedMic) document.getElementById('gateMicSel').value = savedMic;
+    if (savedSpk) document.getElementById('gateSpkSel').value = savedSpk;
+    if (savedCam) document.getElementById('gateCamSel').value = savedCam;
+  } catch (e) {
+    console.warn('[GATE] enumerateDevices fail:', e);
+  }
+}
+
+function _gatePopularSelect(id, devices, labelFallback) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = '<option value="">Padrão do sistema</option>' +
+    devices.map((d, i) =>
+      `<option value="${_esc(d.deviceId)}">${_esc(d.label || labelFallback + ' ' + (i+1))}</option>`
+    ).join('');
+}
+
+async function gateToggleMic() {
+  _gateMicOn = !_gateMicOn;
+  const btn = document.getElementById('gateBtnMic');
+  if (_gateMicOn) {
+    btn.className = 'on';
+    btn.innerHTML = '<i class="bi bi-mic-fill"></i>';
+  } else {
+    btn.className = 'off';
+    btn.innerHTML = '<i class="bi bi-mic-mute-fill"></i>';
+  }
+}
+
+async function gateToggleCam() {
+  if (_gateCamOn) {
+    _gateCamOn = false;
+    _gatePararPreview();
+    const btn = document.getElementById('gateBtnCam');
+    btn.className = 'off';
+    btn.innerHTML = '<i class="bi bi-camera-video-off-fill"></i>';
+    document.getElementById('gatePlaceholder').style.display = '';
+  } else {
+    try {
+      await _gateAbrirPreview();
+      _gateCamOn = true;
+      const btn = document.getElementById('gateBtnCam');
+      btn.className = 'on';
+      btn.innerHTML = '<i class="bi bi-camera-video-fill"></i>';
+      document.getElementById('gatePlaceholder').style.display = 'none';
+    } catch (e) {
+      const nome = e.name || '';
+      if (nome === 'NotFoundError' || nome === 'OverconstrainedError') {
+        alert('📷 Nenhuma câmera encontrada.');
+      } else if (nome === 'NotAllowedError') {
+        alert('📷 Permissão de câmera negada. Libere no cadeado do navegador.');
+      } else if (nome === 'NotReadableError') {
+        alert('📷 Câmera ocupada por outro aplicativo (Zoom/Meet/Teams).');
+      } else {
+        alert('📷 Erro: ' + (e.message || nome));
+      }
+    }
+  }
+}
+
+async function _gateAbrirPreview() {
+  _gatePararPreview();
+  const camId = document.getElementById('gateCamSel').value || '';
+  const constraints = camId
+    ? { video: { deviceId: { exact: camId } }, audio: false }
+    : { video: true, audio: false };
+  _gatePreviewStream = await navigator.mediaDevices.getUserMedia(constraints);
+  const box = document.getElementById('gatePreview');
+  let v = box.querySelector('video');
+  if (!v) {
+    v = document.createElement('video');
+    v.autoplay = true; v.playsInline = true; v.muted = true;
+    box.appendChild(v);
+  }
+  v.srcObject = _gatePreviewStream;
+}
+
+function _gatePararPreview() {
+  if (_gatePreviewStream) {
+    _gatePreviewStream.getTracks().forEach(t => t.stop());
+    _gatePreviewStream = null;
+  }
+  const v = document.querySelector('#gatePreview video');
+  if (v) v.remove();
+}
+
+async function gateTrocarMic() {
+  const micId = document.getElementById('gateMicSel').value;
+  if (micId) localStorage.setItem('cpe_chat_micId', micId);
+  else localStorage.removeItem('cpe_chat_micId');
+}
+
+async function gateTrocarCam() {
+  const camId = document.getElementById('gateCamSel').value;
+  if (camId) localStorage.setItem('cpe_chat_camId', camId);
+  else localStorage.removeItem('cpe_chat_camId');
+  if (_gateCamOn) await _gateAbrirPreview();
+}
+
+function gateCancelar() {
+  _gatePararPreview();
+  if (history.length > 1) history.back();
+  else window.location.href = '/SistemaCPE/index.html';
+}
+
+async function entrarNaReuniao() {
   const nome = document.getElementById('gateInput').value.trim();
-  if (!nome || nome.length < 2) { alert('Digite seu nome (mín 2 caracteres).'); return; }
+  if (!nome || nome.length < 2) {
+    alert('Digite seu nome (mín 2 caracteres).');
+    return;
+  }
+  // Salva selecao de speaker (cpe_chat_speakerId) tambem
+  const spkId = document.getElementById('gateSpkSel').value;
+  if (spkId) localStorage.setItem('cpe_chat_speakerId', spkId);
+  else localStorage.removeItem('cpe_chat_speakerId');
+
   document.getElementById('gateBtn').disabled = true;
-  await pedirEntrada(nome);
+  // Estado inicial pra carregar mais tarde em _entrarNaSala
+  window._gatePrefs = {
+    micOn: _gateMicOn,
+    camOn: _gateCamOn,
+  };
+  // Passa o stream de preview adiante (evita pedir camera de novo)
+  if (_gatePreviewStream) window._gatePreviewStream = _gatePreviewStream;
+  _gatePreviewStream = null;
+  await pedirEntrada(_gateInfo.logado ? null : nome);
 }
 
 async function pedirEntrada(guestName) {
@@ -457,6 +751,7 @@ function sairLobby() {
 
 /* ============ Entrar na sala (depois de aprovado) ============ */
 async function _entrarNaSala() {
+  document.getElementById('gate').style.display = 'none';
   document.getElementById('lobby').style.display = 'none';
   document.getElementById('layout').style.display = '';
   document.getElementById('headerTitle').textContent = _state.meetingNome;
@@ -466,15 +761,42 @@ async function _entrarNaSala() {
     _renderPending();
   }
 
-  // Captura mic (entrada padrão)
-  try {
-    _state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    _state.micOn = true;
-  } catch (e) {
-    console.warn('Sem mic', e);
-    _state.localStream = new MediaStream();
+  const prefs = window._gatePrefs || { micOn: true, camOn: false };
+  _state.localStream = new MediaStream();
+
+  // Captura mic conforme escolha no gate
+  if (prefs.micOn) {
+    const micId = localStorage.getItem('cpe_chat_micId') || '';
+    const audioConstr = micId ? { deviceId: { exact: micId } } : true;
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: audioConstr, video: false });
+      for (const t of s.getAudioTracks()) _state.localStream.addTrack(t);
+      _state.micOn = true;
+    } catch (e) {
+      console.warn('Sem mic', e);
+      _state.micOn = false;
+    }
+  } else {
     _state.micOn = false;
-    alert('⚠️ Não foi possível acessar o microfone. Você vai entrar como "só escuta".\n\nDetalhe: ' + e.message);
+  }
+
+  // Reaproveita stream de preview da camera (evita pedir permissao 2x)
+  if (prefs.camOn && window._gatePreviewStream) {
+    const camTrack = window._gatePreviewStream.getVideoTracks()[0];
+    if (camTrack) {
+      _state.localStream.addTrack(camTrack);
+      _state.camOn = true;
+    }
+    window._gatePreviewStream = null;
+  } else if (prefs.camOn) {
+    // Fallback: abre camera agora
+    const camId = localStorage.getItem('cpe_chat_camId') || '';
+    const videoConstr = camId ? { deviceId: { exact: camId } } : true;
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: videoConstr, audio: false });
+      for (const t of s.getVideoTracks()) _state.localStream.addTrack(t);
+      _state.camOn = true;
+    } catch (e) { console.warn('Sem camera', e); }
   }
 
   _atualizarBotoes();
