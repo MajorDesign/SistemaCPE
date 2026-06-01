@@ -292,7 +292,7 @@ def listar_canais(request: Request):
         cur.execute("""
             SELECT c.id, c.tipo, c.nome, c.descricao, c.grupo_id,
                    c.server_id, c.categoria_id, c.criado_em,
-                   m.ultima_msg_lida_id,
+                   m.ultima_msg_lida_id, m.silenciado_ate,
                    (SELECT COUNT(*) FROM chat_messages msg
                       WHERE msg.channel_id = c.id
                         AND msg.deletado_em IS NULL
@@ -307,7 +307,7 @@ def listar_canais(request: Request):
             UNION ALL
             SELECT c.id, c.tipo, c.nome, c.descricao, c.grupo_id,
                    c.server_id, c.categoria_id, c.criado_em,
-                   m.ultima_msg_lida_id,
+                   m.ultima_msg_lida_id, m.silenciado_ate,
                    (SELECT COUNT(*) FROM chat_messages msg
                       WHERE msg.channel_id = c.id
                         AND msg.deletado_em IS NULL
@@ -2247,19 +2247,39 @@ async def editar_canal(channel_id: int, body: CanalEdit, request: Request):
 
 @router.delete("/channels/{channel_id}")
 async def arquivar_canal(channel_id: int, request: Request):
-    """Arquiva (soft delete). So owner ou ADMIN do sistema. Nao funciona em DM/grupo_sistema."""
-    user = _user_from_request(request)
-    existe, tipo = _canal_existe_e_tipo(channel_id)
-    if not existe:
-        raise HTTPException(status_code=404, detail="Canal nao encontrado")
-    if tipo != "canal":
-        raise HTTPException(status_code=400,
-                            detail="Apenas canais customizados podem ser arquivados")
+    """Arquiva (soft delete). Aceita 'canal' e 'voz' (DM e grupo_sistema nao).
 
-    role = _role_no_canal(channel_id, user["id"])
+    Permissao:
+    - Canal de SERVER: owner/admin do server OU perm_manage_channels OU admin global
+    - Canal SOLTO: owner do canal OU admin global
+    """
+    user = _user_from_request(request)
+    # Carrega tipo + server_id
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute(
+            "SELECT tipo, server_id FROM chat_channels WHERE id=%s AND arquivado_em IS NULL",
+            (channel_id,))
+        r = cur.fetchone()
+    finally:
+        cur.close(); conn.close()
+    if not r:
+        raise HTTPException(status_code=404, detail="Canal nao encontrado")
+    tipo = r["tipo"]; server_id = r["server_id"]
+    if tipo not in ("canal", "voz"):
+        raise HTTPException(status_code=400,
+                            detail="Apenas canais customizados (texto ou voz) podem ser excluidos")
+
     is_sys_admin = user.get("role") in ("ADMIN", "TI", "MANAGER")
-    if role != "owner" and not is_sys_admin:
-        raise HTTPException(status_code=403, detail="So o dono do canal pode arquivar")
+    if server_id:
+        if not (is_sys_admin or _pode_no_server(server_id, user["id"], "manage_channels")):
+            raise HTTPException(status_code=403,
+                                detail="Sem permissao pra excluir canais deste servidor")
+    else:
+        role = _role_no_canal(channel_id, user["id"])
+        if role != "owner" and not is_sys_admin:
+            raise HTTPException(status_code=403, detail="So o dono do canal pode excluir")
 
     membros = _listar_membros_canal(channel_id)
     conn = get_chat_db_or_404()
@@ -2273,6 +2293,7 @@ async def arquivar_canal(channel_id: int, request: Request):
     await manager.send_to_users(membros, {
         "type": "channel_archived",
         "channel_id": channel_id,
+        "server_id": server_id,
     })
     return {"success": True}
 
@@ -2424,6 +2445,83 @@ async def remover_membro(channel_id: int, user_id: int, request: Request):
             "channel_id": channel_id,
         })
     return {"success": True}
+
+
+# =====================================================================
+# Silenciar canal (per-user)
+# Usa chat_channel_members.silenciado_ate. Pra canais de SERVER cria
+# entry on-demand (membership real vem da whitelist de cargos).
+# =====================================================================
+class SilenciarBody(BaseModel):
+    duracao_horas: Optional[int] = Field(
+        None, ge=0, le=24*365,
+        description="0 ou ausente = silenciar pra sempre; negativo nao aceito. "
+                    "Pra DESmutar, use endpoint DELETE.")
+
+
+@router.post("/channels/{channel_id}/silenciar")
+async def silenciar_canal(channel_id: int, body: SilenciarBody, request: Request):
+    """Silencia o canal pro user atual (mute). Pra desmutar use DELETE."""
+    user = _user_from_request(request)
+    if not _can_view_channel(channel_id, user["id"]):
+        raise HTTPException(status_code=403, detail="Voce nao eh membro deste canal")
+
+    if body.duracao_horas and body.duracao_horas > 0:
+        until = datetime.utcnow() + timedelta(hours=body.duracao_horas)
+    else:
+        until = datetime(2099, 12, 31)  # "pra sempre"
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        # Pra canal de SERVER, pode nao existir entry — INSERT IGNORE primeiro
+        cur.execute("""
+            INSERT IGNORE INTO chat_channel_members (channel_id, user_id, role)
+            VALUES (%s, %s, 'member')
+        """, (channel_id, user["id"]))
+        cur.execute("""
+            UPDATE chat_channel_members SET silenciado_ate=%s
+            WHERE channel_id=%s AND user_id=%s
+        """, (until, channel_id, user["id"]))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+    return {"success": True, "silenciado_ate": until.isoformat()}
+
+
+@router.delete("/channels/{channel_id}/silenciar")
+async def desmutar_canal(channel_id: int, request: Request):
+    """Remove o mute do canal pro user atual."""
+    user = _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE chat_channel_members SET silenciado_ate=NULL
+            WHERE channel_id=%s AND user_id=%s
+        """, (channel_id, user["id"]))
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+    return {"success": True}
+
+
+def _users_silenciados(channel_id: int, user_ids: List[int]) -> set:
+    """Retorna o subconjunto de user_ids com mute ATIVO no canal."""
+    if not user_ids:
+        return set()
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        ph = ",".join(["%s"] * len(user_ids))
+        cur.execute(f"""
+            SELECT user_id FROM chat_channel_members
+            WHERE channel_id=%s AND user_id IN ({ph})
+              AND silenciado_ate IS NOT NULL AND silenciado_ate > NOW()
+        """, (channel_id, *user_ids))
+        return {r[0] for r in cur.fetchall()}
+    finally:
+        cur.close(); conn.close()
 
 
 @router.get("/users-disponiveis")
@@ -2837,6 +2935,13 @@ def _criar_notifs_sino(channel_id: int, author_id: int, author_name: Optional[st
     if not alvos:
         return
 
+    # Filtra silenciados — quem mutou o canal nao recebe notif no sino nem WS push
+    silenciados = _users_silenciados(channel_id, [uid for (uid, _, _) in alvos])
+    if silenciados:
+        alvos = [(uid, m, t) for (uid, m, t) in alvos if uid not in silenciados]
+    if not alvos:
+        return
+
     try:
         plus = get_db_or_404()
         cur = plus.cursor()
@@ -2949,8 +3054,10 @@ async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str
     #   em background ou minimizada. Tag 'cpe-chatmention-...' / 'cpe-chatdm-...'
     #   pra UI destacar como urgente (vibrate + requireInteraction).
     # - Mensagem comum em canal: so pros membros OFFLINE (online ve no toast/WS).
+    # - SEMPRE pula usuarios que silenciaram o canal.
     if _PUSH_ENABLED:
         online = set(manager.online_users())
+        muted  = _users_silenciados(channel_id, [uid for uid in membros if uid != user_id])
         # Descobre tipo/nome do canal pra construir mensagens amigaveis
         chan_tipo = None; chan_nome = None
         try:
@@ -2969,7 +3076,7 @@ async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str
         url = f"/SistemaCPE/web/pages/chat.html"
 
         # 1) Push pros MENCIONADOS — destaque "@menção"
-        mention_targets = [uid for uid in mention_ids if uid != user_id]
+        mention_targets = [uid for uid in mention_ids if uid != user_id and uid not in muted]
         if mention_targets:
             tit = f"🔔 {autor} te mencionou"
             sub = f"em #{chan_nome or 'canal'}: {preview}" if chan_tipo != "dm" else preview
@@ -2980,18 +3087,19 @@ async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str
         # 2) Push pra DM (todos os outros membros, geralmente 1)
         if chan_tipo == "dm":
             dm_targets = [uid for uid in membros
-                          if uid != user_id and uid not in mention_targets]
+                          if uid != user_id and uid not in mention_targets and uid not in muted]
             if dm_targets:
                 asyncio.create_task(asyncio.to_thread(
                     _enviar_push_async, dm_targets, f"💬 {autor}", preview, url,
                     f"cpe-chatdm-{channel_id}"))
 
         # 3) Push pra membros OFFLINE em canal normal — apenas quem nao recebeu
-        #    mention/dm acima (evita push duplo)
+        #    mention/dm acima (evita push duplo) e nao silenciou o canal
         if chan_tipo not in ("dm",):
             urgent = set(mention_targets)
             offline_targets = [uid for uid in membros
-                               if uid != user_id and uid not in online and uid not in urgent]
+                               if uid != user_id and uid not in online
+                                  and uid not in urgent and uid not in muted]
             if offline_targets:
                 cnome = f"{autor} em #{chan_nome or 'canal'}"
                 asyncio.create_task(asyncio.to_thread(
