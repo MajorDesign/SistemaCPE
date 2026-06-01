@@ -232,8 +232,20 @@
         el.setSinkId(speakerId).catch(() => {});
       }
     } else if (track.kind === 'video') {
-      // Pode ser camera OU tela; render dentro do card do peer
-      _aplicarVideoNoCard(peer_id, stream);
+      // Pode ser camera OU tela. Cada stream remoto vira um <video> no card.
+      if (!entry.remoteStreams) entry.remoteStreams = new Map();
+      entry.remoteStreams.set(stream.id, stream);
+      // Quando o sender remove o track, removemos da UI
+      track.onended = () => {
+        entry.remoteStreams?.delete(stream.id);
+        _renderVoiceRoom();
+      };
+      stream.onremovetrack = () => {
+        if (stream.getVideoTracks().length === 0) {
+          entry.remoteStreams?.delete(stream.id);
+          _renderVoiceRoom();
+        }
+      };
     }
     _renderVoiceRoom();
   }
@@ -331,30 +343,52 @@
     const st = window._voiceState;
     if (!st.localStream) return;
     if (st.camOn) {
-      // Desliga camera
-      st.localStream.getVideoTracks().forEach(t => { t.stop(); st.localStream.removeTrack(t); });
-      // Tira dos peer connections
+      // Desliga camera — para o track e remove dos peers
+      const camTracks = st.localStream.getVideoTracks().filter(t => !_ehTrackDeTela(t));
+      camTracks.forEach(t => { t.stop(); st.localStream.removeTrack(t); });
       for (const p of st.peers.values()) {
-        const sender = p.pc.getSenders().find(s => s.track && s.track.kind === 'video');
-        if (sender) p.pc.removeTrack(sender);
+        const sender = p.pc.getSenders().find(s => s.track && s.track.kind === 'video'
+                                                    && !_ehTrackDeTela(s.track));
+        if (sender) { try { p.pc.removeTrack(sender); } catch {} }
+        _renegociar(p);
       }
       st.camOn = false;
     } else {
+      const savedCamId = localStorage.getItem('cpe_chat_camId') || '';
+      const videoConstraints = savedCamId
+        ? { deviceId: { exact: savedCamId } }
+        : true;
+      let camStream;
       try {
-        const camStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        const track = camStream.getVideoTracks()[0];
-        st.localStream.addTrack(track);
-        // Adiciona em todos os peers
-        for (const p of st.peers.values()) {
-          p.pc.addTrack(track, st.localStream);
-          // Renegocia (precisa reoffer pra novo media line)
-          _renegociar(p);
-        }
-        st.camOn = true;
+        camStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
       } catch (e) {
-        alert('Câmera: ' + e.message);
+        const nome = e.name || '';
+        let msg;
+        if (nome === 'NotFoundError' || nome === 'OverconstrainedError') {
+          msg = 'Nenhuma câmera encontrada. Conecte uma webcam.';
+        } else if (nome === 'NotAllowedError' || nome === 'PermissionDeniedError') {
+          msg = 'Acesso à câmera bloqueado. Libere nas permissões do site (cadeado da barra de endereço).';
+        } else if (nome === 'NotReadableError') {
+          msg = 'Câmera ocupada por outro aplicativo. Feche Zoom/Meet/Teams/OBS.';
+        } else {
+          msg = (e.message || 'Erro desconhecido') + ' (' + nome + ')';
+        }
+        alert('📷 Câmera: ' + msg);
+        console.error('[voice] getUserMedia(video) fail', e);
         return;
       }
+      const track = camStream.getVideoTracks()[0];
+      st.localStream.addTrack(track);
+      for (const p of st.peers.values()) {
+        p.pc.addTrack(track, st.localStream);
+        _renegociar(p);
+      }
+      // Se outro app tomar a camera (driver fail/desconexao USB)
+      track.onended = () => {
+        console.warn('[voice] track de camera terminou inesperadamente');
+        if (st.camOn) window.voiceToggleCam();
+      };
+      st.camOn = true;
     }
     _wsSend({ type: 'voice_state', channel_id: st.canalId,
               mic_on: st.micOn, cam_on: st.camOn, share_on: st.shareOn });
@@ -366,30 +400,55 @@
     if (!st.canalId) return;
     if (st.shareOn) {
       st.screenStream?.getTracks().forEach(t => { t.stop(); });
-      // Remove dos peers
+      // Remove track de tela dos peers (identificada por _ehTrackDeTela ou
+      // pelo stream id ser o do screenStream antigo)
       for (const p of st.peers.values()) {
-        const senders = p.pc.getSenders().filter(s => s.track && s.track.kind === 'video' &&
-                                                       s.track.label?.toLowerCase().includes('screen'));
-        senders.forEach(s => p.pc.removeTrack(s));
+        const senders = p.pc.getSenders().filter(s => s.track && s.track.kind === 'video'
+                                                       && _ehTrackDeTela(s.track));
+        senders.forEach(s => { try { p.pc.removeTrack(s); } catch {} });
+        _renegociar(p);
       }
       st.screenStream = null;
       st.shareOn = false;
     } else {
-      try {
-        const screen = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-        st.screenStream = screen;
-        const track = screen.getVideoTracks()[0];
-        for (const p of st.peers.values()) {
-          p.pc.addTrack(track, screen);
-          _renegociar(p);
-        }
-        // Se user fechar do navegador
-        track.onended = () => { window.voiceToggleShare(); };
-        st.shareOn = true;
-      } catch (e) {
-        if (e.name !== 'NotAllowedError') alert('Compartilhar tela: ' + e.message);
+      // getDisplayMedia requer secure context (HTTPS) OU localhost
+      if (!window.isSecureContext) {
+        alert('🖥️ Compartilhar tela requer HTTPS ou localhost.\n' +
+              'Acesso atual: ' + location.origin);
         return;
       }
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        alert('🖥️ Seu navegador não suporta compartilhar tela. Use Chrome/Edge/Firefox atualizados.');
+        return;
+      }
+      let screen;
+      try {
+        screen = await navigator.mediaDevices.getDisplayMedia({
+          video: { cursor: 'always' },
+          audio: false,
+        });
+      } catch (e) {
+        if (e.name === 'NotAllowedError') {
+          // Usuario cancelou o seletor — silencioso
+          console.log('[voice] usuario cancelou seletor de tela');
+        } else {
+          alert('🖥️ Compartilhar tela: ' + (e.message || e.name));
+          console.error('[voice] getDisplayMedia fail', e);
+        }
+        return;
+      }
+      st.screenStream = screen;
+      const track = screen.getVideoTracks()[0];
+      for (const p of st.peers.values()) {
+        p.pc.addTrack(track, screen);
+        _renegociar(p);
+      }
+      // Se user clicar "Parar de compartilhar" no botao do browser
+      track.onended = () => {
+        console.log('[voice] tela parou de compartilhar (botao do browser)');
+        if (st.shareOn) window.voiceToggleShare();
+      };
+      st.shareOn = true;
     }
     _wsSend({ type: 'voice_state', channel_id: st.canalId,
               mic_on: st.micOn, cam_on: st.camOn, share_on: st.shareOn });
@@ -413,16 +472,108 @@
   /* =================================================================
      UI da sala
      ================================================================= */
-  function _aplicarVideoNoCard(peer_id, stream) {
-    const card = document.querySelector(`.voice-peer-card[data-peer="${peer_id}"]`);
-    if (!card) return;
-    let v = card.querySelector('video');
+
+  // Cria ou reaproveita um <video> dentro do card. Diferencia por data-key
+  // (1 video por stream — assim camera + screen share coexistem).
+  function _ensureVideo(card, key, stream, muted) {
+    if (!card || !stream) return null;
+    let v = card.querySelector(`video[data-vkey="${key}"]`);
     if (!v) {
       v = document.createElement('video');
-      v.autoplay = true; v.playsInline = true; v.muted = false;
+      v.autoplay = true; v.playsInline = true;
+      v.muted = !!muted;
+      v.dataset.vkey = key;
       card.appendChild(v);
     }
-    v.srcObject = stream;
+    if (v.srcObject !== stream) v.srcObject = stream;
+    return v;
+  }
+
+  // Heuristica pra distinguir track da camera vs screen share
+  // (label da screen costuma conter "screen" / "display" / "window" / "tab")
+  function _ehTrackDeTela(track) {
+    return /screen|display|window|tab|monitor/i.test(track.label || '');
+  }
+
+  // Aplica os videos LOCAIS (camera + screen share) dentro do card "Voce".
+  // Sempre `muted` pra nao gerar feedback de audio.
+  function _aplicarVideosLocais() {
+    const st = window._voiceState;
+    const card = document.querySelector('.voice-peer-card.self');
+    if (!card) return;
+    // Camera local
+    if (st.camOn && st.localStream) {
+      const camTrack = st.localStream.getVideoTracks().find(t => !_ehTrackDeTela(t));
+      if (camTrack) {
+        const camStream = new MediaStream([camTrack]);
+        _ensureVideo(card, 'local-cam', camStream, true);
+      }
+    } else {
+      card.querySelector('video[data-vkey="local-cam"]')?.remove();
+    }
+    // Screen share local
+    if (st.shareOn && st.screenStream && st.screenStream.getVideoTracks().length) {
+      _ensureVideo(card, 'local-screen', st.screenStream, true);
+    } else {
+      card.querySelector('video[data-vkey="local-screen"]')?.remove();
+    }
+    _ajustarLayoutVideosNoCard(card);
+  }
+
+  // Aplica videos REMOTOS de cada peer (camera + screen) usando os streams
+  // armazenados em peer.remoteStreams.
+  function _aplicarVideosRemotos() {
+    const st = window._voiceState;
+    for (const peer of st.peers.values()) {
+      const card = document.querySelector(
+        `.voice-peer-card[data-peer="${CSS.escape(peer.peer_id)}"]`);
+      if (!card) continue;
+      const streamsExistentes = peer.remoteStreams || new Map();
+      // Remove videos cujo stream ja nao existe mais
+      card.querySelectorAll('video[data-vkey^="remote-"]').forEach(v => {
+        const key = v.dataset.vkey.replace('remote-', '');
+        if (!streamsExistentes.has(key)) v.remove();
+      });
+      // Aplica/atualiza
+      streamsExistentes.forEach((stream, id) => {
+        _ensureVideo(card, `remote-${id}`, stream, false);
+      });
+      _ajustarLayoutVideosNoCard(card);
+    }
+  }
+
+  // Se ha 2 videos no card, divide em 2 colunas; senao 1 ocupa tudo.
+  function _ajustarLayoutVideosNoCard(card) {
+    const videos = card.querySelectorAll('video');
+    videos.forEach((v, i) => {
+      if (videos.length === 1) {
+        v.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;background:#000;z-index:1';
+      } else {
+        // Dois: lado a lado, cada um 50%
+        const left = i === 0 ? '0' : '50%';
+        v.style.cssText = `position:absolute;top:0;left:${left};width:50%;height:100%;object-fit:cover;background:#000;z-index:1`;
+      }
+    });
+    // Quando ha video, esconde o avatar grande
+    const av = card.querySelector('.avatar-big');
+    if (av) av.style.display = videos.length ? 'none' : '';
+    // Nome/flags ficam acima do video com sombra pra contraste
+    const nameEl = card.querySelector('.peer-name');
+    const flagsEl = card.querySelector('.peer-flags');
+    if (videos.length) {
+      [nameEl, flagsEl].forEach(el => {
+        if (el) {
+          el.style.position = 'relative';
+          el.style.zIndex = '2';
+          el.style.textShadow = '0 1px 3px rgba(0,0,0,0.9)';
+        }
+      });
+    }
+  }
+
+  function _aplicarVideosTodos() {
+    _aplicarVideosLocais();
+    _aplicarVideosRemotos();
   }
 
   function _renderVoiceRoom() {
@@ -474,15 +625,9 @@
         </button>
       </div>
     `;
-    // Tenta reaplicar streams visuais
-    for (const p of peers) {
-      const remoteStreams = new Set();
-      p.pc.getReceivers().forEach(r => {
-        if (r.track && r.track.kind === 'video') {
-          // Streams nao sao acessiveis diretamente do receiver em todos os browsers
-        }
-      });
-    }
+    // CRITICAL: re-renderizar o innerHTML destroi qualquer <video> previamente
+    // inserido. Reaplica TODOS os streams (self e remotos) logo apos.
+    _aplicarVideosTodos();
   }
 
   function _setHeaderLeaveBtn(connected) {
