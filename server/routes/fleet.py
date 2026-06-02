@@ -773,8 +773,9 @@ def create_checklist(request: Request, data: dict):
             INSERT INTO fleet_checklists (
                 vehicle_id, condutor_id, destino,
                 data_saida, horario_saida, km_saida, nivel_combustivel_saida,
+                cartao_combustivel_saida, documento_veiculo_saida,
                 assinatura_condutor_saida, observacoes, status
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'aguardando_vistoria')
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'aguardando_vistoria')
         """, (
             data.get("vehicle_id"),
             data.get("condutor_id"),
@@ -783,6 +784,8 @@ def create_checklist(request: Request, data: dict):
             data.get("horario_saida"),
             data.get("km_saida"),
             data.get("nivel_combustivel_saida"),
+            1 if data.get("cartao_combustivel_saida") else 0,
+            1 if data.get("documento_veiculo_saida") else 0,
             data.get("assinatura_condutor_saida"),
             data.get("observacoes"),
         ))
@@ -890,6 +893,7 @@ def devolver_veiculo(checklist_id: int, request: Request, data: dict):
             UPDATE fleet_checklists SET
                 data_retorno=%s, horario_retorno=%s, km_retorno=%s,
                 nivel_combustivel_retorno=%s,
+                cartao_combustivel_retorno=%s, documento_veiculo_retorno=%s,
                 assinatura_condutor_retorno=%s,
                 retorno_obs=%s,
                 status='devolvido'
@@ -899,6 +903,8 @@ def devolver_veiculo(checklist_id: int, request: Request, data: dict):
             data.get("horario_retorno"),
             data.get("km_retorno"),
             data.get("nivel_combustivel_retorno"),
+            1 if data.get("cartao_combustivel_retorno") else 0,
+            1 if data.get("documento_veiculo_retorno") else 0,
             data.get("assinatura_condutor_retorno"),
             data.get("retorno_obs"),
             checklist_id,

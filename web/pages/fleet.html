@@ -882,6 +882,18 @@
             <input type="hidden" id="clNivelSaida" value="0">
           </div>
 
+          <!-- Cartão combustível + Documento -->
+          <div class="fleet-grid-2" style="margin:12px 0">
+            <label class="fleet-form-group" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #E5E7EB;border-radius:8px;cursor:pointer;margin:0;background:#F9FAFB">
+              <input type="checkbox" id="clCartaoCombSaida" style="width:18px;height:18px">
+              <span style="font-size:13px;font-weight:500;color:#374151"><i class="bi bi-credit-card-2-front-fill" style="color:#10B981"></i> Cartão combustível está no veículo</span>
+            </label>
+            <label class="fleet-form-group" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #E5E7EB;border-radius:8px;cursor:pointer;margin:0;background:#F9FAFB">
+              <input type="checkbox" id="clDocVeicSaida" style="width:18px;height:18px">
+              <span style="font-size:13px;font-weight:500;color:#374151"><i class="bi bi-file-earmark-text-fill" style="color:#3B82F6"></i> Documento do veículo está no veículo</span>
+            </label>
+          </div>
+
           <!-- Assinatura APENAS do condutor nesta etapa -->
           <div class="fleet-form-group">
             <label class="fleet-label">Observações gerais</label>
@@ -958,6 +970,18 @@
           <div class="fuel-value-display" id="fuelRetornoDisplay">Clique para indicar o nível</div>
         </div>
         <input type="hidden" id="retNivelComb" value="0">
+      </div>
+
+      <!-- Cartão combustível + Documento no retorno -->
+      <div class="fleet-grid-2" style="margin:12px 0">
+        <label class="fleet-form-group" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #E5E7EB;border-radius:8px;cursor:pointer;margin:0;background:#F9FAFB">
+          <input type="checkbox" id="retCartaoComb" style="width:18px;height:18px">
+          <span style="font-size:13px;font-weight:500;color:#374151"><i class="bi bi-credit-card-2-front-fill" style="color:#10B981"></i> Cartão combustível está no veículo</span>
+        </label>
+        <label class="fleet-form-group" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid #E5E7EB;border-radius:8px;cursor:pointer;margin:0;background:#F9FAFB">
+          <input type="checkbox" id="retDocVeic" style="width:18px;height:18px">
+          <span style="font-size:13px;font-weight:500;color:#374151"><i class="bi bi-file-earmark-text-fill" style="color:#3B82F6"></i> Documento do veículo está no veículo</span>
+        </label>
       </div>
 
       <!-- Problemas encontrados pelo condutor -->
@@ -2428,6 +2452,8 @@ function openChecklistForm() {
   document.getElementById('clDataSaida').value = new Date().toISOString().split('T')[0];
   document.getElementById('clHorarioSaida').value = new Date().toTimeString().slice(0,5);
   document.getElementById('clNivelSaida').value = '0';
+  document.getElementById('clCartaoCombSaida').checked = false;
+  document.getElementById('clDocVeicSaida').checked    = false;
   resetFuelGauge('fuelGaugeSaida', 'fuelSaidaDisplay');
   document.querySelectorAll('.checklist-problem-item').forEach(el => el.classList.remove('selected'));
   document.querySelectorAll('.checklist-problem-item input[type=checkbox]').forEach(cb => cb.checked = false);
@@ -2786,6 +2812,8 @@ async function saveChecklist() {
     destino, data_saida, horario_saida,
     km_saida: parseInt(km_saida),
     nivel_combustivel_saida: parseInt(document.getElementById('clNivelSaida').value),
+    cartao_combustivel_saida: document.getElementById('clCartaoCombSaida').checked,
+    documento_veiculo_saida:  document.getElementById('clDocVeicSaida').checked,
     assinatura_condutor_saida: sigCond,
     observacoes: document.getElementById('clObservacoes').value,
     problems,
@@ -2930,6 +2958,8 @@ async function viewChecklist(id) {
           <i class="bi bi-clock" style="color:#9CA3AF;width:18px"></i> Horário: <strong>${c.horario_saida||'—'}</strong><br>
           <i class="bi bi-speedometer" style="color:#9CA3AF;width:18px"></i> KM: <strong>${c.km_saida?.toLocaleString('pt-BR')||'—'}</strong><br>
           <i class="bi bi-fuel-pump" style="color:#9CA3AF;width:18px"></i> Combustível: <strong>${fuelLabel(c.nivel_combustivel_saida)}</strong><br>
+          <i class="bi bi-credit-card-2-front" style="color:#9CA3AF;width:18px"></i> Cartão combustível: <strong>${cartaoDocLabel(c.cartao_combustivel_saida)}</strong><br>
+          <i class="bi bi-file-earmark-text" style="color:#9CA3AF;width:18px"></i> Documento veículo: <strong>${cartaoDocLabel(c.documento_veiculo_saida)}</strong><br>
           <i class="bi bi-shield-check" style="color:#9CA3AF;width:18px"></i> Liberador: <strong>${c.liberador_nome||'Pendente'}</strong>
         </div>
         <div style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap">
@@ -2945,6 +2975,8 @@ async function viewChecklist(id) {
           <i class="bi bi-clock" style="color:#9CA3AF;width:18px"></i> Horário: <strong>${c.horario_retorno||'—'}</strong><br>
           <i class="bi bi-speedometer" style="color:#9CA3AF;width:18px"></i> KM: <strong>${c.km_retorno?.toLocaleString('pt-BR')||'—'}</strong><br>
           <i class="bi bi-fuel-pump" style="color:#9CA3AF;width:18px"></i> Combustível: <strong>${fuelLabel(c.nivel_combustivel_retorno)}</strong><br>
+          <i class="bi bi-credit-card-2-front" style="color:#9CA3AF;width:18px"></i> Cartão combustível: <strong>${cartaoDocLabel(c.cartao_combustivel_retorno)}</strong><br>
+          <i class="bi bi-file-earmark-text" style="color:#9CA3AF;width:18px"></i> Documento veículo: <strong>${cartaoDocLabel(c.documento_veiculo_retorno)}</strong><br>
           <i class="bi bi-shield-check" style="color:#9CA3AF;width:18px"></i> Recebedor: <strong>${c.recebedor_nome||'Pendente'}</strong>
         </div>
         <div style="margin-top:10px;display:flex;gap:12px;flex-wrap:wrap">
@@ -3200,6 +3232,8 @@ async function openRetorno(checklistId) {
   document.getElementById('retKm').placeholder = `Min: ${Number(_retKmSaida).toLocaleString('pt-BR')}`;
   document.getElementById('retObs').value = '';
   document.getElementById('retNivelComb').value = '0';
+  document.getElementById('retCartaoComb').checked = false;
+  document.getElementById('retDocVeic').checked    = false;
   resetFuelGauge('fuelGaugeRetorno', 'fuelRetornoDisplay');
 
   // Mostrar nome do condutor (read-only)
@@ -3359,6 +3393,8 @@ async function saveDevolver() {
     horario_retorno: hora_r,
     km_retorno: parseInt(km),
     nivel_combustivel_retorno: parseInt(document.getElementById('retNivelComb').value),
+    cartao_combustivel_retorno: document.getElementById('retCartaoComb').checked,
+    documento_veiculo_retorno:  document.getElementById('retDocVeic').checked,
     assinatura_condutor_retorno: sig,
     retorno_obs: document.getElementById('retObs').value,
     problems,
@@ -5144,6 +5180,15 @@ function resetFuelGauge(barsId, displayId) {
 
 function fuelLabel(level) {
   return FUEL_LABELS[parseInt(level)] || '—';
+}
+
+// Render do flag cartao/documento no detalhe. NULL=nao informado (checklists
+// antigos pre-migration 068).
+function cartaoDocLabel(v) {
+  if (v === null || v === undefined || v === '') return '—';
+  return Number(v) === 1
+    ? '<span style="color:#10B981"><i class="bi bi-check-circle-fill"></i> Sim</span>'
+    : '<span style="color:#EF4444"><i class="bi bi-x-circle-fill"></i> Não</span>';
 }
 
 /* ============================================================
