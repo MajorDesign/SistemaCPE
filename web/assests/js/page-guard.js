@@ -26,6 +26,114 @@
  *   pageGuard.logout()        - limpa storage e vai pro login
  */
 
+// ════════════════════════════════════════════════════════════════════
+// AUTH-GUARD INLINE — sentinela global de sessão (2026-06-03).
+//
+// Está INLINE dentro do page-guard.js (em vez de arquivo separado) para
+// garantir que o monkey-patch de window.fetch e WebSocket aconteça ANTES
+// do primeiro fetch — qualquer assincronia (script src + load) abriria
+// uma janela de corrida onde 401 vazaria pro backend.
+//
+// Detalhes: web/assests/js/auth-guard.js (fonte canônica, mesma lógica).
+// ════════════════════════════════════════════════════════════════════
+(function (global) {
+  if (global.__cpeAuthGuardLoaded) return;
+  global.__cpeAuthGuardLoaded = true;
+
+  const LOGIN_URL = '/SistemaCPE/web/login.html';
+  const ROTAS_IGNORADAS = [
+    '/api/auth/login', '/api/auth/forgot-password',
+    '/api/auth/reset-password', '/api/auth/primeiro-acesso',
+  ];
+  let _expirado = false;
+
+  function _ehRotaIgnorada(url) {
+    try { return ROTAS_IGNORADAS.some(r => new URL(url, location.origin).pathname.startsWith(r)); }
+    catch { return false; }
+  }
+  function _ehRotaApi(url) {
+    try { return new URL(url, location.origin).pathname.startsWith('/api/'); }
+    catch { return false; }
+  }
+  function _limparStorage() {
+    ['cpe_token','cpe_user','token','user','user_id','logged_in','login_time']
+      .forEach(k => { try{localStorage.removeItem(k);}catch{} try{sessionStorage.removeItem(k);}catch{} });
+  }
+  function _mostrarModal() {
+    if (document.getElementById('__cpeAuthGuardModal')) return;
+    const div = document.createElement('div');
+    div.id = '__cpeAuthGuardModal';
+    div.style.cssText = 'position:fixed;inset:0;z-index:9999999;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;font-family:Inter,-apple-system,sans-serif';
+    div.innerHTML = `
+      <div style="background:#fff;border-radius:14px;padding:32px 36px;max-width:420px;width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+        <div style="font-size:48px;line-height:1;margin-bottom:14px">⏰</div>
+        <h2 style="margin:0 0 10px;color:#1A1A1A;font-size:1.3rem;font-weight:700">Sua sessão expirou</h2>
+        <p style="margin:0 0 22px;color:#6c757d;line-height:1.5;font-size:.95rem">
+          Por segurança, sua sessão de 12 horas terminou.<br>
+          Você será redirecionado pro login em <strong id="__agCount" style="color:#FFC107">3</strong>s.
+        </p>
+        <button id="__agBtnLogin" style="background:#FFC107;color:#1A1A1A;border:0;border-radius:8px;padding:11px 28px;font-weight:700;font-size:.95rem;cursor:pointer;box-shadow:0 4px 12px rgba(255,193,7,.4)">Ir para login agora</button>
+      </div>`;
+    document.body.appendChild(div);
+    const ir = () => { try{location.replace(LOGIN_URL);}catch{location.href=LOGIN_URL;} };
+    document.getElementById('__agBtnLogin').onclick = ir;
+    let c = 3;
+    const t = setInterval(() => {
+      c--; const e = document.getElementById('__agCount'); if (e) e.textContent = String(Math.max(0,c));
+      if (c<=0) { clearInterval(t); ir(); }
+    }, 1000);
+  }
+  function _ativarExpirado(motivo) {
+    if (_expirado) return;
+    _expirado = true;
+    console.warn('[AUTH-GUARD] Sessão expirada —', motivo);
+    try { (global.__cpeOpenWebSockets||[]).forEach(ws => { try{ws.close(4001,'session-expired');}catch{} }); } catch {}
+    _limparStorage();
+    if (document.body) _mostrarModal();
+    else document.addEventListener('DOMContentLoaded', _mostrarModal, { once: true });
+    try { global.dispatchEvent(new CustomEvent('cpe:session-expired', { detail: { motivo } })); } catch {}
+  }
+
+  // Patch window.fetch
+  const _fOriginal = global.fetch.bind(global);
+  global.fetch = async function (input, init) {
+    const url = (typeof input === 'string') ? input : (input && input.url) ? input.url : String(input);
+    if (_expirado && _ehRotaApi(url) && !_ehRotaIgnorada(url)) {
+      return Promise.reject(new Error('Sessão expirada — chamada cancelada'));
+    }
+    const resp = await _fOriginal(input, init);
+    if (resp.status === 401 && _ehRotaApi(url) && !_ehRotaIgnorada(url)) {
+      _ativarExpirado(`401 em ${url}`);
+    }
+    return resp;
+  };
+
+  // Rastreio leve de WebSockets pra fechar na expiração
+  global.__cpeOpenWebSockets = global.__cpeOpenWebSockets || [];
+  const _WS = global.WebSocket;
+  if (_WS && !_WS.__cpePatched) {
+    function _WSp(url, protocols) {
+      const ws = new _WS(url, protocols);
+      try { global.__cpeOpenWebSockets.push(ws); } catch {}
+      ws.addEventListener('close', () => {
+        try { const i = global.__cpeOpenWebSockets.indexOf(ws); if (i>=0) global.__cpeOpenWebSockets.splice(i,1); } catch {}
+      });
+      return ws;
+    }
+    _WSp.prototype = _WS.prototype;
+    _WSp.CONNECTING = _WS.CONNECTING; _WSp.OPEN = _WS.OPEN;
+    _WSp.CLOSING = _WS.CLOSING; _WSp.CLOSED = _WS.CLOSED;
+    _WSp.__cpePatched = true;
+    global.WebSocket = _WSp;
+  }
+
+  global.cpeAuthGuard = {
+    isExpired: () => _expirado,
+    forceExpire: () => _ativarExpirado('forçado manualmente'),
+  };
+  console.log('[AUTH-GUARD] Sentinela ativo — 401 em /api/* dispara redirect pra login');
+})(typeof window !== 'undefined' ? window : this);
+
 (function (global) {
   'use strict';
 
