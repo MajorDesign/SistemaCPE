@@ -36,7 +36,9 @@ import bcrypt
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, EmailStr, Field
 
+from config import PUBLIC_BASE_URL
 from database import get_db_or_404, convert_datetime_to_string, convert_datetime_list
+from services.email_service import email_cadastro_aprovado, enviar_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/pre-cadastro", tags=["pre-cadastro"])
@@ -49,8 +51,13 @@ router = APIRouter(prefix="/api/pre-cadastro", tags=["pre-cadastro"])
 class SolicitarPayload(BaseModel):
     email:    EmailStr
     name:     str = Field(..., min_length=2, max_length=120)
+    username: str = Field(..., min_length=3, max_length=50,
+                          description="Username escolhido pelo usuário. Letras/números/./_/-")
+    cpf:      str = Field(..., min_length=11, max_length=14,
+                          description="CPF — 11 dígitos (com ou sem formatação)")
     password: str = Field(..., min_length=8, max_length=255)
     group_id: int = Field(..., gt=0)
+    unit_id:  int = Field(..., gt=0)
 
 
 class RecusarPayload(BaseModel):
@@ -89,6 +96,75 @@ def garantir_username_unico(cursor, username_base: str) -> str:
         n += 1
         if n > 999:
             raise HTTPException(status_code=500, detail="Não foi possível gerar username único")
+
+
+# ---------- Username escolhido pelo usuário ----------
+
+_USERNAME_REGEX = re.compile(r"^[a-z0-9._-]{3,50}$")
+
+def validar_username_formato(username: str) -> str:
+    """Normaliza pra minúsculas, valida formato. Retorna o username limpo."""
+    u = (username or "").strip().lower()
+    if not _USERNAME_REGEX.match(u):
+        raise HTTPException(
+            status_code=400,
+            detail="Username inválido. Use 3-50 caracteres: letras minúsculas, números, ponto, sublinhado ou hífen.",
+        )
+    return u
+
+
+def username_disponivel(cursor, username: str, ignorar_email: Optional[str] = None) -> bool:
+    """True se username está livre em users + pre_cadastro_pendentes (status pendente).
+    `ignorar_email` exclui a própria solicitação ao reaproveitar pendência."""
+    cursor.execute("SELECT id FROM users WHERE username = %s LIMIT 1", (username,))
+    if cursor.fetchone(): return False
+    if ignorar_email:
+        cursor.execute(
+            "SELECT id FROM pre_cadastro_pendentes "
+            "WHERE username = %s AND status = 'pendente' AND email != %s LIMIT 1",
+            (username, ignorar_email),
+        )
+    else:
+        cursor.execute(
+            "SELECT id FROM pre_cadastro_pendentes "
+            "WHERE username = %s AND status = 'pendente' LIMIT 1",
+            (username,),
+        )
+    return not cursor.fetchone()
+
+
+# ---------- CPF — formatação + validação dos dígitos verificadores ----------
+
+def limpar_cpf(cpf: str) -> str:
+    """Remove tudo que não é dígito. Retorna apenas os 11 dígitos."""
+    return re.sub(r"\D", "", cpf or "")
+
+
+def formatar_cpf(cpf_digitos: str) -> str:
+    """Formata 11 dígitos em 000.000.000-00."""
+    c = cpf_digitos
+    return f"{c[0:3]}.{c[3:6]}.{c[6:9]}-{c[9:11]}" if len(c) == 11 else cpf_digitos
+
+
+def validar_cpf(cpf: str) -> str:
+    """Valida CPF (formato + dígitos verificadores). Retorna formatado ou raise 400."""
+    c = limpar_cpf(cpf)
+    if len(c) != 11 or c == c[0] * 11:
+        raise HTTPException(status_code=400, detail="CPF inválido — informe os 11 dígitos.")
+
+    # Dígito 1
+    soma = sum(int(c[i]) * (10 - i) for i in range(9))
+    d1 = ((soma * 10) % 11) % 10
+    if d1 != int(c[9]):
+        raise HTTPException(status_code=400, detail="CPF inválido.")
+
+    # Dígito 2
+    soma = sum(int(c[i]) * (11 - i) for i in range(10))
+    d2 = ((soma * 10) % 11) % 10
+    if d2 != int(c[10]):
+        raise HTTPException(status_code=400, detail="CPF inválido.")
+
+    return formatar_cpf(c)
 
 
 def _detectar_delimitador(texto: str) -> str:
@@ -257,19 +333,64 @@ async def listar_grupos_publicos():
         if conn: conn.close()
 
 
+@router.get("/unidades-publicas")
+async def listar_unidades_publicas():
+    """Lista unidades ativas — usado no select do formulário de primeiro acesso."""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT id, nome, sigla, cidade, uf
+              FROM unidades_cpe
+             WHERE ativo = 1
+             ORDER BY nome
+        """)
+        return cursor.fetchall()
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@router.get("/verificar-username")
+async def verificar_username(username: str = Query(..., min_length=3, max_length=50)):
+    """Checa em tempo real se o username escolhido está disponível.
+    Retorna {disponivel: bool, motivo: str}."""
+    try:
+        u = validar_username_formato(username)
+    except HTTPException as e:
+        return {"disponivel": False, "motivo": e.detail}
+
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        if username_disponivel(cursor, u):
+            return {"disponivel": True, "username": u}
+        return {"disponivel": False, "motivo": "Username já está em uso. Escolha outro."}
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @router.post("/solicitar", status_code=status.HTTP_201_CREATED)
 async def solicitar_cadastro(payload: SolicitarPayload):
     """Cria uma solicitação de cadastro pendente de aprovação."""
     email_norm = payload.email.strip().lower()
     nome = payload.name.strip()
-    logger.info(f"[PRECAD/SOLICITAR] {email_norm} -> grupo {payload.group_id}")
+
+    # Valida e normaliza username + cpf
+    username = validar_username_formato(payload.username)
+    cpf_fmt  = validar_cpf(payload.cpf)
+
+    logger.info(f"[PRECAD/SOLICITAR] {email_norm} -> grupo {payload.group_id} unidade {payload.unit_id} user '{username}'")
 
     conn = get_db_or_404()
     cursor = None
     try:
         cursor = conn.cursor(dictionary=True)
 
-        # Re-valida (pode ter mudado entre o verificar e o solicitar)
+        # Re-valida e-mail (pode ter mudado entre o verificar e o solicitar)
         cursor.execute("SELECT id FROM users WHERE email = %s", (email_norm,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="E-mail já cadastrado no sistema.")
@@ -284,7 +405,7 @@ async def solicitar_cadastro(payload: SolicitarPayload):
         if email_row["status"] == "usado":
             raise HTTPException(status_code=400, detail="Este e-mail já foi utilizado em um cadastro.")
 
-        # Bloqueia se já tem pendente
+        # Bloqueia se já tem pendente pra esse mesmo e-mail
         cursor.execute(
             "SELECT id FROM pre_cadastro_pendentes WHERE email = %s AND status = 'pendente'",
             (email_norm,),
@@ -292,7 +413,16 @@ async def solicitar_cadastro(payload: SolicitarPayload):
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Já existe uma solicitação pendente para este e-mail.")
 
-        # Valida grupo (e que esteja visível)
+        # Username escolhido pelo usuário precisa estar disponível
+        if not username_disponivel(cursor, username, ignorar_email=email_norm):
+            raise HTTPException(status_code=400, detail="Username já está em uso. Escolha outro.")
+
+        # CPF — bloqueia duplicidade no banco (se já tem user com esse CPF)
+        cursor.execute("SELECT id FROM users WHERE cpf = %s LIMIT 1", (cpf_fmt,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Este CPF já está cadastrado no sistema.")
+
+        # Valida grupo (e que esteja visível pra signup)
         cursor.execute(
             "SELECT id, name FROM cpe_grupo WHERE id = %s AND visivel_signup = 1",
             (payload.group_id,),
@@ -301,17 +431,14 @@ async def solicitar_cadastro(payload: SolicitarPayload):
         if not grupo:
             raise HTTPException(status_code=400, detail="Grupo inválido ou não disponível para auto-cadastro.")
 
-        # Username derivado do e-mail, único
-        username_base = gerar_username(email_norm, nome)
-        username = garantir_username_unico(cursor, username_base)
-        # também garante que não colida com outro pendente do mesmo username
+        # Valida unidade
         cursor.execute(
-            "SELECT id FROM pre_cadastro_pendentes "
-            "WHERE username = %s AND status = 'pendente' AND email != %s",
-            (username, email_norm),
+            "SELECT id, nome FROM unidades_cpe WHERE id = %s AND ativo = 1",
+            (payload.unit_id,),
         )
-        if cursor.fetchone():
-            username = f"{username_base}.{int(payload.group_id)}"
+        unidade = cursor.fetchone()
+        if not unidade:
+            raise HTTPException(status_code=400, detail="Unidade inválida.")
 
         password_hash = bcrypt.hashpw(payload.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -324,29 +451,31 @@ async def solicitar_cadastro(payload: SolicitarPayload):
         if recusado:
             cursor.execute("""
                 UPDATE pre_cadastro_pendentes
-                   SET name = %s, username = %s, password_hash = %s,
-                       group_id = %s, status = 'pendente',
+                   SET name = %s, cpf = %s, username = %s, password_hash = %s,
+                       group_id = %s, unit_id = %s, status = 'pendente',
                        solicitado_em = CURRENT_TIMESTAMP,
                        respondido_por = NULL, respondido_em = NULL,
                        motivo_recusa = NULL
                  WHERE id = %s
-            """, (nome, username, password_hash, payload.group_id, recusado["id"]))
+            """, (nome, cpf_fmt, username, password_hash,
+                  payload.group_id, payload.unit_id, recusado["id"]))
             pend_id = recusado["id"]
         else:
             cursor.execute("""
                 INSERT INTO pre_cadastro_pendentes
-                    (email, name, username, password_hash, group_id, status)
-                VALUES (%s, %s, %s, %s, %s, 'pendente')
-            """, (email_norm, nome, username, password_hash, payload.group_id))
+                    (email, name, cpf, username, password_hash, group_id, unit_id, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'pendente')
+            """, (email_norm, nome, cpf_fmt, username, password_hash,
+                  payload.group_id, payload.unit_id))
             pend_id = cursor.lastrowid
 
         notificar_admins(
             cursor,
-            f"Novo pré-cadastro pendente: {nome} ({email_norm}) — grupo {grupo['name']}",
+            f"Novo pré-cadastro pendente: {nome} ({email_norm}) — {grupo['name']} / {unidade['nome']}",
         )
 
         conn.commit()
-        logger.info(f"[PRECAD/SOLICITAR] ✅ id={pend_id} username={username}")
+        logger.info(f"[PRECAD/SOLICITAR] ✅ id={pend_id} username={username} cpf={cpf_fmt[:6]}***")
 
         return {
             "ok": True,
@@ -445,13 +574,16 @@ async def listar_pendentes(status_filtro: str = Query("pendente")):
             where = "WHERE p.status = %s"
             params = (status_filtro,)
         cursor.execute(f"""
-            SELECT p.id, p.email, p.name, p.username, p.group_id, p.status,
+            SELECT p.id, p.email, p.name, p.cpf, p.username,
+                   p.group_id, p.unit_id, p.status,
                    p.solicitado_em, p.respondido_em, p.motivo_recusa,
                    g.name AS group_name,
-                   d.name AS department_name
+                   d.name AS department_name,
+                   u.nome AS unit_name, u.sigla AS unit_sigla
               FROM pre_cadastro_pendentes p
-              LEFT JOIN cpe_grupo g  ON g.id = p.group_id
-              LEFT JOIN departments d ON d.id = g.department_id
+              LEFT JOIN cpe_grupo g    ON g.id = p.group_id
+              LEFT JOIN departments d  ON d.id = g.department_id
+              LEFT JOIN unidades_cpe u ON u.id = p.unit_id
               {where}
              ORDER BY p.solicitado_em DESC
         """, params)
@@ -486,9 +618,11 @@ async def aprovar(pendente_id: int, aprovado_por: Optional[int] = Query(None)):
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Já existe usuário com este e-mail")
 
+        # Username escolhido pelo usuário. Se entrou em conflito enquanto estava
+        # na fila (caso raro — alguém pegou esse user enquanto pendia), gera sufixo.
         username_final = garantir_username_unico(cursor, pend["username"])
 
-        # Pega o department_id e unit_id do grupo (herda)
+        # department_id herda do grupo
         cursor.execute(
             "SELECT department_id FROM cpe_grupo WHERE id = %s",
             (pend["group_id"],),
@@ -496,13 +630,21 @@ async def aprovar(pendente_id: int, aprovado_por: Optional[int] = Query(None)):
         grp = cursor.fetchone()
         department_id = grp["department_id"] if grp else None
 
+        # Valida que CPF da pendência ainda não foi usado por outro user
+        # (alguém pode ter sido cadastrado manualmente enquanto pendia)
+        if pend.get("cpf"):
+            cursor.execute("SELECT id FROM users WHERE cpf = %s LIMIT 1", (pend["cpf"],))
+            if cursor.fetchone():
+                raise HTTPException(status_code=400, detail="CPF da solicitação já está cadastrado em outro usuário.")
+
         cursor.execute("""
-            INSERT INTO users (name, email, username, password_hash, role,
-                               group_id, department_id, is_active)
-            VALUES (%s, %s, %s, %s, 'USER', %s, %s, 1)
+            INSERT INTO users (name, email, cpf, username, password_hash, role,
+                               group_id, department_id, unit_id, is_active)
+            VALUES (%s, %s, %s, %s, %s, 'USER', %s, %s, %s, 1)
         """, (
-            pend["name"], pend["email"], username_final, pend["password_hash"],
-            pend["group_id"], department_id,
+            pend["name"], pend["email"], pend.get("cpf"), username_final,
+            pend["password_hash"],
+            pend["group_id"], department_id, pend.get("unit_id"),
         ))
         new_user_id = cursor.lastrowid
 
@@ -525,6 +667,31 @@ async def aprovar(pendente_id: int, aprovado_por: Optional[int] = Query(None)):
 
         conn.commit()
         logger.info(f"[PRECAD/APROVAR] ✅ pendente {pendente_id} -> user {new_user_id}")
+
+        # Pega nome do grupo pra incluir no email (consulta separada — não falha o aprovar se quebrar)
+        grupo_nome = None
+        try:
+            cursor.execute("SELECT name FROM cpe_grupo WHERE id = %s", (pend["group_id"],))
+            row = cursor.fetchone()
+            if row: grupo_nome = row["name"]
+        except Exception:
+            pass
+
+        # Envia email de boas-vindas (async — não bloqueia a resposta)
+        try:
+            link_login = f"{PUBLIC_BASE_URL}/SistemaCPE/web/login.html"
+            assunto, html = email_cadastro_aprovado(
+                nome=pend["name"],
+                username=username_final,
+                grupo_nome=grupo_nome,
+                link_login=link_login,
+            )
+            enviar_email(para=pend["email"], assunto=assunto, html=html)
+            logger.info(f"[PRECAD/APROVAR] 📧 email de boas-vindas disparado para {pend['email']}")
+        except Exception as err:
+            # Não derruba a aprovação se o email falhar — admin pode reenviar depois
+            logger.error(f"[PRECAD/APROVAR] ⚠️ falha ao enviar email pra {pend['email']}: {err}")
+
         return {"ok": True, "user_id": new_user_id, "username": username_final}
 
     except HTTPException:

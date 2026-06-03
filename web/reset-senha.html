@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Redefinir Senha - CPE Control</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+
+  <style>
+    .rs-card {
+      background: #fff; border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.12);
+      max-width: 460px; width: 100%;
+      padding: 32px 28px;
+    }
+    .rs-icon-circle {
+      width: 72px; height: 72px; margin: 0 auto 16px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 34px;
+    }
+    .rs-icon-loading { background: #FEF3C7; color: #B45309; animation: rsSpin 1.2s linear infinite; }
+    .rs-icon-ok      { background: #DCFCE7; color: #16A34A; }
+    .rs-icon-fail    { background: #FEE2E2; color: #DC2626; }
+    .rs-icon-success { background: #DCFCE7; color: #16A34A; }
+    @keyframes rsSpin { to { transform: rotate(360deg); } }
+
+    .rs-state { display: none; text-align: center; }
+    .rs-state.active { display: block; }
+
+    .rs-state h1 {
+      font-size: 22px; font-weight: 700; color: #1F2937; margin: 0 0 8px;
+    }
+    .rs-state p { color: #6B7280; font-size: 14px; line-height: 1.55; margin: 0 0 20px; }
+
+    .rs-user-info {
+      background: #F9FAFB; border-radius: 10px;
+      padding: 12px 16px; margin: 16px 0 22px;
+      font-size: 13px; color: #374151; text-align: left;
+    }
+    .rs-user-info strong { color: #1F2937; }
+
+    .rs-field { margin-bottom: 16px; text-align: left; }
+    .rs-field label {
+      display: block; font-size: 13px; font-weight: 600;
+      color: #374151; margin-bottom: 6px;
+    }
+    .rs-pwd-wrap { position: relative; }
+    .rs-field input {
+      width: 100%; padding: 11px 40px 11px 14px;
+      border: 1.5px solid #E5E7EB; border-radius: 10px;
+      font-size: 14px; transition: border-color .15s;
+    }
+    .rs-field input:focus {
+      outline: none; border-color: #FFC107; box-shadow: 0 0 0 3px rgba(255,193,7,.15);
+    }
+    .rs-pwd-toggle {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; cursor: pointer; color: #6B7280;
+    }
+    .rs-pwd-bar {
+      height: 4px; border-radius: 2px; margin-top: 6px;
+      background: #E5E7EB; overflow: hidden; position: relative;
+    }
+    .rs-pwd-bar::before {
+      content: ''; position: absolute; left: 0; top: 0; height: 100%;
+      width: 0%; transition: width .2s, background .2s;
+    }
+    .rs-pwd-bar.fraca::before { width: 33%;  background: #DC2626; }
+    .rs-pwd-bar.media::before { width: 66%;  background: #F59E0B; }
+    .rs-pwd-bar.forte::before { width: 100%; background: #16A34A; }
+    .rs-hint { font-size: 12px; color: #6B7280; margin-top: 4px; }
+
+    .rs-btn {
+      width: 100%; padding: 13px; border-radius: 10px;
+      font-size: 15px; font-weight: 700;
+      border: none; cursor: pointer; transition: all .15s;
+      background: linear-gradient(135deg, #FFC107 0%, #FFA500 100%);
+      color: #1A1A1A;
+    }
+    .rs-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 14px rgba(255,165,0,.4); }
+    .rs-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+    .rs-btn-secondary {
+      background: #F3F4F6; color: #374151; box-shadow: none;
+      margin-top: 10px;
+    }
+    .rs-btn-secondary:hover { background: #E5E7EB; }
+
+    .rs-alert {
+      padding: 12px 14px; border-radius: 10px;
+      font-size: 13px; margin-bottom: 16px;
+      display: flex; gap: 10px; align-items: flex-start;
+      text-align: left;
+    }
+    .rs-alert.danger  { background: #FEF2F2; color: #991B1B; border: 1px solid #FECACA; }
+    .rs-alert.success { background: #F0FDF4; color: #166534; border: 1px solid #BBF7D0; }
+  </style>
+</head>
+
+<body class="login-page">
+  <div class="login-background"></div>
+
+  <div class="login-wrapper">
+    <div class="rs-card">
+
+      <!-- Estado: validando token -->
+      <div class="rs-state active" id="rsStateLoading">
+        <div class="rs-icon-circle rs-icon-loading"><i class="bi bi-hourglass-split"></i></div>
+        <h1>Validando link...</h1>
+        <p>Aguarde, estamos verificando seu link de redefinição.</p>
+      </div>
+
+      <!-- Estado: link inválido / expirado -->
+      <div class="rs-state" id="rsStateInvalid">
+        <div class="rs-icon-circle rs-icon-fail"><i class="bi bi-x-circle"></i></div>
+        <h1>Link inválido ou expirado</h1>
+        <p id="rsInvalidMsg">Este link de redefinição não é mais válido.</p>
+        <a href="/SistemaCPE/web/login.html" class="rs-btn" style="display:inline-block;text-decoration:none;text-align:center;">
+          <i class="bi bi-arrow-left"></i> Voltar ao login
+        </a>
+      </div>
+
+      <!-- Estado: formulário de nova senha -->
+      <div class="rs-state" id="rsStateForm">
+        <div class="rs-icon-circle rs-icon-ok"><i class="bi bi-shield-lock-fill"></i></div>
+        <h1>Defina sua nova senha</h1>
+        <p>Crie uma senha forte que você não usa em outros sistemas.</p>
+
+        <div class="rs-user-info">
+          <i class="bi bi-person-circle"></i>
+          Olá <strong id="rsNome">—</strong>!<br>
+          Conta: <strong id="rsEmail">—</strong>
+        </div>
+
+        <div id="rsAlertForm"></div>
+
+        <div class="rs-field">
+          <label for="rsPwd"><i class="bi bi-lock"></i> Nova senha</label>
+          <div class="rs-pwd-wrap">
+            <input type="password" id="rsPwd" placeholder="Mínimo 8 caracteres" maxlength="72">
+            <button type="button" class="rs-pwd-toggle" id="rsPwdToggle" aria-label="Mostrar">
+              <i class="bi bi-eye"></i>
+            </button>
+          </div>
+          <div class="rs-pwd-bar" id="rsPwdBar"></div>
+          <div class="rs-hint">Use letras, números e ao menos um caractere especial (@ # $ !).</div>
+        </div>
+
+        <div class="rs-field">
+          <label for="rsPwdConf"><i class="bi bi-lock-fill"></i> Confirme a nova senha</label>
+          <input type="password" id="rsPwdConf" placeholder="Repita a senha" maxlength="72">
+        </div>
+
+        <button type="button" class="rs-btn" id="rsSubmit">
+          <i class="bi bi-check2-circle"></i> Redefinir senha
+        </button>
+      </div>
+
+      <!-- Estado: sucesso -->
+      <div class="rs-state" id="rsStateSuccess">
+        <div class="rs-icon-circle rs-icon-success"><i class="bi bi-check-circle-fill"></i></div>
+        <h1>Senha redefinida!</h1>
+        <p>Sua senha foi atualizada com sucesso. Agora faça login com a nova senha.</p>
+        <a href="/SistemaCPE/web/login.html" class="rs-btn" style="display:inline-block;text-decoration:none;text-align:center;">
+          <i class="bi bi-box-arrow-in-right"></i> Ir para o login
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+    const API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
+
+    // ── helpers ──────────────────────────────────────────────────────
+    const states = ['Loading', 'Invalid', 'Form', 'Success'];
+    function showState(name) {
+      states.forEach(s => document.getElementById('rsState' + s).classList.toggle('active', s === name));
+    }
+    function alerta(tipo, msg) {
+      const icones = { danger: 'exclamation-circle', success: 'check-circle' };
+      document.getElementById('rsAlertForm').innerHTML =
+        `<div class="rs-alert ${tipo}"><i class="bi bi-${icones[tipo]}"></i><span>${msg}</span></div>`;
+    }
+    function limparAlerta() { document.getElementById('rsAlertForm').innerHTML = ''; }
+
+    function getToken() {
+      const p = new URLSearchParams(location.search);
+      return (p.get('token') || '').trim();
+    }
+
+    // ── valida token ao carregar ──────────────────────────────────────
+    async function validarToken() {
+      const token = getToken();
+      if (!token) {
+        document.getElementById('rsInvalidMsg').textContent =
+          'O link não contém um token de redefinição. Solicite um novo na tela de login.';
+        showState('Invalid');
+        return;
+      }
+
+      try {
+        const r = await fetch(`${API}/api/auth/reset-password/validate?token=${encodeURIComponent(token)}`);
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          document.getElementById('rsInvalidMsg').textContent =
+            data.detail || 'Este link não é mais válido. Solicite um novo na tela de login.';
+          showState('Invalid');
+          return;
+        }
+        document.getElementById('rsNome').textContent  = data.nome  || '—';
+        document.getElementById('rsEmail').textContent = data.email || '—';
+        showState('Form');
+        setTimeout(() => document.getElementById('rsPwd').focus(), 100);
+      } catch (err) {
+        document.getElementById('rsInvalidMsg').textContent =
+          'Não consegui validar o link. Verifique sua conexão e tente novamente.';
+        showState('Invalid');
+      }
+    }
+
+    // ── força da senha ────────────────────────────────────────────────
+    function avaliarSenha(s) {
+      let pts = 0;
+      if (s.length >= 8) pts++;
+      if (/[A-Z]/.test(s) && /[a-z]/.test(s)) pts++;
+      if (/[0-9]/.test(s)) pts++;
+      if (/[^A-Za-z0-9]/.test(s)) pts++;
+      const bar = document.getElementById('rsPwdBar');
+      bar.classList.remove('fraca','media','forte');
+      if (s.length === 0) return;
+      if (pts <= 1)      bar.classList.add('fraca');
+      else if (pts <= 3) bar.classList.add('media');
+      else               bar.classList.add('forte');
+    }
+
+    // ── submit ────────────────────────────────────────────────────────
+    async function submeter() {
+      const pwd  = document.getElementById('rsPwd').value;
+      const pwd2 = document.getElementById('rsPwdConf').value;
+      limparAlerta();
+
+      if (pwd.length < 8) { alerta('danger', 'A senha deve ter no mínimo 8 caracteres.'); return; }
+      if (pwd !== pwd2)   { alerta('danger', 'As senhas não coincidem.'); return; }
+
+      const btn = document.getElementById('rsSubmit');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+
+      try {
+        const r = await fetch(`${API}/api/auth/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: getToken(), password: pwd }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          alerta('danger', data.detail || 'Erro ao redefinir a senha.');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-check2-circle"></i> Redefinir senha';
+          return;
+        }
+        showState('Success');
+      } catch (err) {
+        alerta('danger', 'Erro de conexão: ' + err.message);
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check2-circle"></i> Redefinir senha';
+      }
+    }
+
+    // ── bind ──────────────────────────────────────────────────────────
+    document.getElementById('rsSubmit').addEventListener('click', submeter);
+    document.getElementById('rsPwd').addEventListener('input', e => avaliarSenha(e.target.value));
+    document.getElementById('rsPwdConf').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); submeter(); }
+    });
+    document.getElementById('rsPwdToggle').addEventListener('click', () => {
+      const inp = document.getElementById('rsPwd');
+      inp.type = inp.type === 'password' ? 'text' : 'password';
+    });
+
+    validarToken();
+  })();
+  </script>
+</body>
+</html>

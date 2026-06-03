@@ -1388,6 +1388,168 @@ async def health():
 # 13. REGISTRAR ROUTERS INTERNOS
 # =========================================
 
+# =========================================================================
+# 🔑 ESQUECI MINHA SENHA — fluxo completo (forgot / validate / reset)
+# Definido aqui (não em routes/auth.py) porque o auth_router está no app.py.
+# =========================================================================
+import uuid as _uuid_fp
+import datetime as _dt_fp
+from pydantic import BaseModel as _BaseModelFP, Field as _FieldFP
+from config import PUBLIC_BASE_URL as _PUB_URL_FP
+
+_RESET_TTL_MIN = 60  # link válido por 1 hora
+
+class _ForgotBody(_BaseModelFP):
+    email: str = _FieldFP(..., min_length=3, max_length=190)
+
+class _ResetBody(_BaseModelFP):
+    token: str = _FieldFP(..., min_length=10, max_length=64)
+    password: str = _FieldFP(..., min_length=8, max_length=72)
+
+def _client_ip_fp(request: Request) -> str:
+    fwd = request.headers.get("X-Forwarded-For", "")
+    if fwd: return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+@auth_router.post("/forgot-password")
+def forgot_password(body: _ForgotBody, request: Request):
+    """Solicita reset de senha: gera token, salva no banco, envia email.
+
+    SEMPRE retorna 200 OK mesmo se o email não existir — evita enumeração
+    de contas válidas (prática padrão de segurança).
+    """
+    from services.email_service import email_reset_senha, enviar_email
+    email = (body.email or "").strip().lower()
+    ip = _client_ip_fp(request)
+    mensagem = "Se este e-mail estiver cadastrado, você receberá o link em instantes."
+
+    if not email or "@" not in email:
+        return {"ok": True, "message": mensagem}
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id, name, email, is_active FROM users WHERE LOWER(email) = %s LIMIT 1",
+            (email,),
+        )
+        user = cursor.fetchone()
+
+        if user and user.get("is_active"):
+            token = _uuid_fp.uuid4().hex + _uuid_fp.uuid4().hex  # 64 chars
+            expires_at = _dt_fp.datetime.utcnow() + _dt_fp.timedelta(minutes=_RESET_TTL_MIN)
+            cursor.execute("""
+                INSERT INTO password_reset_tokens (user_id, token, expires_at, ip_origem)
+                VALUES (%s, %s, %s, %s)
+            """, (user["id"], token, expires_at, ip[:45]))
+            conn.commit()
+
+            link = f"{_PUB_URL_FP}/SistemaCPE/web/reset-senha.html?token={token}"
+            try:
+                assunto, html = email_reset_senha(
+                    nome=user["name"] or "Usuário",
+                    link_reset=link,
+                    ip_origem=ip,
+                    minutos_validade=_RESET_TTL_MIN,
+                )
+                enviar_email(para=user["email"], assunto=assunto, html=html)
+                logger.info(f"[AUTH/FORGOT] 📧 reset enviado para {user['email']} (token={token[:8]}...) ip={ip}")
+            except Exception as err:
+                logger.error(f"[AUTH/FORGOT] ⚠️ email pra {user['email']} falhou: {err}")
+        else:
+            logger.info(f"[AUTH/FORGOT] tentativa pra '{email}' (não existe ou inativo) ip={ip}")
+
+        return {"ok": True, "message": mensagem}
+    finally:
+        try: cursor.close()
+        except: pass
+        try: conn.close()
+        except: pass
+
+
+@auth_router.get("/reset-password/validate")
+def reset_password_validate(token: str):
+    """Valida se o token existe, não expirou e ainda não foi usado."""
+    if not token or len(token) < 10 or len(token) > 64:
+        raise HTTPException(status_code=400, detail="Token inválido")
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT t.id, t.user_id, t.expires_at, t.used_at,
+                   u.name, u.email
+              FROM password_reset_tokens t
+              JOIN users u ON u.id = t.user_id
+             WHERE t.token = %s LIMIT 1
+        """, (token,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Link inválido ou expirado")
+        if row["used_at"] is not None:
+            raise HTTPException(status_code=410, detail="Este link já foi usado")
+        if row["expires_at"] < _dt_fp.datetime.utcnow():
+            raise HTTPException(status_code=410, detail="Este link expirou. Solicite um novo.")
+        return {
+            "ok": True,
+            "email": row["email"],
+            "nome": row["name"],
+            "expira_em_segundos": int((row["expires_at"] - _dt_fp.datetime.utcnow()).total_seconds()),
+        }
+    finally:
+        try: cursor.close()
+        except: pass
+        try: conn.close()
+        except: pass
+
+
+@auth_router.post("/reset-password")
+def reset_password(body: _ResetBody, request: Request):
+    """Troca a senha do usuário associado ao token. Token vira inválido após uso."""
+    from utils import hash_password
+    if not body.token or len(body.token) > 64:
+        raise HTTPException(status_code=400, detail="Token inválido")
+    if not body.password or len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Senha precisa ter ao menos 8 caracteres")
+
+    ip = _client_ip_fp(request)
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT id, user_id, expires_at, used_at
+              FROM password_reset_tokens WHERE token = %s LIMIT 1
+        """, (body.token,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Link inválido")
+        if row["used_at"] is not None:
+            raise HTTPException(status_code=410, detail="Este link já foi usado")
+        if row["expires_at"] < _dt_fp.datetime.utcnow():
+            raise HTTPException(status_code=410, detail="Este link expirou. Solicite um novo.")
+
+        new_hash = hash_password(body.password)
+        cursor.execute("UPDATE users SET password_hash = %s WHERE id = %s",
+                       (new_hash, row["user_id"]))
+        cursor.execute("UPDATE password_reset_tokens SET used_at = NOW() WHERE id = %s",
+                       (row["id"],))
+        # Invalida outros tokens pendentes do mesmo usuário (segurança)
+        cursor.execute("""
+            UPDATE password_reset_tokens
+               SET used_at = NOW()
+             WHERE user_id = %s AND used_at IS NULL AND id != %s
+        """, (row["user_id"], row["id"]))
+        conn.commit()
+        logger.info(f"[AUTH/RESET] ✅ senha trocada user_id={row['user_id']} ip={ip}")
+        return {"ok": True, "message": "Senha redefinida com sucesso. Faça login com a nova senha."}
+    finally:
+        try: cursor.close()
+        except: pass
+        try: conn.close()
+        except: pass
+
+
 app.include_router(auth_router)
 app.include_router(groups_router)
 app.include_router(users_router)

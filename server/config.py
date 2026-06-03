@@ -70,6 +70,12 @@ COOKIE_NAME = "cpe_session"
 SESSION_MAX_AGE_SECONDS = int(os.getenv("SESSION_MAX_AGE_SECONDS", str(12 * 3600)))
 
 # =========================================
+# URL PÚBLICA — usada em emails (links pra login, reset de senha, etc)
+# Configurável via env (.env) para diferir entre dev / staging / prod.
+# =========================================
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://cpecontrol.cpetecnologia.com.br").rstrip("/")
+
+# =========================================
 # DEV
 # =========================================
 DEV_API_KEY = os.getenv("DEV_API_KEY", "").strip()

@@ -261,6 +261,11 @@
           É seu <strong>primeiro acesso</strong>? Solicite seu cadastro aqui.
         </button>
 
+        <!-- ✅ ESQUECI MINHA SENHA -->
+        <button type="button" class="fa-link" id="btnForgotPassword" style="margin-top:4px;">
+          <strong>Esqueci minha senha</strong> — receber link por e-mail
+        </button>
+
       </form>
 
       <!-- ✅ RODAPÉ -->
@@ -277,6 +282,46 @@
         </p>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- MODAL DE ESQUECI MINHA SENHA                                  -->
+  <!-- ============================================================ -->
+  <div class="fa-overlay" id="fpOverlay" role="dialog" aria-modal="true">
+    <div class="fa-modal" style="max-width:480px;">
+      <div class="fa-header">
+        <div>
+          <h3><i class="bi bi-key"></i> Esqueci minha senha</h3>
+          <p>Vamos enviar um link de redefinição pro seu e-mail</p>
+        </div>
+        <button class="fa-close" id="fpClose" type="button" aria-label="Fechar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+
+      <div class="fa-body">
+        <div id="fpAlert"></div>
+
+        <div class="fa-alert info">
+          <i class="bi bi-info-circle"></i>
+          <span>Digite o e-mail cadastrado no sistema. Você receberá um link com validade
+            de <strong>1 hora</strong> para definir uma nova senha.</span>
+        </div>
+
+        <div class="fa-field">
+          <label for="fpEmail"><i class="bi bi-envelope"></i> E-mail cadastrado</label>
+          <input type="email" id="fpEmail" placeholder="seu.email@cpe.com.br"
+                 maxlength="190" autocomplete="email">
+        </div>
+
+        <div class="fa-actions">
+          <button type="button" class="fa-btn fa-btn-secondary" id="fpCancel">Cancelar</button>
+          <button type="button" class="fa-btn fa-btn-primary" id="fpEnviar">
+            <i class="bi bi-send"></i> Enviar link
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -329,13 +374,35 @@
           <div id="faStep2Alert"></div>
 
           <div class="fa-field">
-            <label for="faName"><i class="bi bi-person"></i> Nome Completo</label>
+            <label for="faName"><i class="bi bi-person"></i> Nome Completo *</label>
             <input type="text" id="faName" placeholder="João da Silva" maxlength="120">
             <div class="hint">Como seu nome aparecerá no sistema.</div>
           </div>
 
           <div class="fa-field">
-            <label for="faPassword"><i class="bi bi-lock"></i> Senha</label>
+            <label for="faCpf"><i class="bi bi-card-text"></i> CPF *</label>
+            <input type="text" id="faCpf" placeholder="000.000.000-00" maxlength="14" inputmode="numeric">
+            <div class="hint">Apenas números — a formatação é automática.</div>
+          </div>
+
+          <div class="fa-field">
+            <label for="faUsername"><i class="bi bi-at"></i> Username (login) *</label>
+            <div style="position:relative;">
+              <input type="text" id="faUsername"
+                     placeholder="ex: joao.silva"
+                     maxlength="50" autocomplete="username"
+                     style="padding-right:38px;">
+              <span id="faUsernameStatus"
+                    style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:16px;"></span>
+            </div>
+            <div class="hint" id="faUsernameHint">
+              3-50 caracteres, sem espaços. Pode usar letras, números, ponto, sublinhado ou hífen.
+              Este será o nome usado para login.
+            </div>
+          </div>
+
+          <div class="fa-field">
+            <label for="faPassword"><i class="bi bi-lock"></i> Senha *</label>
             <div class="fa-pwd-wrap">
               <input type="password" id="faPassword" placeholder="Mínimo 8 caracteres" maxlength="100">
               <button type="button" class="fa-pwd-toggle" id="faPwdToggle" aria-label="Mostrar senha">
@@ -347,12 +414,20 @@
           </div>
 
           <div class="fa-field">
-            <label for="faPasswordConf"><i class="bi bi-lock-fill"></i> Confirme a senha</label>
+            <label for="faPasswordConf"><i class="bi bi-lock-fill"></i> Confirme a senha *</label>
             <input type="password" id="faPasswordConf" placeholder="Repita a senha" maxlength="100">
           </div>
 
           <div class="fa-field">
-            <label><i class="bi bi-folder"></i> Selecione seu Grupo</label>
+            <label for="faUnidade"><i class="bi bi-building"></i> Unidade onde você trabalha *</label>
+            <select id="faUnidade">
+              <option value="">Carregando unidades...</option>
+            </select>
+            <div class="hint">Selecione a unidade CPE onde você está alocado.</div>
+          </div>
+
+          <div class="fa-field">
+            <label><i class="bi bi-folder"></i> Selecione seu Grupo *</label>
             <div class="fa-grupo-list" id="faGrupoList">
               <div style="text-align:center;padding:20px;color:#9CA3AF;">
                 <i class="bi bi-hourglass"></i> Carregando grupos...
@@ -488,6 +563,9 @@
     let nomeSugerido = null;
     let gruposCache  = [];
     let grupoSelecionado = null;
+    let unidadesCache = [];
+    let usernameDisponivel = null;   // null=desconhecido | true | false
+    let usernameCheckTimer = null;
 
     // ---- helpers ----------------------------------------------------------
     function showStep(n) {
@@ -518,11 +596,16 @@
     function abrir() {
       document.getElementById('faEmail').value = '';
       document.getElementById('faName').value = '';
+      document.getElementById('faCpf').value = '';
+      document.getElementById('faUsername').value = '';
+      document.getElementById('faUsernameStatus').innerHTML = '';
       document.getElementById('faPassword').value = '';
       document.getElementById('faPasswordConf').value = '';
+      document.getElementById('faUnidade').innerHTML = '<option value="">Carregando unidades...</option>';
       clearAlert('faStep1Alert');
       clearAlert('faStep2Alert');
       grupoSelecionado = null;
+      usernameDisponivel = null;
       showStep(1);
       overlay.classList.add('show');
       setTimeout(() => document.getElementById('faEmail').focus(), 100);
@@ -563,13 +646,22 @@
         nomeSugerido = data.nome_sugerido;
         if (nomeSugerido) document.getElementById('faName').value = nomeSugerido;
 
+        // Sugere username derivado do email (parte antes do @, lowercase)
+        const sugUser = (emailValido.split('@')[0] || '').toLowerCase().replace(/[^a-z0-9._-]/g, '');
+        if (sugUser) {
+          document.getElementById('faUsername').value = sugUser;
+          // dispara a verificação de disponibilidade
+          verificarUsernameDebounced();
+        }
+
         // Aviso de recusa anterior, se houver
         if (data.recusado_anterior) {
           alert('faStep2Alert', 'warning',
             `<strong>Cadastro anterior recusado:</strong><br>${escapeHtml(data.motivo_recusa || 'Sem motivo informado')}<br><br>Refaça preenchendo os dados corretamente.`);
         }
 
-        await carregarGrupos();
+        // Carrega grupos + unidades em paralelo
+        await Promise.all([carregarGrupos(), carregarUnidades()]);
         showStep(2);
       } catch (err) {
         alert('faStep1Alert', 'danger', 'Erro de conexão: ' + err.message);
@@ -617,6 +709,86 @@
       }
     }
 
+    // ---- step 2: carregar unidades ---------------------------------------
+    async function carregarUnidades() {
+      const sel = document.getElementById('faUnidade');
+      sel.innerHTML = '<option value="">Carregando unidades...</option>';
+      try {
+        const r = await fetch(`${PRECAD}/unidades-publicas`);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        unidadesCache = await r.json();
+
+        if (!unidadesCache.length) {
+          sel.innerHTML = '<option value="">Nenhuma unidade disponível</option>';
+          return;
+        }
+        sel.innerHTML = '<option value="">— Selecione sua unidade —</option>' +
+          unidadesCache.map(u => {
+            const local = u.cidade ? `${u.cidade}${u.uf ? '/' + u.uf : ''}` : (u.uf || '');
+            const label = local ? `${escapeHtml(u.nome)} (${escapeHtml(local)})` : escapeHtml(u.nome);
+            return `<option value="${u.id}">${label}</option>`;
+          }).join('');
+      } catch (err) {
+        sel.innerHTML = `<option value="">Erro ao carregar: ${escapeHtml(err.message)}</option>`;
+      }
+    }
+
+    // ---- step 2: máscara e validação de CPF ------------------------------
+    function aplicarMascaraCPF(valor) {
+      const d = (valor || '').replace(/\D/g, '').substring(0, 11);
+      if (d.length <= 3)  return d;
+      if (d.length <= 6)  return `${d.slice(0,3)}.${d.slice(3)}`;
+      if (d.length <= 9)  return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6)}`;
+      return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9,11)}`;
+    }
+
+    function cpfValido(cpf) {
+      const c = (cpf || '').replace(/\D/g, '');
+      if (c.length !== 11 || /^(\d)\1+$/.test(c)) return false;
+      let soma = 0;
+      for (let i = 0; i < 9; i++) soma += parseInt(c[i]) * (10 - i);
+      let d1 = ((soma * 10) % 11) % 10;
+      if (d1 !== parseInt(c[9])) return false;
+      soma = 0;
+      for (let i = 0; i < 10; i++) soma += parseInt(c[i]) * (11 - i);
+      let d2 = ((soma * 10) % 11) % 10;
+      return d2 === parseInt(c[10]);
+    }
+
+    // ---- step 2: verificação assíncrona de username ----------------------
+    function verificarUsernameDebounced() {
+      clearTimeout(usernameCheckTimer);
+      usernameCheckTimer = setTimeout(verificarUsername, 400);
+    }
+
+    async function verificarUsername() {
+      const u = (document.getElementById('faUsername').value || '').trim().toLowerCase();
+      const statusEl = document.getElementById('faUsernameStatus');
+      usernameDisponivel = null;
+
+      if (!u) { statusEl.innerHTML = ''; return; }
+      if (!/^[a-z0-9._-]{3,50}$/.test(u)) {
+        statusEl.innerHTML = '<i class="bi bi-exclamation-triangle-fill" style="color:#DC2626" title="Formato inválido"></i>';
+        usernameDisponivel = false;
+        return;
+      }
+      statusEl.innerHTML = '<i class="bi bi-hourglass-split" style="color:#9CA3AF" title="Verificando..."></i>';
+
+      try {
+        const r = await fetch(`${PRECAD}/verificar-username?username=${encodeURIComponent(u)}`);
+        const d = await r.json();
+        if (d.disponivel) {
+          statusEl.innerHTML = '<i class="bi bi-check-circle-fill" style="color:#16A34A" title="Username disponível"></i>';
+          usernameDisponivel = true;
+        } else {
+          statusEl.innerHTML = `<i class="bi bi-x-circle-fill" style="color:#DC2626" title="${escapeHtml(d.motivo || 'Indisponível')}"></i>`;
+          usernameDisponivel = false;
+        }
+      } catch (err) {
+        statusEl.innerHTML = '<i class="bi bi-question-circle" style="color:#9CA3AF" title="Falha ao verificar"></i>';
+      }
+    }
+
     // ---- step 2: força da senha ------------------------------------------
     function avaliarSenha(s) {
       let pts = 0;
@@ -634,14 +806,32 @@
 
     // ---- step 2: solicitar cadastro --------------------------------------
     async function solicitar() {
-      const name = document.getElementById('faName').value.trim();
-      const pwd  = document.getElementById('faPassword').value;
-      const pwd2 = document.getElementById('faPasswordConf').value;
+      const name     = document.getElementById('faName').value.trim();
+      const cpf      = document.getElementById('faCpf').value.trim();
+      const username = document.getElementById('faUsername').value.trim().toLowerCase();
+      const pwd      = document.getElementById('faPassword').value;
+      const pwd2     = document.getElementById('faPasswordConf').value;
+      const unitId   = parseInt(document.getElementById('faUnidade').value, 10) || 0;
 
       clearAlert('faStep2Alert');
 
       if (!name || name.length < 3) {
         alert('faStep2Alert', 'danger', 'Informe seu nome completo (mínimo 3 caracteres).');
+        return;
+      }
+      if (!cpfValido(cpf)) {
+        alert('faStep2Alert', 'danger', 'CPF inválido. Confira os 11 dígitos.');
+        document.getElementById('faCpf').focus();
+        return;
+      }
+      if (!/^[a-z0-9._-]{3,50}$/.test(username)) {
+        alert('faStep2Alert', 'danger', 'Username inválido. Use 3-50 caracteres: letras minúsculas, números, ponto, sublinhado ou hífen.');
+        document.getElementById('faUsername').focus();
+        return;
+      }
+      if (usernameDisponivel === false) {
+        alert('faStep2Alert', 'danger', 'Username já está em uso. Escolha outro.');
+        document.getElementById('faUsername').focus();
         return;
       }
       if (pwd.length < 8) {
@@ -650,6 +840,11 @@
       }
       if (pwd !== pwd2) {
         alert('faStep2Alert', 'danger', 'As senhas não coincidem.');
+        return;
+      }
+      if (!unitId) {
+        alert('faStep2Alert', 'danger', 'Selecione a unidade onde você trabalha.');
+        document.getElementById('faUnidade').focus();
         return;
       }
       if (!grupoSelecionado) {
@@ -668,14 +863,20 @@
           body: JSON.stringify({
             email: emailValido,
             name: name,
+            cpf: cpf,
+            username: username,
             password: pwd,
             group_id: grupoSelecionado,
+            unit_id: unitId,
           }),
         });
         const data = await r.json();
 
         if (!r.ok) {
-          alert('faStep2Alert', 'danger', data.detail || 'Erro ao enviar solicitação.');
+          // Pydantic detail pode vir como array — normaliza pra string
+          let msg = data.detail || 'Erro ao enviar solicitação.';
+          if (Array.isArray(msg)) msg = msg.map(e => e.msg || JSON.stringify(e)).join(' / ');
+          alert('faStep2Alert', 'danger', msg);
           return;
         }
 
@@ -711,7 +912,100 @@
       const inp = document.getElementById('faPassword');
       inp.type = inp.type === 'password' ? 'text' : 'password';
     });
+
+    // CPF: máscara automática em tempo real
+    document.getElementById('faCpf').addEventListener('input', (e) => {
+      e.target.value = aplicarMascaraCPF(e.target.value);
+    });
+
+    // Username: força lowercase + checagem assíncrona de disponibilidade
+    document.getElementById('faUsername').addEventListener('input', (e) => {
+      e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '');
+      verificarUsernameDebounced();
+    });
+
     overlay.addEventListener('click', e => { if (e.target === overlay) fechar(); });
+  })();
+  </script>
+
+  <!-- ============================================================ -->
+  <!-- LÓGICA DO ESQUECI MINHA SENHA                                 -->
+  <!-- ============================================================ -->
+  <script>
+  (function () {
+    'use strict';
+    const API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
+    const fpOverlay = document.getElementById('fpOverlay');
+    const fpAlert   = document.getElementById('fpAlert');
+    const fpEmail   = document.getElementById('fpEmail');
+    const fpEnviar  = document.getElementById('fpEnviar');
+
+    function mostrarAlerta(tipo, msg) {
+      const icones = { danger: 'exclamation-circle', success: 'check-circle', warning: 'exclamation-triangle', info: 'info-circle' };
+      fpAlert.innerHTML = `<div class="fa-alert ${tipo}"><i class="bi bi-${icones[tipo] || 'info-circle'}"></i><span>${msg}</span></div>`;
+    }
+    function limparAlerta() { fpAlert.innerHTML = ''; }
+
+    function abrir() {
+      fpEmail.value = '';
+      // Pré-preenche se já tem algo no campo de credencial do login
+      const credEl = document.getElementById('credential');
+      if (credEl && credEl.value && credEl.value.includes('@')) fpEmail.value = credEl.value.trim();
+      limparAlerta();
+      fpOverlay.classList.add('show');
+      setTimeout(() => fpEmail.focus(), 100);
+    }
+    function fechar() { fpOverlay.classList.remove('show'); }
+
+    async function enviarLink() {
+      const email = (fpEmail.value || '').trim().toLowerCase();
+      limparAlerta();
+
+      if (!email || !email.includes('@')) {
+        mostrarAlerta('danger', 'Informe um e-mail válido.');
+        return;
+      }
+
+      fpEnviar.disabled = true;
+      fpEnviar.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando...';
+
+      try {
+        const r = await fetch(`${API}/api/auth/forgot-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await r.json().catch(() => ({}));
+
+        if (!r.ok) {
+          mostrarAlerta('danger', data.detail || 'Erro ao solicitar o link.');
+          return;
+        }
+
+        mostrarAlerta('success',
+          '<strong>Pronto!</strong> Se este e-mail estiver cadastrado, você receberá o link em alguns minutos. ' +
+          'Verifique também sua caixa de spam. O link vale por 1 hora.');
+        fpEnviar.innerHTML = '<i class="bi bi-check-lg"></i> Enviado';
+        setTimeout(() => {
+          fechar();
+          fpEnviar.disabled = false;
+          fpEnviar.innerHTML = '<i class="bi bi-send"></i> Enviar link';
+        }, 4000);
+      } catch (err) {
+        mostrarAlerta('danger', 'Erro de conexão: ' + err.message);
+        fpEnviar.disabled = false;
+        fpEnviar.innerHTML = '<i class="bi bi-send"></i> Enviar link';
+      }
+    }
+
+    document.getElementById('btnForgotPassword').addEventListener('click', abrir);
+    document.getElementById('fpClose').addEventListener('click', fechar);
+    document.getElementById('fpCancel').addEventListener('click', fechar);
+    fpEnviar.addEventListener('click', enviarLink);
+    fpEmail.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); enviarLink(); }
+    });
+    fpOverlay.addEventListener('click', e => { if (e.target === fpOverlay) fechar(); });
   })();
   </script>
 
