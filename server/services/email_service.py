@@ -561,3 +561,107 @@ def email_ticket_finalizado(
     """
     html = _BASE_TEMPLATE.format(title="Chamado finalizado", tag="Resolvido", body=body)
     return subject, html
+
+
+# =====================================================================
+# Templates: Cadastro aprovado + Reset de senha
+# =====================================================================
+def email_cadastro_aprovado(
+    nome: str,
+    username: str,
+    grupo_nome: str | None,
+    link_login: str,
+) -> tuple[str, str]:
+    """E-mail para o usuário quando o admin aprova o pré-cadastro.
+
+    NÃO contém a senha (já foi definida pelo próprio usuário no primeiro
+    acesso e está armazenada como hash). Apenas confirma o username e
+    aponta o link de login.
+    """
+    subject = "Seu cadastro foi aprovado — CPE Control"
+    grupo_info = (
+        _info_box("Seu grupo", grupo_nome) if grupo_nome else ""
+    )
+    body = f"""
+        <p>Olá <strong>{_escape(nome)}</strong>,</p>
+        <p>Boa notícia! Seu cadastro no <strong>CPE Control</strong> foi
+        <span style="color:#16A34A;font-weight:600;">aprovado pelo administrador</span>
+        e você já pode entrar no sistema.</p>
+
+        {_info_box("Seu nome de usuário (login)", username)}
+        {grupo_info}
+
+        <div style="margin:18px 0 6px;padding:14px 16px;background:#fffbeb;
+                    border-left:4px solid #F59E0B;border-radius:6px;font-size:13px;">
+          <strong>🔐 Sua senha</strong> é a mesma que você cadastrou no formulário de
+          primeiro acesso. Por segurança, ela não é enviada por e-mail.<br>
+          Esqueceu? Use o link <em>“Esqueci minha senha”</em> na tela de login.
+        </div>
+
+        <p style="text-align:center;margin:24px 0 8px;">
+          <a href="{_escape(link_login)}"
+             style="display:inline-block;padding:12px 28px;background:#FFC107;
+                    color:#1A1A1A;font-weight:700;font-size:14px;text-decoration:none;
+                    border-radius:8px;box-shadow:0 4px 12px rgba(255,193,7,.35);">
+            🚀 Acessar o sistema
+          </a>
+        </p>
+
+        <p style="font-size:12px;color:#6B7280;text-align:center;margin-top:8px;">
+          Se o botão não funcionar, copie e cole este link no navegador:<br>
+          <span style="word-break:break-all;">{_escape(link_login)}</span>
+        </p>
+    """
+    html = _BASE_TEMPLATE.format(title="Cadastro aprovado", tag="Bem-vindo(a)", body=body)
+    return subject, html
+
+
+def email_reset_senha(
+    nome: str,
+    link_reset: str,
+    ip_origem: str,
+    minutos_validade: int = 60,
+) -> tuple[str, str]:
+    """E-mail com link pra redefinir a senha. Token válido por 1h (default).
+
+    Inclui IP que solicitou (audit) — se não foi o próprio usuário, ele
+    sabe que alguém tentou comprometer a conta.
+    """
+    subject = "Redefinir senha — CPE Control"
+    body = f"""
+        <p>Olá <strong>{_escape(nome)}</strong>,</p>
+        <p>Recebemos uma solicitação para <strong>redefinir a senha</strong>
+        da sua conta no <strong>CPE Control</strong>.</p>
+
+        <p style="text-align:center;margin:24px 0 8px;">
+          <a href="{_escape(link_reset)}"
+             style="display:inline-block;padding:12px 28px;background:#FFC107;
+                    color:#1A1A1A;font-weight:700;font-size:14px;text-decoration:none;
+                    border-radius:8px;box-shadow:0 4px 12px rgba(255,193,7,.35);">
+            🔑 Redefinir minha senha
+          </a>
+        </p>
+
+        <p style="font-size:12px;color:#6B7280;text-align:center;margin-top:8px;">
+          Se o botão não funcionar, copie e cole este link no navegador:<br>
+          <span style="word-break:break-all;">{_escape(link_reset)}</span>
+        </p>
+
+        <div style="margin:20px 0 6px;padding:14px 16px;background:#fef2f2;
+                    border-left:4px solid #DC2626;border-radius:6px;font-size:13px;">
+          <strong>⚠️ Atenção:</strong>
+          <ul style="margin:6px 0 0;padding-left:18px;color:#7f1d1d;">
+            <li>O link expira em <strong>{minutos_validade} minutos</strong>.</li>
+            <li>Ele só pode ser usado <strong>uma única vez</strong>.</li>
+            <li>Solicitado a partir do IP: <code>{_escape(ip_origem)}</code></li>
+          </ul>
+        </div>
+
+        <p style="margin-top:18px;font-size:13px;color:#374151;">
+          <strong>Você NÃO solicitou esta troca?</strong> Pode ignorar este e-mail —
+          sua senha atual continua válida. Se isto acontecer com frequência, avise o time
+          de TI para investigar.
+        </p>
+    """
+    html = _BASE_TEMPLATE.format(title="Redefinir senha", tag="Segurança", body=body)
+    return subject, html
