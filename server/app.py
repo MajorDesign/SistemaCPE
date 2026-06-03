@@ -292,22 +292,16 @@ from fastapi.responses import JSONResponse
 _MAX_BODY_BYTES   = int(os.getenv("MAX_BODY_MB", "50")) * 1024 * 1024
 _REQ_PER_MIN      = int(os.getenv("RATE_LIMIT_PER_MIN", "120"))
 _REQ_WINDOW_SEC   = 60
-_AUTH_FAIL_MAX    = int(os.getenv("AUTH_FAIL_MAX", "30"))
-_AUTH_FAIL_WINDOW = int(os.getenv("AUTH_FAIL_WINDOW_SEC", "600"))   # 10 min
-_AUTH_BAN_SEC     = int(os.getenv("AUTH_BAN_SEC", "900"))           # 15 min
-
-# IPs internos/confiáveis nunca são banidos (LAN + loopback)
-_TRUSTED_IP_PREFIXES = ("127.", "10.", "192.168.", "172.16.", "172.17.", "172.18.",
-                        "172.19.", "172.20.", "172.21.", "172.22.", "172.23.",
-                        "172.24.", "172.25.", "172.26.", "172.27.", "172.28.",
-                        "172.29.", "172.30.", "172.31.", "::1")
 
 # Caminhos isentos do rate-limit (healthcheck, docs, static)
 _RATE_EXEMPT_PREFIXES = ("/health", "/uploads/", "/docs", "/redoc", "/openapi.json")
 
 _REQ_LOG       = {}   # ip -> deque[timestamps]
-_AUTH_FAILURES = {}   # ip -> deque[timestamps]
-_AUTH_BANNED   = {}   # ip -> unban_timestamp
+# _AUTH_FAILURES / _AUTH_BANNED mantidos vazios pra compatibilidade dos
+# endpoints /api/security/banned e /api/security/unban/{ip} continuarem
+# respondendo (sem efeito prático, ja que ninguem mais grava neles).
+_AUTH_FAILURES = {}
+_AUTH_BANNED   = {}
 
 def _client_ip(request: Request) -> str:
     fwd = request.headers.get("X-Forwarded-For", "")
@@ -364,34 +358,27 @@ async def abuse_protection(request: Request, call_next):
     # Processa a request
     response = await call_next(request)
 
-    # (4) Fail2ban: registra erros de AUTH para banir IPs externos abusivos.
-    #     Regras (afinadas para evitar banir usuários legítimos):
-    #       - Só conta 401 (token inválido/expirado) — não 403 (autorização de role)
-    #       - Ignora /api/auth/login (já tem rate-limit dedicado)
-    #       - Ignora IPs da rede interna confiável
-    is_trusted = ip.startswith(_TRUSTED_IP_PREFIXES)
-    is_auth_failure = (
-        response.status_code == 401
-        and path.startswith("/api/")
-        and not path.startswith("/api/auth/login")
-    )
-    if is_auth_failure and not is_trusted:
-        fails = _AUTH_FAILURES.setdefault(ip, deque())
-        while fails and now - fails[0] > _AUTH_FAIL_WINDOW:
-            fails.popleft()
-        fails.append(now)
-        if len(fails) >= _AUTH_FAIL_MAX:
-            _AUTH_BANNED[ip] = now + _AUTH_BAN_SEC
-            fails.clear()
-            logger.warning(
-                f"[SEC] 🚫 IP {ip} BANIDO por {_AUTH_BAN_SEC // 60}min — "
-                f"{_AUTH_FAIL_MAX} erros 401 em {_AUTH_FAIL_WINDOW}s"
-            )
+    # (4) Fail2ban GLOBAL de 401 — DESATIVADO em 2026-06-03.
+    #     Razão: numa SPA real, 401 é comportamento ESPERADO quando o token
+    #     de sessão (12h) expira. Várias chamadas paralelas (chat-notifier,
+    #     polling de notificações, WebSocket reconnect, etc) batem 401 ao
+    #     mesmo tempo. Com vários usuários atrás do mesmo NAT corporativo,
+    #     o IP público inteiro era banido — bloqueando toda a empresa.
+    #
+    #     A proteção real contra brute-force está em DOIS lugares ativos:
+    #       - Rate limit por IP: _REQ_PER_MIN (120/min) — anti-DDoS, item (3) acima
+    #       - Rate limit de LOGIN: _check_rate_limit no /api/auth/login
+    #         (5 tentativas em 5min → bloqueio 15min) — única rota onde 401
+    #         legitimamente indica força bruta de credenciais.
+    #
+    #     Para reativar (se um dia for necessário pra ataques fora do /login),
+    #     filtre por endpoints específicos (não /api/* genérico).
 
     return response
 
-logger.info(f"✅ Anti-abuso ativo: {_REQ_PER_MIN} req/min, body max {_MAX_BODY_BYTES // 1024 // 1024}MB, "
-            f"ban após {_AUTH_FAIL_MAX} erros 401 em {_AUTH_FAIL_WINDOW}s\n")
+logger.info(f"✅ Anti-abuso ativo: {_REQ_PER_MIN} req/min, body max {_MAX_BODY_BYTES // 1024 // 1024}MB. "
+            f"Fail2ban de 401 desativado (token expirado != ataque). "
+            f"Brute-force de login: 5 tentativas/5min via _check_rate_limit.\n")
 
 
 # Endpoints administrativos para gerenciar bloqueios em runtime
@@ -1533,6 +1520,16 @@ try:
     logger.info("✅ Router de Meetings registrado: /api/meetings (REST + WS /ws)")
 except Exception as err:
     logger.error(f"❌ Erro ao registrar router de Meetings: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+# ✅ REGISTRAR ROUTER DE BASE DE CONHECIMENTO (KB)
+try:
+    from routes.knowledge_base import router as kb_router
+    app.include_router(kb_router)
+    logger.info("✅ Router de Knowledge Base registrado: /api/kb")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Knowledge Base: {str(err)}")
     import traceback
     logger.error(traceback.format_exc())
 
