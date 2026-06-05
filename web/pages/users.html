@@ -1538,6 +1538,20 @@ function renderUsers(list = users) {
         if (!r.ok) throw new Error('HTTP ' + r.status);
         pendentes = await r.json();
         renderPendentes();
+        // Deep-link via ?focus=pendentes (vem da notificação no sino):
+        // depois de renderizar, faz scroll suave + destaque temporário.
+        const focusParam = new URLSearchParams(location.search).get('focus');
+        if (focusParam === 'pendentes' && pendentes.length) {
+          setTimeout(() => {
+            const sec = document.getElementById('pcPendentesSection');
+            if (!sec) return;
+            sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Pulso visual de 2s pra chamar atenção
+            const oldStyle = sec.style.cssText;
+            sec.style.cssText += ';transition:box-shadow .4s;box-shadow:0 0 0 4px #FFC107';
+            setTimeout(() => { sec.style.cssText = oldStyle; }, 2000);
+          }, 200);
+        }
       } catch (err) {
         console.error('[PRECAD] Erro ao carregar pendentes:', err.message);
       }

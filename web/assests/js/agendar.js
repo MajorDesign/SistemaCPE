@@ -31,8 +31,19 @@ function setErro(msg) {
   if (msg) { box.textContent = msg; box.style.display = 'block'; box.scrollIntoView({ block: 'center' }); }
   else { box.style.display = 'none'; }
 }
+/* Token de funcionário CPE — manda em todas as chamadas. Quando ausente,
+   o backend retorna só treinamentos (cursos ficam ocultos). */
+function _cpeAuthToken() {
+  return localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token')
+      || localStorage.getItem('token')     || sessionStorage.getItem('token')
+      || '';
+}
+
 async function get(path) {
-  const r = await fetch(API + path);
+  const headers = {};
+  const tok = _cpeAuthToken();
+  if (tok) headers['X-Auth-Token'] = tok;
+  const r = await fetch(API + path, { headers });
   if (!r.ok) {
     const e = await r.json().catch(() => ({}));
     throw new Error(e.detail || ('Erro ' + r.status));
@@ -86,30 +97,62 @@ async function escolherModalidade(m) {
   renderCards();
 }
 
+/* Detecta se o visitante é funcionário CPE logado (token salvo no storage).
+   - Funcionário CPE: vê cursos + treinamentos (cursos são privados).
+   - Visitante anônimo: vê só treinamentos (link público padrão).
+   Esta validação acontece DUAS vezes:
+   1) Aqui no frontend: UX (esconde elementos de curso)
+   2) No backend: segurança real (mesmo se hackearem o front, o backend
+      filtra cursos quando a request não vem com token válido) */
+function _ehFuncionarioCPE() {
+  const t = localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token')
+         || localStorage.getItem('token')     || sessionStorage.getItem('token');
+  const u = localStorage.getItem('cpe_user')  || sessionStorage.getItem('cpe_user')
+         || localStorage.getItem('user')      || sessionStorage.getItem('user');
+  return !!(t && u);
+}
+
 function renderCards() {
   const busca = (el('buscaAgenda').value || '').toLowerCase();
-  // so unidades fisicas aparecem na landing (online tem fluxo proprio)
-  const lista = agendasPub.filter(a => a.tipo !== 'online').filter(a => {
-    if (!busca) return true;
-    const naServico = (a.servicos || []).some(s => s.nome.toLowerCase().includes(busca));
-    return a.nome.toLowerCase().includes(busca) || naServico;
-  });
+  const ehFunc = _ehFuncionarioCPE();
+  // Ofertas visíveis:
+  //   - treinamentos: SEMPRE públicos (qualquer cliente)
+  //   - cursos + drones: SÓ se funcionário CPE logado (privados)
+  const _ofertasDe = a => {
+    const trn = a.treinamentos || [];
+    if (!ehFunc) return trn;
+    return trn.concat(a.servicos || []).concat(a.drones || []);
+  };
+  const _labelOferta = (n) => n === 1 ? '1 atendimento disponível'
+                                      : n + ' atendimentos disponíveis';
+  const lista = agendasPub
+    // só físicas aparecem na landing (online tem fluxo próprio)
+    .filter(a => a.tipo !== 'online')
+    // esconde agendas SEM ofertas visíveis para o visitante atual.
+    // Anônimo não vê agenda só de drones; funcionário CPE vê tudo.
+    .filter(a => _ofertasDe(a).length > 0)
+    .filter(a => {
+      if (!busca) return true;
+      const naOferta = _ofertasDe(a).some(s => s.nome.toLowerCase().includes(busca));
+      return a.nome.toLowerCase().includes(busca) || naOferta;
+    });
   const box = el('cardsAgendas');
   if (!lista.length) {
     box.innerHTML = '<div class="ag-loading">Nenhuma unidade encontrada.</div>';
     return;
   }
   box.innerHTML = lista.map(a => {
-    const total = (a.servicos || []).length;
+    const ofertas = _ofertasDe(a);
+    const total = ofertas.length;
     const btnSrv = total
       ? `<button type="button" class="ag-card-srv-btn"
             onclick="abrirModalServicos(${a.id})">
           <i class="bi bi-list-check"></i>
-          <span>Ver ${total} serviço${total === 1 ? '' : 's'} disponíve${total === 1 ? 'l' : 'is'}</span>
+          <span>Ver ${_labelOferta(total)}</span>
           <i class="bi bi-chevron-right ag-card-srv-chev"></i>
          </button>`
       : `<div class="ag-card-srv-empty">
-          <i class="bi bi-info-circle"></i> Nenhum serviço cadastrado
+          <i class="bi bi-info-circle"></i> Nenhum atendimento disponível
          </div>`;
     return `<div class="ag-card">
       <div class="ag-card-nome">${esc(a.nome)}</div>
@@ -121,27 +164,37 @@ function renderCards() {
   }).join('');
 }
 
-/* ============ MODAL: servicos + treinamentos da unidade ============ */
+/* ============ MODAL: ofertas da unidade ============ */
+/* Treinamentos: sempre visíveis (públicos).
+   Cursos e Drones: SÓ visíveis para funcionários CPE logados (privados). */
 function abrirModalServicos(agendaId) {
   const a = agendasPub.find(x => x.id === agendaId);
   if (!a) return;
   el('modalServicosTitulo').textContent = a.nome;
   const lista = el('modalServicosLista');
-  const srv = a.servicos || [];
+  const ehFunc = _ehFuncionarioCPE();
+  const srv = ehFunc ? (a.servicos || []) : [];   // cursos só p/ funcionário
   const trn = a.treinamentos || [];
+  const drn = ehFunc ? (a.drones || [])   : [];   // drones só p/ funcionário
+
+  const tagPrivado = '<span style="font-size:.75rem;color:#FFC107;background:#1A1A1A;padding:2px 8px;border-radius:10px;margin-left:6px;font-weight:600">PRIVADO · CPE</span>';
 
   const blocos = [];
-  if (srv.length) {
-    blocos.push('<div class="ag-modal-secao-titulo"><i class="bi bi-mortarboard"></i> Cursos</div>');
-    blocos.push(srv.map(s => _renderOferta(s, 'curso')).join(''));
-  }
   if (trn.length) {
     blocos.push('<div class="ag-modal-secao-titulo"><i class="bi bi-easel"></i> Treinamentos</div>');
     blocos.push(trn.map(t => _renderOferta(t, 'treinamento')).join(''));
   }
+  if (drn.length) {
+    blocos.push(`<div class="ag-modal-secao-titulo"><i class="bi bi-airplane-engines-fill"></i> Drones ${tagPrivado}</div>`);
+    blocos.push(drn.map(d => _renderOferta(d, 'drone')).join(''));
+  }
+  if (srv.length) {
+    blocos.push(`<div class="ag-modal-secao-titulo"><i class="bi bi-mortarboard"></i> Cursos ${tagPrivado}</div>`);
+    blocos.push(srv.map(s => _renderOferta(s, 'curso')).join(''));
+  }
   lista.innerHTML = blocos.length
     ? blocos.join('')
-    : '<li class="ag-modal-srv-empty">Nenhum serviço ou treinamento cadastrado.</li>';
+    : '<li class="ag-modal-srv-empty">Nenhum atendimento disponível nesta unidade.</li>';
 
   const btn = el('modalServicosAgendar');
   btn.onclick = () => { fecharModalServicos(); abrirForm(agendaId); };
@@ -168,12 +221,15 @@ function _renderOferta(item, kind) {
         ${videos.length    ? `<span><i class="bi bi-camera-video"></i> ${videos.length}</span>` : ''}
       </div>`
     : '';
+  const tag = kind === 'treinamento' ? '<span class="ag-oferta-tag">Treinamento</span>'
+            : kind === 'drone'       ? '<span class="ag-oferta-tag" style="background:#0d9488;color:#fff">Drone</span>'
+            : '';
   return `<div class="ag-oferta-card-compact" onclick="abrirDetalheOferta(${item.id}, '${kind}')">
     ${capa}
     ${badgeMidia}
     <div class="ag-oferta-content">
       <div class="ag-oferta-nome">${esc(item.nome)}
-        ${kind === 'treinamento' ? '<span class="ag-oferta-tag">Treinamento</span>' : ''}</div>
+        ${tag}</div>
       <div class="ag-oferta-meta-row">
         <span class="ag-oferta-meta"><i class="bi bi-clock"></i> ${item.duracao_min} min</span>
         ${item.instrutor ? `<span class="ag-oferta-meta"><i class="bi bi-person-badge"></i> ${esc(item.instrutor)}</span>` : ''}
@@ -192,12 +248,16 @@ function abrirDetalheOferta(itemId, kind) {
   const tituloAgenda = el('modalServicosTitulo').textContent;
   const ag = agendasPub.find(a => a.nome === tituloAgenda);
   if (!ag) return;
-  const lista = kind === 'treinamento' ? (ag.treinamentos || []) : (ag.servicos || []);
+  const lista = kind === 'treinamento' ? (ag.treinamentos || [])
+              : kind === 'drone'       ? (ag.drones || [])
+              :                          (ag.servicos || []);
   const item = lista.find(x => x.id === itemId);
   if (!item) return;
 
   // header
-  el('detalheEyebrow').textContent = kind === 'treinamento' ? 'Treinamento' : 'Curso';
+  el('detalheEyebrow').textContent = kind === 'treinamento' ? 'Treinamento'
+                                   : kind === 'drone'       ? 'Drone'
+                                   :                          'Curso';
   el('detalheTitulo').textContent = item.nome;
 
   // body
@@ -246,8 +306,11 @@ function abrirDetalheOferta(itemId, kind) {
   `;
 
   // botao "Agendar este" — fecha tudo e abre o form com a oferta pre-selecionada
+  const labelKind = kind === 'treinamento' ? 'treinamento'
+                  : kind === 'drone'       ? 'drone'
+                  :                          'curso';
   el('detalheBtnAgendar').innerHTML =
-    `<i class="bi bi-calendar-check"></i> Agendar este ${kind === 'treinamento' ? 'treinamento' : 'curso'}`;
+    `<i class="bi bi-calendar-check"></i> Agendar este ${labelKind}`;
   el('detalheBtnAgendar').onclick = () => {
     fecharDetalhe();
     fecharModalServicos();
@@ -448,21 +511,29 @@ function onAgendaChange() {
   } else {
     el('boxInstrucoes').style.display = 'none';
   }
-  // serviços + treinamentos da agenda (agrupados via <optgroup>)
+  // Treinamentos: sempre visíveis. Cursos e Drones: só para funcionários CPE.
   const fs = el('fServico');
-  const cursos = (agendaSel && agendaSel.servicos) || [];
+  const ehFunc = _ehFuncionarioCPE();
+  const cursos  = ehFunc ? ((agendaSel && agendaSel.servicos) || []) : [];
   const treinos = (agendaSel && agendaSel.treinamentos) || [];
-  let html = '<option value="">--- Escolha um serviço ---</option>';
-  if (cursos.length) {
-    html += '<optgroup label="Cursos">';
-    html += cursos.map(s =>
-      `<option value="servico:${s.id}">${esc(s.nome)}</option>`).join('');
-    html += '</optgroup>';
-  }
+  const drones  = ehFunc ? ((agendaSel && agendaSel.drones) || []) : [];
+  let html = '<option value="">--- Escolha um atendimento ---</option>';
   if (treinos.length) {
     html += '<optgroup label="Treinamentos">';
     html += treinos.map(t =>
       `<option value="treinamento:${t.id}">${esc(t.nome)}</option>`).join('');
+    html += '</optgroup>';
+  }
+  if (cursos.length) {
+    html += '<optgroup label="Cursos (CPE)">';
+    html += cursos.map(s =>
+      `<option value="servico:${s.id}">${esc(s.nome)}</option>`).join('');
+    html += '</optgroup>';
+  }
+  if (drones.length) {
+    html += '<optgroup label="Drones (CPE)">';
+    html += drones.map(d =>
+      `<option value="drone:${d.id}">${esc(d.nome)}</option>`).join('');
     html += '</optgroup>';
   }
   fs.innerHTML = html;
@@ -471,16 +542,16 @@ function onAgendaChange() {
 }
 
 /* Decodifica o value do select 'fServico' (formato 'tipo:ID') em
-   { servico_id, treinamento_id } pronto pra query string. */
+   { servico_id, treinamento_id, drone_id } pronto pra query string. */
 function _ofertaSelecionada() {
   const v = (el('fServico').value || '').split(':');
   if (v.length !== 2) return null;
   const [tipo, idStr] = v;
   const id = parseInt(idStr);
   if (!id) return null;
-  return tipo === 'treinamento'
-    ? { treinamento_id: id }
-    : { servico_id: id };
+  if (tipo === 'treinamento') return { treinamento_id: id };
+  if (tipo === 'drone')       return { drone_id: id };
+  return { servico_id: id };
 }
 
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -499,8 +570,29 @@ function resetCalendario() {
   el('agSlots').innerHTML = '';
 }
 
-function onServicoChange() { carregarDias(); }
+function onServicoChange() { _ajustarModalidadesPorOferta(); carregarDias(); }
 function onModalidadeChange() { carregarDias(); }
+
+/* Curso e Drone são APENAS presenciais — quando o cliente seleciona um deles,
+   esconde a opção "Online" e marca "Presencial" automaticamente.
+   Treinamento mantém as duas opções. */
+function _ajustarModalidadesPorOferta() {
+  const oferta = _ofertaSelecionada();
+  const radioPres = document.querySelector('input[name="modalidade"][value="presencial"]');
+  const radioOnl  = document.querySelector('input[name="modalidade"][value="online"]');
+  if (!radioPres || !radioOnl) return;
+  const labelOnl = radioOnl.closest('label');
+
+  const soPresencial = oferta && (oferta.servico_id || oferta.drone_id);
+  if (soPresencial) {
+    if (labelOnl) labelOnl.style.display = 'none';
+    radioOnl.checked = false;
+    radioPres.checked = true;
+  } else {
+    // Treinamento: ambas
+    if (labelOnl) labelOnl.style.display = '';
+  }
+}
 
 // O calendário só carrega depois que serviço E modalidade foram escolhidos —
 // a disponibilidade dos dias depende da modalidade.
@@ -629,9 +721,9 @@ async function prepararPasso2() {
   const cx = el('listaEquipamentos');
   cx.innerHTML = '<div class="ag-help">Carregando...</div>';
   if (!oferta) { el('boxEquipamentos').style.display = 'none'; return; }
-  const path = oferta.servico_id
-    ? `/servicos/${oferta.servico_id}/equipamentos`
-    : `/treinamentos/${oferta.treinamento_id}/equipamentos`;
+  const path = oferta.servico_id      ? `/servicos/${oferta.servico_id}/equipamentos`
+             : oferta.treinamento_id  ? `/treinamentos/${oferta.treinamento_id}/equipamentos`
+             :                          `/drones/${oferta.drone_id}/equipamentos`;
   try {
     const d = await get(path);
     const eqs = d.equipamentos || [];
@@ -741,9 +833,12 @@ async function enviarAgendamento() {
   const btn = el('btnEnviar');
   btn.disabled = true;
   try {
+    const _h = { 'Content-Type': 'application/json' };
+    const _tok = _cpeAuthToken();
+    if (_tok) _h['X-Auth-Token'] = _tok;
     const r = await fetch(API + '/agendar', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: _h,
       body: JSON.stringify(payload),
     });
     const d = await r.json().catch(() => ({}));
@@ -768,6 +863,12 @@ async function enviarAgendamento() {
 //   - Deep link ?modalidade=online     : pula tela 0, abre form da agenda online
 //   - Deep link ?agenda=ID             : compatibilidade — abre form daquela agenda
 async function bootstrap() {
+  // Badge "Logado como funcionário CPE" — ativa se houver token salvo
+  if (_ehFuncionarioCPE()) {
+    const badge = document.getElementById('cpeFuncBadge');
+    if (badge) badge.style.display = 'block';
+  }
+
   await carregarAgendas();
 
   const params = new URLSearchParams(window.location.search);
