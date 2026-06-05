@@ -909,6 +909,9 @@ async function handleNotificationClick(notificationId, ticketId, tipo) {
     } else if (tipo === 'lembrete_agenda') {
       // Lembrete de compromisso → abre a Agenda
       window.location.href = '/SistemaCPE/web/pages/agenda.html';
+    } else if (tipo === 'pre_cadastro_pendente') {
+      // Solicitação de cadastro → abre Usuários focando na seção de pendentes
+      window.location.href = '/SistemaCPE/web/pages/users.html?focus=pendentes';
     } else if (tiposReuniao.has(tipo) && ticketId) {
       // Convite/resposta de reunião → ir para Recepção e abrir a reserva
       window.location.href = `/SistemaCPE/web/pages/recepcao.html?reserva_id=${ticketId}`;

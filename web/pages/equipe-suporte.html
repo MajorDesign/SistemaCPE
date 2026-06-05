@@ -7,7 +7,7 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/equipe-suporte.css?v=2026-06-03">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/equipe-suporte.css?v=2026-06-05">
 
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-06-03"></script>
@@ -50,6 +50,9 @@
         </div>
         <div class="sup-nav-item" data-section="treinamentos" onclick="showSection('treinamentos')">
           <i class="bi bi-easel"></i><span class="sup-nav-label">Treinamentos</span>
+        </div>
+        <div class="sup-nav-item" data-section="drones" onclick="showSection('drones')">
+          <i class="bi bi-airplane-engines-fill"></i><span class="sup-nav-label">Drones</span>
         </div>
         <div class="sup-nav-item" data-section="equipamentos" onclick="showSection('equipamentos')">
           <i class="bi bi-pc-display"></i><span class="sup-nav-label">Equipamentos</span>
@@ -282,6 +285,41 @@
                 <th>Mídia</th><th>Status</th><th></th>
               </tr></thead>
               <tbody id="tbodyTreinamentos">
+                <tr><td colspan="7" class="sup-empty">Selecione uma agenda.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====== DRONES (espelho de treinamentos, sem colisão com curso/treino) ====== -->
+      <section class="sup-page" id="page-drones">
+        <div class="sup-page-header">
+          <span class="sup-page-title">Drones por unidade</span>
+        </div>
+        <div class="sup-card">
+          <p class="sup-help" style="margin-bottom:14px">
+            <i class="bi bi-info-circle"></i>
+            Drone usa recurso próprio (drone físico) — pode coexistir no mesmo
+            horário com cursos e treinamentos. Aparece no link público para qualquer cliente.
+          </p>
+          <div class="sup-page-header" style="margin-bottom:14px">
+            <div class="sup-field" style="margin:0;min-width:280px">
+              <label>Unidade / Agenda</label>
+              <select class="sup-select" id="droneAgendaSel" onchange="carregarDrones()"></select>
+            </div>
+            <span class="sup-spacer"></span>
+            <button class="btn-sup btn-sup-primary" onclick="novoDrone()" data-need-admin>
+              <i class="bi bi-plus-lg"></i> Novo drone
+            </button>
+          </div>
+          <div class="sup-table-wrap">
+            <table class="sup-table">
+              <thead><tr>
+                <th>Drone</th><th>Instrutor</th><th>Vendedor</th><th>Duração</th>
+                <th>Mídia</th><th>Status</th><th></th>
+              </tr></thead>
+              <tbody id="tbodyDrones">
                 <tr><td colspan="7" class="sup-empty">Selecione uma agenda.</td></tr>
               </tbody>
             </table>
@@ -793,6 +831,163 @@
     </div>
   </div>
 
+  <!-- ============ MODAL: DRONE (espelho de treinamento) ============ -->
+  <div class="sup-modal-overlay" id="modalDrone">
+    <div class="sup-modal lg">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-airplane-engines-fill"></i>
+          <span id="modalDroneTitulo">Novo drone</span></span>
+        <button class="sup-modal-close" onclick="fecharModal('modalDrone')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroDrone"></div>
+        <input type="hidden" id="droneId">
+        <div class="sup-field">
+          <label>Nome do drone *</label>
+          <input type="text" class="sup-input" id="droneNome" maxlength="150"
+                 placeholder="Ex: DJI Mavic 3 Pro / Aluguel completo">
+        </div>
+        <div class="sup-field">
+          <label>Descrição <small style="color:#6b7280">(visível pro cliente no público)</small></label>
+          <textarea class="sup-textarea" id="droneDescricao" maxlength="2000"
+                    placeholder="Características do drone, autonomia, propósito..."></textarea>
+        </div>
+        <div class="sup-field">
+          <label>Duração do atendimento (minutos) *</label>
+          <input type="number" class="sup-input" id="droneDuracao" value="60"
+                 min="5" max="1440" step="5">
+        </div>
+        <div class="sup-grid-2" id="droneCapWrap">
+          <div class="sup-field" id="droneCapPresencialWrap">
+            <label>Capacidade presencial</label>
+            <input type="number" class="sup-input" id="droneCapPresencial" value="1"
+                   min="1" max="999">
+          </div>
+          <div class="sup-field" id="droneCapOnlineWrap">
+            <label>Capacidade online</label>
+            <input type="number" class="sup-input" id="droneCapOnline" value="1"
+                   min="1" max="999">
+          </div>
+        </div>
+        <div class="sup-field">
+          <label>Piloto / Operador <small style="color:#6b7280">(usuário do grupo Drone)</small></label>
+          <select class="sup-select" id="droneInstrutorSel" onchange="onDroneInstrutorChange()">
+            <option value="">— Sem piloto padrão —</option>
+          </select>
+          <div class="sup-help">
+            Cadastre usuários no <strong>grupo "Drone"</strong> em Grupos para que apareçam aqui.
+            <a href="#" onclick="toggleDroneInstrutorManual(); return false;" style="color:#92400e;font-weight:600;">
+              Não está na lista? Digite manualmente
+            </a>
+          </div>
+        </div>
+        <div class="sup-field" id="droneInstrutorManualWrap" style="display:none">
+          <label>Piloto manual</label>
+          <input type="text" class="sup-input" id="droneInstrutor" maxlength="150"
+                 placeholder="Nome do piloto (quando ainda não está cadastrado)">
+        </div>
+        <div class="sup-field">
+          <label>Vendedor responsável <small style="color:#6b7280">(padrão)</small></label>
+          <select class="sup-select" id="droneVendedorSel" onchange="onDroneVendedorChange()">
+            <option value="">— Sem vendedor padrão —</option>
+          </select>
+          <div class="sup-help">
+            <a href="#" onclick="toggleDroneVendedorManual(); return false;" style="color:#92400e;font-weight:600;">
+              Não está na lista? Cadastre manualmente
+            </a>
+          </div>
+        </div>
+        <div class="sup-field" id="droneVendedorManualWrap" style="display:none">
+          <label>Vendedor manual</label>
+          <input type="text" class="sup-input" id="droneVendedorNome" maxlength="150">
+        </div>
+        <div class="sup-field">
+          <label><input type="checkbox" id="droneAtivo" checked> Drone ativo</label>
+        </div>
+
+        <!-- Equipamentos vinculados ao drone (só ao editar) -->
+        <div id="droneEquipsWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-pc-display"></i> Equipamentos vinculados ao drone
+          </div>
+          <div id="droneEquipsLista" style="margin-bottom:10px"></div>
+          <div class="sup-grid-2" style="align-items:end">
+            <div class="sup-field" style="margin:0;display:flex;gap:6px">
+              <select class="sup-select" id="droneEquipSel">
+                <option value="">— Vincular equipamento existente —</option>
+              </select>
+              <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                      onclick="vincularEquipDrone()" style="white-space:nowrap">
+                <i class="bi bi-link-45deg"></i> Vincular
+              </button>
+            </div>
+            <div class="sup-field" style="margin:0">
+              <a href="#" onclick="toggleCriarEquipInlineDrone(); return false;"
+                 style="color:#92400e;font-weight:600;font-size:.85rem">
+                <i class="bi bi-plus-circle"></i> Criar novo equipamento
+              </a>
+            </div>
+          </div>
+          <div id="droneEquipNovoWrap" style="display:none;margin-top:8px;padding:10px;background:#fafafa;border-radius:8px">
+            <div class="sup-field" style="margin-bottom:8px">
+              <input type="text" class="sup-input" id="droneEquipNovoNome"
+                     placeholder="Nome do equipamento" maxlength="150">
+            </div>
+            <div class="sup-field" style="margin-bottom:8px">
+              <input type="text" class="sup-input" id="droneEquipNovoDesc"
+                     placeholder="Descrição (opcional)" maxlength="250">
+            </div>
+            <button type="button" class="btn-sup btn-sup-primary btn-sup-sm"
+                    onclick="criarEquipInlineDrone()">
+              <i class="bi bi-check-lg"></i> Criar e vincular
+            </button>
+          </div>
+        </div>
+
+        <div id="droneMidiaWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-images"></i> Galeria (fotos)
+          </div>
+          <div id="droneFotosLista" class="sup-midia-grid"></div>
+          <div style="margin-top:8px">
+            <input type="file" id="droneFotoInput" accept="image/*" multiple style="display:none"
+                   onchange="uploadFotosDrone(event)">
+            <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                    onclick="document.getElementById('droneFotoInput').click()">
+              <i class="bi bi-upload"></i> Enviar fotos
+            </button>
+            <span class="sup-help" style="margin-left:8px">JPG, PNG ou WEBP até 8MB cada</span>
+          </div>
+          <div class="sup-card-title" style="margin-top:18px;margin-bottom:10px">
+            <i class="bi bi-camera-video"></i> Vídeos (links)
+          </div>
+          <div id="droneVideosLista"></div>
+          <div class="sup-grid-2" style="margin-top:8px">
+            <div class="sup-field" style="margin:0">
+              <input type="text" class="sup-input" id="droneVideoTitulo"
+                     placeholder="Título (opcional)" maxlength="150">
+            </div>
+            <div class="sup-field" style="margin:0;display:flex;gap:6px">
+              <input type="url" class="sup-input" id="droneVideoUrl"
+                     placeholder="https://youtube.com/..." maxlength="500">
+              <button type="button" class="btn-sup btn-sup-primary btn-sup-sm"
+                      onclick="addVideoDrone()" style="white-space:nowrap">
+                <i class="bi bi-plus-lg"></i> Adicionar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-danger" id="btnExcluirDrone" onclick="excluirDrone()"
+                style="margin-right:auto;display:none"><i class="bi bi-trash"></i> Excluir</button>
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalDrone')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarDrone()">
+          <i class="bi bi-check-lg"></i> Salvar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ MODAL: EQUIPAMENTO ============ -->
   <div class="sup-modal-overlay" id="modalEquip">
     <div class="sup-modal lg">
@@ -854,6 +1049,7 @@
               <select class="sup-select" id="equipVincTipo" onchange="onEquipVincTipoChange()">
                 <option value="servico">Curso</option>
                 <option value="treinamento">Treinamento</option>
+                <option value="drone">Drone</option>
               </select>
             </div>
             <div class="sup-field" style="margin:0;display:flex;gap:6px">
@@ -948,6 +1144,22 @@
             </select>
           </div>
         </div>
+        <!-- Piloto: só aparece quando a oferta selecionada for um drone.
+             Lista usuários ativos do grupo "Drone". -->
+        <div class="sup-field" id="agtPilotoWrap" style="display:none">
+          <label><i class="bi bi-airplane-engines-fill" style="color:#FFC107"></i>
+            Piloto / Operador do drone *
+            <small style="color:#6b7280">(usuário do grupo Drone)</small>
+          </label>
+          <select class="sup-select" id="agtPiloto">
+            <option value="">— Escolha o piloto —</option>
+          </select>
+          <div class="sup-help">
+            Quem vai operar o drone neste atendimento. Cadastre pilotos no
+            <strong>grupo "Drone"</strong> em Grupos para aparecerem aqui.
+          </div>
+        </div>
+
         <div class="sup-grid-2">
           <div class="sup-field">
             <label>Vendedor</label>
@@ -1210,6 +1422,58 @@
     </div>
   </div>
 
+  <!-- ============ MODAL: DUPLICAR (curso ou treinamento) ============ -->
+  <div class="sup-modal-overlay" id="modalDuplicar">
+    <div class="sup-modal">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title">
+          <i class="bi bi-files"></i> <span id="modalDupTitulo">Duplicar para outras unidades</span>
+        </span>
+        <button class="sup-modal-close" onclick="fecharModal('modalDuplicar')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroDup"></div>
+        <input type="hidden" id="dupId">
+        <input type="hidden" id="dupTipo">
+        <p class="sup-help" style="margin-bottom:14px">
+          <i class="bi bi-info-circle" style="color:#0d9488"></i>
+          Vai duplicar: <strong>nome, descrição, duração, capacidade, instrutor, vendedor</strong>
+          e <strong>equipamentos vinculados</strong>. Fotos e vídeos NÃO são copiados —
+          cada unidade costuma ter prints próprios.
+        </p>
+
+        <div style="background:#fffbeb;border-left:4px solid #FFC107;padding:10px 12px;
+                    border-radius:6px;margin-bottom:14px;font-size:.85rem;color:#92400e">
+          <i class="bi bi-arrow-right-circle"></i>
+          Duplicando: <strong id="dupOrigem">—</strong>
+        </div>
+
+        <div class="sup-field">
+          <label>Para qual(is) unidade(s)?</label>
+          <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+            <button type="button" class="btn-sup btn-sup-ghost btn-sup-sm" onclick="dupMarcarTodas(true)">
+              <i class="bi bi-check-all"></i> Marcar todas
+            </button>
+            <button type="button" class="btn-sup btn-sup-ghost btn-sup-sm" onclick="dupMarcarTodas(false)">
+              <i class="bi bi-square"></i> Limpar
+            </button>
+          </div>
+          <div id="dupAgendasList"
+               style="border:1.5px solid var(--sup-border);border-radius:8px;
+                      padding:8px;max-height:280px;overflow-y:auto;background:#fafafa">
+            <div class="sup-empty">Carregando unidades...</div>
+          </div>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalDuplicar')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="confirmarDuplicar()">
+          <i class="bi bi-files"></i> Duplicar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Lightbox global — clicar em foto amplia em tela cheia -->
   <div class="sup-lightbox" id="supLightbox" onclick="fecharLightbox()">
     <button type="button" class="sup-lightbox-close" onclick="fecharLightbox()" title="Fechar (Esc)">
@@ -1219,6 +1483,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/equipe-suporte.js?v=2026-06-03"></script>
+  <script src="/SistemaCPE/web/assests/js/equipe-suporte.js?v=2026-06-05"></script>
 </body>
 </html>

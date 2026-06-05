@@ -34,6 +34,8 @@ let servicosAgenda = [];     // serviços da agenda aberta (modal de agendamento
 let vendedoresList = [];     // usuários do grupo Comercial
 let cursosSecao = [];        // cursos exibidos na seção Cursos
 let cursosPreselect = null;  // agenda a pré-selecionar ao abrir a seção Cursos
+let treinosPreselect = null; // agenda a pré-selecionar ao abrir a seção Treinamentos
+let dronesPreselect = null;  // agenda a pré-selecionar ao abrir a seção Drones
 
 /* ============ PERMISSOES ============ */
 async function carregarPermissoes() {
@@ -121,7 +123,7 @@ function setErro(id, msg) {
 /* ============ NAVEGAÇÃO ============ */
 const TITULOS_SECAO = {
   dashboard: 'Dashboard', agendas: 'Agendas', calendario: 'Calendário',
-  cursos: 'Cursos', treinamentos: 'Treinamentos',
+  cursos: 'Cursos', treinamentos: 'Treinamentos', drones: 'Drones',
   equipamentos: 'Equipamentos', clientes: 'Clientes', feriados: 'Feriados',
 };
 function showSection(name) {
@@ -133,6 +135,7 @@ function showSection(name) {
   document.getElementById('supSidebar').classList.remove('show');
   if (name === 'dashboard') loadDashboard();
   else if (name === 'treinamentos') initSecaoTreinamentos();
+  else if (name === 'drones') initSecaoDrones();
   else if (name === 'clientes') initSecaoClientes();
   else if (name === 'agendas') initSecaoAgendas();
   else if (name === 'calendario') initSecaoCalendario();
@@ -234,6 +237,10 @@ function renderAgendasCards() {
           <i class="bi bi-gear"></i> Horários</button>
         <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="irParaCursos(${a.id})">
           <i class="bi bi-mortarboard"></i> Cursos</button>
+        <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="irParaTreinamentos(${a.id})">
+          <i class="bi bi-easel"></i> Treinamentos</button>
+        <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="irParaDrones(${a.id})">
+          <i class="bi bi-airplane-engines-fill"></i> Drones</button>
         <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="abrirModalAgenda(${a.id})" data-need-admin>
           <i class="bi bi-pencil"></i> Editar</button>
         <button class="btn-sup btn-sup-${a.ativo ? 'danger' : 'primary'} btn-sup-sm"
@@ -289,6 +296,16 @@ function configHorariosDe(id) {
 function irParaCursos(id) {
   cursosPreselect = id;
   showSection('cursos');
+}
+
+function irParaTreinamentos(id) {
+  treinosPreselect = id;
+  showSection('treinamentos');
+}
+
+function irParaDrones(id) {
+  dronesPreselect = id;
+  showSection('drones');
 }
 
 async function toggleAgenda(id) {
@@ -464,10 +481,42 @@ async function _selecionarAgendaCalendario() {
   carregarCalendario();
 }
 
+/* Carrega TODAS as ofertas da agenda em arrays separados (cursos, treinamentos
+   e drones). Usado pelo modal de novo/editar atendimento (calendário interno). */
+let treinosAgenda = [];
+let dronesAgenda  = [];
 async function carregarServicosAgenda() {
-  if (!agendaAtual) { servicosAgenda = []; return; }
-  const r = await apiFetch('/agendas/' + agendaAtual.id + '/servicos');
-  servicosAgenda = r.success ? (r.servicos || []) : [];
+  if (!agendaAtual) { servicosAgenda = []; treinosAgenda = []; dronesAgenda = []; return; }
+  const aid = agendaAtual.id;
+  const [rs, rt, rd] = await Promise.all([
+    apiFetch('/agendas/' + aid + '/servicos'),
+    apiFetch('/agendas/' + aid + '/treinamentos'),
+    apiFetch('/agendas/' + aid + '/drones'),
+  ]);
+  servicosAgenda = rs && rs.success ? (rs.servicos || [])      : [];
+  treinosAgenda  = rt && rt.success ? (rt.treinamentos || [])  : [];
+  dronesAgenda   = rd && rd.success ? (rd.drones || [])        : [];
+}
+
+/* Decodifica o value do select 'agtServico' (formato 'tipo:ID') em
+   { tipo, id, item } ou null. Compat: se vier só um número, assume curso. */
+function _parseAgtOferta(val) {
+  if (!val) return null;
+  let tipo, id;
+  if (String(val).includes(':')) {
+    const parts = String(val).split(':');
+    tipo = parts[0];
+    id = parseInt(parts[1], 10);
+  } else {
+    tipo = 'servico';
+    id = parseInt(val, 10);
+  }
+  const arr = tipo === 'servico'      ? servicosAgenda
+            : tipo === 'treinamento'  ? treinosAgenda
+            : tipo === 'drone'        ? dronesAgenda
+            : [];
+  const item = arr.find(x => x.id == id) || null;
+  return item ? { tipo, id, item } : null;
 }
 
 /* ============ CALENDÁRIO ============ */
@@ -712,20 +761,48 @@ async function novoAgendamentoEm(dataStr) {
 }
 
 function _preencherSelectServicos() {
-  document.getElementById('agtServico').innerHTML =
-    '<option value="">— Sem serviço —</option>' +
-    servicosAgenda.map(s => `<option value="${s.id}">${esc(s.nome)} (${s.duracao_min}min)</option>`).join('');
+  let html = '<option value="">— Sem serviço —</option>';
+  if (servicosAgenda.length) {
+    html += '<optgroup label="Cursos">';
+    html += servicosAgenda.map(s =>
+      `<option value="servico:${s.id}">${esc(s.nome)} (${s.duracao_min}min)</option>`).join('');
+    html += '</optgroup>';
+  }
+  if (treinosAgenda.length) {
+    html += '<optgroup label="Treinamentos">';
+    html += treinosAgenda.map(t =>
+      `<option value="treinamento:${t.id}">${esc(t.nome)} (${t.duracao_min}min)</option>`).join('');
+    html += '</optgroup>';
+  }
+  if (dronesAgenda.length) {
+    html += '<optgroup label="Drones">';
+    html += dronesAgenda.map(d =>
+      `<option value="drone:${d.id}">${esc(d.nome)} (${d.duracao_min}min)</option>`).join('');
+    html += '</optgroup>';
+  }
+  document.getElementById('agtServico').innerHTML = html;
 }
 function _preencherSelectVendedores() {
   document.getElementById('agtVendedor').innerHTML =
     '<option value="">—</option>' +
     vendedoresList.map(v => `<option value="${v.id}">${esc(v.name)}</option>`).join('');
 }
-async function _carregarEquipSelect(servicoId, selecionado) {
+async function _carregarEquipSelect(valOuId, selecionado) {
   const sel = document.getElementById('agtEquipamento');
   sel.innerHTML = '<option value="">—</option>';
-  if (!servicoId) return;
-  const r = await apiFetch('/servicos/' + servicoId + '/equipamentos');
+  if (!valOuId) return;
+  // Aceita 'tipo:id' (formato novo) ou só id (compat — assume servico)
+  let path;
+  if (String(valOuId).includes(':')) {
+    const o = _parseAgtOferta(valOuId);
+    if (!o) return;
+    path = o.tipo === 'drone'        ? '/drones/' + o.id + '/equipamentos'
+         : o.tipo === 'treinamento'  ? '/treinamentos/' + o.id + '/equipamentos'
+         :                              '/servicos/' + o.id + '/equipamentos';
+  } else {
+    path = '/servicos/' + valOuId + '/equipamentos';
+  }
+  const r = await apiFetch(path);
   if (r.success) {
     sel.innerHTML = '<option value="">—</option>' +
       (r.equipamentos || []).filter(e => e.ativo)
@@ -735,11 +812,20 @@ async function _carregarEquipSelect(servicoId, selecionado) {
 }
 
 async function onAgtServicoChange() {
-  const sid = document.getElementById('agtServico').value;
-  await _carregarEquipSelect(sid);
-  if (!sid) return;
-  const s = servicosAgenda.find(x => x.id == sid);
-  if (!s) return;
+  const val = document.getElementById('agtServico').value;
+  await _carregarEquipSelect(val);
+  // Piloto: visível só quando a oferta selecionada for DRONE
+  const o = _parseAgtOferta(val);
+  const pilotoWrap = document.getElementById('agtPilotoWrap');
+  if (o && o.tipo === 'drone') {
+    pilotoWrap.style.display = '';
+    await _popularSelectPilotos('agtPiloto');
+  } else {
+    pilotoWrap.style.display = 'none';
+    document.getElementById('agtPiloto').value = '';
+  }
+  if (!o) return;
+  const s = o.item;
   const tit = document.getElementById('agtTitulo');
   if (!tit.value.trim()) tit.value = s.nome;
   const ini = document.getElementById('agtInicio').value;
@@ -757,8 +843,15 @@ async function abrirModalAgendamento(id) {
   document.getElementById('modalAgTitulo').textContent = a ? 'Editar atendimento' : 'Novo atendimento';
   _preencherSelectServicos();
   _preencherSelectVendedores();
+  // Reconstrói o value 'tipo:id' a partir do agendamento existente
+  let valOferta = '';
+  if (a) {
+    if (a.servico_id)        valOferta = 'servico:' + a.servico_id;
+    else if (a.treinamento_id) valOferta = 'treinamento:' + a.treinamento_id;
+    else if (a.drone_id)     valOferta = 'drone:' + a.drone_id;
+  }
   document.getElementById('agtId').value = a ? a.id : '';
-  document.getElementById('agtServico').value = a && a.servico_id ? a.servico_id : '';
+  document.getElementById('agtServico').value = valOferta;
   document.getElementById('agtTitulo').value = a ? a.titulo : '';
   document.getElementById('agtCliente').value = a && a.cliente_nome ? a.cliente_nome : '';
   document.getElementById('agtEmail').value = a && a.cliente_email ? a.cliente_email : '';
@@ -770,19 +863,33 @@ async function abrirModalAgendamento(id) {
   document.getElementById('agtVendedor').value = a && a.vendedor_id ? a.vendedor_id : '';
   document.getElementById('agtStatus').value = a ? a.status : 'agendado';
   document.getElementById('agtObs').value = a && a.observacoes ? a.observacoes : '';
+
+  // Piloto: mostra/esconde conforme a oferta. Pré-preenche se editar drone.
+  const pilotoWrap = document.getElementById('agtPilotoWrap');
+  if (a && a.drone_id) {
+    pilotoWrap.style.display = '';
+    await _popularSelectPilotos('agtPiloto', a.piloto_id);
+  } else {
+    pilotoWrap.style.display = 'none';
+    document.getElementById('agtPiloto').value = '';
+  }
+
   // Excluir agendamento (DELETE) e admin-only; cancelar (status='cancelado') e op.
   document.getElementById('btnExcluirAg').style.display =
     (a && _canAdmin) ? 'inline-flex' : 'none';
-  await _carregarEquipSelect(a && a.servico_id ? a.servico_id : '',
+  await _carregarEquipSelect(valOferta,
                              a && a.equipamento_id ? a.equipamento_id : '');
   abrirModal('modalAgendamento');
 }
 
 async function salvarAgendamento() {
   const id = document.getElementById('agtId').value;
+  const o = _parseAgtOferta(document.getElementById('agtServico').value);
   const payload = {
     agenda_id: agendaAtual.id,
-    servico_id: document.getElementById('agtServico').value || null,
+    servico_id:     (o && o.tipo === 'servico')     ? o.id : null,
+    treinamento_id: (o && o.tipo === 'treinamento') ? o.id : null,
+    drone_id:       (o && o.tipo === 'drone')       ? o.id : null,
     equipamento_id: document.getElementById('agtEquipamento').value || null,
     titulo: document.getElementById('agtTitulo').value.trim(),
     cliente_nome: document.getElementById('agtCliente').value.trim(),
@@ -793,11 +900,17 @@ async function salvarAgendamento() {
     modalidade: document.getElementById('agtModalidade').value || null,
     tipo_negocio: document.getElementById('agtTipo').value || null,
     vendedor_id: document.getElementById('agtVendedor').value || null,
+    piloto_id:   document.getElementById('agtPiloto').value || null,
     status: document.getElementById('agtStatus').value,
     observacoes: document.getElementById('agtObs').value.trim(),
   };
   if (!payload.titulo) { setErro('erroAg', 'Informe o título ou escolha um serviço.'); return; }
   if (!payload.inicio || !payload.fim) { setErro('erroAg', 'Informe início e fim.'); return; }
+  // Drone exige piloto
+  if (payload.drone_id && !payload.piloto_id) {
+    setErro('erroAg', 'Selecione o piloto que vai operar o drone neste atendimento.');
+    return;
+  }
   const r = id
     ? await apiFetch('/agendamentos/' + id, { method: 'PUT', body: JSON.stringify(payload) })
     : await apiFetch('/agendamentos', { method: 'POST', body: JSON.stringify(payload) });
@@ -919,18 +1032,21 @@ async function salvarConfigHorarios() {
 }
 
 /* ============ SEÇÃO CURSOS ============ */
-function _opcoesAgendas(selId) {
+function _opcoesAgendas(selId, filtro) {
+  // filtro: opcional, ex: a => a.tipo !== 'online'
   const sel = document.getElementById(selId);
   const prev = sel.value;
-  sel.innerHTML = agendas.length
-    ? agendas.map(a => `<option value="${a.id}">${esc(a.nome)}</option>`).join('')
-    : '<option value="">Nenhuma agenda cadastrada</option>';
-  if (prev) sel.value = prev;
+  const lista = filtro ? agendas.filter(filtro) : agendas;
+  sel.innerHTML = lista.length
+    ? lista.map(a => `<option value="${a.id}">${esc(a.nome)}</option>`).join('')
+    : '<option value="">Nenhuma agenda disponível</option>';
+  if (prev && lista.some(a => String(a.id) === String(prev))) sel.value = prev;
 }
 
 async function initSecaoCursos() {
   if (!agendas.length) await loadAgendas();
-  _opcoesAgendas('cursoAgendaSel');
+  // Curso é apenas presencial — não listar agendas online no select
+  _opcoesAgendas('cursoAgendaSel', a => (a.tipo || 'fisica') !== 'online');
   if (cursosPreselect) {
     document.getElementById('cursoAgendaSel').value = cursosPreselect;
     cursosPreselect = null;
@@ -968,6 +1084,8 @@ async function carregarCursos() {
     <td style="white-space:nowrap">
       <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="editarCurso(${s.id})"
         title="Editar" data-need-admin><i class="bi bi-pencil"></i></button>
+      <button class="btn-sup btn-sup-secondary btn-sup-sm" onclick="abrirModalDuplicar('curso', ${s.id}, ${JSON.stringify(s.nome).replace(/"/g, '&quot;')})"
+        title="Duplicar para outras unidades" data-need-admin><i class="bi bi-files"></i></button>
       <button class="btn-sup btn-sup-danger btn-sup-sm" onclick="excluirCurso(${s.id})"
         title="Excluir" data-need-admin><i class="bi bi-trash"></i></button>
     </td></tr>`).join('');
@@ -979,22 +1097,16 @@ function _agendaAtualCursos() {
   return agendas.find(a => a.id === id) || null;
 }
 
-/* Em agenda online, capacidade presencial nao faz sentido — esconde o
-   campo e deixa o de online ocupando a linha toda. */
+/* Curso é APENAS presencial — esconde o campo "Capacidade online" SEMPRE
+   e força cap_online=0. Frontend espelha a regra do backend. */
 function _adaptarModalCursoPorTipo() {
-  const ag = _agendaAtualCursos();
-  const presWrap = document.getElementById('cursoCapPresencialWrap');
   const onlineWrap = document.getElementById('cursoCapOnlineWrap');
   const grid = document.getElementById('cursoCapWrap');
-  if (!presWrap || !onlineWrap || !grid) return;
-  if (ag && ag.tipo === 'online') {
-    presWrap.style.display = 'none';
-    grid.style.gridTemplateColumns = '1fr';
-    document.getElementById('cursoCapPresencial').value = 1; // valor sentinela
-  } else {
-    presWrap.style.display = '';
-    grid.style.gridTemplateColumns = '';
-  }
+  if (!onlineWrap || !grid) return;
+  onlineWrap.style.display = 'none';
+  grid.style.gridTemplateColumns = '1fr';
+  const onlineInput = document.getElementById('cursoCapOnline');
+  if (onlineInput) onlineInput.value = 0;
 }
 
 /* Carrega vendedores no select. Pre-seleciona id se passado. */
@@ -1157,12 +1269,15 @@ async function carregarEquipamentos() {
 async function _carregarOpcoesItens(entidade) {
   if (_opcoesItensCache[entidade]) return _opcoesItensCache[entidade];
   const itens = [];
+  const pathPorEntidade = {
+    'servico':     a => '/agendas/' + a.id + '/servicos',
+    'treinamento': a => '/agendas/' + a.id + '/treinamentos',
+    'drone':       a => '/agendas/' + a.id + '/drones',
+  };
+  const chavePorEntidade = { 'servico': 'servicos', 'treinamento': 'treinamentos', 'drone': 'drones' };
   for (const a of agendas.filter(x => x.ativo)) {
-    const path = entidade === 'servico'
-      ? '/agendas/' + a.id + '/servicos'
-      : '/agendas/' + a.id + '/treinamentos';
-    const r = await apiFetch(path);
-    const lista = r.success ? (r[entidade === 'servico' ? 'servicos' : 'treinamentos'] || []) : [];
+    const r = await apiFetch(pathPorEntidade[entidade](a));
+    const lista = r.success ? (r[chavePorEntidade[entidade]] || []) : [];
     lista.forEach(it => itens.push({
       id: it.id, nome: it.nome, agenda_id: a.id, agenda_nome: a.nome,
     }));
@@ -1192,8 +1307,12 @@ function _renderVincList() {
     return;
   }
   box.innerHTML = equipVincAtuais.map((v, idx) => {
-    const tipoIcon = v.entidade === 'treinamento' ? 'bi-easel' : 'bi-mortarboard';
-    const tipoLabel = v.entidade === 'treinamento' ? 'Treinamento' : 'Curso';
+    const tipoIcon  = v.entidade === 'treinamento' ? 'bi-easel'
+                    : v.entidade === 'drone'       ? 'bi-airplane-engines-fill'
+                    : 'bi-mortarboard';
+    const tipoLabel = v.entidade === 'treinamento' ? 'Treinamento'
+                    : v.entidade === 'drone'       ? 'Drone'
+                    : 'Curso';
     return `<div class="sup-midia-video-item">
       <i class="bi ${tipoIcon}"></i>
       <span style="flex:1">
@@ -1448,17 +1567,22 @@ async function desvincularEquip(equipId, entidade, entidadeId, kind) {
 // Wrappers por kind
 function vincularEquipCurso()  { const id = document.getElementById('cursoId').value;   return _vincularEquip('servico',     id, 'curso'); }
 function vincularEquipTreino() { const id = document.getElementById('treinoId').value;  return _vincularEquip('treinamento', id, 'treino'); }
+function vincularEquipDrone()  { const id = document.getElementById('droneId').value;   return _vincularEquip('drone',       id, 'drone'); }
 function criarEquipInlineCurso()  { const id = document.getElementById('cursoId').value;   return _criarEquipInline('servico',     id, 'curso'); }
 function criarEquipInlineTreino() { const id = document.getElementById('treinoId').value;  return _criarEquipInline('treinamento', id, 'treino'); }
+function criarEquipInlineDrone()  { const id = document.getElementById('droneId').value;   return _criarEquipInline('drone',       id, 'drone'); }
 function toggleCriarEquipInlineCurso()  { const w = document.getElementById('cursoEquipNovoWrap');  w.style.display = w.style.display === 'none' ? '' : 'none'; }
 function toggleCriarEquipInlineTreino() { const w = document.getElementById('treinoEquipNovoWrap'); w.style.display = w.style.display === 'none' ? '' : 'none'; }
+function toggleCriarEquipInlineDrone()  { const w = document.getElementById('droneEquipNovoWrap');  w.style.display = w.style.display === 'none' ? '' : 'none'; }
 
 async function uploadFotosCurso(ev)  { return _uploadFotos(ev, 'servico',     'curso'); }
 async function uploadFotosTreino(ev) { return _uploadFotos(ev, 'treinamento', 'treino'); }
+async function uploadFotosDrone(ev)  { return _uploadFotos(ev, 'drone',       'drone'); }
 async function _uploadFotos(ev, entidade, kind) {
   const files = [...(ev.target.files || [])];
   if (!files.length) return;
-  const entId = document.getElementById((kind === 'curso' ? 'curso' : 'treino') + 'Id').value;
+  // kind = prefixo do id do form: 'curso' | 'treino' | 'drone'
+  const entId = document.getElementById(kind + 'Id').value;
   if (!entId) { toast('Salve primeiro.', 'error'); return; }
   toast(`Enviando ${files.length} foto(s)...`, 'info');
   for (const f of files) {
@@ -1484,19 +1608,20 @@ async function _uploadFotos(ev, entidade, kind) {
 
 async function addVideoCurso()  { return _addVideo('servico',     'curso'); }
 async function addVideoTreino() { return _addVideo('treinamento', 'treino'); }
+async function addVideoDrone()  { return _addVideo('drone',       'drone'); }
 async function _addVideo(entidade, kind) {
-  const prefix = (kind === 'curso' ? 'curso' : 'treino');
-  const entId = document.getElementById(prefix + 'Id').value;
+  // kind = prefixo dos ids no form: 'curso' | 'treino' | 'drone'
+  const entId = document.getElementById(kind + 'Id').value;
   if (!entId) { toast('Salve primeiro.', 'error'); return; }
-  const url = document.getElementById(prefix + 'VideoUrl').value.trim();
-  const titulo = document.getElementById(prefix + 'VideoTitulo').value.trim();
+  const url = document.getElementById(kind + 'VideoUrl').value.trim();
+  const titulo = document.getElementById(kind + 'VideoTitulo').value.trim();
   if (!url) { toast('Informe a URL do vídeo.', 'error'); return; }
   const r = await apiFetch(`/midia/${entidade}/${entId}/videos`, {
     method: 'POST', body: JSON.stringify({ url, titulo }),
   });
   if (!r.success) { toast(r.detail || 'Erro ao adicionar.', 'error'); return; }
-  document.getElementById(prefix + 'VideoUrl').value = '';
-  document.getElementById(prefix + 'VideoTitulo').value = '';
+  document.getElementById(kind + 'VideoUrl').value = '';
+  document.getElementById(kind + 'VideoTitulo').value = '';
   carregarMidia(entidade, entId, kind);
 }
 
@@ -1605,6 +1730,10 @@ let treinosSecao = [];
 async function initSecaoTreinamentos() {
   if (!agendas.length) await loadAgendas();
   _opcoesAgendas('treinoAgendaSel');
+  if (treinosPreselect) {
+    document.getElementById('treinoAgendaSel').value = treinosPreselect;
+    treinosPreselect = null;
+  }
   await carregarTreinamentos();
 }
 
@@ -1641,6 +1770,10 @@ async function carregarTreinamentos() {
       <td style="white-space:nowrap">
         <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="editarTreinamento(${t.id})"
                 title="Editar" data-need-admin><i class="bi bi-pencil"></i></button>
+        <button class="btn-sup btn-sup-secondary btn-sup-sm" onclick="abrirModalDuplicar('treinamento', ${t.id}, ${JSON.stringify(t.nome).replace(/"/g, '&quot;')})"
+                title="Duplicar para outras unidades" data-need-admin><i class="bi bi-files"></i></button>
+        <button class="btn-sup btn-sup-danger btn-sup-sm" onclick="excluirTreinamentoDireto(${t.id}, ${JSON.stringify(t.nome).replace(/"/g, '&quot;')})"
+                title="Excluir" data-need-admin><i class="bi bi-trash"></i></button>
       </td>
     </tr>`;
   }).join('');
@@ -1756,6 +1889,244 @@ async function excluirTreinamento() {
   await carregarTreinamentos();
 }
 
+/* ============================================================
+   DRONES — espelho de treinamentos (sem colisão com curso/treino)
+   ============================================================ */
+let dronesSecao = [];
+
+async function initSecaoDrones() {
+  if (!agendas.length) await loadAgendas();
+  // Drone é apenas presencial — não listar agendas online no select
+  _opcoesAgendas('droneAgendaSel', a => (a.tipo || 'fisica') !== 'online');
+  if (dronesPreselect) {
+    document.getElementById('droneAgendaSel').value = dronesPreselect;
+    dronesPreselect = null;
+  }
+  await carregarDrones();
+}
+
+async function carregarDrones() {
+  const agId = document.getElementById('droneAgendaSel').value;
+  const tbody = document.getElementById('tbodyDrones');
+  if (!agId) {
+    tbody.innerHTML = '<tr><td colspan="7" class="sup-empty">Cadastre uma agenda primeiro.</td></tr>';
+    dronesSecao = [];
+    return;
+  }
+  const r = await apiFetch('/agendas/' + agId + '/drones');
+  dronesSecao = r.success ? (r.drones || []) : [];
+  if (!dronesSecao.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="sup-empty">Nenhum drone nesta agenda. Clique em "Novo drone".</td></tr>';
+    return;
+  }
+  tbody.innerHTML = dronesSecao.map(d => {
+    const vendedor = d.vendedor_nome
+      || (d.vendedor_id ? (vendedoresList.find(v => v.id == d.vendedor_id) || {}).name : '');
+    return `<tr>
+      <td><strong>${esc(d.nome)}</strong>
+        ${d.descricao ? '<br><span class="sup-help">' + esc(d.descricao.slice(0,80)) + (d.descricao.length>80?'…':'') + '</span>' : ''}</td>
+      <td>${d.instrutor ? '<i class="bi bi-person-badge"></i> ' + esc(d.instrutor) : '<span class="sup-help">—</span>'}</td>
+      <td>${vendedor ? esc(vendedor) : '<span class="sup-help">—</span>'}</td>
+      <td>${d.duracao_min} min</td>
+      <td>
+        <span title="Fotos"><i class="bi bi-image"></i> ${d.total_fotos || 0}</span>
+        &middot;
+        <span title="Vídeos"><i class="bi bi-camera-video"></i> ${d.total_videos || 0}</span>
+      </td>
+      <td>${d.ativo ? '<span class="sup-pill ok">Ativo</span>'
+                    : '<span class="sup-pill off">Inativo</span>'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-sup btn-sup-ghost btn-sup-sm" onclick="editarDrone(${d.id})"
+                title="Editar" data-need-admin><i class="bi bi-pencil"></i></button>
+        <button class="btn-sup btn-sup-secondary btn-sup-sm" onclick="abrirModalDuplicar('drone', ${d.id}, ${JSON.stringify(d.nome).replace(/"/g, '&quot;')})"
+                title="Duplicar para outras unidades" data-need-admin><i class="bi bi-files"></i></button>
+        <button class="btn-sup btn-sup-danger btn-sup-sm" onclick="excluirDroneDireto(${d.id}, ${JSON.stringify(d.nome).replace(/"/g, '&quot;')})"
+                title="Excluir" data-need-admin><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`;
+  }).join('');
+  aplicarPermissoes();
+}
+
+function _agendaAtualDrones() {
+  const id = parseInt(document.getElementById('droneAgendaSel').value);
+  return agendas.find(a => a.id === id) || null;
+}
+/* Drone é APENAS presencial — esconde "Capacidade online" SEMPRE
+   e força cap_online=0. Frontend espelha a regra do backend. */
+function _adaptarModalDronePorTipo() {
+  const onlineWrap = document.getElementById('droneCapOnlineWrap');
+  const grid = document.getElementById('droneCapWrap');
+  if (!onlineWrap || !grid) return;
+  onlineWrap.style.display = 'none';
+  grid.style.gridTemplateColumns = '1fr';
+  const onlineInput = document.getElementById('droneCapOnline');
+  if (onlineInput) onlineInput.value = 0;
+}
+function onDroneVendedorChange() {
+  if (document.getElementById('droneVendedorSel').value) {
+    document.getElementById('droneVendedorNome').value = '';
+  }
+}
+function toggleDroneVendedorManual() {
+  const wrap = document.getElementById('droneVendedorManualWrap');
+  wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+}
+function onDroneInstrutorChange() {
+  // Se o usuário escolheu um piloto do select, limpa o campo manual
+  if (document.getElementById('droneInstrutorSel').value) {
+    const m = document.getElementById('droneInstrutor');
+    if (m) m.value = '';
+  }
+}
+function toggleDroneInstrutorManual() {
+  const wrap = document.getElementById('droneInstrutorManualWrap');
+  wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
+}
+
+/* Cache global de pilotos (grupo Drone). Carrega na 1ª abertura do modal. */
+let pilotosList = [];
+async function _popularSelectPilotos(selId, piloto_id) {
+  if (!pilotosList.length) {
+    const r = await apiFetch('/pilotos');
+    pilotosList = r.success ? (r.pilotos || []) : [];
+  }
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Sem piloto padrão —</option>' +
+    pilotosList.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  if (piloto_id) sel.value = String(piloto_id);
+}
+
+async function novoDrone() {
+  setErro('erroDrone', '');
+  document.getElementById('modalDroneTitulo').textContent = 'Novo drone';
+  document.getElementById('droneId').value = '';
+  document.getElementById('droneNome').value = '';
+  document.getElementById('droneDescricao').value = '';
+  document.getElementById('droneDuracao').value = 60;
+  document.getElementById('droneCapPresencial').value = 1;
+  document.getElementById('droneCapOnline').value = 1;
+  document.getElementById('droneInstrutor').value = '';
+  document.getElementById('droneInstrutorManualWrap').style.display = 'none';
+  document.getElementById('droneVendedorNome').value = '';
+  document.getElementById('droneVendedorManualWrap').style.display = 'none';
+  document.getElementById('droneAtivo').checked = true;
+  document.getElementById('droneMidiaWrap').style.display = 'none';
+  document.getElementById('droneEquipsWrap').style.display = 'none';
+  document.getElementById('btnExcluirDrone').style.display = 'none';
+  await Promise.all([
+    _popularSelectVendedor('droneVendedorSel'),
+    _popularSelectPilotos('droneInstrutorSel'),
+  ]);
+  _adaptarModalDronePorTipo();
+  abrirModal('modalDrone');
+}
+
+async function editarDrone(id) {
+  const d = dronesSecao.find(x => x.id === id);
+  if (!d) return;
+  setErro('erroDrone', '');
+  document.getElementById('modalDroneTitulo').textContent = 'Editar drone';
+  document.getElementById('droneId').value = d.id;
+  document.getElementById('droneNome').value = d.nome;
+  document.getElementById('droneDescricao').value = d.descricao || '';
+  document.getElementById('droneDuracao').value = d.duracao_min;
+  document.getElementById('droneCapPresencial').value = d.cap_presencial || 1;
+  document.getElementById('droneCapOnline').value = d.cap_online || 1;
+  document.getElementById('droneVendedorNome').value = d.vendedor_nome || '';
+  document.getElementById('droneVendedorManualWrap').style.display = d.vendedor_nome ? '' : 'none';
+  document.getElementById('droneAtivo').checked = !!d.ativo;
+  document.getElementById('btnExcluirDrone').style.display = _canAdmin ? 'inline-flex' : 'none';
+  await Promise.all([
+    _popularSelectVendedor('droneVendedorSel', d.vendedor_id),
+    _popularSelectPilotos('droneInstrutorSel'),
+  ]);
+  // Instrutor: tenta casar com a lista de pilotos pelo nome. Se achar, seleciona o id;
+  // senão, mostra como "manual" (texto livre).
+  const sel = document.getElementById('droneInstrutorSel');
+  const inputManual = document.getElementById('droneInstrutor');
+  const manualWrap = document.getElementById('droneInstrutorManualWrap');
+  const matchPiloto = d.instrutor
+    ? pilotosList.find(p => p.name === d.instrutor)
+    : null;
+  if (matchPiloto) {
+    sel.value = String(matchPiloto.id);
+    inputManual.value = '';
+    manualWrap.style.display = 'none';
+  } else if (d.instrutor) {
+    sel.value = '';
+    inputManual.value = d.instrutor;
+    manualWrap.style.display = '';
+  } else {
+    sel.value = '';
+    inputManual.value = '';
+    manualWrap.style.display = 'none';
+  }
+  document.getElementById('droneMidiaWrap').style.display = '';
+  document.getElementById('droneEquipsWrap').style.display = '';
+  document.getElementById('droneEquipNovoWrap').style.display = 'none';
+  carregarMidia('drone', d.id, 'drone');
+  carregarEquipsVinculados('drone', d.id, 'drone');
+  _adaptarModalDronePorTipo();
+  abrirModal('modalDrone');
+}
+
+async function salvarDrone() {
+  const id = document.getElementById('droneId').value;
+  // Piloto: prioridade pra select (grupo Drone). Se vazio, usa o texto livre.
+  const pilotoId = document.getElementById('droneInstrutorSel').value;
+  const pilotoSel = pilotoId ? pilotosList.find(p => String(p.id) === pilotoId) : null;
+  const pilotoNome = pilotoSel
+    ? pilotoSel.name
+    : document.getElementById('droneInstrutor').value.trim();
+  const payload = {
+    agenda_id: document.getElementById('droneAgendaSel').value,
+    nome: document.getElementById('droneNome').value.trim(),
+    descricao: document.getElementById('droneDescricao').value.trim(),
+    duracao_min: parseInt(document.getElementById('droneDuracao').value) || 60,
+    cap_presencial: parseInt(document.getElementById('droneCapPresencial').value) || 1,
+    cap_online: parseInt(document.getElementById('droneCapOnline').value) || 1,
+    instrutor: pilotoNome,
+    vendedor_id: document.getElementById('droneVendedorSel').value || null,
+    vendedor_nome: document.getElementById('droneVendedorNome').value.trim(),
+    ativo: document.getElementById('droneAtivo').checked,
+  };
+  if (!payload.nome) { setErro('erroDrone', 'Informe o nome.'); return; }
+  const r = id
+    ? await apiFetch('/drones/' + id, { method: 'PUT', body: JSON.stringify(payload) })
+    : await apiFetch('/drones', { method: 'POST', body: JSON.stringify(payload) });
+  if (!r.success) { setErro('erroDrone', r.detail || 'Erro ao salvar.'); return; }
+  fecharModal('modalDrone');
+  toast('Drone salvo.', 'success');
+  await carregarDrones();
+}
+
+async function excluirDrone() {
+  const id = document.getElementById('droneId').value;
+  if (!id || !confirm('Excluir este drone? Fotos e vídeos vinculados serão removidos.')) return;
+  const r = await apiFetch('/drones/' + id, { method: 'DELETE' });
+  if (!r.success) { setErro('erroDrone', r.detail || 'Erro ao excluir.'); return; }
+  fecharModal('modalDrone');
+  toast('Drone excluído.', 'success');
+  await carregarDrones();
+}
+
+async function excluirDroneDireto(id, nome) {
+  if (!confirm(`Excluir o drone "${nome}"?\n\nEsta ação remove:\n- O drone\n- Fotos e vídeos vinculados\n- Vínculos com equipamentos\n\nAgendamentos passados ficam preservados (sem referência).`)) return;
+  try {
+    const r = await apiFetch('/drones/' + id, { method: 'DELETE' });
+    if (!r.success) {
+      toast('Erro: ' + (r.detail || 'falha'), 'error');
+      return;
+    }
+    toast('Drone excluído', 'success');
+    carregarDrones();
+  } catch (e) {
+    alert('Erro de rede: ' + (e.message || e));
+  }
+}
+
 /* ============ MODAL: agendamentos do dia (Hoje / Amanha) ============ */
 async function abrirAgendamentosDia(quando) {
   const d = new Date();
@@ -1847,6 +2218,9 @@ async function abrirListaAgendas() {
         <button class="btn-sup btn-sup-ghost btn-sup-sm" title="Ver cursos"
           onclick="fecharModal('modalListaAgendas'); irParaCursos(${a.id})">
           <i class="bi bi-mortarboard"></i></button>
+        <button class="btn-sup btn-sup-ghost btn-sup-sm" title="Ver treinamentos"
+          onclick="fecharModal('modalListaAgendas'); irParaTreinamentos(${a.id})">
+          <i class="bi bi-easel"></i></button>
       </td>
     </tr>`;
   }).join('');
@@ -2263,3 +2637,126 @@ document.addEventListener('DOMContentLoaded', async () => {
   _notifTimer = setInterval(carregarNotificacoes, 30000);
   document.getElementById('supLoading').style.display = 'none';
 });
+
+
+/* ============================================================
+   DUPLICAR (cursos e treinamentos) para outras unidades
+   ============================================================ */
+let _dupCtx = null;  // {tipo:'curso'|'treinamento', id, origemAgendaId}
+
+function abrirModalDuplicar(tipo, id, nome) {
+  const listaPorTipo = {
+    'curso':        cursosSecao,
+    'treinamento':  treinosSecao,
+    'drone':        dronesSecao,
+  };
+  const lista = listaPorTipo[tipo] || [];
+  const item = lista.find(x => x.id == id);
+  const agendaOrigemId = item ? item.agenda_id : null;
+  _dupCtx = { tipo, id, agendaOrigemId };
+
+  document.getElementById('dupId').value = id;
+  document.getElementById('dupTipo').value = tipo;
+  document.getElementById('dupOrigem').textContent = (nome || '—') + ' (id ' + id + ')';
+  const titulosPorTipo = {
+    'curso':       'Duplicar curso para outras unidades',
+    'treinamento': 'Duplicar treinamento para outras unidades',
+    'drone':       'Duplicar drone para outras unidades',
+  };
+  document.getElementById('modalDupTitulo').textContent =
+    titulosPorTipo[tipo] || 'Duplicar para outras unidades';
+  document.getElementById('erroDup').innerHTML = '';
+
+  // Lista de agendas (todas EXCETO a de origem)
+  const cont = document.getElementById('dupAgendasList');
+  const destinos = (agendas || []).filter(a => a.id !== agendaOrigemId);
+  if (!destinos.length) {
+    cont.innerHTML = '<div class="sup-empty">Não há outras unidades disponíveis para duplicação.</div>';
+  } else {
+    cont.innerHTML = destinos.map(a => `
+      <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;
+                    border-radius:6px;cursor:pointer;transition:background .1s"
+             onmouseover="this.style.background='#fffbe8'"
+             onmouseout="this.style.background='transparent'">
+        <input type="checkbox" class="dup-agenda-cb" value="${a.id}">
+        <span style="flex:1">
+          <strong>${esc(a.nome)}</strong>
+          ${a.tipo === 'online' ? ' <span class="sup-pill" style="background:#dbeafe;color:#1e40af;font-size:.7rem">ONLINE</span>' : ''}
+        </span>
+        ${a.ativo ? '' : '<span class="sup-pill off">Inativa</span>'}
+      </label>
+    `).join('');
+  }
+
+  document.getElementById('modalDuplicar').classList.add('show');
+}
+
+function dupMarcarTodas(marcar) {
+  document.querySelectorAll('#dupAgendasList .dup-agenda-cb').forEach(cb => {
+    cb.checked = !!marcar;
+  });
+}
+
+async function confirmarDuplicar() {
+  if (!_dupCtx) return;
+  const cbs = document.querySelectorAll('#dupAgendasList .dup-agenda-cb:checked');
+  const agenda_ids = Array.from(cbs).map(cb => parseInt(cb.value, 10)).filter(Boolean);
+
+  if (!agenda_ids.length) {
+    document.getElementById('erroDup').innerHTML =
+      '<div class="sup-modal-erro-msg">Selecione pelo menos uma unidade destino.</div>';
+    return;
+  }
+
+  const endpointPorTipo = {
+    'curso':       '/servicos/' + _dupCtx.id + '/duplicar',
+    'treinamento': '/treinamentos/' + _dupCtx.id + '/duplicar',
+    'drone':       '/drones/' + _dupCtx.id + '/duplicar',
+  };
+  const endpoint = endpointPorTipo[_dupCtx.tipo];
+
+  try {
+    const r = await apiFetch(endpoint, {
+      method: 'POST',
+      body: JSON.stringify({ agenda_ids }),
+    });
+    if (!r.success) {
+      document.getElementById('erroDup').innerHTML =
+        '<div class="sup-modal-erro-msg">Erro: ' + esc(r.detail || 'falha desconhecida') + '</div>';
+      return;
+    }
+    fecharModal('modalDuplicar');
+    const msg = `Duplicado em ${r.duplicados} unidade(s)` +
+      (r.equipamentos_replicados ? ` — ${r.equipamentos_replicados} equipamento(s) vinculado(s)` : '') +
+      (r.ignorados && r.ignorados.length ? ` (${r.ignorados.length} ignoradas)` : '');
+    if (typeof toast === 'function') toast(msg, 'success');
+    else alert(msg);
+    // Recarrega a lista da agenda atual
+    if (_dupCtx.tipo === 'curso')           carregarCursos();
+    else if (_dupCtx.tipo === 'treinamento') carregarTreinamentos();
+    else if (_dupCtx.tipo === 'drone')      carregarDrones();
+  } catch (e) {
+    document.getElementById('erroDup').innerHTML =
+      '<div class="sup-modal-erro-msg">Erro de rede: ' + esc(e.message || e) + '</div>';
+  }
+}
+
+/* ============================================================
+   EXCLUIR DIRETO (treinamento — versão sem modal de edição aberta)
+   curso já tem excluirCurso() chamada direta na linha.
+   ============================================================ */
+async function excluirTreinamentoDireto(id, nome) {
+  if (!confirm(`Excluir o treinamento "${nome}"?\n\nEsta ação remove:\n- O treinamento\n- Fotos e vídeos vinculados\n- Vínculos com equipamentos\n\nAgendamentos passados ficam preservados (sem referência).`)) return;
+  try {
+    const r = await apiFetch('/treinamentos/' + id, { method: 'DELETE' });
+    if (!r.success) {
+      if (typeof toast === 'function') toast('Erro: ' + (r.detail || 'falha'), 'error');
+      else alert('Erro ao excluir: ' + (r.detail || 'falha desconhecida'));
+      return;
+    }
+    if (typeof toast === 'function') toast('Treinamento excluído', 'success');
+    carregarTreinamentos();
+  } catch (e) {
+    alert('Erro de rede: ' + (e.message || e));
+  }
+}

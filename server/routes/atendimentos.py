@@ -25,6 +25,7 @@ router = APIRouter(prefix="/api/atendimentos", tags=["Atendimentos"])
 _STATUS_OCUPA = ("pendente", "agendado", "atendido")
 _STATUS_VALIDOS = ("pendente", "agendado", "atendido", "cancelado", "nao_compareceu")
 _GRUPO_COMERCIAL = "Comercial"
+_GRUPO_PILOTOS = "Drone"  # operadores/pilotos cadastrados aqui aparecem no agendamento de drone
 _DIAS_BUSCA_PUBLICA = 60   # janela de dias oferecida ao cliente
 
 
@@ -227,11 +228,33 @@ def _slot_tem_vaga(ags, blqs, oferta_id, cap_p, cap_o, ini, fim,
     contados de forma independente.
 
     `entidade` = 'servico' | 'treinamento' — define qual campo do agendamento
-    deve bater com oferta_id."""
+    deve bater com oferta_id.
+
+    REGRA DE COLISÃO (2026-06-03): curso e treinamento compartilham o mesmo
+    recurso (sala/instrutor). Se for slot de curso, qualquer treinamento no
+    horário bloqueia. E vice-versa. Modalidade não conta aqui — recurso comum.
+    DRONE usa recurso próprio (drone físico): NÃO entra nessa regra de colisão.
+    REGRA CURSO E DRONE: ambos são apenas presenciais. Slot online sempre False.
+    """
+    if modalidade == "online" and entidade in ("servico", "drone"):
+        return False
     if any(b["inicio"] < fim and b["fim"] > ini for b in blqs):
         return False
 
-    chave = "servico_id" if entidade == "servico" else "treinamento_id"
+    # Colisão curso<->treinamento (mesmo recurso). Drone fica de fora.
+    if entidade == "servico":
+        if any(a.get("treinamento_id") is not None
+               and a["inicio"] < fim and a["fim"] > ini for a in ags):
+            return False
+    elif entidade == "treinamento":
+        if any(a.get("servico_id") is not None
+               and a["inicio"] < fim and a["fim"] > ini for a in ags):
+            return False
+    # entidade == "drone": sem checagem de colisão entre entidades
+
+    if entidade == "servico":         chave = "servico_id"
+    elif entidade == "treinamento":   chave = "treinamento_id"
+    else:                              chave = "drone_id"
 
     def _conta(modal):
         return sum(1 for a in ags if a.get(chave) == oferta_id
@@ -263,11 +286,11 @@ def _feriados_set(cursor, agenda_id, dini, dfim) -> set:
     return {str(r["data"]) for r in cursor.fetchall()}
 
 
-def _resolver_oferta(cursor, agenda_id, servico_id=None, treinamento_id=None):
-    """Retorna metadados da 'oferta' (curso ou treinamento) ou None se
-    nem servico_id nem treinamento_id foram informados.
+def _resolver_oferta(cursor, agenda_id, servico_id=None, treinamento_id=None, drone_id=None):
+    """Retorna metadados da 'oferta' (curso, treinamento ou drone) ou None se
+    nenhum dos IDs foi informado.
 
-    Quando ambos forem passados, prioriza servico_id (compatibilidade).
+    Prioridade quando mais de um for passado: servico > treinamento > drone.
     Levanta 404 se o ID nao existe ou nao pertence a agenda.
     """
     if servico_id:
@@ -290,6 +313,16 @@ def _resolver_oferta(cursor, agenda_id, servico_id=None, treinamento_id=None):
         return {"entidade": "treinamento", "id": t["id"], "nome": t["nome"],
                 "duracao_min": t["duracao_min"],
                 "cap_presencial": t["cap_presencial"], "cap_online": t["cap_online"]}
+    if drone_id:
+        cursor.execute(
+            "SELECT id, nome, duracao_min, cap_presencial, cap_online "
+            "FROM atend_drones WHERE id=%s", (drone_id,))
+        d = cursor.fetchone()
+        if not d or (agenda_id is not None and not _pertence_agenda(cursor, "atend_drones", drone_id, agenda_id)):
+            raise HTTPException(status_code=404, detail="Drone nao encontrado nessa agenda")
+        return {"entidade": "drone", "id": d["id"], "nome": d["nome"],
+                "duracao_min": d["duracao_min"],
+                "cap_presencial": d["cap_presencial"], "cap_online": d["cap_online"]}
     return None
 
 
@@ -299,10 +332,13 @@ def _pertence_agenda(cursor, tabela: str, id_: int, agenda_id: int) -> bool:
 
 
 def _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
-                 excluir_id=None, treinamento_id=None):
+                 excluir_id=None, treinamento_id=None, drone_id=None):
     """Valida se cabe um agendamento. Retorna None se ha vaga, ou uma
-    mensagem de erro. Capacidade vem da oferta (curso OU treinamento);
-    presencial e online sao limites independentes."""
+    mensagem de erro. Capacidade vem da oferta (curso, treinamento ou drone);
+    presencial e online sao limites independentes.
+
+    Drone NAO entra na regra de colisao curso<->treinamento (recurso proprio).
+    """
     if _eh_feriado(cursor, agenda_id, inicio.date()):
         return "Esse dia e feriado nessa agenda."
     cursor.execute(
@@ -311,11 +347,18 @@ def _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
     if cursor.fetchone():
         return "Esse horario esta bloqueado nessa agenda."
 
+    # Regra: curso e drone são APENAS presenciais. Bloqueia online.
+    if servico_id and modalidade == "online":
+        return "Curso é apenas presencial — escolha a modalidade presencial."
+    if drone_id and modalidade == "online":
+        return "Drone é apenas presencial — escolha a modalidade presencial."
+
     cap = 1
-    cap_por_oferta = (servico_id or treinamento_id) and modalidade in ("presencial", "online")
+    cap_por_oferta = (servico_id or treinamento_id or drone_id) and modalidade in ("presencial", "online")
     if cap_por_oferta:
-        tabela = "atend_servicos" if servico_id else "atend_treinamentos"
-        oferta_id = servico_id or treinamento_id
+        if servico_id:    tabela, oferta_id = "atend_servicos", servico_id
+        elif treinamento_id: tabela, oferta_id = "atend_treinamentos", treinamento_id
+        else:             tabela, oferta_id = "atend_drones", drone_id
         cursor.execute(
             f"SELECT cap_presencial, cap_online FROM {tabela} WHERE id=%s",
             (oferta_id,))
@@ -323,6 +366,37 @@ def _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
         if s:
             bruto = s["cap_online"] if modalidade == "online" else s["cap_presencial"]
             cap = max(1, int(bruto or 1))
+
+    # REGRA DE COLISÃO CURSO ↔ TREINAMENTO (adicionada 2026-06-03):
+    # Curso e treinamento compartilham o mesmo recurso físico (sala/instrutor).
+    # Se estamos agendando um CURSO e existe TREINAMENTO ocupando o horário
+    # naquela agenda, bloqueia. E vice-versa. Não distingue modalidade aqui —
+    # se há treinamento marcado no slot, o curso entra em conflito mesmo se
+    # for modalidade diferente (recurso comum).
+    if servico_id:
+        cursor.execute(
+            "SELECT id FROM atend_agendamentos WHERE agenda_id=%s "
+            "AND status IN ('pendente','agendado','atendido') "
+            "AND treinamento_id IS NOT NULL "
+            "AND inicio<%s AND fim>%s "
+            + ("AND id != %s LIMIT 1" if excluir_id else "LIMIT 1"),
+            ([agenda_id, fim, inicio, excluir_id] if excluir_id else [agenda_id, fim, inicio]),
+        )
+        if cursor.fetchone():
+            return ("Esse horário já tem um treinamento marcado nessa agenda. "
+                    "Curso e treinamento não podem coexistir no mesmo horário.")
+    elif treinamento_id:
+        cursor.execute(
+            "SELECT id FROM atend_agendamentos WHERE agenda_id=%s "
+            "AND status IN ('pendente','agendado','atendido') "
+            "AND servico_id IS NOT NULL "
+            "AND inicio<%s AND fim>%s "
+            + ("AND id != %s LIMIT 1" if excluir_id else "LIMIT 1"),
+            ([agenda_id, fim, inicio, excluir_id] if excluir_id else [agenda_id, fim, inicio]),
+        )
+        if cursor.fetchone():
+            return ("Esse horário já tem um curso marcado nessa agenda. "
+                    "Curso e treinamento não podem coexistir no mesmo horário.")
 
     sql = ("SELECT COUNT(*) AS n FROM atend_agendamentos WHERE agenda_id=%s "
            "AND status IN ('pendente','agendado','atendido') "
@@ -333,9 +407,12 @@ def _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
         if servico_id:
             sql += " AND servico_id=%s AND modalidade=%s"
             params += [servico_id, modalidade]
-        else:
+        elif treinamento_id:
             sql += " AND treinamento_id=%s AND modalidade=%s"
             params += [treinamento_id, modalidade]
+        else:
+            sql += " AND drone_id=%s AND modalidade=%s"
+            params += [drone_id, modalidade]
     if excluir_id:
         sql += " AND id != %s"
         params.append(excluir_id)
@@ -997,17 +1074,22 @@ def criar_servico(request: Request, data: dict):
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        _agenda_ou_404(cursor, agenda_id)
+        agenda = _agenda_ou_404(cursor, agenda_id)
+        # Regra: curso é APENAS presencial. Não pode ser cadastrado em agenda online.
+        if (agenda.get("tipo") or "").lower() == "online":
+            raise HTTPException(status_code=400,
+                detail="Curso é apenas presencial — escolha uma agenda física.")
         instrutor = (data.get("instrutor") or "").strip() or None
         descricao = (data.get("descricao") or "").strip() or None
         vendedor_id = data.get("vendedor_id") or None
         vendedor_nome = (data.get("vendedor_nome") or "").strip() or None
+        # cap_online sempre 0 para curso (UI também esconde o campo)
         cursor.execute("""
             INSERT INTO atend_servicos
                 (agenda_id, nome, descricao, duracao_min, cap_presencial, cap_online,
                  instrutor, vendedor_id, vendedor_nome, ativo, ordem)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (agenda_id, nome, descricao, dur, cap_p, cap_o, instrutor,
+            VALUES (%s, %s, %s, %s, %s, 0, %s, %s, %s, %s, %s)
+        """, (agenda_id, nome, descricao, dur, cap_p, instrutor,
               vendedor_id, vendedor_nome,
               1 if data.get("ativo", 1) else 0,
               int(data.get("ordem") or 0)))
@@ -1028,22 +1110,28 @@ def atualizar_servico(servico_id: int, request: Request, data: dict):
     if dur < 5 or dur > 1440:
         raise HTTPException(status_code=400, detail="Duracao deve ser entre 5 e 1440 minutos")
     cap_p = max(1, int(data.get("cap_presencial") or 1))
-    cap_o = max(1, int(data.get("cap_online") or 1))
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        _servico_ou_404(cursor, servico_id)
+        servico = _servico_ou_404(cursor, servico_id)
+        # Curso é apenas presencial — não pode pertencer a agenda online (proteção dupla)
+        cursor.execute("SELECT tipo FROM atend_agendas WHERE id=%s", (servico["agenda_id"],))
+        ag = cursor.fetchone()
+        if ag and (ag.get("tipo") or "").lower() == "online":
+            raise HTTPException(status_code=400,
+                detail="Curso é apenas presencial — esta agenda é online.")
         instrutor = (data.get("instrutor") or "").strip() or None
         descricao = (data.get("descricao") or "").strip() or None
         vendedor_id = data.get("vendedor_id") or None
         vendedor_nome = (data.get("vendedor_nome") or "").strip() or None
+        # cap_online sempre 0 (curso só presencial)
         cursor.execute("""
             UPDATE atend_servicos
                SET nome=%s, descricao=%s, duracao_min=%s, cap_presencial=%s,
-                   cap_online=%s, instrutor=%s, vendedor_id=%s, vendedor_nome=%s,
+                   cap_online=0, instrutor=%s, vendedor_id=%s, vendedor_nome=%s,
                    ativo=%s, ordem=%s
              WHERE id=%s
-        """, (nome, descricao, dur, cap_p, cap_o, instrutor,
+        """, (nome, descricao, dur, cap_p, instrutor,
               vendedor_id, vendedor_nome,
               1 if data.get("ativo", 1) else 0,
               int(data.get("ordem") or 0), servico_id))
@@ -1068,9 +1156,98 @@ def excluir_servico(servico_id: int, request: Request):
         cursor.execute(
             "DELETE FROM atend_midia_videos WHERE entidade='servico' AND entidade_id=%s",
             (servico_id,))
+        # Limpa vinculos m:n com equipamentos
+        cursor.execute(
+            "DELETE FROM atend_equipamento_vinculos WHERE entidade='servico' AND entidade_id=%s",
+            (servico_id,))
         cursor.execute("DELETE FROM atend_servicos WHERE id=%s", (servico_id,))
         conn.commit()
         return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/servicos/{servico_id}/duplicar")
+def duplicar_servico(servico_id: int, request: Request, data: dict):
+    """Duplica um curso em N agendas (unidades). Copia: dados base + vínculos
+    com equipamentos. NÃO copia mídia (fotos/vídeos) — cada unidade costuma
+    ter prints próprios; o usuário adiciona depois se quiser.
+
+    Body: {"agenda_ids": [id1, id2, ...]} — agendas destino.
+    Bloqueia tentativa de duplicar pra mesma agenda do original.
+    """
+    _exigir_admin_suporte(request)
+    agenda_ids = data.get("agenda_ids") or []
+    if not isinstance(agenda_ids, list) or not agenda_ids:
+        raise HTTPException(status_code=400, detail="Informe ao menos uma agenda destino.")
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        original = _servico_ou_404(cursor, servico_id)
+
+        # Filtra: só agendas existentes e diferentes da original
+        cursor.execute(
+            "SELECT id, nome FROM atend_agendas WHERE id IN ("
+            + ",".join(["%s"] * len(agenda_ids)) + ")",
+            tuple(agenda_ids),
+        )
+        agendas_existentes = {a["id"]: a["nome"] for a in cursor.fetchall()}
+
+        # Pega vínculos do original com equipamentos (m:n)
+        cursor.execute(
+            "SELECT equipamento_id FROM atend_equipamento_vinculos "
+            "WHERE entidade='servico' AND entidade_id=%s",
+            (servico_id,),
+        )
+        equip_ids = [r["equipamento_id"] for r in cursor.fetchall()]
+
+        criados = []
+        ignorados = []
+        for aid in agenda_ids:
+            if aid not in agendas_existentes:
+                ignorados.append({"agenda_id": aid, "motivo": "agenda inexistente"})
+                continue
+            if aid == original["agenda_id"]:
+                ignorados.append({"agenda_id": aid, "motivo": "mesma agenda do original"})
+                continue
+
+            cursor.execute("""
+                INSERT INTO atend_servicos
+                    (agenda_id, nome, descricao, duracao_min, cap_presencial, cap_online,
+                     instrutor, vendedor_id, vendedor_nome, ativo, ordem)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                aid, original["nome"], original.get("descricao"),
+                original.get("duracao_min", 60),
+                original.get("cap_presencial", 1), original.get("cap_online", 1),
+                original.get("instrutor"),
+                original.get("vendedor_id"), original.get("vendedor_nome"),
+                int(original.get("ativo") or 1), int(original.get("ordem") or 0),
+            ))
+            novo_id = cursor.lastrowid
+
+            # Replica vínculos com equipamentos (são globais — podem ser reusados)
+            for eq_id in equip_ids:
+                cursor.execute(
+                    "INSERT IGNORE INTO atend_equipamento_vinculos "
+                    "(equipamento_id, entidade, entidade_id) VALUES (%s, 'servico', %s)",
+                    (eq_id, novo_id),
+                )
+
+            criados.append({
+                "id": novo_id, "agenda_id": aid, "agenda_nome": agendas_existentes[aid],
+            })
+
+        conn.commit()
+        return {
+            "success": True,
+            "duplicados": len(criados),
+            "criados": criados,
+            "ignorados": ignorados,
+            "equipamentos_replicados": len(equip_ids),
+        }
     finally:
         cursor.close()
         conn.close()
@@ -1321,6 +1498,12 @@ def listar_vendedores(request: Request):
 
 
 def _query_vendedores() -> list:
+    return _query_usuarios_grupo(_GRUPO_COMERCIAL)
+
+
+def _query_usuarios_grupo(nome_grupo: str) -> list:
+    """Retorna usuários ativos de um grupo (id, name). Usado por
+    /vendedores (grupo Comercial) e /pilotos (grupo Drone)."""
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -1330,11 +1513,19 @@ def _query_vendedores() -> list:
             JOIN cpe_grupo g ON g.id = u.group_id
             WHERE g.name = %s AND u.is_active = 1
             ORDER BY u.name
-        """, (_GRUPO_COMERCIAL,))
+        """, (nome_grupo,))
         return cursor.fetchall()
     finally:
         cursor.close()
         conn.close()
+
+
+@router.get("/pilotos")
+def listar_pilotos(request: Request):
+    """Usuários ativos do grupo 'Drone' — pilotos/operadores disponíveis
+    para vincular a um drone (no cadastro) ou a um agendamento de drone."""
+    _exigir_view_suporte(request)
+    return {"success": True, "pilotos": _query_usuarios_grupo(_GRUPO_PILOTOS)}
 
 
 # ============================================================
@@ -1550,19 +1741,22 @@ def _gravar_agendamento(cursor, agenda_id, dados, origem, created_by):
     — formam a base de clientes derivada)."""
     cursor.execute("""
         INSERT INTO atend_agendamentos
-            (agenda_id, servico_id, treinamento_id, equipamento_id, titulo,
+            (agenda_id, servico_id, treinamento_id, drone_id, equipamento_id, titulo,
              cliente_nome, cliente_email, cliente_telefone,
              cliente_empresa, cliente_funcao,
              observacoes, modalidade, tipo_negocio, vendedor_id, vendedor_nome,
+             piloto_id,
              inicio, fim, status, origem, created_by)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
     """, (
         agenda_id, dados.get("servico_id"), dados.get("treinamento_id"),
+        dados.get("drone_id"),
         dados["equipamento_id"], dados["titulo"],
         dados["cliente_nome"], dados["cliente_email"], dados["cliente_telefone"],
         dados.get("cliente_empresa"), dados.get("cliente_funcao"),
         dados["observacoes"], dados["modalidade"], dados["tipo_negocio"],
         dados["vendedor_id"], dados.get("vendedor_nome"),
+        dados.get("piloto_id"),
         dados["inicio"], dados["fim"], dados["status"],
         origem, created_by,
     ))
@@ -1587,6 +1781,7 @@ def criar_agendamento(request: Request, data: dict):
         _agenda_ou_404(cursor, agenda_id)
         servico_id = data.get("servico_id") or None
         treinamento_id = data.get("treinamento_id") or None
+        drone_id = data.get("drone_id") or None
         titulo = (data.get("titulo") or "").strip()
         if servico_id:
             srv = _servico_ou_404(cursor, servico_id, agenda_id)
@@ -1596,19 +1791,28 @@ def criar_agendamento(request: Request, data: dict):
             trn = _treinamento_ou_404(cursor, treinamento_id, agenda_id)
             if not titulo:
                 titulo = trn["nome"]
+        elif drone_id:
+            drn = _drone_ou_404(cursor, drone_id, agenda_id)
+            if not titulo:
+                titulo = drn["nome"]
         if not titulo:
-            raise HTTPException(status_code=400, detail="Informe o titulo, curso ou treinamento")
+            raise HTTPException(status_code=400, detail="Informe o titulo, curso, treinamento ou drone")
         status = data.get("status") if data.get("status") in _STATUS_VALIDOS else "agendado"
         modalidade = (data.get("modalidade")
                       if data.get("modalidade") in ("presencial", "online") else None)
         if status in _STATUS_OCUPA:
             erro = _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
-                                treinamento_id=treinamento_id)
+                                treinamento_id=treinamento_id, drone_id=drone_id)
             if erro:
                 raise HTTPException(status_code=409, detail=erro)
+        # Piloto: aceita user_id do grupo Drone. Só faz sentido quando a oferta é drone.
+        piloto_id = data.get("piloto_id") or None
+        if piloto_id and not drone_id:
+            piloto_id = None  # silencia em vez de erro — UX limpo
         novo = _gravar_agendamento(cursor, agenda_id, {
             "servico_id": servico_id,
             "treinamento_id": treinamento_id,
+            "drone_id": drone_id,
             "equipamento_id": data.get("equipamento_id") or None,
             "titulo": titulo,
             "cliente_nome": (data.get("cliente_nome") or "").strip() or None,
@@ -1619,6 +1823,7 @@ def criar_agendamento(request: Request, data: dict):
             "tipo_negocio": data.get("tipo_negocio") if data.get("tipo_negocio") in
                 ("locacao", "venda") else None,
             "vendedor_id": data.get("vendedor_id") or None,
+            "piloto_id": piloto_id,
             "inicio": inicio, "fim": fim, "status": status,
         }, origem="interno", created_by=user["id"])
         conn.commit()
@@ -1655,6 +1860,7 @@ def atualizar_agendamento(agendamento_id: int, request: Request, data: dict):
 
         novo_servico = _campo("servico_id") or None
         novo_treinamento = _campo("treinamento_id") or None
+        novo_drone = _campo("drone_id") or None
         novo_modalidade = _campo("modalidade")
         if novo_modalidade not in ("presencial", "online"):
             novo_modalidade = None
@@ -1662,23 +1868,33 @@ def atualizar_agendamento(agendamento_id: int, request: Request, data: dict):
             erro = _checar_vaga(cursor, atual["agenda_id"], novo_servico,
                                 novo_modalidade, inicio, fim,
                                 excluir_id=agendamento_id,
-                                treinamento_id=novo_treinamento)
+                                treinamento_id=novo_treinamento,
+                                drone_id=novo_drone)
             if erro:
                 raise HTTPException(status_code=409, detail=erro)
 
+        # Piloto só faz sentido em agendamento de drone
+        novo_piloto = _campo("piloto_id") or None
+        if novo_piloto and not novo_drone:
+            novo_piloto = None
+
         cursor.execute("""
             UPDATE atend_agendamentos
-               SET titulo=%s, servico_id=%s, treinamento_id=%s, equipamento_id=%s,
+               SET titulo=%s, servico_id=%s, treinamento_id=%s, drone_id=%s,
+                   equipamento_id=%s,
                    cliente_nome=%s, cliente_email=%s, cliente_telefone=%s,
                    observacoes=%s, modalidade=%s, tipo_negocio=%s, vendedor_id=%s,
+                   piloto_id=%s,
                    inicio=%s, fim=%s, status=%s
              WHERE id=%s
         """, (
-            titulo, novo_servico, novo_treinamento, _campo("equipamento_id") or None,
+            titulo, novo_servico, novo_treinamento, novo_drone,
+            _campo("equipamento_id") or None,
             (_campo("cliente_nome") or None), (_campo("cliente_email") or None),
             (_campo("cliente_telefone") or None), (_campo("observacoes") or None),
             (_campo("modalidade") or None), (_campo("tipo_negocio") or None),
             (_campo("vendedor_id") or None),
+            novo_piloto,
             inicio, fim, novo_status, agendamento_id,
         ))
         conn.commit()
@@ -1880,6 +2096,10 @@ def excluir_treinamento(treinamento_id: int, request: Request):
         cursor.execute(
             "DELETE FROM atend_midia_videos WHERE entidade='treinamento' AND entidade_id=%s",
             (treinamento_id,))
+        # Limpa vinculos m:n com equipamentos
+        cursor.execute(
+            "DELETE FROM atend_equipamento_vinculos WHERE entidade='treinamento' AND entidade_id=%s",
+            (treinamento_id,))
         cursor.execute("DELETE FROM atend_treinamentos WHERE id=%s", (treinamento_id,))
         conn.commit()
         return {"success": True}
@@ -1888,11 +2108,295 @@ def excluir_treinamento(treinamento_id: int, request: Request):
         conn.close()
 
 
+@router.post("/treinamentos/{treinamento_id}/duplicar")
+def duplicar_treinamento(treinamento_id: int, request: Request, data: dict):
+    """Duplica um treinamento em N agendas. Mesma lógica de /servicos/duplicar."""
+    _exigir_admin_suporte(request)
+    agenda_ids = data.get("agenda_ids") or []
+    if not isinstance(agenda_ids, list) or not agenda_ids:
+        raise HTTPException(status_code=400, detail="Informe ao menos uma agenda destino.")
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        original = _treinamento_ou_404(cursor, treinamento_id)
+
+        cursor.execute(
+            "SELECT id, nome FROM atend_agendas WHERE id IN ("
+            + ",".join(["%s"] * len(agenda_ids)) + ")",
+            tuple(agenda_ids),
+        )
+        agendas_existentes = {a["id"]: a["nome"] for a in cursor.fetchall()}
+
+        cursor.execute(
+            "SELECT equipamento_id FROM atend_equipamento_vinculos "
+            "WHERE entidade='treinamento' AND entidade_id=%s",
+            (treinamento_id,),
+        )
+        equip_ids = [r["equipamento_id"] for r in cursor.fetchall()]
+
+        criados = []
+        ignorados = []
+        for aid in agenda_ids:
+            if aid not in agendas_existentes:
+                ignorados.append({"agenda_id": aid, "motivo": "agenda inexistente"})
+                continue
+            if aid == original["agenda_id"]:
+                ignorados.append({"agenda_id": aid, "motivo": "mesma agenda do original"})
+                continue
+
+            cursor.execute("""
+                INSERT INTO atend_treinamentos
+                    (agenda_id, nome, descricao, duracao_min, cap_presencial, cap_online,
+                     instrutor, vendedor_id, vendedor_nome, ativo, ordem)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                aid, original["nome"], original.get("descricao"),
+                original.get("duracao_min", 60),
+                original.get("cap_presencial", 1), original.get("cap_online", 1),
+                original.get("instrutor"),
+                original.get("vendedor_id"), original.get("vendedor_nome"),
+                int(original.get("ativo") or 1), int(original.get("ordem") or 0),
+            ))
+            novo_id = cursor.lastrowid
+
+            for eq_id in equip_ids:
+                cursor.execute(
+                    "INSERT IGNORE INTO atend_equipamento_vinculos "
+                    "(equipamento_id, entidade, entidade_id) VALUES (%s, 'treinamento', %s)",
+                    (eq_id, novo_id),
+                )
+
+            criados.append({
+                "id": novo_id, "agenda_id": aid, "agenda_nome": agendas_existentes[aid],
+            })
+
+        conn.commit()
+        return {
+            "success": True,
+            "duplicados": len(criados),
+            "criados": criados,
+            "ignorados": ignorados,
+            "equipamentos_replicados": len(equip_ids),
+        }
+    finally:
+        cursor.close()
+        conn.close()
+
+
 # ============================================================
-# MIDIA (fotos e videos) - polimorfica (servico ou treinamento)
+# DRONES — espelho de treinamentos, mas SEM colisão com curso/treinamento.
+# (Drone usa recurso próprio — pode coexistir no mesmo horário/agenda.)
+# Os endpoints públicos retornam drones SEM precisar de token (igual treinos).
 # ============================================================
 
-_MIDIA_ENTIDADES = ("servico", "treinamento", "equipamento")
+def _drone_ou_404(cursor, drone_id: int, agenda_id: int = None) -> dict:
+    cursor.execute("SELECT * FROM atend_drones WHERE id=%s", (drone_id,))
+    d = cursor.fetchone()
+    if not d:
+        raise HTTPException(status_code=404, detail="Drone nao encontrado")
+    if agenda_id is not None and d["agenda_id"] != agenda_id:
+        raise HTTPException(status_code=400, detail="Drone nao pertence a agenda informada")
+    return d
+
+
+@router.get("/agendas/{agenda_id}/drones")
+def listar_drones(agenda_id: int, request: Request):
+    _exigir_view_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _agenda_ou_404(cursor, agenda_id)
+        cursor.execute("""
+            SELECT d.*,
+              (SELECT COUNT(*) FROM atend_midia_fotos WHERE entidade='drone' AND entidade_id=d.id) AS total_fotos,
+              (SELECT COUNT(*) FROM atend_midia_videos WHERE entidade='drone' AND entidade_id=d.id) AS total_videos,
+              (SELECT COUNT(*) FROM atend_equipamento_vinculos WHERE entidade='drone' AND entidade_id=d.id) AS total_equipamentos
+            FROM atend_drones d
+            WHERE d.agenda_id=%s ORDER BY d.ordem, d.nome
+        """, (agenda_id,))
+        return {"success": True, "drones": cursor.fetchall()}
+    finally:
+        cursor.close(); conn.close()
+
+
+@router.post("/drones")
+def criar_drone(request: Request, data: dict):
+    _exigir_admin_suporte(request)
+    agenda_id = data.get("agenda_id")
+    nome = (data.get("nome") or "").strip()
+    if not agenda_id or not nome:
+        raise HTTPException(status_code=400, detail="Agenda e nome sao obrigatorios")
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        agenda = _agenda_ou_404(cursor, agenda_id)
+        # Regra: drone é APENAS presencial (recurso físico). Não pode ser
+        # cadastrado em agenda online.
+        if (agenda.get("tipo") or "").lower() == "online":
+            raise HTTPException(status_code=400,
+                detail="Drone é apenas presencial — escolha uma agenda física.")
+        # cap_online sempre 0 para drone (UI também esconde o campo)
+        cursor.execute("""
+            INSERT INTO atend_drones
+                (agenda_id, nome, descricao, duracao_min, cap_presencial, cap_online,
+                 instrutor, vendedor_id, vendedor_nome, ativo, ordem)
+            VALUES (%s,%s,%s,%s,%s,0,%s,%s,%s,%s,%s)
+        """, (
+            agenda_id, nome, (data.get("descricao") or "").strip() or None,
+            int(data.get("duracao_min") or 60),
+            int(data.get("cap_presencial") or 1),
+            (data.get("instrutor") or "").strip() or None,
+            data.get("vendedor_id") or None,
+            (data.get("vendedor_nome") or "").strip() or None,
+            1 if data.get("ativo", 1) else 0,
+            int(data.get("ordem") or 0),
+        ))
+        new_id = cursor.lastrowid
+        conn.commit()
+        return {"success": True, "id": new_id}
+    finally:
+        cursor.close(); conn.close()
+
+
+@router.put("/drones/{drone_id}")
+def atualizar_drone(drone_id: int, request: Request, data: dict):
+    _exigir_admin_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        drone = _drone_ou_404(cursor, drone_id)
+        nome = (data.get("nome") or "").strip()
+        if not nome:
+            raise HTTPException(status_code=400, detail="Nome obrigatorio")
+        # Drone é apenas presencial — proteção dupla contra agenda online.
+        cursor.execute("SELECT tipo FROM atend_agendas WHERE id=%s", (drone["agenda_id"],))
+        ag = cursor.fetchone()
+        if ag and (ag.get("tipo") or "").lower() == "online":
+            raise HTTPException(status_code=400,
+                detail="Drone é apenas presencial — esta agenda é online.")
+        # cap_online sempre 0 (drone só presencial)
+        cursor.execute("""
+            UPDATE atend_drones SET
+              nome=%s, descricao=%s, duracao_min=%s,
+              cap_presencial=%s, cap_online=0,
+              instrutor=%s, vendedor_id=%s, vendedor_nome=%s,
+              ativo=%s, ordem=%s
+            WHERE id=%s
+        """, (
+            nome, (data.get("descricao") or "").strip() or None,
+            int(data.get("duracao_min") or 60),
+            int(data.get("cap_presencial") or 1),
+            (data.get("instrutor") or "").strip() or None,
+            data.get("vendedor_id") or None,
+            (data.get("vendedor_nome") or "").strip() or None,
+            1 if data.get("ativo", 1) else 0,
+            int(data.get("ordem") or 0), drone_id,
+        ))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close(); conn.close()
+
+
+@router.delete("/drones/{drone_id}")
+def excluir_drone(drone_id: int, request: Request):
+    _exigir_admin_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _drone_ou_404(cursor, drone_id)
+        cursor.execute("DELETE FROM atend_midia_fotos WHERE entidade='drone' AND entidade_id=%s", (drone_id,))
+        cursor.execute("DELETE FROM atend_midia_videos WHERE entidade='drone' AND entidade_id=%s", (drone_id,))
+        cursor.execute("DELETE FROM atend_equipamento_vinculos WHERE entidade='drone' AND entidade_id=%s", (drone_id,))
+        cursor.execute("DELETE FROM atend_drones WHERE id=%s", (drone_id,))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close(); conn.close()
+
+
+@router.post("/drones/{drone_id}/duplicar")
+def duplicar_drone(drone_id: int, request: Request, data: dict):
+    """Duplica drone em N agendas. Mesma lógica de duplicar treinamento."""
+    _exigir_admin_suporte(request)
+    agenda_ids = data.get("agenda_ids") or []
+    if not isinstance(agenda_ids, list) or not agenda_ids:
+        raise HTTPException(status_code=400, detail="Informe ao menos uma agenda destino.")
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        original = _drone_ou_404(cursor, drone_id)
+        cursor.execute("SELECT id, nome FROM atend_agendas WHERE id IN ("
+                       + ",".join(["%s"] * len(agenda_ids)) + ")", tuple(agenda_ids))
+        agendas_existentes = {a["id"]: a["nome"] for a in cursor.fetchall()}
+        cursor.execute(
+            "SELECT equipamento_id FROM atend_equipamento_vinculos "
+            "WHERE entidade='drone' AND entidade_id=%s", (drone_id,))
+        equip_ids = [r["equipamento_id"] for r in cursor.fetchall()]
+
+        criados, ignorados = [], []
+        for aid in agenda_ids:
+            if aid not in agendas_existentes:
+                ignorados.append({"agenda_id": aid, "motivo": "agenda inexistente"})
+                continue
+            if aid == original["agenda_id"]:
+                ignorados.append({"agenda_id": aid, "motivo": "mesma agenda do original"})
+                continue
+            cursor.execute("""
+                INSERT INTO atend_drones
+                    (agenda_id, nome, descricao, duracao_min, cap_presencial, cap_online,
+                     instrutor, vendedor_id, vendedor_nome, ativo, ordem)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            """, (
+                aid, original["nome"], original.get("descricao"),
+                original.get("duracao_min", 60),
+                original.get("cap_presencial", 1), original.get("cap_online", 1),
+                original.get("instrutor"),
+                original.get("vendedor_id"), original.get("vendedor_nome"),
+                int(original.get("ativo") or 1), int(original.get("ordem") or 0),
+            ))
+            novo_id = cursor.lastrowid
+            for eq_id in equip_ids:
+                cursor.execute(
+                    "INSERT IGNORE INTO atend_equipamento_vinculos "
+                    "(equipamento_id, entidade, entidade_id) VALUES (%s, 'drone', %s)",
+                    (eq_id, novo_id))
+            criados.append({"id": novo_id, "agenda_id": aid,
+                            "agenda_nome": agendas_existentes[aid]})
+        conn.commit()
+        return {
+            "success": True, "duplicados": len(criados),
+            "criados": criados, "ignorados": ignorados,
+            "equipamentos_replicados": len(equip_ids),
+        }
+    finally:
+        cursor.close(); conn.close()
+
+
+@router.get("/drones/{drone_id}/equipamentos")
+def listar_equipamentos_drone(drone_id: int, request: Request):
+    _exigir_view_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT e.id, e.nome, e.descricao
+            FROM atend_equipamentos e
+            JOIN atend_equipamento_vinculos v ON v.equipamento_id=e.id
+            WHERE v.entidade='drone' AND v.entidade_id=%s AND e.ativo=1
+            ORDER BY e.ordem, e.nome
+        """, (drone_id,))
+        return {"success": True, "equipamentos": cursor.fetchall()}
+    finally:
+        cursor.close(); conn.close()
+
+
+# ============================================================
+# MIDIA (fotos e videos) - polimorfica (servico, treinamento, drone)
+# ============================================================
+
+_MIDIA_ENTIDADES = ("servico", "treinamento", "equipamento", "drone")
 _UPLOAD_ROOT = Path(__file__).resolve().parents[2] / "web" / "uploads" / "atendimentos"
 _UPLOAD_URL_BASE = "/SistemaCPE/web/uploads/atendimentos"
 _FOTO_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
@@ -2052,11 +2556,26 @@ def excluir_video(video_id: int, request: Request):
 # PARTE PUBLICA (sem login) - o cliente se agenda
 # ============================================================
 
+def _request_eh_funcionario_cpe(request: Request) -> bool:
+    """True se a request vem com token de sessão CPE válido — significa que
+    é funcionário logado (não cliente público). Cursos são privados e só
+    visíveis para funcionários; treinamentos são públicos pra qualquer um.
+
+    Defesa em profundidade: o frontend já esconde cursos pra anônimos,
+    mas o backend AQUI é o gatekeeper real. Sem este filtro, basta forjar
+    a UI no DevTools pra ver cursos privados."""
+    return _resolve_user_id(request) is not None
+
+
 @router.get("/publico/agendas")
-def pub_listar_agendas(tipo: str = None):
-    """Agendas ativas, com seus servicos ativos (tela inicial publica).
+def pub_listar_agendas(request: Request, tipo: str = None):
+    """Agendas ativas, com suas ofertas (tela inicial publica).
+    - Treinamentos: sempre incluídos (público).
+    - Cursos: incluídos APENAS se request vem com token de funcionário CPE.
+
     Filtro opcional por tipo ('fisica' ou 'online')."""
     filtro_tipo = tipo if tipo in ("fisica", "online") else None
+    ehFunc = _request_eh_funcionario_cpe(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -2074,8 +2593,11 @@ def pub_listar_agendas(tipo: str = None):
             """)
         agendas = cursor.fetchall()
         for a in agendas:
-            a["servicos"] = _pub_listar_ofertas(cursor, a["id"], "servico")
+            # Cursos e Drones: privados — só funcionário CPE autenticado vê.
+            # Treinamentos: sempre públicos (qualquer cliente).
+            a["servicos"] = _pub_listar_ofertas(cursor, a["id"], "servico") if ehFunc else []
             a["treinamentos"] = _pub_listar_ofertas(cursor, a["id"], "treinamento")
+            a["drones"] = _pub_listar_ofertas(cursor, a["id"], "drone") if ehFunc else []
         return {"success": True, "agendas": agendas}
     finally:
         cursor.close()
@@ -2083,9 +2605,12 @@ def pub_listar_agendas(tipo: str = None):
 
 
 def _pub_listar_ofertas(cursor, agenda_id: int, entidade: str) -> list:
-    """Retorna cursos ou treinamentos da agenda com galeria de fotos/videos
-    inclusa. Usado pelos endpoints publicos."""
-    tabela = "atend_servicos" if entidade == "servico" else "atend_treinamentos"
+    """Retorna ofertas (servico/treinamento/drone) da agenda com galeria
+    de fotos/videos inclusa. Usado pelos endpoints publicos."""
+    if entidade == "servico":         tabela = "atend_servicos"
+    elif entidade == "treinamento":   tabela = "atend_treinamentos"
+    elif entidade == "drone":         tabela = "atend_drones"
+    else: raise ValueError("entidade invalida: " + str(entidade))
     cursor.execute(f"""
         SELECT id, nome, descricao, duracao_min, instrutor,
                COALESCE(vendedor_nome,
@@ -2109,7 +2634,9 @@ def _pub_listar_ofertas(cursor, agenda_id: int, entidade: str) -> list:
 
 
 @router.get("/publico/agendas/{agenda_id}")
-def pub_obter_agenda(agenda_id: int):
+def pub_obter_agenda(agenda_id: int, request: Request):
+    """Detalhe de agenda pública. Cursos só pra funcionário CPE logado."""
+    ehFunc = _request_eh_funcionario_cpe(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -2119,8 +2646,9 @@ def pub_obter_agenda(agenda_id: int):
         ag = cursor.fetchone()
         if not ag:
             raise HTTPException(status_code=404, detail="Agenda nao encontrada")
-        ag["servicos"] = _pub_listar_ofertas(cursor, agenda_id, "servico")
+        ag["servicos"] = _pub_listar_ofertas(cursor, agenda_id, "servico") if ehFunc else []
         ag["treinamentos"] = _pub_listar_ofertas(cursor, agenda_id, "treinamento")
+        ag["drones"] = _pub_listar_ofertas(cursor, agenda_id, "drone") if ehFunc else []
         return {"success": True, "agenda": ag}
     finally:
         cursor.close()
@@ -2165,6 +2693,25 @@ def pub_equipamentos_treino(treinamento_id: int):
         conn.close()
 
 
+@router.get("/publico/drones/{drone_id}/equipamentos")
+def pub_equipamentos_drone(drone_id: int):
+    """Equipamentos vinculados a um drone."""
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT e.id, e.nome, e.descricao
+            FROM atend_equipamentos e
+            JOIN atend_equipamento_vinculos v ON v.equipamento_id = e.id
+            WHERE v.entidade='drone' AND v.entidade_id=%s AND e.ativo=1
+            ORDER BY e.ordem, e.nome
+        """, (drone_id,))
+        return {"success": True, "equipamentos": cursor.fetchall()}
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.get("/publico/vendedores")
 def pub_vendedores():
     return {"success": True, "vendedores": _query_vendedores()}
@@ -2172,10 +2719,11 @@ def pub_vendedores():
 
 def _contexto_agenda_oferta(cursor, agenda_id: int,
                             servico_id: int = None,
-                            treinamento_id: int = None):
-    """Carrega agenda ativa + oferta ativa (curso OU treinamento) + faixas de
-    horario. A oferta retornada tem chaves uniformes: id, nome, agenda_id,
-    duracao_min, cap_presencial, cap_online + `entidade` ('servico'|'treinamento')."""
+                            treinamento_id: int = None,
+                            drone_id: int = None):
+    """Carrega agenda ativa + oferta ativa (curso, treinamento ou drone) +
+    faixas de horario. A oferta retornada tem chaves uniformes: id, nome,
+    agenda_id, duracao_min, cap_presencial, cap_online + `entidade`."""
     cursor.execute("SELECT * FROM atend_agendas WHERE id=%s AND ativo=1", (agenda_id,))
     agenda = cursor.fetchone()
     if not agenda:
@@ -2193,8 +2741,15 @@ def _contexto_agenda_oferta(cursor, agenda_id: int,
         if not t or t["agenda_id"] != agenda_id:
             raise HTTPException(status_code=404, detail="Treinamento nao encontrado nessa agenda")
         oferta = dict(t); oferta["entidade"] = "treinamento"
+    elif drone_id:
+        cursor.execute("SELECT * FROM atend_drones WHERE id=%s AND ativo=1", (drone_id,))
+        d = cursor.fetchone()
+        if not d or d["agenda_id"] != agenda_id:
+            raise HTTPException(status_code=404, detail="Drone nao encontrado nessa agenda")
+        oferta = dict(d); oferta["entidade"] = "drone"
     else:
-        raise HTTPException(status_code=400, detail="Informe servico_id ou treinamento_id")
+        raise HTTPException(status_code=400,
+                            detail="Informe servico_id, treinamento_id ou drone_id")
     cursor.execute("SELECT * FROM atend_horarios WHERE agenda_id=%s", (agenda_id,))
     horarios = cursor.fetchall()
     return agenda, oferta, horarios
@@ -2202,17 +2757,17 @@ def _contexto_agenda_oferta(cursor, agenda_id: int,
 
 @router.get("/publico/agendas/{agenda_id}/dias")
 def pub_dias_disponiveis(agenda_id: int, servico_id: int = None,
-                         treinamento_id: int = None, modalidade: str = None):
-    """Dias com pelo menos um horario livre para a oferta (curso ou
-    treinamento) na modalidade escolhida, nos proximos `_DIAS_BUSCA_PUBLICA`
-    dias. Passe APENAS UM: servico_id ou treinamento_id."""
+                         treinamento_id: int = None, drone_id: int = None,
+                         modalidade: str = None):
+    """Dias com pelo menos um horario livre para a oferta (curso, treinamento
+    ou drone) na modalidade escolhida. Passe APENAS UM dos IDs."""
     if modalidade not in ("presencial", "online"):
         modalidade = None
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
         agenda, oferta, horarios = _contexto_agenda_oferta(
-            cursor, agenda_id, servico_id, treinamento_id)
+            cursor, agenda_id, servico_id, treinamento_id, drone_id)
         agora = datetime.now()
         hoje = agora.date()
         fim_janela = datetime.combine(hoje + timedelta(days=_DIAS_BUSCA_PUBLICA), _time())
@@ -2248,7 +2803,7 @@ def pub_dias_disponiveis(agenda_id: int, servico_id: int = None,
 @router.get("/publico/agendas/{agenda_id}/horarios")
 def pub_horarios_disponiveis(agenda_id: int, data: str,
                              servico_id: int = None, treinamento_id: int = None,
-                             modalidade: str = None):
+                             drone_id: int = None, modalidade: str = None):
     """Horarios de inicio da oferta numa data, com a flag de disponibilidade."""
     if modalidade not in ("presencial", "online"):
         modalidade = None
@@ -2256,7 +2811,7 @@ def pub_horarios_disponiveis(agenda_id: int, data: str,
     cursor = conn.cursor(dictionary=True)
     try:
         agenda, oferta, horarios = _contexto_agenda_oferta(
-            cursor, agenda_id, servico_id, treinamento_id)
+            cursor, agenda_id, servico_id, treinamento_id, drone_id)
         dia = _parse_date(data)
         if _eh_feriado(cursor, agenda_id, dia):
             return {"success": True, "duracao_min": oferta["duracao_min"],
@@ -2287,14 +2842,26 @@ def pub_horarios_disponiveis(agenda_id: int, data: str,
 
 
 @router.post("/publico/agendar")
-def pub_agendar(data: dict):
-    """Cria o agendamento feito pelo cliente. Entra como 'pendente'."""
+def pub_agendar(data: dict, request: Request):
+    """Cria o agendamento feito pelo cliente. Entra como 'pendente'.
+
+    - Cursos (servico_id): privados, só funcionário CPE autenticado pode marcar.
+    - Treinamentos e Drones: livres pra qualquer cliente."""
     agenda_id = data.get("agenda_id")
     servico_id = data.get("servico_id") or None
     treinamento_id = data.get("treinamento_id") or None
-    if not agenda_id or (not servico_id and not treinamento_id):
+    drone_id = data.get("drone_id") or None
+    if not agenda_id or (not servico_id and not treinamento_id and not drone_id):
         raise HTTPException(status_code=400,
-                            detail="Selecione a agenda e o curso ou treinamento")
+                            detail="Selecione a agenda e o curso, treinamento ou drone")
+
+    # Guarda: curso e drone só pra funcionário CPE logado (privados).
+    if (servico_id or drone_id) and not _request_eh_funcionario_cpe(request):
+        item = "curso" if servico_id else "drone"
+        raise HTTPException(
+            status_code=403,
+            detail=f"Agendamento de {item} é restrito a funcionários CPE autenticados.",
+        )
     nome = (data.get("cliente_nome") or "").strip()
     email = (data.get("cliente_email") or "").strip()
     telefone = (data.get("cliente_telefone") or "").strip()
@@ -2308,7 +2875,7 @@ def pub_agendar(data: dict):
     cursor = conn.cursor(dictionary=True)
     try:
         agenda, oferta, horarios = _contexto_agenda_oferta(
-            cursor, agenda_id, servico_id, treinamento_id)
+            cursor, agenda_id, servico_id, treinamento_id, drone_id)
         dur = oferta["duracao_min"]
         fim = inicio + timedelta(minutes=dur)
 
@@ -2325,7 +2892,7 @@ def pub_agendar(data: dict):
                                 detail="Informe se o atendimento sera presencial ou online")
         # valida capacidade da oferta para a modalidade escolhida
         erro = _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
-                            treinamento_id=treinamento_id)
+                            treinamento_id=treinamento_id, drone_id=drone_id)
         if erro:
             raise HTTPException(status_code=409, detail=erro + " Escolha outro horario.")
 
@@ -2348,9 +2915,14 @@ def pub_agendar(data: dict):
                 raise HTTPException(status_code=400, detail="Vendedor invalido")
             vendedor_nome_livre = None  # tem cadastro: ignora nome livre
 
+        # Piloto: só faz sentido em agendamento de drone (oferta=drone).
+        piloto_id_pub = data.get("piloto_id") or None
+        if piloto_id_pub and not drone_id:
+            piloto_id_pub = None
         novo = _gravar_agendamento(cursor, agenda_id, {
             "servico_id": servico_id,
             "treinamento_id": treinamento_id,
+            "drone_id": drone_id,
             "equipamento_id": equipamento_id,
             "titulo": oferta["nome"],
             "cliente_nome": nome,
@@ -2365,6 +2937,7 @@ def pub_agendar(data: dict):
                 ("locacao", "venda") else None,
             "vendedor_id": vendedor_id,
             "vendedor_nome": vendedor_nome_livre,
+            "piloto_id": piloto_id_pub,
             "inicio": inicio, "fim": fim, "status": "pendente",
         }, origem="publico", created_by=None)
         conn.commit()

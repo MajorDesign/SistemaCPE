@@ -157,7 +157,7 @@ def enviar_email(
 
 
 # =====================================================================
-# Templates HTML — visual leve, cores do sistema (#667eea / #764ba2)
+# Templates HTML — identidade CPE Control (#FFC107 amarelo / #1A1A1A preto)
 # =====================================================================
 
 _BASE_TEMPLATE = """<!DOCTYPE html>
@@ -167,26 +167,37 @@ _BASE_TEMPLATE = """<!DOCTYPE html>
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0"
              style="max-width:600px;background:#fff;border-radius:12px;overflow:hidden;
-                    box-shadow:0 4px 14px rgba(0,0,0,0.06);">
+                    box-shadow:0 4px 18px rgba(0,0,0,0.08);">
         <tr>
-          <td style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
-                     padding:20px 28px;color:#fff;">
-            <div style="font-size:13px;letter-spacing:.06em;text-transform:uppercase;opacity:.85;">
+          <td style="background:linear-gradient(135deg,#FFC107 0%,#FFA500 100%);
+                     padding:22px 28px;color:#1A1A1A;
+                     border-bottom:4px solid #1A1A1A;">
+            <div style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;opacity:.75;">
               {tag}
             </div>
-            <div style="font-size:20px;font-weight:600;margin-top:4px;">
+            <div style="font-size:22px;font-weight:800;margin-top:4px;line-height:1.2;">
               {title}
             </div>
           </td>
         </tr>
-        <tr><td style="padding:24px 28px;font-size:14px;line-height:1.55;">
+        <tr><td style="padding:26px 28px;font-size:14px;line-height:1.6;color:#1f2937;">
           {body}
         </td></tr>
         <tr>
-          <td style="padding:14px 28px;background:#f9fafb;border-top:1px solid #eef0f4;
-                     font-size:12px;color:#6b7280;">
-            <div>CPE Control · Sistema de Chamados</div>
-            <div style="margin-top:2px;">Você está recebendo este e-mail porque está envolvido neste chamado.</div>
+          <td style="padding:16px 28px;background:#1A1A1A;
+                     border-top:3px solid #FFC107;
+                     font-size:12px;color:#cbd5e1;text-align:center;">
+            <div style="margin-bottom:6px;">
+              <span style="color:#FFC107;font-weight:700;letter-spacing:.04em;">CPE&nbsp;CONTROL</span>
+              <span style="opacity:.6;"> · Sistema de Gerenciamento Inteligente</span>
+            </div>
+            <div style="font-size:11px;opacity:.7;">
+              E-mail automático — não responda a esta mensagem.
+            </div>
+            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2a2a2a;
+                        font-size:11px;color:#94a3b8;">
+              <i>Desenvolvido por</i> <strong style="color:#FFC107;">Jonathan Lopes</strong>
+            </div>
           </td>
         </tr>
       </table>
