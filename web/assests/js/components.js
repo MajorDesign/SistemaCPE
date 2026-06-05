@@ -50,21 +50,9 @@ const sidebarHTML = `
       </a>
     </li>
     <li class="menu-item">
-      <a href="pages/billing.html" class="menu-link">
-        <span class="menu-icon">💰</span>
-        <span>Faturamento</span>
-      </a>
-    </li>
-    <li class="menu-item">
-      <a href="pages/knowledge-base.html" class="menu-link">
+      <a href="pages/base_conhecimento.html" class="menu-link">
         <span class="menu-icon">📚</span>
         <span>Base de conhecimento</span>
-      </a>
-    </li>
-    <li class="menu-item">
-      <a href="pages/registrations.html" class="menu-link">
-        <span class="menu-icon">👥</span>
-        <span>Cadastros</span>
       </a>
     </li>
     <li class="menu-item">

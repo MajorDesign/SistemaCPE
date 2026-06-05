@@ -97,10 +97,10 @@ PAGES_CATALOG: list[PageDef] = [
     # Relatorios). O arquivo avaliacoes.html virou shim de redirect; a
     # permissao foi removida pra nao aparecer em telas de admin de roles.
 
-    {"page_key": "KNOWLEDGE_BASE",   "display_name": "Base de Conhecimento",
-     "description": "Artigos, manuais e documentação",
+    {"page_key": "BASE_CONHECIMENTO", "display_name": "Base de Conhecimento",
+     "description": "Artigos, manuais e documentação por setor",
      "category": "operational", "icon": "bi-book",
-     "url": "/SistemaCPE/web/pages/knowledge-base.html",           "ordem": 110},
+     "url": "/SistemaCPE/web/pages/base_conhecimento.html",        "ordem": 110},
 
     {"page_key": "DOWNLOAD_AGENTS",  "display_name": "Download de Agentes",
      "description": "Baixar agentes de instalação",
@@ -156,16 +156,6 @@ PAGES_CATALOG: list[PageDef] = [
      "category": "admin", "icon": "bi-graph-up",
      "url": "/SistemaCPE/web/pages/reports.html",                  "ordem": 250,
      "default_roles": ["RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"]},
-
-    {"page_key": "BILLING",          "display_name": "Faturamento",
-     "description": "Faturamento e pagamentos",
-     "category": "admin", "icon": "bi-credit-card",
-     "url": "/SistemaCPE/web/pages/billing.html",                  "ordem": 260},
-
-    {"page_key": "REGISTRATIONS",    "display_name": "Cadastros",
-     "description": "Cadastros diversos do sistema",
-     "category": "admin", "icon": "bi-person-plus",
-     "url": "/SistemaCPE/web/pages/registrations.html",            "ordem": 270},
 
     # ───────── Configuração ─────────
     {"page_key": "SETTINGS",         "display_name": "Configurações",
