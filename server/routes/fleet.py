@@ -132,9 +132,10 @@ def list_vehicles(request: Request, include_inativos: int = 0):
                     FROM fleet_reservations r
                     JOIN users sol ON sol.id = r.solicitante_id
                     WHERE r.vehicle_id = v.id AND r.status = 'aprovado'
-                      AND r.data_reserva = CURDATE()
-                      AND r.horario_fim >= CURTIME()
-                    ORDER BY r.horario_inicio LIMIT 1
+                      AND r.data_reserva <= CURDATE()
+                      AND COALESCE(r.data_fim, r.data_reserva) >= CURDATE()
+                      AND TIMESTAMP(COALESCE(r.data_fim, r.data_reserva), r.horario_fim) >= NOW()
+                    ORDER BY r.data_reserva, r.horario_inicio LIMIT 1
                    ) AS reserva_ativa,
                    (SELECT ck.id FROM fleet_checklists ck
                     WHERE ck.vehicle_id = v.id
@@ -751,22 +752,26 @@ def create_checklist(request: Request, data: dict):
                 detail=f"Veiculo com manutencao agendada ({manut_bloqueio['tipo']}) a partir de {manut_bloqueio['data_entrada']}. Aguarde liberacao pelo responsavel."
             )
 
-        # Verificar reserva aprovada para outro usuário (30min antes até fim)
+        # Verificar reserva aprovada para outro usuario (1h antes do inicio ate o fim)
+        # Considera reservas multi-dia: ativa se NOW() esta em [inicio-1h, fim_efetivo]
         cursor.execute("""
-            SELECT r.id, r.solicitante_id, r.horario_inicio, r.horario_fim, sol.name AS sol_nome
+            SELECT r.id, r.solicitante_id, r.data_reserva, r.data_fim,
+                   r.horario_inicio, r.horario_fim, sol.name AS sol_nome
             FROM fleet_reservations r
             JOIN users sol ON sol.id = r.solicitante_id
             WHERE r.vehicle_id = %s AND r.status = 'aprovado'
-              AND r.data_reserva = CURDATE()
-              AND ADDTIME(r.horario_inicio, '-01:00:00') <= CURTIME()
-              AND r.horario_fim > CURTIME()
               AND r.solicitante_id != %s
+              AND TIMESTAMP(r.data_reserva, r.horario_inicio) - INTERVAL 1 HOUR <= NOW()
+              AND TIMESTAMP(COALESCE(r.data_fim, r.data_reserva), r.horario_fim) > NOW()
         """, (vehicle_id, user_id))
         reserva_bloqueio = cursor.fetchone()
         if reserva_bloqueio:
+            df_ex = reserva_bloqueio.get("data_fim") or reserva_bloqueio["data_reserva"]
             raise HTTPException(
                 status_code=400,
-                detail=f"Veiculo reservado por {reserva_bloqueio['sol_nome']} de {reserva_bloqueio['horario_inicio']} a {reserva_bloqueio['horario_fim']}"
+                detail=(f"Veiculo reservado por {reserva_bloqueio['sol_nome']} de "
+                        f"{reserva_bloqueio['data_reserva']} {reserva_bloqueio['horario_inicio']} "
+                        f"ate {df_ex} {reserva_bloqueio['horario_fim']}")
             )
 
         cursor.execute("""
@@ -2404,6 +2409,7 @@ def create_reservation(request: Request, data: dict):
     user_id = _get_user_id(request)
     vehicle_id = data.get("vehicle_id")
     data_reserva = data.get("data_reserva")
+    data_fim = (data.get("data_fim") or "").strip() or None  # opcional; NULL = mesmo dia
     horario_inicio = data.get("horario_inicio")
     horario_fim = data.get("horario_fim")
     destino = (data.get("destino") or "").strip()
@@ -2414,7 +2420,9 @@ def create_reservation(request: Request, data: dict):
     # Não permitir agendamento retroativo
     try:
         hi = horario_inicio if len(horario_inicio) > 5 else f"{horario_inicio}:00"
+        hf = horario_fim if len(horario_fim) > 5 else f"{horario_fim}:00"
         inicio_dt = datetime.fromisoformat(f"{data_reserva}T{hi}")
+        fim_dt = datetime.fromisoformat(f"{data_fim or data_reserva}T{hf}")
     except ValueError:
         raise HTTPException(status_code=400, detail="Data/horário inválidos.")
     if inicio_dt < datetime.now():
@@ -2422,6 +2430,16 @@ def create_reservation(request: Request, data: dict):
             status_code=400,
             detail="O horário do agendamento não pode ser menor do que a hora do dia atual."
         )
+    if fim_dt <= inicio_dt:
+        raise HTTPException(
+            status_code=400,
+            detail="A data/hora de fim deve ser posterior à de início."
+        )
+    # data_fim, se vier, precisa ser >= data_reserva
+    if data_fim and data_fim < data_reserva:
+        raise HTTPException(status_code=400, detail="Data de fim deve ser igual ou posterior à data de início.")
+
+    data_fim_eff = data_fim or data_reserva  # ultimo dia efetivo da reserva
 
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
@@ -2432,7 +2450,8 @@ def create_reservation(request: Request, data: dict):
         if veh and veh["status"] in ("manutencao", "revisao"):
             raise HTTPException(status_code=400, detail="Veiculo esta em manutencao/revisao e nao pode ser agendado")
 
-        # Verificar se tem manutenção agendada na data solicitada
+        # Manutencao agendada que intersecta [data_reserva, data_fim_eff]?
+        # manut [me, mc] intersecta nova [dr, df_eff] se me <= df_eff E (mc IS NULL OR mc >= dr)
         cursor.execute("""
             SELECT m.id, m.tipo, m.data_entrada, m.data_conclusao
             FROM fleet_maintenance m
@@ -2440,7 +2459,7 @@ def create_reservation(request: Request, data: dict):
               AND m.data_entrada IS NOT NULL
               AND m.data_entrada <= %s
               AND (m.data_conclusao IS NULL OR m.data_conclusao >= %s)
-        """, (vehicle_id, data_reserva, data_reserva))
+        """, (vehicle_id, data_fim_eff, data_reserva))
         manut = cursor.fetchone()
         if manut:
             raise HTTPException(
@@ -2448,26 +2467,33 @@ def create_reservation(request: Request, data: dict):
                 detail=f"Veiculo com manutencao agendada ({manut['tipo']}) a partir de {manut['data_entrada']}. Aguarde a liberacao pelo responsavel."
             )
 
-        # Verificar conflito de horário (overlap)
+        # Conflito de reserva: comparar TIMESTAMPs continuos.
+        # nova: [inicio_dt, fim_dt]
+        # existente: [data_reserva + hi, COALESCE(data_fim,data_reserva) + hf]
+        # overlap se existente_fim > nova_inicio AND existente_inicio < nova_fim
         cursor.execute("""
-            SELECT id, solicitante_id, horario_inicio, horario_fim
+            SELECT id, solicitante_id, data_reserva, data_fim, horario_inicio, horario_fim
             FROM fleet_reservations
-            WHERE vehicle_id = %s AND data_reserva = %s
+            WHERE vehicle_id = %s
               AND status IN ('pendente','aprovado')
-              AND horario_inicio < %s AND horario_fim > %s
-        """, (vehicle_id, data_reserva, horario_fim, horario_inicio))
+              AND TIMESTAMP(COALESCE(data_fim, data_reserva), horario_fim) > %s
+              AND TIMESTAMP(data_reserva, horario_inicio) < %s
+        """, (vehicle_id, f"{data_reserva} {hi}", f"{data_fim_eff} {hf}"))
         conflito = cursor.fetchone()
         if conflito:
+            df_ex = conflito.get("data_fim") or conflito["data_reserva"]
             raise HTTPException(
                 status_code=409,
-                detail=f"Conflito: este veiculo ja tem reserva #{conflito['id']} de {conflito['horario_inicio']} a {conflito['horario_fim']} neste dia"
+                detail=(f"Conflito: este veiculo ja tem reserva #{conflito['id']} "
+                        f"de {conflito['data_reserva']} {conflito['horario_inicio']} "
+                        f"ate {df_ex} {conflito['horario_fim']}")
             )
 
         cursor.execute("""
             INSERT INTO fleet_reservations
-                (vehicle_id, solicitante_id, destino, data_reserva, horario_inicio, horario_fim)
-            VALUES (%s,%s,%s,%s,%s,%s)
-        """, (vehicle_id, user_id, destino, data_reserva, horario_inicio, horario_fim))
+                (vehicle_id, solicitante_id, destino, data_reserva, data_fim, horario_inicio, horario_fim)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, (vehicle_id, user_id, destino, data_reserva, data_fim, horario_inicio, horario_fim))
         conn.commit()
         return {"success": True, "id": cursor.lastrowid, "message": "Reserva enviada para aprovacao!"}
     except HTTPException:
@@ -2495,15 +2521,20 @@ def approve_reservation(res_id: int, request: Request):
         if r["status"] != "pendente":
             raise HTTPException(status_code=400, detail="Reserva nao esta pendente")
 
-        # Re-checar conflito com outras aprovadas
+        # Re-checar conflito com outras aprovadas (timestamp continuo, multi-dia)
         cursor.execute("""
             SELECT id FROM fleet_reservations
-            WHERE vehicle_id=%s AND data_reserva=%s AND id!=%s
+            WHERE vehicle_id=%s AND id!=%s
               AND status='aprovado'
-              AND horario_inicio < %s AND horario_fim > %s
-        """, (r["vehicle_id"], r["data_reserva"], res_id, r["horario_fim"], r["horario_inicio"]))
+              AND TIMESTAMP(COALESCE(data_fim, data_reserva), horario_fim) > TIMESTAMP(%s, %s)
+              AND TIMESTAMP(data_reserva, horario_inicio) < TIMESTAMP(%s, %s)
+        """, (
+            r["vehicle_id"], res_id,
+            r["data_reserva"], r["horario_inicio"],
+            r.get("data_fim") or r["data_reserva"], r["horario_fim"],
+        ))
         if cursor.fetchone():
-            raise HTTPException(status_code=409, detail="Conflito com outra reserva ja aprovada neste horario")
+            raise HTTPException(status_code=409, detail="Conflito com outra reserva ja aprovada neste periodo")
 
         cursor.execute("""
             UPDATE fleet_reservations
