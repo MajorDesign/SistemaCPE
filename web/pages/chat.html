@@ -1083,6 +1083,36 @@
     .voice-peer-card video {
       position: absolute; inset: 0; width: 100%; height: 100%;
       object-fit: cover; border-radius: 10px; background: #000;
+      cursor: zoom-in;
+    }
+    /* Modal de expansao de video (screen share / camera) */
+    .voice-expand-overlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0,0,0,0.92);
+      display: none; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .voice-expand-overlay.open { display: flex; }
+    .voice-expand-overlay video {
+      max-width: 100%; max-height: 100%;
+      width: auto; height: auto;
+      object-fit: contain; background: #000;
+      border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+      cursor: zoom-out;
+    }
+    .voice-expand-overlay .ve-close {
+      position: absolute; top: 16px; right: 20px;
+      width: 44px; height: 44px; border-radius: 50%;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.25);
+      color: #fff; font-size: 1.4rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .voice-expand-overlay .ve-close:hover { background: rgba(220,38,38,0.85); }
+    .voice-expand-overlay .ve-title {
+      position: absolute; top: 18px; left: 24px;
+      color: #fff; font-weight: 600; font-size: 1rem;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+      display: flex; align-items: center; gap: 8px;
     }
     .voice-controls {
       display: flex; gap: 10px; justify-content: center;
@@ -1319,7 +1349,7 @@
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-06-03"></script>
   <script src="/SistemaCPE/web/assests/js/pwa.js" defer></script>
-  <script src="/SistemaCPE/web/assests/js/chat-voice.js" defer></script>
+  <script src="/SistemaCPE/web/assests/js/chat-voice.js?v=2026-06-15" defer></script>
   <script>pageGuard('CHAT');</script>
 </head>
 
@@ -1457,6 +1487,14 @@
           </div>
         </div>
         <div class="voice-room" id="chatVoiceRoom" style="display:none"></div>
+        <!-- Modal de expansao de video (screen share / camera) — preenchido por chat-voice.js -->
+        <div class="voice-expand-overlay" id="voiceExpandOverlay" onclick="if(event.target===this)window.voiceExpandClose()">
+          <div class="ve-title"><i class="bi bi-display-fill"></i><span id="voiceExpandTitle">Compartilhamento</span></div>
+          <button class="ve-close" type="button" onclick="window.voiceExpandClose()" title="Fechar (Esc)">
+            <i class="bi bi-x-lg"></i>
+          </button>
+          <video id="voiceExpandVideo" autoplay playsinline></video>
+        </div>
         <div class="chat-typing-bar" id="chatTypingBar"></div>
         <div class="chat-reply-preview" id="chatReplyPreview">
           <i class="bi bi-reply"></i>

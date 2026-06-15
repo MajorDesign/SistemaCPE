@@ -475,6 +475,7 @@
 
   // Cria ou reaproveita um <video> dentro do card. Diferencia por data-key
   // (1 video por stream — assim camera + screen share coexistem).
+  // Click no video abre modal fullscreen com o mesmo stream.
   function _ensureVideo(card, key, stream, muted) {
     if (!card || !stream) return null;
     let v = card.querySelector(`video[data-vkey="${key}"]`);
@@ -483,11 +484,44 @@
       v.autoplay = true; v.playsInline = true;
       v.muted = !!muted;
       v.dataset.vkey = key;
+      v.title = 'Clique para expandir';
+      v.addEventListener('click', () => {
+        const peerName = card.querySelector('.peer-name')?.textContent || 'Compartilhamento';
+        const isScreen = key.endsWith('-screen') || (stream.getVideoTracks()[0] && _ehTrackDeTela(stream.getVideoTracks()[0]));
+        _abrirModalExpandido(stream, peerName, isScreen, !!muted);
+      });
       card.appendChild(v);
     }
     if (v.srcObject !== stream) v.srcObject = stream;
     return v;
   }
+
+  // Abre o modal de expansao reaplicando o mesmo MediaStream num <video> grande.
+  // O video do card continua tocando normal (MediaStream suporta multiplos
+  // consumidores). Modal fecha por ESC, click no overlay ou botao X.
+  function _abrirModalExpandido(stream, titulo, isScreen, muted) {
+    const overlay = document.getElementById('voiceExpandOverlay');
+    const vid = document.getElementById('voiceExpandVideo');
+    const tit = document.getElementById('voiceExpandTitle');
+    if (!overlay || !vid) return;
+    tit.textContent = (isScreen ? 'Tela de ' : 'Camera de ') + titulo;
+    vid.muted = muted;  // self = muted; remoto = nao mute (audio do screen share passa)
+    vid.srcObject = stream;
+    overlay.classList.add('open');
+    if (!window._voiceExpandEscHandler) {
+      window._voiceExpandEscHandler = (ev) => {
+        if (ev.key === 'Escape') window.voiceExpandClose();
+      };
+      document.addEventListener('keydown', window._voiceExpandEscHandler);
+    }
+  }
+
+  window.voiceExpandClose = function () {
+    const overlay = document.getElementById('voiceExpandOverlay');
+    const vid = document.getElementById('voiceExpandVideo');
+    if (overlay) overlay.classList.remove('open');
+    if (vid) { vid.srcObject = null; vid.pause(); }
+  };
 
   // Heuristica pra distinguir track da camera vs screen share
   // (label da screen costuma conter "screen" / "display" / "window" / "tab")
