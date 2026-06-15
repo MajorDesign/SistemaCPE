@@ -9,10 +9,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/fleet.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/fleet.css?v=2026-06-15">
   <!-- Config global (define API_BASE_URL = http://127.0.0.1:8000) -->
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-06-03"></script>
+  <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-06-15"></script>
   <script>pageGuard('FLEET');</script>
 </head>
 <body class="fleet-body">
@@ -441,22 +441,29 @@
         <label class="fleet-label">Destino <span class="req">*</span></label>
         <input class="fleet-input" id="resDestino" placeholder="Ex: Visita ao cliente - Centro">
       </div>
-      <div class="fleet-grid-3">
+      <div class="fleet-grid-2">
         <div class="fleet-form-group">
-          <label class="fleet-label">Data <span class="req">*</span></label>
+          <label class="fleet-label">Data de início <span class="req">*</span></label>
           <input class="fleet-input" type="date" id="resData">
         </div>
         <div class="fleet-form-group">
-          <label class="fleet-label">Início <span class="req">*</span></label>
+          <label class="fleet-label">Data de fim <span style="color:#9CA3AF;font-weight:400;font-size:11px">(opcional)</span></label>
+          <input class="fleet-input" type="date" id="resDataFim" placeholder="Mesmo dia">
+        </div>
+      </div>
+      <div class="fleet-grid-2">
+        <div class="fleet-form-group">
+          <label class="fleet-label">Hora de início <span class="req">*</span></label>
           <input class="fleet-input" type="time" id="resInicio">
         </div>
         <div class="fleet-form-group">
-          <label class="fleet-label">Fim <span class="req">*</span></label>
+          <label class="fleet-label">Hora de fim <span class="req">*</span></label>
           <input class="fleet-input" type="time" id="resFim">
         </div>
       </div>
       <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px 14px;font-size:12px;color:#1E40AF;margin-top:8px">
         <i class="bi bi-info-circle-fill"></i> A reserva será enviada para aprovação do responsável. O veículo ficará indisponível 1 hora antes do horário de início para outros usuários.
+        <br><strong>Reserva de vários dias:</strong> preencha "Data de fim" — o veículo fica ocupado continuamente do início ao fim (devolução).
       </div>
     </div>
     <div class="fleet-modal-footer">
@@ -3715,7 +3722,29 @@ function renderApprovedToday() {
 }
 
 function _resDate(r) { return ((r.data_reserva||'').split('T')[0]); }
+function _resDateFim(r) { return ((r.data_fim || r.data_reserva || '').split('T')[0]); }
 function _resDay(r) { return parseInt(_resDate(r).split('-')[2] || '0'); }
+// Reserva multi-dia? Lista de dias do mes atual cobertos por ela (ou apenas o dia inicial).
+function _resDaysNoMes(r, year, month) {
+  const ini = _resDate(r), fim = _resDateFim(r);
+  if (!ini) return [];
+  const dIni = new Date(ini + 'T00:00:00');
+  const dFim = new Date(fim + 'T00:00:00');
+  const out = [];
+  for (let d = new Date(dIni); d <= dFim; d.setDate(d.getDate() + 1)) {
+    if (d.getFullYear() === year && (d.getMonth() + 1) === month) out.push(d.getDate());
+  }
+  return out.length ? out : [_resDay(r)];
+}
+function _resCobreData(r, dateStr) {
+  const ini = _resDate(r), fim = _resDateFim(r);
+  return ini && dateStr >= ini && dateStr <= fim;
+}
+function _resPeriodoFmt(r) {
+  const ini = _resDate(r).split('-').reverse().join('/');
+  const fim = _resDateFim(r).split('-').reverse().join('/');
+  return ini === fim ? ini : (ini + ' → ' + fim);
+}
 
 function renderReservationsList() {
   const isAdmin = ['ADMIN','TI','RESPONSAVEL_GRUPO'].includes(currentUser?.role);
@@ -3730,7 +3759,7 @@ function renderReservationsList() {
   }
 
   container.innerHTML = list.map(r => {
-    const dataFmt = _resDate(r).split('-').reverse().join('/');
+    const dataFmt = _resPeriodoFmt(r);
     const actions = [];
     if (r.status === 'pendente' && isAdmin) {
       actions.push('<button class="btn-fleet btn-fleet-sm" style="background:#DCFCE7;color:#16A34A;border:1px solid #BBF7D0" onclick="approveReservation('+r.id+')"><i class="bi bi-check-lg"></i> Aprovar</button>');
@@ -3770,8 +3799,11 @@ function renderCalendar() {
 
   const byDay = {};
   _calReservations.forEach(r => {
-    const d = _resDay(r);
-    if (d > 0) { if (!byDay[d]) byDay[d] = []; byDay[d].push(r); }
+    // Reservas multi-dia aparecem em todos os dias do range dentro deste mes.
+    const dias = _resDaysNoMes(r, _calYear, _calMonth);
+    dias.forEach(d => {
+      if (d > 0) { if (!byDay[d]) byDay[d] = []; byDay[d].push(r); }
+    });
   });
 
   let html = '';
@@ -3797,7 +3829,7 @@ function showDayDetail(day) {
   const dd = String(day).padStart(2,'0');
   const mm = String(_calMonth).padStart(2,'0');
   const dateStr = _calYear+'-'+mm+'-'+dd;
-  const reservas = _calReservations.filter(r => _resDate(r) === dateStr);
+  const reservas = _calReservations.filter(r => _resCobreData(r, dateStr));
   const isAdmin = ['ADMIN','TI','RESPONSAVEL_GRUPO'].includes(currentUser?.role);
 
   document.getElementById('modalDayDetailTitle').innerHTML = '<i class="bi bi-calendar-event"></i> Reservas — '+dd+'/'+mm+'/'+_calYear+' <span style="font-weight:400;font-size:13px;color:#6B7280">('+reservas.length+' reserva'+(reservas.length!==1?'s':'')+')</span>';
@@ -3811,10 +3843,15 @@ function showDayDetail(day) {
     if ((r.status === 'pendente' || r.status === 'aprovado') && (r.solicitante_id === currentUser?.id || isAdmin)) {
       actions.push('<button class="btn-fleet btn-fleet-sm" style="background:#F3F4F6;color:#6B7280" onclick="cancelReservation('+r.id+');closeModal(\'modalDayDetail\')"><i class="bi bi-trash"></i> Cancelar</button>');
     }
+    const multiDia = _resDate(r) !== _resDateFim(r);
+    const periodoBadge = multiDia
+      ? '<span style="font-size:11px;background:#1F2937;color:#fff;padding:3px 8px;border-radius:4px;font-weight:700;margin-left:6px"><i class="bi bi-calendar-range"></i> '+_resPeriodoFmt(r)+'</span>'
+      : '';
     return '<div style="background:#fff;border:1px solid #E5E7EB;border-radius:10px;padding:16px;margin-bottom:12px;border-left:4px solid '+(r.status==='aprovado'?'#16A34A':r.status==='pendente'?'#F59E0B':'#DC2626')+'">'
-      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">'
       + '  <span style="font-size:20px;font-weight:700;color:#1F2937">'+r.horario_inicio+' — '+r.horario_fim+'</span>'
       + '  '+badgeStatus(r.status)
+      + '  '+periodoBadge
       + '</div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">'
       + '  <div style="background:#F9FAFB;border-radius:8px;padding:10px">'
@@ -3853,6 +3890,7 @@ async function openReservationModal() {
       }).join('');
   document.getElementById('resDestino').value = '';
   document.getElementById('resData').value = new Date().toISOString().split('T')[0];
+  document.getElementById('resDataFim').value = '';  // opcional; vazio = mesmo dia
   document.getElementById('resInicio').value = '08:00';
   document.getElementById('resFim').value = '18:00';
   openModal('modalReservation');
@@ -3862,13 +3900,19 @@ async function saveReservation() {
   const vehicle_id = document.getElementById('resVehicle').value;
   const destino = document.getElementById('resDestino').value.trim();
   const data_reserva = document.getElementById('resData').value;
+  const data_fim = document.getElementById('resDataFim').value;  // pode ser ''
   const horario_inicio = document.getElementById('resInicio').value;
   const horario_fim = document.getElementById('resFim').value;
   if (!vehicle_id || !destino || !data_reserva || !horario_inicio || !horario_fim) {
     showToast('Preencha todos os campos', 'error'); return;
   }
-  if (horario_fim <= horario_inicio) {
+  // Mesmo dia: hora_fim > hora_inicio. Multi-dia: pode ter qualquer hora.
+  const ehMesmoDia = (!data_fim) || (data_fim === data_reserva);
+  if (ehMesmoDia && horario_fim <= horario_inicio) {
     showToast('Horario de fim deve ser maior que o inicio', 'error'); return;
+  }
+  if (data_fim && data_fim < data_reserva) {
+    showToast('A data de fim deve ser igual ou posterior a data de inicio', 'error'); return;
   }
   // Não permitir agendamento retroativo
   const inicioReserva = new Date(`${data_reserva}T${horario_inicio}:00`);
@@ -3876,9 +3920,11 @@ async function saveReservation() {
     showToast('O horário do agendamento não pode ser menor do que a hora do dia atual.', 'error');
     return;
   }
+  const payload = { vehicle_id: parseInt(vehicle_id), destino, data_reserva, horario_inicio, horario_fim };
+  if (data_fim) payload.data_fim = data_fim;
   const res = await apiFetch('/reservations', {
     method: 'POST',
-    body: JSON.stringify({ vehicle_id: parseInt(vehicle_id), destino, data_reserva, horario_inicio, horario_fim }),
+    body: JSON.stringify(payload),
   });
   if (!res?.success) { showToast(res?.detail || 'Erro ao criar reserva', 'error'); return; }
   showToast('Reserva enviada para aprovacao!', 'success');
