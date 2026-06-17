@@ -11,6 +11,7 @@ e horario, preenche os dados e cria um agendamento que entra como
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from database import get_db_or_404, convert_datetime_list
 from datetime import datetime, date, timedelta, time as _time
+from typing import Optional
 import logging
 import os
 import shutil
