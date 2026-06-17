@@ -26,7 +26,15 @@ router = APIRouter(prefix="/api/atendimentos", tags=["Atendimentos"])
 _STATUS_OCUPA = ("pendente", "agendado", "atendido")
 _STATUS_VALIDOS = ("pendente", "agendado", "atendido", "cancelado", "nao_compareceu")
 _GRUPO_COMERCIAL = "Comercial"
-_GRUPO_PILOTOS = "Drone"  # operadores/pilotos cadastrados aqui aparecem no agendamento de drone
+_GRUPO_PILOTOS   = "Drone"    # pilotos/operadores p/ drones
+_GRUPO_SUPORTE   = "Suporte"  # instrutores p/ treinamentos, cursos, servicos
+
+# Grupos validos pra busca de ociosidade. Cada grupo vira um card separado
+# na dashboard. Adicione novos grupos aqui pra estender.
+_GRUPOS_INSTRUTORES = {
+    "Drone":   _GRUPO_PILOTOS,
+    "Suporte": _GRUPO_SUPORTE,
+}
 _DIAS_BUSCA_PUBLICA = 60   # janela de dias oferecida ao cliente
 
 
@@ -1511,13 +1519,15 @@ def _query_vendedores() -> list:
 
 
 def _query_usuarios_grupo(nome_grupo: str) -> list:
-    """Retorna usuários ativos de um grupo (id, name). Usado por
-    /vendedores (grupo Comercial) e /pilotos (grupo Drone)."""
+    """Retorna usuários ativos de um grupo (id, name, avatar_url). Usado por
+    /vendedores (grupo Comercial), /pilotos (grupo Drone) e
+    /instrutores-ociosidade. avatar_url adicionado em 2026-06-17 pra
+    feature de ociosidade na dashboard."""
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute("""
-            SELECT u.id, u.name
+            SELECT u.id, u.name, u.avatar_url
             FROM users u
             JOIN cpe_grupo g ON g.id = u.group_id
             WHERE g.name = %s AND u.is_active = 1
@@ -1535,6 +1545,131 @@ def listar_pilotos(request: Request):
     para vincular a um drone (no cadastro) ou a um agendamento de drone."""
     _exigir_view_suporte(request)
     return {"success": True, "pilotos": _query_usuarios_grupo(_GRUPO_PILOTOS)}
+
+
+@router.get("/instrutores-suporte")
+def listar_instrutores_suporte(request: Request):
+    """Usuarios ativos do grupo 'Suporte' — instrutores/atendentes para
+    treinamentos, cursos e servicos. Espelho de /pilotos pra outro grupo."""
+    _exigir_view_suporte(request)
+    return {"success": True, "instrutores": _query_usuarios_grupo(_GRUPO_SUPORTE)}
+
+
+@router.get("/instrutores-ociosidade")
+def instrutores_ociosidade(
+    request: Request,
+    dias: int = 7,
+    agenda_id: Optional[int] = None,
+    grupo: str = "Drone",
+):
+    """Matriz instrutor x dia com count de agendamentos para a dashboard.
+
+    Mostra ociosidade dos instrutores nos proximos `dias` dias. Cada celula =
+    quantos agendamentos ativos aquele instrutor tem naquele dia. Frontend
+    colore: 0=verde, 1=amarelo, 2=laranja, 3+=vermelho (limite normal: 2/dia).
+
+    Parametro `grupo` define qual conjunto de usuarios listar:
+      - 'Drone'   -> pilotos (default, retrocompat)
+      - 'Suporte' -> instrutores de treinamento/curso/servico
+    Cada grupo vira um card separado na dashboard.
+
+    Permissao: admin do modulo (RESPONSAVEL_GRUPO Suporte / ADMIN / TI /
+    grupo 'Suporte ti'). Se nao tem permissao -> 403.
+    """
+    _exigir_admin_suporte(request)
+    # Sanitiza periodo (limite max 30 dias pra nao explodir query)
+    dias = max(1, min(int(dias or 7), 30))
+    # Resolve nome do grupo (default Drone p/ retrocompat). Qualquer valor fora
+    # da whitelist cai pra Drone — evita injection no SQL.
+    grupo_nome = _GRUPOS_INSTRUTORES.get(grupo or "Drone", _GRUPO_PILOTOS)
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        # 1) Lista de instrutores (do grupo especificado, ativos)
+        pilotos = _query_usuarios_grupo(grupo_nome)  # [{id, name, avatar_url}, ...]
+        if not pilotos:
+            return {"success": True, "instrutores": [], "dias": [], "grupo": grupo_nome}
+
+        piloto_ids = [p["id"] for p in pilotos]
+        placeholders = ", ".join(["%s"] * len(piloto_ids))
+
+        # 2) Count de agendamentos por (piloto_id, dia) nos proximos N dias.
+        #    Considera apenas status que ocupam a agenda (nao cancelado/nao-compareceu).
+        #    Se agenda_id informado, filtra por aquela agenda.
+        params = list(piloto_ids) + [dias]
+        sql = f"""
+            SELECT
+                piloto_id,
+                DATE(inicio) AS dia,
+                COUNT(*)     AS qtd,
+                GROUP_CONCAT(
+                    CONCAT(TIME_FORMAT(inicio, '%%H:%%i'), '-', TIME_FORMAT(fim, '%%H:%%i'),
+                           ' ', COALESCE(titulo, ''))
+                    ORDER BY inicio SEPARATOR ' | '
+                ) AS detalhes
+            FROM atend_agendamentos
+            WHERE piloto_id IN ({placeholders})
+              AND status IN ('pendente', 'agendado', 'atendido')
+              AND DATE(inicio) >= CURDATE()
+              AND DATE(inicio) <  DATE_ADD(CURDATE(), INTERVAL %s DAY)
+        """
+        if agenda_id:
+            sql += " AND agenda_id = %s"
+            params.append(agenda_id)
+        sql += " GROUP BY piloto_id, DATE(inicio)"
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+
+        # 3) Monta matriz: dict[piloto_id][dia_iso] = {qtd, detalhes}
+        carga = {pid: {} for pid in piloto_ids}
+        for r in rows:
+            pid = r["piloto_id"]
+            dia_iso = r["dia"].isoformat() if r["dia"] else None
+            if pid in carga and dia_iso:
+                carga[pid][dia_iso] = {
+                    "qtd": int(r["qtd"]),
+                    "detalhes": r["detalhes"] or "",
+                }
+
+        # 4) Lista de dias (proximos N dias, ISO)
+        from datetime import date as _date, timedelta as _td
+        hoje = _date.today()
+        lista_dias = [(hoje + _td(days=i)).isoformat() for i in range(dias)]
+
+        # 5) Resposta — cada instrutor com array de celulas (mesmo tamanho de lista_dias)
+        instrutores = []
+        for p in pilotos:
+            celulas = []
+            total = 0
+            for d in lista_dias:
+                c = carga.get(p["id"], {}).get(d)
+                qtd = c["qtd"] if c else 0
+                total += qtd
+                celulas.append({
+                    "data": d,
+                    "qtd": qtd,
+                    "detalhes": (c or {}).get("detalhes", ""),
+                })
+            instrutores.append({
+                "id":          p["id"],
+                "nome":        p["name"],
+                "avatar_url":  p.get("avatar_url"),
+                "total":       total,  # total no periodo (pra ordenar)
+                "celulas":     celulas,
+            })
+
+        # Ordena: mais OCIOSOS primeiro (responsavel quer ver quem ta livre)
+        instrutores.sort(key=lambda x: (x["total"], x["nome"]))
+        return {
+            "success": True,
+            "grupo":   grupo_nome,
+            "dias":    lista_dias,
+            "instrutores": instrutores,
+        }
+    finally:
+        cursor.close()
+        conn.close()
 
 
 # ============================================================
@@ -1814,10 +1949,12 @@ def criar_agendamento(request: Request, data: dict):
                                 treinamento_id=treinamento_id, drone_id=drone_id)
             if erro:
                 raise HTTPException(status_code=409, detail=erro)
-        # Piloto: aceita user_id do grupo Drone. Só faz sentido quando a oferta é drone.
+        # Instrutor/piloto: aceita user_id do grupo Drone. Generalizado em
+        # 2026-06-17 — pode ser atribuido a agendamentos de servico/treinamento/
+        # drone (necessario para a feature de "ociosidade da equipe" na dashboard
+        # do responsavel do grupo). Endpoint POST publico (`agendar` linha ~3194)
+        # mantem restricao pq cliente externo nao escolhe instrutor.
         piloto_id = data.get("piloto_id") or None
-        if piloto_id and not drone_id:
-            piloto_id = None  # silencia em vez de erro — UX limpo
         novo = _gravar_agendamento(cursor, agenda_id, {
             "servico_id": servico_id,
             "treinamento_id": treinamento_id,
@@ -1882,10 +2019,9 @@ def atualizar_agendamento(agendamento_id: int, request: Request, data: dict):
             if erro:
                 raise HTTPException(status_code=409, detail=erro)
 
-        # Piloto só faz sentido em agendamento de drone
+        # Instrutor/piloto: generalizado em 2026-06-17 — aceita pra qualquer
+        # tipo de oferta. Ver comentario no POST /agendamentos.
         novo_piloto = _campo("piloto_id") or None
-        if novo_piloto and not novo_drone:
-            novo_piloto = None
 
         cursor.execute("""
             UPDATE atend_agendamentos

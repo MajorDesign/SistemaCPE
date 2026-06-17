@@ -235,6 +235,99 @@ async function loadAgendas() {
   agendas = d.success ? (d.agendas || []) : [];
   renderAgendasTabela();
   renderAgendasCards();
+  // Carrega ociosidade dos 2 grupos (so visivel pra _canAdmin via data-need-admin no HTML)
+  carregarOciosidade('Drone');
+  carregarOciosidade('Suporte');
+}
+
+/* ============ OCIOSIDADE DA EQUIPE (dashboard, admin-only) ============
+   Mostra matriz instrutor x dia colorida pra responsavel do grupo enxergar
+   quem esta livre nos proximos 7 dias.
+   Backend: GET /api/atendimentos/instrutores-ociosidade?dias=7&grupo=Drone|Suporte
+   Cada grupo vira um card separado.
+   Permissao backend: admin do modulo (mesma whitelist da dashboard inteira). */
+async function carregarOciosidade(grupo) {
+  // Detecta se ALGUM card data-need-admin esta visivel; se nao, não chama
+  // o endpoint (evita 403 no console pra view-only).
+  const anyAdminCard = document.querySelector('[data-need-admin]');
+  if (!anyAdminCard || anyAdminCard.style.display === 'none') return;
+
+  const sufixo = grupo === 'Drone' ? 'Drone' : 'Suporte';
+  const tbody = document.getElementById('tbodyOciosidade' + sufixo);
+  if (!tbody) return;
+
+  const r = await apiFetch('/instrutores-ociosidade?dias=7&grupo=' + encodeURIComponent(grupo));
+  if (!r || !r.success) {
+    tbody.innerHTML = '<tr><td class="sup-empty">Falha ao carregar ociosidade.</td></tr>';
+    return;
+  }
+  renderOciosidade(grupo, r.dias || [], r.instrutores || []);
+}
+
+function renderOciosidade(grupo, dias, instrutores) {
+  const sufixo = grupo === 'Drone' ? 'Drone' : 'Suporte';
+  const thead = document.getElementById('thOciosidade' + sufixo);
+  const tbody = document.getElementById('tbodyOciosidade' + sufixo);
+  if (!thead || !tbody) return;
+
+  // Helper: data ISO -> "Seg 17/06" (pt-BR curto)
+  const DOW = ['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
+  const fmtCab = (iso) => {
+    const d = new Date(iso + 'T12:00:00');  // meio-dia evita TZ rolling
+    return DOW[d.getDay()] + ' ' + String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0');
+  };
+
+  // Reconstroi cabecalho (primeira coluna varia por grupo)
+  const colNome = grupo === 'Drone' ? 'Piloto' : 'Instrutor';
+  thead.innerHTML = `<th style="min-width:220px">${colNome}</th>`
+    + dias.map(d => `<th style="text-align:center;font-size:11px;font-weight:600">${fmtCab(d)}</th>`).join('');
+
+  if (!instrutores.length) {
+    tbody.innerHTML = `<tr><td colspan="${dias.length + 1}" class="sup-empty">`
+      + `Nenhum usuario cadastrado no grupo ${grupo}.</td></tr>`;
+    return;
+  }
+
+  // Helper: cor de fundo pela carga
+  const corCelula = (qtd) => {
+    if (qtd === 0) return { bg:'#dcfce7', fg:'#166534', txt:'Livre' };       // verde
+    if (qtd === 1) return { bg:'#fef9c3', fg:'#854d0e', txt:'1 ag.' };       // amarelo
+    if (qtd === 2) return { bg:'#fed7aa', fg:'#9a3412', txt:'2 ag.' };       // laranja
+    return { bg:'#fee2e2', fg:'#991b1b', txt:qtd + ' ag.' };                 // vermelho
+  };
+
+  // Helper: iniciais pra fallback do avatar
+  const iniciais = (nome) => {
+    if (!nome) return '?';
+    return nome.trim().split(/\s+/).slice(0,2).map(s => s[0]).join('').toUpperCase();
+  };
+
+  tbody.innerHTML = instrutores.map(ins => {
+    const av = ins.avatar_url
+      ? `<img src="${esc(ins.avatar_url)}" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0">`
+      : `<div style="width:32px;height:32px;border-radius:50%;background:#1a1a1a;color:#ffc107;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0">${esc(iniciais(ins.nome))}</div>`;
+
+    const celulas = ins.celulas.map(c => {
+      const cor = corCelula(c.qtd);
+      const tip = c.detalhes
+        ? ` title="${esc(c.detalhes).replace(/\|/g, '\n')}"`
+        : ' title="Sem agendamentos"';
+      return `<td style="text-align:center;padding:6px;background:${cor.bg};color:${cor.fg};font-weight:600;font-size:12px"${tip}>${cor.txt}</td>`;
+    }).join('');
+
+    return `<tr>
+      <td style="vertical-align:middle">
+        <div style="display:flex;align-items:center;gap:10px">
+          ${av}
+          <div>
+            <div style="font-weight:600;color:#1f2937">${esc(ins.nome)}</div>
+            <div style="font-size:11px;color:#6b7280">${ins.total} agendamento(s) na semana</div>
+          </div>
+        </div>
+      </td>
+      ${celulas}
+    </tr>`;
+  }).join('');
 }
 
 /* ============ SEÇÃO AGENDAS (config por unidade) ============ */
@@ -848,15 +941,22 @@ async function _carregarEquipSelect(valOuId, selecionado) {
 async function onAgtServicoChange() {
   const val = document.getElementById('agtServico').value;
   await _carregarEquipSelect(val);
-  // Piloto: visível só quando a oferta selecionada for DRONE
+  // Instrutor/piloto: dropdown sempre visivel mas a LISTA muda conforme tipo
+  //   - drone        -> grupo Drone (pilotos)
+  //   - treinamento  -> grupo Suporte
+  //   - servico/curso-> grupo Suporte
+  //   - nenhuma sel. -> grupo Suporte (default, troca quando o user escolher)
   const o = _parseAgtOferta(val);
-  const pilotoWrap = document.getElementById('agtPilotoWrap');
+  const label = document.getElementById('agtPilotoLabel');
+  const suffix = document.getElementById('agtPilotoLabelSuffix');
   if (o && o.tipo === 'drone') {
-    pilotoWrap.style.display = '';
-    await _popularSelectPilotos('agtPiloto');
+    await _popularSelectInstrutores('agtPiloto', 'Drone');
+    label.textContent = 'Piloto / Operador do drone *';
+    suffix.textContent = '(obrigatorio — grupo Drone)';
   } else {
-    pilotoWrap.style.display = 'none';
-    document.getElementById('agtPiloto').value = '';
+    await _popularSelectInstrutores('agtPiloto', 'Suporte');
+    label.textContent = 'Instrutor';
+    suffix.textContent = '(opcional — grupo Suporte — usado na dashboard de ociosidade)';
   }
   if (!o) return;
   const s = o.item;
@@ -898,14 +998,13 @@ async function abrirModalAgendamento(id) {
   document.getElementById('agtStatus').value = a ? a.status : 'agendado';
   document.getElementById('agtObs').value = a && a.observacoes ? a.observacoes : '';
 
-  // Piloto: mostra/esconde conforme a oferta. Pré-preenche se editar drone.
-  const pilotoWrap = document.getElementById('agtPilotoWrap');
-  if (a && a.drone_id) {
-    pilotoWrap.style.display = '';
-    await _popularSelectPilotos('agtPiloto', a.piloto_id);
-  } else {
-    pilotoWrap.style.display = 'none';
-    document.getElementById('agtPiloto').value = '';
+  // Instrutor/piloto: dropdown sempre visivel. Lista correta vem de
+  // onAgtServicoChange (que ja decide grupo Drone vs Suporte pelo tipo).
+  // Chamamos manualmente porque setar .value em script nao dispara change.
+  await onAgtServicoChange();
+  // Pre-preenche o instrutor selecionado, se houver
+  if (a && a.piloto_id) {
+    document.getElementById('agtPiloto').value = String(a.piloto_id);
   }
 
   // Excluir agendamento (DELETE) e admin-only; cancelar (status='cancelado') e op.
@@ -2070,8 +2169,12 @@ function toggleDroneInstrutorManual() {
   wrap.style.display = wrap.style.display === 'none' ? '' : 'none';
 }
 
-/* Cache global de pilotos (grupo Drone). Carrega na 1ª abertura do modal. */
-let pilotosList = [];
+/* Caches globais de instrutores por grupo. Carregam na 1a vez que precisam. */
+let pilotosList = [];           // grupo Drone (pilotos)
+let instrutoresSuporteList = []; // grupo Suporte (instrutores de treinamento/curso)
+
+/* Compat: cadastro de drone continua usando _popularSelectPilotos
+   (lista APENAS pilotos do grupo Drone, comportamento original). */
 async function _popularSelectPilotos(selId, piloto_id) {
   if (!pilotosList.length) {
     const r = await apiFetch('/pilotos');
@@ -2082,6 +2185,42 @@ async function _popularSelectPilotos(selId, piloto_id) {
   sel.innerHTML = '<option value="">— Sem piloto padrão —</option>' +
     pilotosList.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   if (piloto_id) sel.value = String(piloto_id);
+}
+
+/* Generalizada (2026-06-17): popula select com instrutores do grupo escolhido.
+   Aceita 'Drone' (pilotos) ou 'Suporte' (instrutores de treinamento).
+   Mantem valor pre-selecionado (preserva escolha do user quando troca tipo). */
+async function _popularSelectInstrutores(selId, grupo) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  // Preserva selecao anterior antes de re-renderizar (UX: trocar tipo nao
+  // perde o instrutor escolhido se ele estiver na lista do novo grupo).
+  const selecionadoAntes = sel.value;
+
+  let lista;
+  if (grupo === 'Drone') {
+    if (!pilotosList.length) {
+      const r = await apiFetch('/pilotos');
+      pilotosList = r.success ? (r.pilotos || []) : [];
+    }
+    lista = pilotosList;
+  } else {
+    // Default: 'Suporte' (qualquer outro valor cai aqui)
+    if (!instrutoresSuporteList.length) {
+      const r = await apiFetch('/instrutores-suporte');
+      instrutoresSuporteList = r.success ? (r.instrutores || []) : [];
+    }
+    lista = instrutoresSuporteList;
+  }
+
+  const labelVazio = grupo === 'Drone' ? '— Sem piloto —' : '— Sem instrutor —';
+  sel.innerHTML = `<option value="">${labelVazio}</option>` +
+    lista.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+
+  // Restaura selecao se o id ainda existe no novo grupo
+  if (selecionadoAntes && lista.some(p => String(p.id) === selecionadoAntes)) {
+    sel.value = selecionadoAntes;
+  }
 }
 
 async function novoDrone() {

@@ -170,6 +170,61 @@
             </table>
           </div>
         </div>
+
+        <!-- ====== OCIOSIDADE — DRONE ====== -->
+        <!-- data-need-admin: JS aplica display:none p/ users sem nivel admin -->
+        <div class="sup-card" data-need-admin style="margin-top:16px">
+          <div class="sup-page-header" style="margin-bottom:12px">
+            <span class="sup-card-title" style="margin:0">
+              <i class="bi bi-airplane-engines-fill" style="color:#FFC107"></i>
+              Pilotos de drone — ociosidade próximos 7 dias
+            </span>
+            <span class="sup-spacer"></span>
+            <span class="ociosidade-legenda" style="font-size:12px;color:#6b7280;display:inline-flex;align-items:center;gap:14px;margin-right:12px">
+              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:2px;background:#dcfce7;border:1px solid #16a34a"></span> Livre</span>
+              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:2px;background:#fef9c3;border:1px solid #facc15"></span> 1 ag.</span>
+              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:2px;background:#fed7aa;border:1px solid #f97316"></span> 2 ag.</span>
+              <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:2px;background:#fee2e2;border:1px solid #dc2626"></span> 3+ ag.</span>
+            </span>
+            <button class="btn-sup btn-sup-ghost" onclick="carregarOciosidade('Drone')" title="Recarregar">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+          <div class="sup-table-wrap">
+            <table class="sup-table sup-table-ociosidade">
+              <thead><tr id="thOciosidadeDrone"><th style="min-width:220px">Piloto</th></tr></thead>
+              <tbody id="tbodyOciosidadeDrone"><tr><td class="sup-empty">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+          <div style="font-size:12px;color:#6b7280;margin-top:8px;padding:8px 12px;background:#f9fafb;border-radius:6px">
+            <i class="bi bi-info-circle"></i>
+            Lista usuários do grupo <strong>Drone</strong>. Sem instrutor atribuído ao agendamento, ele não aparece aqui.
+          </div>
+        </div>
+
+        <!-- ====== OCIOSIDADE — SUPORTE (treinamentos/cursos/serviços) ====== -->
+        <div class="sup-card" data-need-admin style="margin-top:16px">
+          <div class="sup-page-header" style="margin-bottom:12px">
+            <span class="sup-card-title" style="margin:0">
+              <i class="bi bi-mortarboard-fill" style="color:#FFC107"></i>
+              Instrutores de treinamento — ociosidade próximos 7 dias
+            </span>
+            <span class="sup-spacer"></span>
+            <button class="btn-sup btn-sup-ghost" onclick="carregarOciosidade('Suporte')" title="Recarregar">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+          </div>
+          <div class="sup-table-wrap">
+            <table class="sup-table sup-table-ociosidade">
+              <thead><tr id="thOciosidadeSuporte"><th style="min-width:220px">Instrutor</th></tr></thead>
+              <tbody id="tbodyOciosidadeSuporte"><tr><td class="sup-empty">Carregando...</td></tr></tbody>
+            </table>
+          </div>
+          <div style="font-size:12px;color:#6b7280;margin-top:8px;padding:8px 12px;background:#f9fafb;border-radius:6px">
+            <i class="bi bi-info-circle"></i>
+            Lista usuários do grupo <strong>Suporte</strong> — atuam em treinamentos, cursos e serviços.
+          </div>
+        </div>
       </section>
 
       <!-- ====== AGENDAS (config por unidade) ====== -->
@@ -1253,19 +1308,22 @@
             </select>
           </div>
         </div>
-        <!-- Piloto: só aparece quando a oferta selecionada for um drone.
-             Lista usuários ativos do grupo "Drone". -->
-        <div class="sup-field" id="agtPilotoWrap" style="display:none">
-          <label><i class="bi bi-airplane-engines-fill" style="color:#FFC107"></i>
-            Piloto / Operador do drone *
-            <small style="color:#6b7280">(usuário do grupo Drone)</small>
+        <!-- Instrutor: visivel para qualquer tipo de oferta (curso, treinamento
+             ou drone). Lista usuarios ativos do grupo "Drone".
+             Em drone: obrigatorio (validacao no JS).
+             Em curso/treinamento: opcional, mas usado pela dashboard de
+             ociosidade pra mostrar quem esta livre. -->
+        <div class="sup-field" id="agtPilotoWrap">
+          <label><i class="bi bi-person-badge-fill" style="color:#FFC107"></i>
+            <span id="agtPilotoLabel">Instrutor / Operador</span>
+            <small style="color:#6b7280" id="agtPilotoLabelSuffix">(usuario do grupo Drone)</small>
           </label>
           <select class="sup-select" id="agtPiloto">
-            <option value="">— Escolha o piloto —</option>
+            <option value="">— Escolha o instrutor —</option>
           </select>
-          <div class="sup-help">
-            Quem vai operar o drone neste atendimento. Cadastre pilotos no
-            <strong>grupo "Drone"</strong> em Grupos para aparecerem aqui.
+          <div class="sup-help" id="agtPilotoHelp">
+            Quem vai atender. Aparece na dashboard de ociosidade da equipe.
+            Cadastre instrutores no <strong>grupo "Drone"</strong> em Grupos.
           </div>
         </div>
 
