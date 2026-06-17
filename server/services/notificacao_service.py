@@ -115,13 +115,19 @@ class NotificacaoService:
             # Criar notificacao para cada responsavel
             notificacoes_criadas = 0
 
+            # Fix 2026-06-17: 'mensagem' nao estava definida (NameError em runtime).
+            # Tanto este except interno como o externo capturam apenas
+            # mysql.connector.Error, entao NameError escapava ambos e quebrava
+            # toda chamada a esta funcao. Texto vem do docstring desta funcao.
+            mensagem = f"Novo ticket: '{titulo_ticket}' de {usuario_autor_nome}"
+
             for usuario in usuarios_setor:
                 try:
                     logger.info(f"  ├─ 💌 Notificando: {usuario['name']}")
 
                     cursor.execute(
                         """
-                        INSERT INTO notificacoes 
+                        INSERT INTO notificacoes
                         (ticket_id, usuario_id, mensagem, tipo, lido, created_at)
                         VALUES (%s, %s, %s, %s, 0, NOW())
                         """,

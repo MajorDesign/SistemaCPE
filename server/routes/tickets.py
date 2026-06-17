@@ -2552,16 +2552,19 @@ async def criar_interacao(payload: InteracaoCriar):
                 logger.info(f"    🔄 INICIANDO FALLBACK (banco de dados)...")
                 
                 # Fallback: criar notificações direto no banco para todos
+                # Fix 2026-06-17: era `criar_notificacao_multipla` (nao existe).
+                # Funcao correta eh `criar_notificacao_no_banco` (definida na
+                # linha 422 deste arquivo, mesma assinatura).
                 for idx, user_id in enumerate(usuarios_para_notificar, 1):
                     logger.info(f"    ├─ [Fallback {idx}] user_id: {user_id}")
                     tipo_notif = "nova_resposta" if publico_final == 1 else "comentario_interno"
                     mensagem = f"Nova {'resposta' if publico_final == 1 else 'nota interna'} no ticket #{ticket_db.get('numero', payload.ticket_id)}"
                     logger.info(f"    │  ▶️ Criando notificação (tipo: {tipo_notif})")
-                    criar_notificacao_multipla(
-                        conexao, 
-                        payload.ticket_id, 
-                        user_id, 
-                        tipo_notif, 
+                    criar_notificacao_no_banco(
+                        conexao,
+                        payload.ticket_id,
+                        user_id,
+                        tipo_notif,
                         mensagem
                     )
                     logger.info(f"    │  ✓ Notificação criada para #{user_id}")
