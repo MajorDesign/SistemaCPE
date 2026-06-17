@@ -1,0 +1,25 @@
+# =====================================================================
+# Pre-commit hooks — SistemaCPE
+# =====================================================================
+# Rodam em `git commit` (ou `pre-commit run --all-files` manual).
+# Bloqueiam o commit se acharem erro.
+#
+# Setup uma vez por dev (após clonar o repo ou pull novo):
+#   server/.venv/Scripts/python.exe -m pip install pre-commit
+#   server/.venv/Scripts/python.exe -m pre_commit install
+#
+# Pular em emergência (NÃO recomendado, deixa rastro):
+#   git commit --no-verify -m "..."
+# =====================================================================
+
+repos:
+  # Ruff oficial — cria venv isolado, portável entre devs.
+  # Versão pinada pra evitar surpresa de update silencioso.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.17
+    hooks:
+      # Pyflakes (F) — detecta NameError, import quebrado, sintaxe.
+      # Config em .ruff.toml.
+      - id: ruff-check
+        name: ruff (bugs reais — F821/F401/sintaxe)
+        args: [--no-cache]
