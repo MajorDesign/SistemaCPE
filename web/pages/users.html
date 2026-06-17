@@ -10,7 +10,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
@@ -86,6 +86,805 @@
     }
     .pc-email-row button:hover { background: #FEE2E2; }
     .pc-email-row button:disabled { color: #D1D5DB; cursor: not-allowed; }
+
+    /* =================================================================
+       ============ REFRESH CPE 2026 — Linguagem técnica unificada ============
+       Override LOCAL desta página (escopo .main-content). Não afeta
+       outras telas que usem components.css.
+       ================================================================= */
+    .main-content,
+    .main-content input,
+    .main-content select,
+    .main-content textarea,
+    .main-content button {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+    }
+    .main-content { -webkit-font-smoothing: antialiased; }
+
+    /* Topbar título */
+    .main-content .top-bar h1 {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-weight: 700; letter-spacing: -.015em; color: #0F1419;
+    }
+    .main-content .top-bar h1 i { color: #B8870B; }
+
+    /* ---- Cards de Pré-cadastro: hairline amarelo em vez de fundo amarelado ---- */
+    .main-content .pc-section {
+      background: #fff;
+      border: 1px solid #D8D5C8;
+      border-left: 3px solid #FFC107;
+      border-radius: 4px;
+      padding: 20px 22px;
+    }
+    .main-content .pc-section h3 {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-weight: 600; font-size: 1rem;
+      color: #0F1419; letter-spacing: -.01em;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #D8D5C8;
+      margin-bottom: 14px;
+    }
+    .main-content .pc-section h3 i { color: #B8870B; }
+    .main-content .pc-section .badge-count {
+      background: #1A1A1A; color: #FFC107;
+      border-radius: 2px; padding: 3px 8px;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-weight: 600; font-size: .68rem;
+      letter-spacing: .1em; text-transform: uppercase;
+      font-variant-numeric: tabular-nums;
+    }
+    .main-content .pc-card {
+      background: #fff; border: 1px solid #D8D5C8;
+      border-radius: 4px; padding: 14px 18px;
+    }
+    .main-content .pc-card .info .name { color: #0F1419; font-weight: 600; }
+    .main-content .pc-card .info .email { color: #5C6370; }
+    .main-content .pc-card .meta span {
+      background: #ECEAE0; color: #5C6370;
+      border-radius: 2px; padding: 3px 8px;
+      font-size: 11px; font-weight: 500;
+    }
+    .main-content .pc-card .meta span.grupo { background: rgba(29,78,216,.08); color: #1D4ED8; }
+    .main-content .pc-card .meta span.dept  { background: rgba(27,127,78,.1); color: #1B7F4E; }
+
+    /* Import zone */
+    .main-content .pc-import-zone {
+      border: 2px dashed #D8D5C8;
+      background: #FAF8F2;
+      border-radius: 4px;
+    }
+    .main-content .pc-import-zone:hover {
+      border-color: #FFC107; background: rgba(255,193,7,.05);
+    }
+    .main-content .pc-import-zone i { color: #B8870B; }
+    .main-content .pc-import-zone.has-file { border-color: #1B7F4E; background: rgba(27,127,78,.04); }
+    .main-content .pc-import-zone.has-file i { color: #1B7F4E; }
+    .main-content .pc-import-result {
+      background: rgba(27,127,78,.06); border: 1px solid rgba(27,127,78,.25);
+      border-left: 3px solid #1B7F4E; border-radius: 2px;
+    }
+
+    /* ---- Stats grid: linha técnica monocromática (igual outras páginas) ---- */
+    .main-content .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: #D8D5C8;
+      border: 1px solid #D8D5C8;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .main-content .stat-card {
+      background: #fff;
+      border: none !important;
+      border-radius: 0;
+      padding: 20px 22px;
+      box-shadow: none;
+      position: relative;
+      transition: background .18s;
+    }
+    .main-content .stat-card::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px; background: #FFC107;
+      transform: scaleX(0); transform-origin: left;
+      transition: transform .25s ease;
+    }
+    .main-content .stat-card:hover {
+      background: #FAF8F2; box-shadow: none;
+    }
+    .main-content .stat-card:hover::before { transform: scaleX(1); }
+    .main-content .stat-card .stat-label {
+      font-size: .68rem; color: #5C6370;
+      text-transform: uppercase; letter-spacing: .12em;
+      font-weight: 600;
+    }
+    .main-content .stat-card .stat-value {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 2.2rem; font-weight: 800;
+      color: #0F1419;
+      letter-spacing: -.025em;
+      font-variant-numeric: tabular-nums;
+      line-height: 1; margin: 6px 0;
+    }
+    .main-content .stat-card .stat-change {
+      font-size: .8rem; color: #5C6370;
+    }
+
+    /* ---- Search/Filter: hairline preto inferior em vez de border completa ---- */
+    .main-content .search-filter {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+    .main-content .search-filter input,
+    .main-content .search-filter select {
+      background: #fff;
+      border: 1px solid #D8D5C8;
+      border-radius: 4px;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      color: #0F1419;
+      padding: 10px 13px;
+    }
+    .main-content .search-filter input:focus,
+    .main-content .search-filter select:focus {
+      border-color: #1A1A1A;
+      box-shadow: 0 0 0 3px rgba(255,193,7,.22);
+      outline: none;
+    }
+    .main-content .search-filter input::placeholder { color: #5C6370; }
+
+    /* ---- Users table: header underline preto, hover papel ---- */
+    .main-content .users-table {
+      background: #fff;
+      border: 1px solid #D8D5C8;
+      border-radius: 4px;
+      box-shadow: none;
+      overflow: hidden;
+    }
+    .main-content .users-table table { font-family: 'DM Sans', system-ui, sans-serif; }
+    .main-content .users-table thead th {
+      background: transparent !important;
+      color: #5C6370;
+      font-weight: 500;
+      font-size: .7rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      border-bottom: 2px solid #1A1A1A;
+      padding: 12px 14px;
+      text-align: left;
+    }
+    .main-content .users-table tbody td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #D8D5C8;
+      color: #0F1419;
+      vertical-align: middle;
+    }
+    .main-content .users-table tbody tr:hover { background: #FAF8F2; }
+    .main-content .users-table tbody tr:last-child td { border-bottom: none; }
+
+    /* Avatares / nome (se houver) — DM Sans */
+    .main-content .users-table .user-info .name { font-weight: 600; color: #0F1419; }
+    .main-content .users-table .user-info .username { color: #5C6370; font-size: .82rem; }
+
+    /* ---- Badges/Pills: quadrados técnicos sem letter-spacing exagerado ---- */
+    .main-content .badge,
+    .main-content .role-badge,
+    .main-content .status-badge {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-weight: 600;
+      border-radius: 2px;
+      padding: 4px 9px;
+      font-size: .72rem;
+      letter-spacing: .04em;
+    }
+
+    /* ---- Botões Bootstrap dentro do main-content ---- */
+    .main-content .btn {
+      border-radius: 4px;
+      font-weight: 600;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      letter-spacing: 0;
+      transition: transform .15s, box-shadow .15s, background .15s, color .15s;
+      border: 1px solid transparent;
+    }
+    .main-content .btn:hover { transform: translateY(-1px); }
+    .main-content .btn-primary {
+      background: #1A1A1A; color: #FFC107; border-color: #1A1A1A;
+    }
+    .main-content .btn-primary:hover {
+      background: #000; color: #FFC107; border-color: #1A1A1A;
+      box-shadow: 0 5px 14px rgba(15,20,25,.2);
+    }
+    .main-content .btn-success {
+      background: #1B7F4E; color: #fff; border-color: #1B7F4E;
+    }
+    .main-content .btn-success:hover { background: #166940; border-color: #166940; }
+    .main-content .btn-warning {
+      background: #FFC107; color: #1A1A1A; border-color: #FFC107;
+    }
+    .main-content .btn-warning:hover { background: #FFD54A; }
+    .main-content .btn-danger {
+      background: transparent; color: #C0392B; border: 1px solid #C0392B;
+    }
+    .main-content .btn-danger:hover { background: #C0392B; color: #fff; }
+    .main-content .btn-secondary {
+      background: transparent; color: #5C6370; border: 1px solid #D8D5C8;
+    }
+    .main-content .btn-secondary:hover { color: #0F1419; border-color: #1A1A1A; }
+    .main-content .btn-sm { padding: 6px 12px; font-size: .82rem; }
+
+    /* ---- Modal Bootstrap: header preto + linha amarela ---- */
+    #userModal .modal-content,
+    #groupAssignModal .modal-content,
+    .modal-content {
+      border-radius: 6px;
+      border: 1px solid #1A1A1A;
+      overflow: hidden;
+    }
+    #userModal .modal-header,
+    #groupAssignModal .modal-header {
+      background: #1A1A1A; color: #fff;
+      border-bottom: none;
+      padding: 16px 22px;
+      position: relative;
+    }
+    #userModal .modal-header::after,
+    #groupAssignModal .modal-header::after {
+      content: ''; position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 2px;
+      background: linear-gradient(90deg, #FFC107 0%, #FFC107 22%, transparent 22%, transparent 100%);
+    }
+    #userModal .modal-title,
+    #groupAssignModal .modal-title {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-weight: 600; letter-spacing: -.01em;
+    }
+    #userModal .modal-title i,
+    #groupAssignModal .modal-title i { color: #FFC107; }
+    #userModal .btn-close,
+    #groupAssignModal .btn-close {
+      filter: invert(1) brightness(2);
+      opacity: .7;
+      transition: opacity .15s, transform .15s;
+    }
+    #userModal .btn-close:hover,
+    #groupAssignModal .btn-close:hover {
+      opacity: 1; transform: rotate(90deg);
+    }
+    #userModal .modal-body label,
+    #groupAssignModal .modal-body label {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: .7rem; font-weight: 600;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: #5C6370; margin-bottom: 6px;
+    }
+    #userModal .modal-body .form-control,
+    #userModal .modal-body .form-select,
+    #groupAssignModal .modal-body .form-control,
+    #groupAssignModal .modal-body .form-select {
+      border-color: #D8D5C8; border-radius: 4px;
+      font-family: 'DM Sans', system-ui, sans-serif;
+    }
+    #userModal .modal-body .form-control:focus,
+    #userModal .modal-body .form-select:focus,
+    #groupAssignModal .modal-body .form-control:focus,
+    #groupAssignModal .modal-body .form-select:focus {
+      border-color: #1A1A1A;
+      box-shadow: 0 0 0 3px rgba(255,193,7,.22);
+    }
+    #userModal .modal-footer,
+    #groupAssignModal .modal-footer {
+      background: #ECEAE0;
+      border-top: 1px solid #D8D5C8;
+    }
+
+    /* ---- Estados vazios ---- */
+    .main-content .empty-state {
+      text-align: center; padding: 32px 16px;
+      color: #5C6370;
+    }
+    .main-content .empty-state-icon i {
+      font-size: 2.4rem; opacity: .4; color: #5C6370;
+    }
+
+    /* ---- Toast (se houver) ---- */
+    .toast-notification {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      border-radius: 4px;
+    }
+
+    /* ---- RESPONSIVIDADE — mobile ---- */
+    @media (max-width: 980px) {
+      .main-content .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .main-content .stat-card .stat-value { font-size: 1.8rem; }
+    }
+    @media (max-width: 768px) {
+      .main-content .top-bar h1 { font-size: 1.15rem; }
+      .main-content .stats-grid { gap: 1px; }
+      .main-content .stat-card { padding: 14px 16px; }
+      .main-content .stat-card .stat-value { font-size: 1.6rem; }
+      .main-content .stat-card .stat-label { font-size: .62rem; }
+      .main-content .search-filter {
+        display: grid; grid-template-columns: 1fr;
+        gap: 8px;
+      }
+      .main-content .users-table {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      .main-content .users-table table {
+        font-size: .82rem; min-width: 720px;
+      }
+      .main-content .users-table thead th,
+      .main-content .users-table tbody td {
+        padding: 9px 11px;
+      }
+      .main-content .pc-card {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      .main-content .pc-card .actions {
+        justify-content: flex-end;
+      }
+      #userModal .modal-dialog,
+      #groupAssignModal .modal-dialog {
+        margin: 0; max-width: 100%; min-height: 100vh;
+      }
+      #userModal .modal-content,
+      #groupAssignModal .modal-content {
+        border-radius: 0; min-height: 100vh;
+      }
+    }
+    @media (max-width: 480px) {
+      .main-content .stats-grid { grid-template-columns: 1fr; }
+      .main-content .stat-card .stat-value { font-size: 1.7rem; }
+      .main-content .pc-section { padding: 14px 16px; }
+    }
+
+    /* ---- Movimento: stagger nos stat-cards + linhas tabela ---- */
+    @keyframes usersEnter {
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .main-content .stat-card,
+    .main-content .users-table tbody tr,
+    .main-content .pc-card,
+    .main-content .pc-section {
+      opacity: 0; transform: translateY(6px);
+      animation: usersEnter .42s cubic-bezier(.2,.8,.2,1) forwards;
+    }
+    .main-content .stat-card:nth-child(1) { animation-delay: .04s; }
+    .main-content .stat-card:nth-child(2) { animation-delay: .08s; }
+    .main-content .stat-card:nth-child(3) { animation-delay: .12s; }
+    .main-content .stat-card:nth-child(4) { animation-delay: .16s; }
+    .main-content .users-table tbody tr:nth-child(1)  { animation-delay: .18s; }
+    .main-content .users-table tbody tr:nth-child(2)  { animation-delay: .21s; }
+    .main-content .users-table tbody tr:nth-child(3)  { animation-delay: .24s; }
+    .main-content .users-table tbody tr:nth-child(4)  { animation-delay: .27s; }
+    .main-content .users-table tbody tr:nth-child(5)  { animation-delay: .30s; }
+    .main-content .users-table tbody tr:nth-child(6)  { animation-delay: .33s; }
+    .main-content .users-table tbody tr:nth-child(n+7){ animation-delay: .36s; }
+    .main-content .pc-section:nth-child(1) { animation-delay: .08s; }
+    .main-content .pc-section:nth-child(2) { animation-delay: .14s; }
+    .main-content .pc-section:nth-child(3) { animation-delay: .20s; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .main-content .stat-card,
+      .main-content .users-table tbody tr,
+      .main-content .pc-card,
+      .main-content .pc-section {
+        animation: none; opacity: 1; transform: none;
+      }
+      .main-content .stat-card::before { transition: none; }
+    }
+
+    /* ---- Pulse visual em itens recém-focados (?focus=pendentes) ---- */
+    @keyframes usersPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(255,193,7,.55); }
+      70%  { box-shadow: 0 0 0 10px rgba(255,193,7,0); }
+      100% { box-shadow: 0 0 0 0 rgba(255,193,7,0); }
+    }
+    .main-content .pulse-target { animation: usersPulse 1.4s ease-out; }
+
+    /* =================================================================
+       Fix: .btn-action (Editar/Senha) ficava INVISÍVEL no hover porque
+       herdava background amarelo claro + texto amarelo (components.css).
+       !important para garantir override em todas as variantes.
+       ================================================================= */
+    .main-content .users-table .btn-action,
+    .main-content .btn-action {
+      background: transparent !important;
+      border: 1px solid #D8D5C8 !important;
+      color: #B8870B !important;
+      border-radius: 4px !important;
+      font-weight: 600;
+      letter-spacing: 0;
+      padding: 6px 12px;
+      font-size: .78rem;
+      text-transform: none !important;
+      transition: background .15s, color .15s, border-color .15s, transform .15s;
+    }
+    .main-content .users-table .btn-action:hover,
+    .main-content .btn-action:hover {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+      border-color: #1A1A1A !important;
+      transform: translateY(-1px);
+    }
+    .main-content .users-table .btn-action.danger,
+    .main-content .btn-action.danger {
+      color: #C0392B !important;
+      border-color: rgba(192,57,43,.3) !important;
+    }
+    .main-content .users-table .btn-action.danger:hover,
+    .main-content .btn-action.danger:hover {
+      background: #C0392B !important;
+      color: #fff !important;
+      border-color: #C0392B !important;
+    }
+
+    /* =================================================================
+       MODAL USUÁRIO — REDESIGN (skill /frontend-design)
+       Linguagem técnica CPE. Vence o .modal-content global de
+       components.css (max-width:500px + padding extra) com seletor
+       body #userModal + !important. Layout em seções com numeração.
+       ================================================================= */
+
+    /* ─── Override do .modal-content global (sem prefixo) ─── */
+    body #userModal .modal-content {
+      max-width: none !important;
+      width: 100% !important;
+      padding: 0 !important;
+      border-radius: 6px !important;
+      border: 1px solid #1A1A1A !important;
+      background: #fff !important;
+      box-shadow: 0 24px 80px rgba(15,20,25,.18) !important;
+      animation: none !important;
+      overflow: hidden;
+    }
+
+    /* ─── Dialog: largura por breakpoint, sem brigar com Bootstrap ─── */
+    body #userModal .modal-dialog {
+      max-width: 100% !important;
+      width: auto !important;
+    }
+    @media (min-width: 992px) {
+      body #userModal .modal-dialog.modal-xl {
+        max-width: 1100px !important;
+        margin: 1.75rem auto !important;
+      }
+    }
+    @media (min-width: 1400px) {
+      body #userModal .modal-dialog.modal-xl {
+        max-width: 1240px !important;
+      }
+    }
+    @media (max-width: 991.98px) {
+      body #userModal .modal-dialog {
+        margin: 0 !important;
+        max-width: 100% !important;
+        min-height: 100vh !important;
+      }
+      body #userModal .modal-content {
+        min-height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+      }
+    }
+
+    /* ─── Header: bloco preto + ruler amarelo + título visível ─── */
+    body #userModal .modal-header {
+      background: #0A0A0A !important;
+      color: #fff !important;
+      border-bottom: none !important;
+      padding: 22px 28px !important;
+      margin: 0 !important;
+      position: relative;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    body #userModal .modal-header::after {
+      content: '';
+      position: absolute; left: 0; right: 0; bottom: 0;
+      height: 3px;
+      background: linear-gradient(90deg,
+        #FFC107 0%, #FFC107 18%,
+        rgba(255,193,7,0) 18%, rgba(255,193,7,0) 100%);
+    }
+    body #userModal .modal-title {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 700 !important;
+      font-size: 1.05rem !important;
+      letter-spacing: -.005em !important;
+      text-transform: none !important;
+      color: #fff !important;
+      margin: 0 !important;
+      display: flex; align-items: center; gap: 14px;
+    }
+    body #userModal .modal-title i {
+      color: #FFC107 !important;
+      font-size: 1.3rem !important;
+    }
+    body #userModal .modal-eyebrow {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: .62rem;
+      font-weight: 600;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.55);
+      padding: 3px 9px;
+      border: 1px solid rgba(255,193,7,.4);
+      border-radius: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    /* Botão fechar — X vermelho via pseudo-elemento.
+       Vence o .btn-close global (components.css:974) que zera background-image. */
+    body #userModal .btn-close {
+      background: transparent !important;
+      background-image: none !important;
+      border: 1px solid rgba(231, 76, 60, .35) !important;
+      border-radius: 3px !important;
+      width: 34px; height: 34px;
+      padding: 0 !important;
+      margin: 0 !important;
+      filter: none !important;
+      opacity: 1 !important;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: #E74C3C !important;
+      font-size: 0;
+      cursor: pointer;
+      transition: background .18s, transform .18s, border-color .18s;
+      position: relative;
+    }
+    body #userModal .btn-close::before {
+      content: '\F659'; /* bi-x-lg */
+      font-family: 'bootstrap-icons';
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #E74C3C;
+      line-height: 1;
+    }
+    body #userModal .btn-close:hover {
+      background: #E74C3C !important;
+      border-color: #E74C3C !important;
+      transform: rotate(90deg);
+    }
+    body #userModal .btn-close:hover::before {
+      color: #fff;
+    }
+    body #userModal .btn-close:focus-visible {
+      outline: 2px solid #E74C3C;
+      outline-offset: 2px;
+    }
+
+    /* ─── Body: fundo papel, padding generoso, scroll interno ─── */
+    body #userModal .modal-body {
+      background: #F5F4ED !important;
+      padding: 26px 30px !important;
+      margin: 0 !important;
+      max-height: calc(100vh - 110px);
+      overflow-y: auto;
+    }
+
+    /* ─── Seções tipográficas com numeração técnica (signature) ─── */
+    body #userModal .form-section {
+      background: #fff;
+      border: 1px solid #D8D5C8;
+      border-radius: 4px;
+      padding: 22px 24px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+    body #userModal .form-section::before {
+      content: ''; position: absolute;
+      top: 0; left: 0; width: 3px; height: 36px;
+      background: #FFC107;
+    }
+    body #userModal .form-section-head {
+      display: flex; align-items: baseline; gap: 14px;
+      padding-bottom: 14px; margin-bottom: 18px;
+      border-bottom: 1px solid #ECEAE0;
+    }
+    body #userModal .form-section-num {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: .72rem; font-weight: 700;
+      letter-spacing: .15em;
+      color: #B8870B;
+      font-variant-numeric: tabular-nums;
+    }
+    body #userModal .form-section-title {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: .92rem; font-weight: 600;
+      letter-spacing: -.005em;
+      color: #0F1419;
+      margin: 0;
+    }
+    body #userModal .form-section-sub {
+      font-size: .76rem; color: #5C6370;
+      margin-left: auto;
+      font-family: 'DM Sans', system-ui, sans-serif;
+    }
+
+    /* ─── Labels técnicos ─── */
+    body #userModal .form-label {
+      display: flex !important; align-items: center; gap: 8px;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .68rem !important; font-weight: 600 !important;
+      letter-spacing: .12em !important; text-transform: uppercase !important;
+      color: #5C6370 !important;
+      margin-bottom: 6px !important;
+    }
+    body #userModal .form-label i {
+      color: #B8870B; font-size: .95rem;
+    }
+    body #userModal .form-label .required {
+      color: #C0392B; font-weight: 700; font-size: .9rem;
+    }
+
+    /* ─── Inputs ─── */
+    body #userModal .form-control,
+    body #userModal .form-select {
+      background: #fff !important;
+      border: 1px solid #D8D5C8 !important;
+      border-radius: 4px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .92rem !important;
+      color: #0F1419 !important;
+      padding: 10px 13px !important;
+      transition: border-color .15s, box-shadow .15s;
+      width: 100%;
+    }
+    body #userModal .form-control:focus,
+    body #userModal .form-select:focus {
+      border-color: #1A1A1A !important;
+      box-shadow: 0 0 0 3px rgba(255,193,7,.25) !important;
+      outline: none !important;
+    }
+    body #userModal .form-control::placeholder {
+      color: #A8AAB2; font-weight: 400;
+    }
+    body #userModal .help-text {
+      font-size: .74rem;
+      color: #7B8088;
+      margin-top: 5px;
+      line-height: 1.35;
+      font-family: 'DM Sans', system-ui, sans-serif;
+    }
+
+    /* ─── Senha: input + toggle olho ─── */
+    body #userModal .password-input-group { position: relative; }
+    body #userModal .password-input-group .form-control {
+      padding-right: 42px !important;
+    }
+    body #userModal .password-toggle {
+      position: absolute; right: 6px; top: 50%;
+      transform: translateY(-50%);
+      background: transparent; border: none;
+      color: #5C6370; padding: 8px 10px;
+      border-radius: 3px; cursor: pointer;
+      transition: color .15s, background .15s;
+      z-index: 5;
+    }
+    body #userModal .password-toggle:hover {
+      color: #1A1A1A; background: #ECEAE0;
+    }
+
+    /* ─── Requisitos de senha: grid 5 colunas ─── */
+    body #userModal .password-requirements {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px 16px;
+      padding: 14px 18px;
+      background: #FAF8F2;
+      border: 1px solid #D8D5C8;
+      border-left: 3px solid #FFC107;
+      border-radius: 3px;
+      font-size: .8rem;
+      margin-top: 10px;
+    }
+    body #userModal .password-requirements .requirement {
+      display: flex; align-items: center; gap: 8px;
+      color: #5C6370;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      min-width: 0;
+      transition: color .15s;
+    }
+    body #userModal .password-requirements .requirement.met {
+      color: #1B7F4E; font-weight: 600;
+    }
+    body #userModal .password-requirements .requirement-icon {
+      font-size: 0;
+      width: 18px; height: 18px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: #ECEAE0;
+      border-radius: 50%;
+      flex-shrink: 0;
+      position: relative;
+      transition: background .15s;
+    }
+    body #userModal .password-requirements .requirement-icon::before {
+      content: '\F659';
+      font-family: 'bootstrap-icons';
+      font-size: .58rem;
+      color: #9CA3AF;
+    }
+    body #userModal .password-requirements .requirement.met .requirement-icon {
+      background: #1B7F4E;
+    }
+    body #userModal .password-requirements .requirement.met .requirement-icon::before {
+      content: '\F26B';
+      color: #fff;
+      font-size: .85rem;
+    }
+
+    /* ─── Footer interno (botões) ─── */
+    body #userModal .form-actions {
+      display: flex; gap: 10px;
+      margin-top: 6px; padding-top: 20px;
+      border-top: 1px solid #D8D5C8;
+    }
+    body #userModal .form-actions .btn {
+      flex: 1;
+      padding: 11px 22px !important;
+      font-weight: 600 !important;
+      letter-spacing: .02em !important;
+      border-radius: 4px !important;
+      font-size: .9rem !important;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      transition: transform .15s, box-shadow .15s, background .15s, color .15s;
+      border: 1px solid transparent !important;
+    }
+    body #userModal .form-actions .btn-secondary {
+      background: #fff !important; color: #5C6370 !important;
+      border-color: #D8D5C8 !important;
+    }
+    body #userModal .form-actions .btn-secondary:hover {
+      color: #0F1419 !important; border-color: #1A1A1A !important;
+      transform: translateY(-1px);
+    }
+    body #userModal .form-actions .btn-primary {
+      background: #1A1A1A !important; color: #FFC107 !important;
+      border-color: #1A1A1A !important;
+    }
+    body #userModal .form-actions .btn-primary:hover {
+      background: #000 !important;
+      box-shadow: 0 6px 18px rgba(15,20,25,.25);
+      transform: translateY(-1px);
+    }
+
+    /* ─── Responsivo ─── */
+    @media (max-width: 991.98px) {
+      body #userModal .modal-body { padding: 20px 18px !important; max-height: none; }
+      body #userModal .form-section { padding: 18px 18px; }
+      body #userModal .password-requirements { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 540px) {
+      body #userModal .modal-body { padding: 16px 14px !important; }
+      body #userModal .form-section { padding: 16px 14px; }
+      body #userModal .password-requirements { grid-template-columns: 1fr; }
+      body #userModal .form-section-head { flex-direction: column; align-items: flex-start; gap: 6px; }
+      body #userModal .form-section-sub { margin-left: 0; }
+      body #userModal .form-actions { flex-direction: column; }
+    }
+
+    /* ─── Animação suave das seções ─── */
+    @keyframes userModalSectionEnter {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    body #userModal.show .form-section {
+      animation: userModalSectionEnter .4s cubic-bezier(.2,.8,.2,1) both;
+    }
+    body #userModal.show .form-section:nth-of-type(1) { animation-delay: .05s; }
+    body #userModal.show .form-section:nth-of-type(2) { animation-delay: .12s; }
+    body #userModal.show .form-section:nth-of-type(3) { animation-delay: .19s; }
+    @media (prefers-reduced-motion: reduce) {
+      body #userModal.show .form-section { animation: none; }
+    }
   </style>
 
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
@@ -130,11 +929,8 @@
         </div>
         <!-- [FIM] Alerts -->
 
-        <!-- [INICIO] Page Header -->
-        <div class="page-header">
-          <h2 class="page-title">
-            <i class="bi bi-people-fill"></i> Gerenciamento de Usuários
-          </h2>
+        <!-- [INICIO] Page Header — só botões de ação (título vem do top-bar) -->
+        <div class="page-header" style="justify-content:flex-end;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn-add-user" id="btnImportCsv"
               data-bs-toggle="modal" data-bs-target="#csvImportModal"
@@ -270,174 +1066,178 @@
   <!-- ================================================== -->
   <!-- [INICIO] User Modal -->
   <div class="modal fade" id="userModal" tabindex="-1" aria-labelledby="userModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="userModalLabel">
-            <i class="bi bi-person-plus"></i> Novo Usuário
+            <i class="bi bi-person-plus"></i> <span id="userModalTitleText">Novo Usuário</span>
+            <span class="modal-eyebrow">CPE / USUÁRIOS</span>
           </h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
 
-        <div class="modal-body" style="padding: 2rem;">
+        <div class="modal-body">
           <div class="alert alert-danger d-none" id="modalAlertBox" role="alert">
             <i class="bi bi-exclamation-circle"></i>
             <span id="modalAlertMessage"></span>
           </div>
 
           <form id="addUserForm" novalidate>
-            <!-- [INICIO] Campo Nome Completo -->
-            <div class="mb-3">
-              <label for="inputName" class="form-label">
-                <i class="bi bi-person"></i> Nome Completo <span style="color: #ef4444;">*</span>
-              </label>
-              <input type="text" class="form-control" id="inputName" placeholder="Ex: João da Silva" required />
-              <div class="help-text">Digite o nome completo do usuário</div>
-            </div>
-            <!-- [FIM] Campo Nome Completo -->
 
-            <!-- [INICIO] Campo E-mail -->
-            <div class="mb-3">
-              <label for="inputEmail" class="form-label">
-                <i class="bi bi-envelope"></i> E-mail <span style="color: #ef4444;">*</span>
-              </label>
-              <input type="email" class="form-control" id="inputEmail" placeholder="seu.email@example.com" required />
-              <div class="help-text">O e-mail deve ser único no sistema</div>
-            </div>
-            <!-- [FIM] Campo E-mail -->
-
-            <!-- [INICIO] Campo Username -->
-            <div class="mb-3">
-              <label for="inputUsername" class="form-label">
-                <i class="bi bi-at"></i> Username (Usuário) <span style="color: #ef4444;">*</span>
-              </label>
-              <input type="text" class="form-control" id="inputUsername" placeholder="nomedousuario" required />
-              <div class="help-text">Será usado para login (sem espaços ou caracteres especiais)</div>
-            </div>
-            <!-- [FIM] Campo Username -->
-
-            <!-- [INICIO] Campo CPF (opcional — necessário para termos de responsabilidade) -->
-            <div class="mb-3">
-              <label for="inputCpf" class="form-label">
-                <i class="bi bi-credit-card-2-front"></i> CPF
-              </label>
-              <input type="text" class="form-control" id="inputCpf" placeholder="000.000.000-00" maxlength="14" />
-              <div class="help-text">Opcional. Usado para gerar termos de responsabilidade (celular, notebook).</div>
-            </div>
-            <!-- [FIM] Campo CPF -->
-
-            <!-- [INICIO] Campo Senha -->
-            <div class="mb-3" id="passwordField">
-              <label for="inputPassword" class="form-label">
-                <i class="bi bi-lock"></i> Senha <span style="color: #ef4444;">*</span>
-              </label>
-              <div class="password-input-group">
-                <input 
-                  type="password" 
-                  class="form-control" 
-                  id="inputPassword" 
-                  placeholder="Digite uma senha forte"
-                  required 
-                />
-                <button type="button" class="password-toggle" id="togglePassword" title="Mostrar/Ocultar">
-                  <i class="bi bi-eye"></i>
-                </button>
+            <!-- ─── SEÇÃO 01 — IDENTIFICAÇÃO ─── -->
+            <section class="form-section">
+              <div class="form-section-head">
+                <span class="form-section-num">01</span>
+                <h6 class="form-section-title">Identificação</h6>
+                <span class="form-section-sub">Dados pessoais e de acesso</span>
               </div>
-              
-              <!-- [INICIO] Requisitos de Senha -->
-              <div class="password-requirements">
-                <div class="requirement unmet" id="req-length">
-                  <span class="requirement-icon">Check</span>
-                  <span>Mínimo 8 caracteres</span>
+              <div class="row g-3">
+                <div class="col-lg-4 col-md-6">
+                  <label for="inputName" class="form-label">
+                    <i class="bi bi-person"></i> Nome Completo <span class="required">*</span>
+                  </label>
+                  <input type="text" class="form-control" id="inputName" placeholder="Ex: João da Silva" required />
+                  <div class="help-text">Nome completo para identificação</div>
                 </div>
-                <div class="requirement unmet" id="req-uppercase">
-                  <span class="requirement-icon">Check</span>
-                  <span>Pelo menos 1 letra maiúscula</span>
+                <div class="col-lg-4 col-md-6">
+                  <label for="inputEmail" class="form-label">
+                    <i class="bi bi-envelope"></i> E-mail <span class="required">*</span>
+                  </label>
+                  <input type="email" class="form-control" id="inputEmail" placeholder="usuario@empresa.com" required />
+                  <div class="help-text">Único no sistema. Usado para login e notificações</div>
                 </div>
-                <div class="requirement unmet" id="req-lowercase">
-                  <span class="requirement-icon">Check</span>
-                  <span>Pelo menos 1 letra minúscula</span>
+                <div class="col-lg-4 col-md-6">
+                  <label for="inputUsername" class="form-label">
+                    <i class="bi bi-at"></i> Username <span class="required">*</span>
+                  </label>
+                  <input type="text" class="form-control" id="inputUsername" placeholder="nome.sobrenome" required />
+                  <div class="help-text">Sem espaços ou caracteres especiais</div>
                 </div>
-                <div class="requirement unmet" id="req-number">
-                  <span class="requirement-icon">Check</span>
-                  <span>Pelo menos 1 número</span>
-                </div>
-                <div class="requirement unmet" id="req-special">
-                  <span class="requirement-icon">Check</span>
-                  <span>Pelo menos 1 caractere especial (@, #, $, %, &, etc)</span>
+                <div class="col-lg-4 col-md-6">
+                  <label for="inputCpf" class="form-label">
+                    <i class="bi bi-credit-card-2-front"></i> CPF
+                  </label>
+                  <input type="text" class="form-control" id="inputCpf" placeholder="000.000.000-00" maxlength="14" />
+                  <div class="help-text">Opcional. Usado em termos de responsabilidade</div>
                 </div>
               </div>
-              <!-- [FIM] Requisitos de Senha -->
-            </div>
-            <!-- [FIM] Campo Senha -->
+            </section>
 
-            <!-- [INICIO] Campo Grupo -->
-            <div class="mb-3">
-              <label for="inputGroup" class="form-label">
-                <i class="bi bi-folder"></i> Grupo
-              </label>
-              <select class="form-select" id="inputGroup">
-                <option value="">-- Sem Grupo --</option>
-              </select>
-              <div class="help-text">Selecione um grupo para vincular este usuário</div>
-            </div>
-            <!-- [FIM] Campo Grupo -->
-
-            <!-- [INICIO] Campo Unidade -->
-            <div class="mb-3">
-              <label for="inputUnit" class="form-label">
-                <i class="bi bi-geo-alt"></i> Unidade
-              </label>
-              <select class="form-select" id="inputUnit">
-                <option value="">-- Sem Unidade --</option>
-              </select>
-              <div class="help-text">Filial física a que este usuário pertence</div>
-            </div>
-            <!-- [FIM] Campo Unidade -->
-
-            <!-- [INICIO] Campos Permissão e Status -->
-           <!-- [INICIO] Campos Permissão e Status -->
-<div class="row">
-  <div class="col-md-6 mb-3">
-    <label for="inputRole" class="form-label">
-      <i class="bi bi-shield-check"></i> Tipo de Permissão <span style="color: #ef4444;">*</span>
-    </label>
-    <select class="form-select" id="inputRole" required>
-      <option value="">Selecione o tipo...</option>
-      <option value="USER">👤 Usuário Comum</option>
-      <option value="RESPONSAVEL_GRUPO">👨‍💼 Responsável do Grupo</option>
-      <option value="ADMIN">🔐 Administrador Sistema</option>
-      <option value="TI">🔧 TI</option>
-      <option value="MANAGER">📊 Gerente</option>
-    </select>
-    <small class="form-text text-muted">
-      <strong>Usuário Comum:</strong> Vê apenas seus tickets<br>
-      <strong>Responsável:</strong> Vê todos os tickets do seu grupo
-    </small>
-  </div>
-
-              <div class="col-md-6 mb-3">
-                <label for="inputStatus" class="form-label">
-                  <i class="bi bi-toggle2-on"></i> Status
-                </label>
-                <select class="form-select" id="inputStatus">
-                  <option value="true">Ativo</option>
-                  <option value="false">Inativo</option>
-                </select>
+            <!-- ─── SEÇÃO 02 — VÍNCULOS ORGANIZACIONAIS ─── -->
+            <section class="form-section">
+              <div class="form-section-head">
+                <span class="form-section-num">02</span>
+                <h6 class="form-section-title">Vínculos organizacionais</h6>
+                <span class="form-section-sub">Grupo, unidade e permissão</span>
               </div>
-            </div>
-            <!-- [FIM] Campos Permissão e Status -->
+              <div class="row g-3">
+                <div class="col-lg-4 col-md-6">
+                  <label for="inputGroup" class="form-label">
+                    <i class="bi bi-folder"></i> Grupo
+                  </label>
+                  <select class="form-select" id="inputGroup">
+                    <option value="">-- Sem Grupo --</option>
+                  </select>
+                  <div class="help-text">Vincula usuário a um setor/equipe</div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                  <label for="inputUnit" class="form-label">
+                    <i class="bi bi-geo-alt"></i> Unidade
+                  </label>
+                  <select class="form-select" id="inputUnit">
+                    <option value="">-- Sem Unidade --</option>
+                  </select>
+                  <div class="help-text">Filial física onde o usuário atua</div>
+                </div>
+                <div class="col-lg-4 col-md-6">
+                  <label for="inputRole" class="form-label">
+                    <i class="bi bi-shield-check"></i> Tipo de Permissão <span class="required">*</span>
+                  </label>
+                  <select class="form-select" id="inputRole" required>
+                    <option value="">Selecione o tipo...</option>
+                    <option value="USER">👤 Usuário Comum</option>
+                    <option value="RESPONSAVEL_GRUPO">👨‍💼 Responsável do Grupo</option>
+                    <option value="ADMIN">🔐 Administrador</option>
+                    <option value="TI">🔧 TI</option>
+                    <option value="MANAGER">📊 Gerente</option>
+                  </select>
+                  <div class="help-text"><strong>Comum:</strong> seus tickets · <strong>Responsável:</strong> tickets do grupo</div>
+                </div>
+              </div>
+            </section>
 
-            <!-- [INICIO] Botões do Formulário -->
-            <div class="d-flex gap-2">
-              <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
-                <i class="bi bi-check-lg"></i> Criar Usuário
-              </button>
-              <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">
+            <!-- ─── SEÇÃO 03 — ACESSO E SEGURANÇA ─── -->
+            <section class="form-section">
+              <div class="form-section-head">
+                <span class="form-section-num">03</span>
+                <h6 class="form-section-title">Acesso e segurança</h6>
+                <span class="form-section-sub">Status de login e credenciais</span>
+              </div>
+              <div class="row g-3">
+                <div class="col-lg-4 col-md-6">
+                  <label for="inputStatus" class="form-label">
+                    <i class="bi bi-toggle2-on"></i> Status
+                  </label>
+                  <select class="form-select" id="inputStatus">
+                    <option value="true">Ativo</option>
+                    <option value="false">Inativo</option>
+                  </select>
+                  <div class="help-text">Inativos não conseguem fazer login</div>
+                </div>
+                <div class="col-lg-8 col-md-6" id="passwordField">
+                  <label for="inputPassword" class="form-label">
+                    <i class="bi bi-lock"></i> Senha <span class="required">*</span>
+                  </label>
+                  <div class="password-input-group">
+                    <input
+                      type="password"
+                      class="form-control"
+                      id="inputPassword"
+                      placeholder="Digite uma senha forte"
+                      required
+                    />
+                    <button type="button" class="password-toggle" id="togglePassword" title="Mostrar/Ocultar">
+                      <i class="bi bi-eye"></i>
+                    </button>
+                  </div>
+                  <div class="help-text">Mínimo 8 caracteres, com maiúscula, número e caractere especial</div>
+                </div>
+                <div class="col-12" id="passwordRequirementsCol">
+                  <div class="password-requirements">
+                    <div class="requirement unmet" id="req-length">
+                      <span class="requirement-icon">Check</span>
+                      <span>Mínimo 8 caracteres</span>
+                    </div>
+                    <div class="requirement unmet" id="req-uppercase">
+                      <span class="requirement-icon">Check</span>
+                      <span>1 letra maiúscula</span>
+                    </div>
+                    <div class="requirement unmet" id="req-lowercase">
+                      <span class="requirement-icon">Check</span>
+                      <span>1 letra minúscula</span>
+                    </div>
+                    <div class="requirement unmet" id="req-number">
+                      <span class="requirement-icon">Check</span>
+                      <span>1 número</span>
+                    </div>
+                    <div class="requirement unmet" id="req-special">
+                      <span class="requirement-icon">Check</span>
+                      <span>1 caractere especial</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <!-- ─── AÇÕES ─── -->
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                 <i class="bi bi-x-lg"></i> Cancelar
               </button>
+              <button type="submit" class="btn btn-primary" id="submitBtn">
+                <i class="bi bi-check-lg"></i> Criar Usuário
+              </button>
             </div>
-            <!-- [FIM] Botões do Formulário -->
           </form>
         </div>
       </div>
@@ -519,7 +1319,7 @@
   <!-- ================================================== -->
   
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-06-17"></script>
 
   <!-- ================================================== -->
   <!-- DADOS GLOBAIS -->
@@ -978,7 +1778,7 @@ function renderUsers(list = users) {
 
       selectedUserId = userId;
 
-      document.getElementById("userModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Usuario';
+      document.getElementById("userModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> <span id="userModalTitleText">Editar Usuário</span> <span class="modal-eyebrow">CPE / USUÁRIOS</span>';
 
       document.getElementById("inputName").value = user.name || '';
       document.getElementById("inputEmail").value = user.email || '';
@@ -991,6 +1791,8 @@ function renderUsers(list = users) {
 
       document.getElementById("inputPassword").value = '';
       document.getElementById("passwordField").style.display = 'none';
+      const _reqCol = document.getElementById("passwordRequirementsCol");
+      if (_reqCol) _reqCol.style.display = 'none';
 
       document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Usuario';
 
@@ -1008,12 +1810,14 @@ function renderUsers(list = users) {
       if (!selectedUserId) {
         console.log("[USERS/MODAL] Resetando modal para novo usuario");
         
-        document.getElementById("userModalLabel").innerHTML = '<i class="bi bi-person-plus"></i> Novo Usuario';
+        document.getElementById("userModalLabel").innerHTML = '<i class="bi bi-person-plus"></i> <span id="userModalTitleText">Novo Usuário</span> <span class="modal-eyebrow">CPE / USUÁRIOS</span>';
         document.getElementById("addUserForm").reset();
         document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Usuario';
         
         document.getElementById("passwordField").style.display = 'block';
         document.getElementById("inputPassword").required = true;
+        const _reqCol = document.getElementById("passwordRequirementsCol");
+        if (_reqCol) _reqCol.style.display = 'block';
       }
       
       hideModalError();

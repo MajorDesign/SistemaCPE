@@ -368,8 +368,9 @@ async def abuse_protection(request: Request, call_next):
     #     A proteção real contra brute-force está em DOIS lugares ativos:
     #       - Rate limit por IP: _REQ_PER_MIN (120/min) — anti-DDoS, item (3) acima
     #       - Rate limit de LOGIN: _check_rate_limit no /api/auth/login
-    #         (5 tentativas em 5min → bloqueio 15min) — única rota onde 401
-    #         legitimamente indica força bruta de credenciais.
+    #         (15 tentativas em 5min → bloqueio 5min) — chave por
+    #         (credencial, IP), única rota onde 401 legitimamente indica
+    #         força bruta de credenciais.
     #
     #     Para reativar (se um dia for necessário pra ataques fora do /login),
     #     filtre por endpoints específicos (não /api/* genérico).
@@ -378,7 +379,8 @@ async def abuse_protection(request: Request, call_next):
 
 logger.info(f"✅ Anti-abuso ativo: {_REQ_PER_MIN} req/min, body max {_MAX_BODY_BYTES // 1024 // 1024}MB. "
             f"Fail2ban de 401 desativado (token expirado != ataque). "
-            f"Brute-force de login: 5 tentativas/5min via _check_rate_limit.\n")
+            f"Brute-force de login: 15 tentativas/5min via _check_rate_limit "
+            f"(chave: credencial+IP, bloqueio 5min).\n")
 
 
 # Endpoints administrativos para gerenciar bloqueios em runtime
@@ -431,21 +433,31 @@ logger.info("✅ Security headers middleware ativo\n")
 auth_router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # ==================================================
-# Rate-limit de login: bloqueia força bruta por IP
-# 5 tentativas falhas em 5min → 15min de bloqueio
+# Rate-limit de login: bloqueia força bruta por (credencial + IP)
+# 15 tentativas falhas em 5min → 5min de bloqueio
+#
+# Por que (credencial, IP) e não só IP:
+# A CPE inteira sai por um IP NAT compartilhado. Chave só por IP
+# fazia 1 usuário esquecendo a senha bloquear a empresa toda.
+# Histórico: incidente 2026-06-16. Ver memory/project_rate_limit_login_2026_06_16.md
 # ==================================================
 from collections import defaultdict
 
-_LOGIN_ATTEMPTS = defaultdict(list)   # ip -> [timestamp, ...]
-_LOGIN_BLOCKED  = {}                  # ip -> timestamp_unblock
-_MAX_ATTEMPTS   = 5
+_LOGIN_ATTEMPTS = defaultdict(list)   # (cred, ip) -> [timestamp, ...]
+_LOGIN_BLOCKED  = {}                  # (cred, ip) -> timestamp_unblock
+_MAX_ATTEMPTS   = 15
 _WINDOW_SEC     = 300                 # 5 min
-_BLOCK_SEC      = 900                 # 15 min
+_BLOCK_SEC      = 300                 # 5 min
 
-def _check_rate_limit(ip: str) -> None:
-    """Levanta 429 se IP estiver bloqueado por brute-force."""
+def _rl_key(credential: str, ip: str):
+    """Normaliza a chave do rate-limit: (cred_lower, ip)."""
+    return ((credential or "").strip().lower(), ip or "unknown")
+
+def _check_rate_limit(credential: str, ip: str) -> None:
+    """Levanta 429 se (credencial, IP) estiver bloqueado por brute-force."""
     now = time.time()
-    unblock = _LOGIN_BLOCKED.get(ip, 0)
+    key = _rl_key(credential, ip)
+    unblock = _LOGIN_BLOCKED.get(key, 0)
     if unblock > now:
         wait = int(unblock - now)
         raise HTTPException(
@@ -453,19 +465,21 @@ def _check_rate_limit(ip: str) -> None:
             detail=f"Muitas tentativas de login. Tente novamente em {wait}s."
         )
     # Limpa tentativas fora da janela
-    _LOGIN_ATTEMPTS[ip] = [t for t in _LOGIN_ATTEMPTS[ip] if now - t < _WINDOW_SEC]
+    _LOGIN_ATTEMPTS[key] = [t for t in _LOGIN_ATTEMPTS[key] if now - t < _WINDOW_SEC]
 
-def _register_failure(ip: str) -> None:
+def _register_failure(credential: str, ip: str) -> None:
     now = time.time()
-    _LOGIN_ATTEMPTS[ip].append(now)
-    if len(_LOGIN_ATTEMPTS[ip]) >= _MAX_ATTEMPTS:
-        _LOGIN_BLOCKED[ip] = now + _BLOCK_SEC
-        _LOGIN_ATTEMPTS[ip].clear()
-        logger.warning(f"[AUTH] 🚫 IP {ip} bloqueado por {_BLOCK_SEC}s (brute-force)")
+    key = _rl_key(credential, ip)
+    _LOGIN_ATTEMPTS[key].append(now)
+    if len(_LOGIN_ATTEMPTS[key]) >= _MAX_ATTEMPTS:
+        _LOGIN_BLOCKED[key] = now + _BLOCK_SEC
+        _LOGIN_ATTEMPTS[key].clear()
+        logger.warning(f"[AUTH] 🚫 ({key[0]!r}, {key[1]}) bloqueado por {_BLOCK_SEC}s (brute-force)")
 
-def _register_success(ip: str) -> None:
-    _LOGIN_ATTEMPTS.pop(ip, None)
-    _LOGIN_BLOCKED.pop(ip, None)
+def _register_success(credential: str, ip: str) -> None:
+    key = _rl_key(credential, ip)
+    _LOGIN_ATTEMPTS.pop(key, None)
+    _LOGIN_BLOCKED.pop(key, None)
 
 
 @auth_router.post("/login", response_model=LoginResponse, status_code=status.HTTP_200_OK)
@@ -476,7 +490,7 @@ def login(login_data: LoginRequest, response: Response, request: Request = None)
     if request:
         fwd = request.headers.get("X-Forwarded-For", "")
         client_ip = fwd.split(",")[0].strip() if fwd else (request.client.host if request.client else "unknown")
-    _check_rate_limit(client_ip)
+    _check_rate_limit(login_data.credential, client_ip)
 
     logger.info("\n" + "=" * 100)
     logger.info("[AUTH] 🔐 TENTATIVA DE LOGIN")
@@ -629,7 +643,7 @@ def login(login_data: LoginRequest, response: Response, request: Request = None)
 
         logger.info("[AUTH] ✅ LOGIN BEM-SUCEDIDO!")
         logger.info("=" * 100 + "\n")
-        _register_success(client_ip)
+        _register_success(login_data.credential, client_ip)
 
         return LoginResponse(
             success=True,
@@ -642,7 +656,7 @@ def login(login_data: LoginRequest, response: Response, request: Request = None)
     except HTTPException as he:
         # Marca falha de auth (401) no rate-limit. Erros 400 (campos vazios) não contam.
         if he.status_code == status.HTTP_401_UNAUTHORIZED:
-            _register_failure(client_ip)
+            _register_failure(login_data.credential, client_ip)
         raise
     except Exception as err:
         logger.error(f"[AUTH] ❌ ERRO INESPERADO: {str(err)}")
@@ -1016,7 +1030,7 @@ async def get_user(user_id: int):
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
             "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, u.cpf, "
-            "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
+            "       u.is_active, u.created_at, u.avatar_url, unidades_cpe.nome AS unit_nome "
             "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
             "WHERE u.id = %s",
             (user_id,),

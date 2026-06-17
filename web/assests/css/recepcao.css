@@ -931,3 +931,473 @@ body.recep-body video { height: auto; }
   /* Modal Bootstrap */
   .modal-dialog { margin: 8px; }
 }
+
+/* =====================================================================
+   ============ REFRESH CPE 2026-06-16 — Linguagem técnica unificada =====
+   Override APENAS visual. Zero mudança em classes/IDs/estrutura.
+   Skill /frontend-design — pin: ferramenta interna de recepção.
+   IMPORTANTE: NÃO usar overflow:hidden em .modal-content
+   (quebrou o scroll do fleet — lição aprendida).
+   ===================================================================== */
+
+/* ─── Fonte unificada DM Sans ─── */
+.recep-body,
+.recep-body input,
+.recep-body select,
+.recep-body textarea,
+.recep-body button {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif !important;
+}
+.recep-body { -webkit-font-smoothing: antialiased; }
+
+/* ─── Sidebar logo: tipografia técnica + ruler amarelo ─── */
+.recep-sidebar-logo {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  position: relative;
+}
+.recep-sidebar-logo::after {
+  content: '';
+  position: absolute; left: 16px; right: 16px; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    var(--recep-primary) 0%, var(--recep-primary) 30%,
+    rgba(255,193,7,0) 30%, rgba(255,193,7,0) 100%);
+}
+.recep-logo-cpe,
+.recep-logo-modulo {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  letter-spacing: -.01em !important;
+}
+
+/* ─── Topbar: tipografia + badge técnico ─── */
+.recep-topbar-title {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: -.015em !important;
+  color: var(--recep-dark) !important;
+}
+.recep-topbar-badge {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  font-size: .66rem !important;
+  letter-spacing: .14em !important;
+  border-radius: 2px !important;
+  padding: 4px 10px !important;
+}
+
+/* ─── Section header (h2 das páginas) ─── */
+.recep-section-header h2 {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: -.015em !important;
+  color: var(--recep-dark) !important;
+}
+
+/* ─── Cards: cantos técnicos + hairline amarelo no hover (signature) ─── */
+.recep-card {
+  border-radius: 4px !important;
+  border: 1px solid var(--recep-border) !important;
+  position: relative;
+  transition: box-shadow .18s, border-color .18s;
+}
+
+/* ─── Tabela: header técnico ─── */
+.recep-table thead th {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .68rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .14em !important;
+  text-transform: uppercase !important;
+  color: var(--recep-muted) !important;
+  border-bottom: 2px solid var(--recep-dark) !important;
+  background: transparent !important;
+}
+.recep-table tbody td {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+.recep-table tbody tr:hover td { background: #FAF8F2 !important; }
+
+/* ─── Inputs/selects ─── */
+.recep-input,
+.recep-select {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  border-radius: 4px !important;
+  border-width: 1px !important;
+}
+.recep-input:focus,
+.recep-select:focus {
+  border-color: var(--recep-dark) !important;
+  box-shadow: 0 0 0 3px rgba(255,193,7,.25) !important;
+}
+
+/* ─── Botões btn-recep ─── */
+.btn-recep {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  border-radius: 4px !important;
+  letter-spacing: .02em !important;
+  transition: background .15s, color .15s, transform .15s, box-shadow .15s, border-color .15s !important;
+}
+.btn-recep:hover { transform: translateY(-1px); }
+.btn-recep-primary {
+  background: var(--recep-dark) !important;
+  color: var(--recep-primary) !important;
+  border: 1px solid var(--recep-dark) !important;
+}
+.btn-recep-primary:hover {
+  background: #000 !important;
+  color: var(--recep-primary) !important;
+  box-shadow: 0 6px 16px rgba(15,20,25,.2);
+}
+.btn-recep-secondary {
+  background: #fff !important;
+  color: var(--recep-muted) !important;
+  border: 1px solid var(--recep-border) !important;
+}
+.btn-recep-secondary:hover {
+  color: var(--recep-dark) !important;
+  border-color: var(--recep-dark) !important;
+  background: #fff !important;
+}
+.btn-recep-danger {
+  background: transparent !important;
+  color: var(--recep-danger) !important;
+  border: 1px solid var(--recep-danger) !important;
+}
+.btn-recep-danger:hover {
+  background: var(--recep-danger) !important;
+  color: #fff !important;
+}
+.btn-recep-ghost {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  border-radius: 3px !important;
+}
+
+/* ─── Legenda do calendário: dots técnicos ─── */
+.recep-legend {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: .76rem;
+  color: var(--recep-muted);
+}
+.legend-dot {
+  border-radius: 2px !important;
+}
+
+/* ─── Salas grid: cards técnicos ─── */
+.recep-rooms-grid > * {
+  border-radius: 4px !important;
+}
+
+/* ─── FullCalendar: refinos sutis para combinar com CPE ─── */
+.fc {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+.fc .fc-toolbar-title {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: -.01em !important;
+  color: var(--recep-dark) !important;
+}
+.fc .fc-button {
+  background: #fff !important;
+  color: var(--recep-muted) !important;
+  border: 1px solid var(--recep-border) !important;
+  border-radius: 3px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: .82rem !important;
+  padding: 6px 12px !important;
+  transition: background .15s, color .15s, border-color .15s, transform .15s;
+}
+.fc .fc-button:hover {
+  color: var(--recep-dark) !important;
+  border-color: var(--recep-dark) !important;
+  transform: translateY(-1px);
+}
+.fc .fc-button-primary:not(:disabled).fc-button-active,
+.fc .fc-button-primary:not(:disabled):active {
+  background: var(--recep-dark) !important;
+  color: var(--recep-primary) !important;
+  border-color: var(--recep-dark) !important;
+}
+.fc .fc-col-header-cell-cushion {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  font-size: .72rem !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+  color: var(--recep-muted) !important;
+}
+.fc .fc-daygrid-day-number {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 500 !important;
+  color: var(--recep-dark) !important;
+  font-variant-numeric: tabular-nums;
+}
+.fc .fc-day-today {
+  background: rgba(255,193,7,.08) !important;
+}
+.fc .fc-day-today .fc-daygrid-day-number {
+  color: #B8870C !important;
+  font-weight: 700 !important;
+}
+
+/* ─── Status timeline ─── */
+.status-timeline {
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+/* =====================================================================
+   MODAIS BOOTSTRAP (escopo .recep-body) — padrão CPE
+   IDs: #reservaModal, #reservaDetalhe, #salaModal, #envioModal,
+        #rastreioApiModal, #statusModal
+   ===================================================================== */
+
+.recep-body .modal-content {
+  border-radius: 6px !important;
+  border: 1px solid var(--recep-dark) !important;
+  box-shadow: 0 24px 80px rgba(15,20,25,.18) !important;
+  background: #fff !important;
+  /* NÃO usar overflow:hidden aqui — quebra scroll. Cantos são arredondados
+     via border-radius dos próprios filhos (header/body/footer). */
+}
+
+/* Header preto + ruler amarelo + título visível */
+.recep-body .modal-header {
+  background: #0A0A0A !important;
+  color: #fff !important;
+  border-bottom: none !important;
+  padding: 18px 24px !important;
+  position: relative;
+  border-radius: 6px 6px 0 0 !important;
+}
+.recep-body .modal-header::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg,
+    var(--recep-primary) 0%, var(--recep-primary) 18%,
+    rgba(255,193,7,0) 18%, rgba(255,193,7,0) 100%);
+}
+.recep-body .modal-title {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  letter-spacing: -.005em !important;
+  color: #fff !important;
+  display: inline-flex; align-items: center; gap: 10px;
+  margin: 0 !important;
+  text-transform: none !important;
+}
+.recep-body .modal-title i { color: var(--recep-primary) !important; }
+.recep-body .modal-title code {
+  background: rgba(255,193,7,.12) !important;
+  color: var(--recep-primary) !important;
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-family: ui-monospace, Menlo, Consolas, monospace !important;
+}
+.recep-body .modal-title .text-muted {
+  color: rgba(255,255,255,.55) !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+
+/* Botão fechar — X vermelho */
+.recep-body .modal-header .btn-close {
+  background: transparent !important;
+  background-image: none !important;
+  border: 1px solid rgba(231,76,60,.35) !important;
+  border-radius: 3px !important;
+  width: 32px; height: 32px;
+  padding: 0 !important;
+  margin: 0 !important;
+  opacity: 1 !important;
+  filter: none !important;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0;
+  cursor: pointer;
+  transition: background .18s, transform .18s, border-color .18s;
+  flex-shrink: 0;
+  position: relative;
+}
+.recep-body .modal-header .btn-close::before {
+  content: '\F659'; /* bi-x-lg */
+  font-family: 'bootstrap-icons';
+  font-size: 1rem;
+  font-weight: 700;
+  color: #E74C3C;
+}
+.recep-body .modal-header .btn-close:hover {
+  background: #E74C3C !important;
+  border-color: #E74C3C !important;
+  transform: rotate(90deg);
+}
+.recep-body .modal-header .btn-close:hover::before { color: #fff; }
+
+/* Body em papel + form labels técnicos */
+.recep-body .modal-body {
+  background: #F5F4ED !important;
+  padding: 22px 24px !important;
+}
+.recep-body .modal-body .form-label {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .68rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+  color: var(--recep-muted) !important;
+  margin-bottom: 6px !important;
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+}
+.recep-body .modal-body .form-label i { color: #B8870C !important; }
+.recep-body .modal-body .form-label .text-danger,
+.recep-body .modal-body .form-label span.text-danger {
+  color: #C0392B !important;
+  font-weight: 700;
+}
+.recep-body .modal-body .form-control,
+.recep-body .modal-body .form-select {
+  background: #fff !important;
+  border: 1px solid var(--recep-border) !important;
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .9rem !important;
+  color: var(--recep-dark) !important;
+}
+.recep-body .modal-body .form-control:focus,
+.recep-body .modal-body .form-select:focus {
+  border-color: var(--recep-dark) !important;
+  box-shadow: 0 0 0 3px rgba(255,193,7,.25) !important;
+}
+.recep-body .modal-body .form-text,
+.recep-body .modal-body .form-text.text-muted,
+.recep-body .modal-body small.text-muted {
+  font-size: .74rem !important;
+  color: #7B8088 !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+
+/* Alertas técnicos (border-left amarelo/vermelho) */
+.recep-body .modal-body .alert {
+  border-radius: 3px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+.recep-body .modal-body .alert-danger {
+  background: rgba(192,57,43,.06) !important;
+  border: 1px solid rgba(192,57,43,.25) !important;
+  border-left: 3px solid #C0392B !important;
+  color: #8B2D24 !important;
+}
+.recep-body .modal-body .alert-warning {
+  background: #FAF8F2 !important;
+  border: 1px solid var(--recep-border) !important;
+  border-left: 3px solid var(--recep-primary) !important;
+  color: var(--recep-dark) !important;
+}
+.recep-body .modal-body .alert-warning i { color: #B8870C; }
+
+/* Footer + botões CPE */
+.recep-body .modal-footer {
+  background: #ECEAE0 !important;
+  border-top: 1px solid var(--recep-border) !important;
+  border-radius: 0 0 6px 6px !important;
+  padding: 12px 22px !important;
+}
+.recep-body .modal-footer .btn {
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  font-size: .88rem !important;
+  letter-spacing: .02em !important;
+  padding: 9px 18px !important;
+  border: 1px solid transparent !important;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: background .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s;
+}
+.recep-body .modal-footer .btn-secondary {
+  background: #fff !important;
+  color: var(--recep-muted) !important;
+  border-color: var(--recep-border) !important;
+}
+.recep-body .modal-footer .btn-secondary:hover {
+  color: var(--recep-dark) !important;
+  border-color: var(--recep-dark) !important;
+  transform: translateY(-1px);
+}
+.recep-body .modal-footer .btn-primary {
+  background: var(--recep-dark) !important;
+  color: var(--recep-primary) !important;
+  border-color: var(--recep-dark) !important;
+}
+.recep-body .modal-footer .btn-primary:hover {
+  background: #000 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15,20,25,.2);
+}
+.recep-body .modal-footer .btn-danger {
+  background: transparent !important;
+  color: var(--recep-danger) !important;
+  border-color: var(--recep-danger) !important;
+}
+.recep-body .modal-footer .btn-danger:hover {
+  background: var(--recep-danger) !important;
+  color: #fff !important;
+  transform: translateY(-1px);
+}
+.recep-body .modal-footer .btn-outline-secondary,
+.recep-body .modal-footer .btn-outline-primary {
+  background: #fff !important;
+  color: var(--recep-muted) !important;
+  border-color: var(--recep-border) !important;
+}
+.recep-body .modal-footer .btn-outline-secondary:hover,
+.recep-body .modal-footer .btn-outline-primary:hover {
+  color: var(--recep-dark) !important;
+  border-color: var(--recep-dark) !important;
+}
+
+/* Status modal: form labels e selects sm */
+.recep-body .modal-body .form-control-sm,
+.recep-body .modal-body .form-select-sm {
+  font-size: .85rem !important;
+  padding: 7px 10px !important;
+}
+
+/* Code (rastreio) */
+.recep-body code {
+  font-family: ui-monospace, Menlo, Consolas, monospace !important;
+}
+
+/* Kbd (no aviso de Ctrl/Cmd) */
+.recep-body kbd {
+  background: var(--recep-dark) !important;
+  color: var(--recep-primary) !important;
+  border-radius: 2px !important;
+  padding: 2px 6px !important;
+  font-family: ui-monospace, Menlo, Consolas, monospace !important;
+  font-size: .78rem !important;
+  border: none !important;
+}
+
+/* Stagger sutil cards (movimento técnico) */
+@keyframes recepCardEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.recep-card,
+.recep-rooms-grid > * {
+  animation: recepCardEnter .38s cubic-bezier(.2,.8,.2,1) both;
+}
+.recep-rooms-grid > *:nth-child(1) { animation-delay: .04s; }
+.recep-rooms-grid > *:nth-child(2) { animation-delay: .08s; }
+.recep-rooms-grid > *:nth-child(3) { animation-delay: .12s; }
+.recep-rooms-grid > *:nth-child(4) { animation-delay: .16s; }
+.recep-rooms-grid > *:nth-child(n+5) { animation-delay: .2s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .recep-card,
+  .recep-rooms-grid > * { animation: none; }
+}

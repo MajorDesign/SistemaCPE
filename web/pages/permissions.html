@@ -16,7 +16,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
@@ -293,10 +293,527 @@
       .perm-toggles-grid { grid-template-columns: 1fr; }
       .perm-tabs { flex-wrap: wrap; }
     }
+
+    /* =================================================================
+       ============ REFRESH CPE 2026-06-17 — Linguagem técnica unificada ===
+       Override APENAS visual. Escopo .permissions-body.
+       Skill /frontend-design — pin: console de controle de acesso.
+       Sem mudança em classes/IDs/JS.
+       ================================================================= */
+
+    /* ─── Fonte unificada DM Sans ─── */
+    .permissions-body,
+    .permissions-body input,
+    .permissions-body select,
+    .permissions-body textarea,
+    .permissions-body button {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif !important;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Anti-zoom iOS nos inputs */
+    .permissions-body .form-control,
+    .permissions-body .form-select { font-size: 16px !important; }
+
+    /* ─── Top bar título ─── */
+    .permissions-body .top-bar h1 {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 700 !important;
+      letter-spacing: -.015em !important;
+      color: #0F1419 !important;
+    }
+    .permissions-body .top-bar h1 i { color: #B8870C !important; }
+
+    /* ─── Page header ─── */
+    .permissions-body .page-title {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 700 !important;
+      letter-spacing: -.015em !important;
+      color: #0F1419 !important;
+    }
+    .permissions-body .page-title i { color: #B8870C !important; }
+
+    /* ─── Banner explicativo (era azul) → papel + amarelo CPE ─── */
+    .permissions-body .perm-logic-note {
+      background: #FAF8F2;
+      border: 1px solid #D8D5C8;
+      border-left: 3px solid #FFC107;
+      border-radius: 3px;
+      padding: 12px 16px;
+      margin-bottom: 22px;
+      color: #0F1419;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: .85rem;
+      line-height: 1.5;
+    }
+    .permissions-body .perm-logic-note i { color: #B8870C; }
+    .permissions-body .perm-logic-note strong { color: #0F1419; }
+    .permissions-body .perm-logic-note em {
+      background: #1A1A1A;
+      color: #FFC107;
+      padding: 1px 6px;
+      border-radius: 2px;
+      font-style: normal;
+      font-size: .78rem;
+      font-weight: 600;
+      letter-spacing: .04em;
+    }
+
+    /* ─── Tabs técnicas ─── */
+    .permissions-body .perm-tabs {
+      border-bottom: 1px solid #D8D5C8 !important;
+      gap: 4px !important;
+    }
+    .permissions-body .perm-tab {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .88rem !important;
+      letter-spacing: .01em !important;
+      color: #5C6370 !important;
+      padding: 12px 18px !important;
+      border-bottom-width: 2px !important;
+    }
+    .permissions-body .perm-tab:hover {
+      color: #0F1419 !important;
+    }
+    .permissions-body .perm-tab.active {
+      color: #0F1419 !important;
+      border-bottom-color: #FFC107 !important;
+    }
+    .permissions-body .perm-tab i { color: #B8870C; }
+    .permissions-body .perm-tab .badge {
+      background: #ECEAE0 !important;
+      color: #5C6370 !important;
+      border-radius: 2px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      letter-spacing: .04em !important;
+      font-variant-numeric: tabular-nums;
+    }
+    .permissions-body .perm-tab.active .badge {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+    }
+
+    /* ─── Cards de página ─── */
+    .permissions-body .perm-page-card {
+      border-radius: 4px !important;
+      border: 1px solid #D8D5C8 !important;
+      transition: border-color .18s, box-shadow .18s;
+    }
+    .permissions-body .perm-page-card:hover {
+      border-color: #1A1A1A !important;
+      box-shadow: 0 4px 14px rgba(15,20,25,.06);
+    }
+
+    /* ─── Page icons: cores legadas → CPE técnico ─── */
+    .permissions-body .perm-page-icon {
+      border-radius: 3px !important;
+      width: 38px !important;
+      height: 38px !important;
+    }
+    .permissions-body .perm-page-icon.admin {
+      background: rgba(192,57,43,.1) !important;
+      color: #C0392B !important;
+    }
+    .permissions-body .perm-page-icon.operational {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+    }
+    .permissions-body .perm-page-icon.config {
+      background: rgba(184,135,12,.15) !important;
+      color: #B8870C !important;
+    }
+
+    /* ─── Page info / títulos ─── */
+    .permissions-body .perm-page-info h5 {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 600 !important;
+      color: #0F1419 !important;
+      letter-spacing: -.005em !important;
+    }
+    .permissions-body .perm-page-info small {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      color: #5C6370 !important;
+    }
+
+    /* ─── Toggle switch: AZUL → PRETO + amarelo (BUG principal) ─── */
+    .permissions-body .perm-switch-slider {
+      background-color: #D8D5C8 !important;
+    }
+    .permissions-body .perm-switch input:checked + .perm-switch-slider {
+      background-color: #1A1A1A !important;
+    }
+    .permissions-body .perm-switch input:checked + .perm-switch-slider::before {
+      background-color: #FFC107 !important;
+    }
+
+    /* ─── Toggle item (linha com switch) ─── */
+    .permissions-body .perm-toggle-item {
+      background: #fff !important;
+      border: 1px solid #ECEAE0 !important;
+      border-radius: 3px !important;
+      transition: background .15s, border-color .15s;
+    }
+    .permissions-body .perm-toggle-item:hover {
+      background: #FAF8F2 !important;
+      border-color: #D8D5C8 !important;
+    }
+    .permissions-body .perm-toggle-item .label {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      color: #0F1419 !important;
+      font-weight: 500 !important;
+    }
+
+    /* ─── Dept titles (Por Grupo) ─── */
+    .permissions-body .perm-dept-title {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .64rem !important;
+      letter-spacing: .14em !important;
+      color: #B8870C !important;
+      display: inline-flex !important;
+      align-items: center;
+      gap: 6px;
+    }
+    .permissions-body .perm-dept-title i { color: #B8870C; }
+
+    /* ─── Warn banner (amarelo claro → papel + border técnica) ─── */
+    .permissions-body .perm-warn-banner {
+      background: #FAF8F2 !important;
+      border: 1px solid #D8D5C8 !important;
+      border-left: 3px solid #FFC107 !important;
+      border-radius: 3px !important;
+      color: #0F1419 !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+    }
+    .permissions-body .perm-warn-banner i { color: #B8870C !important; }
+    .permissions-body .perm-warn-banner strong { color: #0F1419 !important; }
+    .permissions-body .perm-warn-banner code {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .76rem !important;
+      padding: 2px 8px;
+      border-radius: 2px;
+      letter-spacing: .02em;
+    }
+    .permissions-body .perm-warn-banner button {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+      border: 1px solid #1A1A1A !important;
+      border-radius: 3px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 600 !important;
+      letter-spacing: .02em !important;
+      transition: background .15s, transform .15s, box-shadow .15s;
+    }
+    .permissions-body .perm-warn-banner button:hover {
+      background: #000 !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(15,20,25,.2);
+    }
+    .permissions-body .perm-warn-banner button.ghost {
+      background: #fff !important;
+      color: #5C6370 !important;
+      border-color: #D8D5C8 !important;
+    }
+    .permissions-body .perm-warn-banner button.ghost:hover {
+      color: #0F1419 !important;
+      border-color: #1A1A1A !important;
+      background: #fff !important;
+    }
+
+    /* ─── Status pills ─── */
+    .permissions-body .perm-status-pill {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      border-radius: 2px !important;
+      letter-spacing: .04em !important;
+      font-size: .68rem !important;
+      font-weight: 600 !important;
+    }
+    .permissions-body .perm-status-pill.efetivo {
+      background: rgba(27,127,78,.12) !important;
+      color: #1B7F4E !important;
+    }
+    .permissions-body .perm-status-pill.redundante {
+      background: rgba(192,57,43,.12) !important;
+      color: #C0392B !important;
+    }
+    .permissions-body .perm-status-pill.vazio {
+      background: #ECEAE0 !important;
+      color: #5C6370 !important;
+    }
+
+    /* ─── Matriz (tabela) ─── */
+    .permissions-body .perm-matrix-wrap {
+      border-radius: 4px !important;
+      border: 1px solid #D8D5C8 !important;
+    }
+    .permissions-body .perm-matrix th {
+      background: transparent !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      color: #5C6370 !important;
+      font-size: .68rem !important;
+      letter-spacing: .14em !important;
+      border-bottom: 2px solid #1A1A1A !important;
+    }
+    .permissions-body .perm-matrix td {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      border-bottom: 1px solid #ECEAE0 !important;
+    }
+    .permissions-body .perm-matrix tbody tr:hover td {
+      background: #FAF8F2 !important;
+    }
+    .permissions-body .perm-matrix td.cell-yes { color: #1B7F4E !important; }
+    .permissions-body .perm-matrix td.cell-no  { color: #5C6370 !important; opacity: .35; }
+    /* Badge da coluna "categoria" — bg-light Bootstrap → técnico */
+    .permissions-body .perm-matrix .badge.bg-light {
+      background: #ECEAE0 !important;
+      color: #5C6370 !important;
+      border-radius: 2px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      letter-spacing: .04em !important;
+    }
+    /* Badges de grupo (azul Bootstrap) → preto+amarelo */
+    .permissions-body .perm-matrix .badge.bg-primary {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+      border-radius: 2px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      letter-spacing: .04em !important;
+      font-weight: 600 !important;
+    }
+
+    /* ─── Aba Exceções (badges danger/success vermelhos/verdes) ─── */
+    .permissions-body #exceptionsList .badge.bg-danger {
+      background: #C0392B !important;
+      border-radius: 2px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      letter-spacing: .04em !important;
+    }
+    .permissions-body #exceptionsList .badge.bg-success {
+      background: #1B7F4E !important;
+      border-radius: 2px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      letter-spacing: .04em !important;
+    }
+
+    /* ─── Toast ─── */
+    .permissions-body .perm-toast {
+      border-radius: 3px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      background: #1A1A1A !important;
+      color: #fff !important;
+      border-left: 3px solid #FFC107 !important;
+      box-shadow: 0 8px 24px rgba(15,20,25,.18) !important;
+    }
+    .permissions-body .perm-toast.success {
+      background: #fff !important;
+      color: #145C3A !important;
+      border: 1px solid #D8D5C8 !important;
+      border-left: 3px solid #1B7F4E !important;
+    }
+    .permissions-body .perm-toast.error {
+      background: #fff !important;
+      color: #8B2D24 !important;
+      border: 1px solid #D8D5C8 !important;
+      border-left: 3px solid #C0392B !important;
+    }
+
+    /* ─── Empty state ─── */
+    .permissions-body .perm-empty {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      color: #5C6370 !important;
+    }
+    .permissions-body .perm-empty i {
+      color: #B8870C !important;
+      opacity: .4 !important;
+    }
+
+    /* ─── Botão "Nova Exceção" (Bootstrap btn-primary) → CPE ─── */
+    .permissions-body .btn-primary {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+      border: 1px solid #1A1A1A !important;
+      border-radius: 4px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 600 !important;
+      letter-spacing: .02em !important;
+      transition: background .15s, transform .15s, box-shadow .15s !important;
+    }
+    .permissions-body .btn-primary:hover {
+      background: #000 !important;
+      color: #FFC107 !important;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(15,20,25,.2);
+    }
+
+    .permissions-body .btn-outline-danger {
+      background: transparent !important;
+      color: #C0392B !important;
+      border: 1px solid #C0392B !important;
+      border-radius: 3px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+    }
+    .permissions-body .btn-outline-danger:hover {
+      background: #C0392B !important;
+      color: #fff !important;
+    }
+
+    /* =================================================================
+       MODAL #exceptionModal (Bootstrap) — header preto + ruler + X vermelho
+       ================================================================= */
+    .permissions-body #exceptionModal .modal-content {
+      border-radius: 6px !important;
+      border: 1px solid #1A1A1A !important;
+      box-shadow: 0 24px 80px rgba(15,20,25,.18) !important;
+    }
+    .permissions-body #exceptionModal .modal-header {
+      background: #0A0A0A !important;
+      color: #fff !important;
+      border-bottom: none !important;
+      border-radius: 6px 6px 0 0 !important;
+      padding: 18px 24px !important;
+      position: relative;
+    }
+    .permissions-body #exceptionModal .modal-header::after {
+      content: '';
+      position: absolute; left: 0; right: 0; bottom: 0;
+      height: 3px;
+      background: linear-gradient(90deg,
+        #FFC107 0%, #FFC107 18%,
+        rgba(255,193,7,0) 18%, rgba(255,193,7,0) 100%);
+    }
+    .permissions-body #exceptionModal .modal-title {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 700 !important;
+      font-size: 1rem !important;
+      letter-spacing: -.005em !important;
+      color: #fff !important;
+      display: inline-flex; align-items: center; gap: 10px;
+    }
+    .permissions-body #exceptionModal .modal-title i { color: #FFC107 !important; }
+    .permissions-body #exceptionModal .btn-close {
+      background: transparent !important;
+      background-image: none !important;
+      border: 1px solid rgba(231,76,60,.35) !important;
+      border-radius: 3px !important;
+      width: 32px; height: 32px;
+      padding: 0 !important;
+      margin: 0 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 0;
+      transition: background .18s, transform .18s, border-color .18s;
+      position: relative;
+    }
+    .permissions-body #exceptionModal .btn-close::before {
+      content: '\F659';
+      font-family: 'bootstrap-icons';
+      font-size: 1rem;
+      font-weight: 700;
+      color: #E74C3C;
+    }
+    .permissions-body #exceptionModal .btn-close:hover {
+      background: #E74C3C !important;
+      border-color: #E74C3C !important;
+      transform: rotate(90deg);
+    }
+    .permissions-body #exceptionModal .btn-close:hover::before { color: #fff; }
+
+    .permissions-body #exceptionModal .modal-body {
+      background: #F5F4ED !important;
+      padding: 22px 24px !important;
+    }
+    .permissions-body #exceptionModal .form-label {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .68rem !important;
+      font-weight: 600 !important;
+      letter-spacing: .12em !important;
+      text-transform: uppercase !important;
+      color: #5C6370 !important;
+      margin-bottom: 6px !important;
+      display: flex !important;
+      align-items: center; gap: 6px;
+    }
+    .permissions-body #exceptionModal .form-label i { color: #B8870C !important; }
+    .permissions-body #exceptionModal .form-control,
+    .permissions-body #exceptionModal .form-select {
+      background: #fff !important;
+      border: 1px solid #D8D5C8 !important;
+      border-radius: 4px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      color: #0F1419 !important;
+    }
+    .permissions-body #exceptionModal .form-control:focus,
+    .permissions-body #exceptionModal .form-select:focus {
+      border-color: #1A1A1A !important;
+      box-shadow: 0 0 0 3px rgba(255,193,7,.25) !important;
+    }
+    .permissions-body #exceptionModal .form-text {
+      color: #7B8088 !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .74rem !important;
+    }
+    .permissions-body #exceptionModal .alert-danger {
+      background: rgba(192,57,43,.06) !important;
+      border: 1px solid rgba(192,57,43,.25) !important;
+      border-left: 3px solid #C0392B !important;
+      color: #8B2D24 !important;
+      border-radius: 3px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+    }
+    .permissions-body #exceptionModal .modal-footer {
+      background: #ECEAE0 !important;
+      border-top: 1px solid #D8D5C8 !important;
+      border-radius: 0 0 6px 6px !important;
+      padding: 12px 22px !important;
+    }
+    .permissions-body #exceptionModal .modal-footer .btn {
+      border-radius: 4px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 600 !important;
+      letter-spacing: .02em !important;
+      padding: 9px 18px !important;
+      transition: background .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s;
+    }
+    .permissions-body #exceptionModal .modal-footer .btn-secondary {
+      background: #fff !important;
+      color: #5C6370 !important;
+      border: 1px solid #D8D5C8 !important;
+    }
+    .permissions-body #exceptionModal .modal-footer .btn-secondary:hover {
+      color: #0F1419 !important;
+      border-color: #1A1A1A !important;
+      transform: translateY(-1px);
+    }
+
+    /* =================================================================
+       RESPONSIVIDADE MOBILE
+       ================================================================= */
+    @media (max-width: 540px) {
+      .permissions-body .perm-tabs {
+        overflow-x: auto;
+        flex-wrap: nowrap !important;
+        scrollbar-width: thin;
+      }
+      .permissions-body .perm-tab {
+        white-space: nowrap;
+        font-size: .82rem !important;
+        padding: 10px 14px !important;
+        flex-shrink: 0;
+      }
+      .permissions-body .perm-page-card { padding: 14px 16px !important; }
+      .permissions-body .perm-warn-banner { font-size: 12px !important; }
+      .permissions-body .perm-warn-banner .actions { flex-direction: column !important; align-items: stretch !important; }
+      .permissions-body .perm-warn-banner button { width: 100%; justify-content: center; }
+      .permissions-body .perm-matrix { font-size: 12px !important; }
+      .permissions-body .perm-matrix th,
+      .permissions-body .perm-matrix td { padding: 8px 10px !important; }
+    }
   </style>
 </head>
 
-<body>
+<body class="permissions-body">
   <div id="navbar-container"></div>
   <div class="container-main">
     <div id="sidebar-container"></div>
@@ -314,16 +831,13 @@
 
         <!-- HEADER + ALERTA INFO -->
         <div class="page-header" style="margin-bottom: 1rem;">
-          <h2 class="page-title">
-            <i class="bi bi-shield-check"></i> Gerenciar Permissões
-          </h2>
-          <p style="color:#6B7280;margin:6px 0 0;font-size:14px;">
+          <p style="color:#5C6370;margin:0;font-size:14px;font-family:'DM Sans',sans-serif;">
             Controle quais <strong>roles</strong> e <strong>grupos</strong> podem acessar cada página.
             Use exceções para liberar/bloquear usuários específicos.
           </p>
         </div>
 
-        <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:12px 14px;margin-bottom:20px;color:#1E40AF;font-size:13px;">
+        <div class="perm-logic-note">
           <i class="bi bi-info-circle"></i>
           <strong>Lógica:</strong>
           ADMIN sempre acessa &middot; exceção <em>block</em> nega &middot; exceção <em>allow</em> libera &middot;
@@ -454,7 +968,7 @@
   <!-- ================================================== -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-06-17"></script>
 
   <script>
   // ==================================================================

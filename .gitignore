@@ -285,3 +285,16 @@ tools/inventory_agent/.venv/
 tools/inventory_agent/__pycache__/
 tools/inventory_agent/*.spec
 tools/inventory_agent/cpe_agent.log
+
+# ============================================================
+# CPE Control — Dados gerados em runtime / teste (NÃO commitar)
+# ============================================================
+# Dados do importador legado (CSV + SQL dump, ~67MB)
+/Chamados antigos/
+
+# Uploads de usuários (KB, avatars) — DADOS de produção/teste, não código
+/web/uploads/kb/
+/web/uploads/user-avatars/
+
+# Notas de design locais (do skill /frontend-design)
+.design-notes-*.md

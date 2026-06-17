@@ -8,7 +8,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 
@@ -366,10 +366,564 @@
     .ap-stat .lbl { font-size: 11px; color: #6b7280; font-weight: 600; text-transform: uppercase; }
     .ap-stat .val { font-size: 22px; font-weight: 700; color: #1f2937; line-height: 1.2; margin-top: 4px; }
     .ap-stat .sub { font-size: 11px; color: #9ca3af; }
+
+    /* =================================================================
+       ============ REFRESH CPE 2026-06-16 — Linguagem técnica unificada ===
+       Override APENAS visual. Escopo .inventory-ti-body (não afeta outras).
+       Skill /frontend-design — pin: ferramenta interna de inventário T.I.
+       NÃO usar overflow:hidden em .modal-content (lição do fleet).
+       ================================================================= */
+
+    /* ─── Fonte unificada DM Sans ─── */
+    .inventory-ti-body,
+    .inventory-ti-body input,
+    .inventory-ti-body select,
+    .inventory-ti-body textarea,
+    .inventory-ti-body button {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif !important;
+    }
+    .inventory-ti-body { -webkit-font-smoothing: antialiased; }
+
+    /* ─── Topbar título ─── */
+    .inventory-ti-body .top-bar h1 {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 700 !important;
+      letter-spacing: -.015em !important;
+      color: #0F1419 !important;
+    }
+    .inventory-ti-body .top-bar h1 i { color: #B8870C !important; }
+
+    /* ─── KPI cards: cantos técnicos + hairline amarelo no hover (signature) ─── */
+    .inventory-ti-body .kpi-card {
+      border-radius: 4px !important;
+      border: 1px solid #D8D5C8 !important;
+      box-shadow: none !important;
+      position: relative;
+      transition: background .18s, border-color .18s;
+      overflow: hidden;
+    }
+    .inventory-ti-body .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: #FFC107;
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform .3s cubic-bezier(.2,.8,.2,1);
+    }
+    .inventory-ti-body .kpi-card:hover { background: #FAF8F2; }
+    .inventory-ti-body .kpi-card:hover::before { transform: scaleX(1); }
+
+    .inventory-ti-body .kpi-icon { border-radius: 3px !important; }
+    /* "total" era roxo → preto+amarelo CPE */
+    .inventory-ti-body .kpi-icon.total {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+    }
+    /* Mantém online verde e offline vermelho (semantic) — só refina */
+    .inventory-ti-body .kpi-val {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 800 !important;
+      letter-spacing: -.02em !important;
+      font-variant-numeric: tabular-nums;
+      color: #0F1419 !important;
+    }
+    .inventory-ti-body .kpi-lbl {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .66rem !important;
+      letter-spacing: .14em !important;
+      color: #5C6370 !important;
+    }
+
+    /* ─── Layout principal: cantos técnicos ─── */
+    .inventory-ti-body .inv-layout {
+      border-radius: 4px !important;
+      border: 1px solid #D8D5C8 !important;
+      box-shadow: none !important;
+    }
+
+    /* ─── Painel de filtros: cores roxas → CPE ─── */
+    .inventory-ti-body .inv-filter-panel {
+      background: #FAF8F2 !important;
+      border-right: 1px solid #D8D5C8 !important;
+    }
+    .inventory-ti-body .inv-filter-title {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .62rem !important;
+      letter-spacing: .14em !important;
+      color: #5C6370 !important;
+    }
+    .inventory-ti-body .inv-filter-item {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      border-left-width: 3px !important;
+      color: #0F1419 !important;
+    }
+    .inventory-ti-body .inv-filter-item:hover {
+      background: rgba(255,193,7,.08) !important;
+    }
+    .inventory-ti-body .inv-filter-item.active {
+      background: #fff !important;
+      color: #0F1419 !important;
+      border-left-color: #FFC107 !important;
+    }
+    .inventory-ti-body .inv-filter-badge {
+      background: #ECEAE0 !important;
+      color: #5C6370 !important;
+      border-radius: 2px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      letter-spacing: .04em !important;
+      font-variant-numeric: tabular-nums;
+    }
+    .inventory-ti-body .inv-filter-item.active .inv-filter-badge {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+    }
+
+    /* ─── Toolbar e busca ─── */
+    .inventory-ti-body .inv-toolbar {
+      border-bottom: 1px solid #D8D5C8 !important;
+    }
+    .inventory-ti-body .inv-search {
+      border-radius: 4px !important;
+      border: 1px solid #D8D5C8 !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+    }
+    .inventory-ti-body .inv-search:focus {
+      border-color: #1A1A1A !important;
+      box-shadow: 0 0 0 3px rgba(255,193,7,.25) !important;
+    }
+    .inventory-ti-body .inv-btn {
+      border-radius: 4px !important;
+      border: 1px solid #D8D5C8 !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 600 !important;
+      letter-spacing: .02em !important;
+      color: #5C6370 !important;
+      transition: background .15s, color .15s, border-color .15s, transform .15s !important;
+    }
+    .inventory-ti-body .inv-btn:hover {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+      border-color: #1A1A1A !important;
+      transform: translateY(-1px);
+    }
+    /* Variante "primary" — usado no botão "Mais informações" da linha expandida */
+    .inventory-ti-body .inv-btn-primary {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+      border: 1px solid #1A1A1A !important;
+    }
+    .inventory-ti-body .inv-btn-primary:hover {
+      background: #000 !important;
+      color: #FFC107 !important;
+      border-color: #1A1A1A !important;
+      box-shadow: 0 4px 12px rgba(15,20,25,.2);
+    }
+
+    /* ─── Tabela técnica ─── */
+    .inventory-ti-body .inv-table thead th {
+      background: transparent !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .68rem !important;
+      letter-spacing: .14em !important;
+      text-transform: uppercase !important;
+      color: #5C6370 !important;
+      border-bottom: 2px solid #1A1A1A !important;
+    }
+    .inventory-ti-body .inv-table td {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      border-bottom: 1px solid #ECEAE0 !important;
+    }
+    .inventory-ti-body .inv-table tbody tr.data-row:hover td { background: #FAF8F2 !important; }
+    .inventory-ti-body .inv-table tbody tr.data-row.expanded td { background: #FAF8F2 !important; }
+    .inventory-ti-body .inv-hostname { color: #0F1419 !important; }
+
+    /* ─── Tipo badges: refinar legados roxos/azuis ─── */
+    .inventory-ti-body .tipo-badge {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      border-radius: 2px !important;
+      letter-spacing: .04em !important;
+      font-weight: 600 !important;
+    }
+    .inventory-ti-body .tipo-notebook { background: #1A1A1A !important; color: #FFC107 !important; }
+    .inventory-ti-body .tipo-desktop  { background: #ECEAE0 !important; color: #0F1419 !important; }
+    .inventory-ti-body .tipo-servidor { background: rgba(192,57,43,.1) !important; color: #C0392B !important; }
+    .inventory-ti-body .tipo-terminal { background: rgba(184,135,12,.15) !important; color: #92400E !important; }
+    .inventory-ti-body .tipo-outro    { background: #ECEAE0 !important; color: #5C6370 !important; }
+
+    /* ─── Loc-badge: roxo → preto+amarelo ─── */
+    .inventory-ti-body .loc-badge {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+      border-radius: 2px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      letter-spacing: .04em !important;
+    }
+
+    /* ─── Detail-row: fundo azul → papel ─── */
+    .inventory-ti-body .detail-row td {
+      background: #FAF8F2 !important;
+      border-bottom: 2px solid #D8D5C8 !important;
+    }
+    .inventory-ti-body .detail-lbl { color: #5C6370 !important; }
+    .inventory-ti-body .detail-val { color: #0F1419 !important; }
+
+    /* ─── Paginação: roxo → preto+amarelo ─── */
+    .inventory-ti-body .pag-btn {
+      border-radius: 3px !important;
+      border: 1px solid #D8D5C8 !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 600 !important;
+      color: #5C6370 !important;
+      transition: background .15s, color .15s, border-color .15s !important;
+    }
+    .inventory-ti-body .pag-btn:hover {
+      color: #0F1419 !important;
+      border-color: #1A1A1A !important;
+    }
+    .inventory-ti-body .pag-btn.active {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+      border-color: #1A1A1A !important;
+    }
+
+    /* ─── Status dots ─── */
+    .inventory-ti-body .st-online  { background: #1B7F4E !important; }
+    .inventory-ti-body .st-offline { background: #5C6370 !important; }
+    .inventory-ti-body .st-alerta  { background: #FFC107 !important; box-shadow: 0 0 0 3px rgba(255,193,7,.25) !important; }
+
+    /* ─── Omada — tabs e categorias roxas → preto+amarelo ─── */
+    .inventory-ti-body .omada-tab {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      border-radius: 3px !important;
+      color: #5C6370 !important;
+      transition: background .15s, color .15s, border-color .15s !important;
+    }
+    .inventory-ti-body .omada-tab:hover {
+      background: rgba(255,193,7,.08) !important;
+      color: #0F1419 !important;
+    }
+    .inventory-ti-body .omada-tab.active {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+      border-color: #1A1A1A !important;
+      box-shadow: none !important;
+    }
+    .inventory-ti-body .omada-tab .ot-count {
+      background: #ECEAE0 !important;
+      color: #5C6370 !important;
+      border-radius: 2px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+    }
+    .inventory-ti-body .omada-tab.active .ot-count {
+      background: #FFC107 !important;
+      color: #1A1A1A !important;
+    }
+    .inventory-ti-body .omada-cat-bar {
+      background: #FAF8F2 !important;
+      border-bottom: 1px solid #D8D5C8 !important;
+    }
+    .inventory-ti-body .omada-cat {
+      background: #fff !important;
+      border: 1px solid #D8D5C8 !important;
+      color: #5C6370 !important;
+      border-radius: 3px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 600 !important;
+    }
+    .inventory-ti-body .omada-cat:hover {
+      border-color: #1A1A1A !important;
+      color: #0F1419 !important;
+    }
+    .inventory-ti-body .omada-cat.active {
+      background: #1A1A1A !important;
+      border-color: #1A1A1A !important;
+      color: #FFC107 !important;
+    }
+    .inventory-ti-body .omada-cat span {
+      background: #ECEAE0 !important;
+      color: #5C6370 !important;
+      border-radius: 2px !important;
+    }
+    .inventory-ti-body .omada-cat.active span {
+      background: #FFC107 !important;
+      color: #1A1A1A !important;
+    }
+
+    /* ─── Topologia: refinos ─── */
+    .inventory-ti-body .topo-site-title {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 700 !important;
+      letter-spacing: -.005em !important;
+      border-bottom: 2px solid #FFC107 !important;
+    }
+    .inventory-ti-body .topo-tree {
+      background: #FAF8F2 !important;
+      border-radius: 4px !important;
+    }
+    .inventory-ti-body .topo-node {
+      border-radius: 3px !important;
+      border: 1px solid #D8D5C8 !important;
+      box-shadow: none !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+    }
+    .inventory-ti-body .topo-node:hover {
+      border-color: #FFC107 !important;
+      box-shadow: 0 4px 12px rgba(15,20,25,.08) !important;
+    }
+    .inventory-ti-body .topo-node.switch {
+      background: #1A1A1A !important;
+      color: #fff !important;
+      border-color: #1A1A1A !important;
+    }
+    .inventory-ti-body .topo-node.switch:hover { border-color: #FFC107 !important; }
+    .inventory-ti-body .topo-node.gateway {
+      background: #FFC107 !important;
+      border-color: #B8870C !important;
+      color: #1A1A1A !important;
+    }
+    .inventory-ti-body .topo-node-clients {
+      background: #1B7F4E !important;
+      border-radius: 2px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+    }
+    .inventory-ti-body .topo-node.offline .topo-node-clients { background: #5C6370 !important; }
+
+    /* ─── AP stats grid ─── */
+    .inventory-ti-body .ap-stat {
+      background: #FAF8F2 !important;
+      border: 1px solid #D8D5C8 !important;
+      border-radius: 3px !important;
+    }
+    .inventory-ti-body .ap-stat .lbl {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .66rem !important;
+      letter-spacing: .14em !important;
+      color: #5C6370 !important;
+    }
+    .inventory-ti-body .ap-stat .val {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 800 !important;
+      letter-spacing: -.02em !important;
+      color: #0F1419 !important;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* =================================================================
+       MODAIS BOOTSTRAP — header gradient roxo → preto + ruler + X vermelho
+       IDs: #detailModal, #apModal, #apelidoModal, #manutModal,
+            #fornModal, #infoModal
+       ================================================================= */
+
+    .inventory-ti-body .modal-content {
+      border-radius: 6px !important;
+      border: 1px solid #1A1A1A !important;
+      box-shadow: 0 24px 80px rgba(15,20,25,.18) !important;
+      /* SEM overflow:hidden — lição do fleet (quebra scroll interno) */
+    }
+
+    /* Header preto + ruler amarelo (vence o gradient roxo legado #243-244) */
+    .inventory-ti-body .modal-header {
+      background: #0A0A0A !important;
+      background-image: none !important;
+      color: #fff !important;
+      border-bottom: none !important;
+      border-radius: 6px 6px 0 0 !important;
+      padding: 18px 24px !important;
+      position: relative;
+    }
+    .inventory-ti-body .modal-header::after {
+      content: '';
+      position: absolute; left: 0; right: 0; bottom: 0;
+      height: 3px;
+      background: linear-gradient(90deg,
+        #FFC107 0%, #FFC107 18%,
+        rgba(255,193,7,0) 18%, rgba(255,193,7,0) 100%);
+    }
+    .inventory-ti-body .modal-title {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 700 !important;
+      font-size: 1rem !important;
+      letter-spacing: -.005em !important;
+      color: #fff !important;
+      margin: 0 !important;
+      display: inline-flex; align-items: center; gap: 10px;
+    }
+    .inventory-ti-body .modal-title i { color: #FFC107 !important; }
+
+    /* X vermelho (mesmo padrão dos outros módulos) */
+    .inventory-ti-body .modal-header .btn-close {
+      background: transparent !important;
+      background-image: none !important;
+      border: 1px solid rgba(231,76,60,.35) !important;
+      border-radius: 3px !important;
+      width: 32px; height: 32px;
+      padding: 0 !important;
+      margin: 0 !important;
+      opacity: 1 !important;
+      filter: none !important;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 0;
+      transition: background .18s, transform .18s, border-color .18s;
+      position: relative;
+    }
+    .inventory-ti-body .modal-header .btn-close::before {
+      content: '\F659';
+      font-family: 'bootstrap-icons';
+      font-size: 1rem;
+      font-weight: 700;
+      color: #E74C3C;
+    }
+    .inventory-ti-body .modal-header .btn-close:hover {
+      background: #E74C3C !important;
+      border-color: #E74C3C !important;
+      transform: rotate(90deg);
+    }
+    .inventory-ti-body .modal-header .btn-close:hover::before { color: #fff; }
+
+    /* Body papel + seções técnicas */
+    .inventory-ti-body .modal-body {
+      background: #F5F4ED !important;
+      padding: 22px 24px !important;
+    }
+    .inventory-ti-body .modal-section-title {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .68rem !important;
+      letter-spacing: .14em !important;
+      color: #B8870C !important;
+      border-bottom: 1px solid #D8D5C8 !important;
+    }
+    .inventory-ti-body .modal-lbl {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .62rem !important;
+      letter-spacing: .12em !important;
+      text-transform: uppercase !important;
+      color: #5C6370 !important;
+      font-weight: 600 !important;
+    }
+    .inventory-ti-body .modal-val {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      color: #0F1419 !important;
+    }
+
+    /* Tabela de discos refinada */
+    .inventory-ti-body .disco-table th {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .66rem !important;
+      letter-spacing: .12em !important;
+      text-transform: uppercase !important;
+      color: #5C6370 !important;
+      border-bottom: 1px solid #D8D5C8 !important;
+    }
+    .inventory-ti-body .disco-table td {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      border-bottom: 1px solid #ECEAE0 !important;
+    }
+
+    /* Form labels e inputs dentro do modal */
+    .inventory-ti-body .modal-body .form-label {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .68rem !important;
+      font-weight: 600 !important;
+      letter-spacing: .12em !important;
+      text-transform: uppercase !important;
+      color: #5C6370 !important;
+      margin-bottom: 6px !important;
+    }
+    .inventory-ti-body .modal-body .form-control,
+    .inventory-ti-body .modal-body .form-select {
+      background: #fff !important;
+      border: 1px solid #D8D5C8 !important;
+      border-radius: 4px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      color: #0F1419 !important;
+    }
+    .inventory-ti-body .modal-body .form-control:focus,
+    .inventory-ti-body .modal-body .form-select:focus {
+      border-color: #1A1A1A !important;
+      box-shadow: 0 0 0 3px rgba(255,193,7,.25) !important;
+    }
+
+    /* Footer */
+    .inventory-ti-body .modal-footer {
+      background: #ECEAE0 !important;
+      border-top: 1px solid #D8D5C8 !important;
+      border-radius: 0 0 6px 6px !important;
+      padding: 12px 22px !important;
+    }
+    .inventory-ti-body .modal-footer .btn {
+      border-radius: 4px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 600 !important;
+      font-size: .88rem !important;
+      letter-spacing: .02em !important;
+      padding: 9px 18px !important;
+      border: 1px solid transparent !important;
+      transition: background .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s;
+    }
+    .inventory-ti-body .modal-footer .btn-secondary {
+      background: #fff !important;
+      color: #5C6370 !important;
+      border-color: #D8D5C8 !important;
+    }
+    .inventory-ti-body .modal-footer .btn-secondary:hover {
+      color: #0F1419 !important;
+      border-color: #1A1A1A !important;
+      transform: translateY(-1px);
+    }
+    .inventory-ti-body .modal-footer .btn-primary {
+      background: #1A1A1A !important;
+      color: #FFC107 !important;
+      border-color: #1A1A1A !important;
+    }
+    .inventory-ti-body .modal-footer .btn-primary:hover {
+      background: #000 !important;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(15,20,25,.2);
+    }
+    .inventory-ti-body .modal-footer .btn-danger {
+      background: transparent !important;
+      color: #C0392B !important;
+      border-color: #C0392B !important;
+    }
+    .inventory-ti-body .modal-footer .btn-danger:hover {
+      background: #C0392B !important;
+      color: #fff !important;
+    }
+
+    /* Alertas dentro do modal */
+    .inventory-ti-body .modal-body .alert-danger {
+      background: rgba(192,57,43,.06) !important;
+      border: 1px solid rgba(192,57,43,.25) !important;
+      border-left: 3px solid #C0392B !important;
+      color: #8B2D24 !important;
+      border-radius: 3px !important;
+    }
+
+    /* Stagger entrada KPIs e linhas tabela */
+    @keyframes invtiEnter {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .inventory-ti-body .kpi-card,
+    .inventory-ti-body .inv-table tbody tr.data-row {
+      animation: invtiEnter .38s cubic-bezier(.2,.8,.2,1) both;
+    }
+    .inventory-ti-body .kpi-card:nth-child(1) { animation-delay: .04s; }
+    .inventory-ti-body .kpi-card:nth-child(2) { animation-delay: .08s; }
+    .inventory-ti-body .kpi-card:nth-child(3) { animation-delay: .12s; }
+    .inventory-ti-body .kpi-card:nth-child(4) { animation-delay: .16s; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .inventory-ti-body .kpi-card,
+      .inventory-ti-body .inv-table tbody tr.data-row { animation: none; }
+      .inventory-ti-body .kpi-card::before { transition: none; }
+    }
   </style>
 </head>
 
-<body>
+<body class="inventory-ti-body">
   <!-- NAVBAR (injetada pelo nav.js) -->
   <nav id="navbar-container"></nav>
 
@@ -897,7 +1451,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-06-17"></script>
 
   <script>
   /* ── Estado global ──────────────────────────────────────── */
@@ -1734,7 +2288,7 @@
         <div class="detail-item"><span class="detail-lbl">Cadastrado em:</span><span class="detail-val">${fmtDate(d.criado_em,true)}</span></div>
       </div>
       <div class="detail-actions">
-        <button class="inv-btn" style="font-size:12px;background:#667eea;color:white;border:none;"
+        <button class="inv-btn inv-btn-primary" style="font-size:12px;"
           onclick="openModal(${d.id});event.stopPropagation();">
           <i class="bi bi-info-circle"></i> Mais informações
         </button>

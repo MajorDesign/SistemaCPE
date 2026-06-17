@@ -142,6 +142,40 @@ function showSection(name) {
   else if (name === 'cursos') initSecaoCursos();
   else if (name === 'equipamentos') initSecaoEquipamentos();
   else if (name === 'feriados') initSecaoFeriados();
+  // Anima itens visiveis na pagina nova com stagger (cards, agendas, stats).
+  // Respeita prefers-reduced-motion via CSS @media.
+  supAnimateInPage(name);
+}
+
+/* ============ MOVIMENTO ============
+   Stagger fade-up nos cards/agendas/stats ao trocar de secao. Cuida pra
+   só animar UMA VEZ por entrada e dentro do contêiner correto. */
+function supAnimateInPage(name) {
+  const page = document.getElementById('page-' + name);
+  if (!page) return;
+  // Pequeno delay pra dar tempo da pagina renderizar (algumas usam fetchs async)
+  requestAnimationFrame(() => {
+    const seletores = [
+      '.sup-stat-card',
+      '.sup-agenda-card',
+      '.sup-card',
+      '.sup-table tbody tr',
+    ];
+    const alvos = page.querySelectorAll(seletores.join(','));
+    alvos.forEach((el, i) => {
+      el.classList.remove('sup-enter');                 // reset
+      void el.offsetWidth;                              // reflow pra reiniciar
+      el.style.animationDelay = (Math.min(i, 18) * 28) + 'ms';
+      el.classList.add('sup-enter');
+    });
+  });
+}
+
+/* Aplica pulso amarelo num elemento recem-criado (1.2s e remove sozinho). */
+function supPulse(el) {
+  if (!el) return;
+  el.classList.add('sup-pulse');
+  setTimeout(() => el.classList.remove('sup-pulse'), 1300);
 }
 
 /* ============ DASHBOARD ============ */
@@ -1169,12 +1203,16 @@ async function editarCurso(id) {
   document.getElementById('cursoVendedorManualWrap').style.display = s.vendedor_nome ? '' : 'none';
   document.getElementById('cursoAtivo').checked = !!s.ativo;
   await _popularSelectVendedor('cursoVendedorSel', s.vendedor_id);
-  // Mídia + Equipamentos só ao editar (precisam de servico_id existente)
+  // Mídia + Equipamentos + Banner + Módulos só ao editar (precisam de id existente)
   document.getElementById('cursoMidiaWrap').style.display = '';
   document.getElementById('cursoEquipsWrap').style.display = '';
   document.getElementById('cursoEquipNovoWrap').style.display = 'none';
+  document.getElementById('cursoBannerWrap').style.display = '';
+  document.getElementById('cursoModulosWrap').style.display = '';
   carregarMidia('servico', s.id, 'curso');
   carregarEquipsVinculados('servico', s.id, 'curso');
+  carregarBanner('servico', s.id, 'curso', s.banner_url);
+  carregarModulos('servico', s.id, 'curso');
   _adaptarModalCursoPorTipo();
   abrirModal('modalCurso');
 }
@@ -1230,13 +1268,33 @@ async function carregarEquipamentos() {
     return;
   }
   tbody.innerHTML = equipsSecao.map(e => {
+    // Vinculos: chips compactos sentence-case com icone que discrimina o tipo.
     const vincs = (e.vinculos || []).map(v => {
-      const tipoIcon = v.entidade === 'treinamento' ? 'bi-easel' : 'bi-mortarboard';
-      const tipoCls  = v.entidade === 'treinamento' ? 'pendente' : 'agendado';
-      return `<span class="sup-pill ${tipoCls}" title="${v.entidade}">
-        <i class="bi ${tipoIcon}"></i> ${esc(v.nome || '?')}
-      </span>`;
-    }).join(' ');
+      const tipoIcon = v.entidade === 'treinamento' ? 'bi-easel'
+                     : v.entidade === 'drone'       ? 'bi-airplane-engines-fill'
+                     :                                'bi-mortarboard';
+      const tipoLabel = v.entidade === 'treinamento' ? 'Treinamento'
+                      : v.entidade === 'drone'       ? 'Drone'
+                      :                                'Curso';
+      const nome = v.nome || '?';
+      const titleAttr = (tipoLabel + ': ' + nome).replace(/"/g, '&quot;');
+      return '<span class="sup-equip-vinc-chip tipo-' + esc(v.entidade) +
+             '" title="' + titleAttr + '">' +
+             '<i class="bi ' + tipoIcon + '"></i>' +
+             '<span>' + esc(nome) + '</span></span>';
+    }).join('');
+    const vincsCell = vincs
+      ? '<div class="sup-equip-vincs">' + vincs + '</div>'
+      : '<span class="sup-help">Sem vínculo</span>';
+
+    // Descricao: truncada em 2 linhas, tooltip nativo com texto completo.
+    const descFull = e.descricao
+      ? esc(String(e.descricao).replace(/\s+/g, ' ').trim())
+      : '';
+    const descCell = descFull
+      ? '<div class="sup-equip-desc-cell" title="' + descFull + '">' + descFull + '</div>'
+      : '<span class="sup-help">—</span>';
+
     const thumb = e.foto_principal
       ? `<img src="${esc(e.foto_principal)}" alt="" class="sup-equip-thumb"
               onclick="event.stopPropagation(); abrirLightbox('${esc(e.foto_principal)}')"
@@ -1249,10 +1307,8 @@ async function carregarEquipamentos() {
           <strong>${esc(e.nome)}</strong>
         </div>
       </td>
-      <td>${e.descricao
-        ? '<span class="sup-help">' + esc(e.descricao) + '</span>'
-        : '<span class="sup-help">—</span>'}</td>
-      <td>${vincs || '<span class="sup-help">Sem vínculo</span>'}</td>
+      <td>${descCell}</td>
+      <td>${vincsCell}</td>
       <td>${e.ativo ? '<span class="sup-pill ok">Ativo</span>'
                     : '<span class="sup-pill off">Inativo</span>'}</td>
       <td style="white-space:nowrap">
@@ -1489,6 +1545,17 @@ async function carregarEquipsVinculados(entidade, entidadeId, kind) {
   await _atualizarSelectEquipsLivres(kind, entidade, entidadeId, vincs);
 }
 
+// Resumo curto da descricao (max ~160 chars). Quebra em fronteira de palavra
+// e adiciona reticencias quando truncado. Tooltip mostra a descricao completa.
+function _resumirDescricao(txt, max) {
+  if (!txt) return '';
+  const s = String(txt).replace(/\s+/g, ' ').trim();
+  const limite = max || 160;
+  if (s.length <= limite) return s;
+  const corte = s.lastIndexOf(' ', limite);
+  return s.slice(0, corte > 60 ? corte : limite) + '…';
+}
+
 function _renderEquipsVinculados(kind, entidade, entidadeId, equips) {
   const box = document.getElementById(kind + 'EquipsLista');
   if (!box) return;
@@ -1497,30 +1564,45 @@ function _renderEquipsVinculados(kind, entidade, entidadeId, equips) {
       'Nenhum equipamento vinculado ainda.</div>';
     return;
   }
-  box.innerHTML = equips.map(e => `
-    <div class="sup-midia-video-item">
-      <i class="bi bi-pc-display"></i>
-      <span style="flex:1">
-        <strong>${esc(e.nome)}</strong>
-        ${e.descricao ? '<span class="sup-help" style="margin-left:6px">— ' + esc(e.descricao) + '</span>' : ''}
-      </span>
+  box.innerHTML = equips.map(e => {
+    const resumo = _resumirDescricao(e.descricao, 160);
+    const descFull = e.descricao ? esc(String(e.descricao).replace(/\s+/g,' ').trim()) : '';
+    const thumb = e.foto_capa
+      ? `<img src="${esc(e.foto_capa)}" alt="" class="sup-equip-thumb"
+              onclick="abrirLightbox('${esc(e.foto_capa)}')"
+              title="Clique para ampliar">`
+      : `<div class="sup-equip-thumb sup-equip-thumb-placeholder"><i class="bi bi-pc-display"></i></div>`;
+    return `
+    <div class="sup-equip-item">
+      ${thumb}
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600">${esc(e.nome)}</div>
+        ${resumo ? `<div class="sup-help sup-equip-desc" title="${descFull}">${esc(resumo)}</div>` : ''}
+      </div>
       <button type="button" title="Desvincular"
               onclick="desvincularEquip(${e.id}, '${entidade}', ${entidadeId}, '${kind}')">
         <i class="bi bi-x-lg"></i>
       </button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
+// Popula o select com TODOS os equipamentos ativos. Os ja vinculados
+// aparecem desabilitados (em cinza) com a marca "(ja vinculado)".
 async function _atualizarSelectEquipsLivres(kind, entidade, entidadeId, jaVinculados) {
   const sel = document.getElementById(kind + 'EquipSel');
   if (!sel) return;
-  // Pega TODOS do catalogo e remove os ja vinculados
   const r = await apiFetch('/equipamentos');
   const todos = r.success ? (r.equipamentos || []) : [];
   const idsVinc = new Set(jaVinculados.map(e => e.id));
-  const livres = todos.filter(e => !idsVinc.has(e.id) && e.ativo);
+  const ativos = todos.filter(e => e.ativo);
   sel.innerHTML = '<option value="">— Vincular equipamento existente —</option>' +
-    livres.map(e => `<option value="${e.id}">${esc(e.nome)}</option>`).join('');
+    ativos.map(e => {
+      const vinc = idsVinc.has(e.id);
+      return `<option value="${e.id}"${vinc ? ' disabled' : ''}>` +
+             `${esc(e.nome)}${vinc ? ' (já vinculado)' : ''}` +
+             `</option>`;
+    }).join('');
 }
 
 async function _vincularEquip(entidade, entidadeId, kind) {
@@ -1849,8 +1931,12 @@ async function editarTreinamento(id) {
   document.getElementById('treinoMidiaWrap').style.display = '';
   document.getElementById('treinoEquipsWrap').style.display = '';
   document.getElementById('treinoEquipNovoWrap').style.display = 'none';
+  document.getElementById('treinoBannerWrap').style.display = '';
+  document.getElementById('treinoModulosWrap').style.display = '';
   carregarMidia('treinamento', t.id, 'treino');
   carregarEquipsVinculados('treinamento', t.id, 'treino');
+  carregarBanner('treinamento', t.id, 'treino', t.banner_url);
+  carregarModulos('treinamento', t.id, 'treino');
   _adaptarModalTreinoPorTipo();
   abrirModal('modalTreinamento');
 }
@@ -2066,8 +2152,12 @@ async function editarDrone(id) {
   document.getElementById('droneMidiaWrap').style.display = '';
   document.getElementById('droneEquipsWrap').style.display = '';
   document.getElementById('droneEquipNovoWrap').style.display = 'none';
+  document.getElementById('droneBannerWrap').style.display = '';
+  document.getElementById('droneModulosWrap').style.display = '';
   carregarMidia('drone', d.id, 'drone');
   carregarEquipsVinculados('drone', d.id, 'drone');
+  carregarBanner('drone', d.id, 'drone', d.banner_url);
+  carregarModulos('drone', d.id, 'drone');
   _adaptarModalDronePorTipo();
   abrirModal('modalDrone');
 }
@@ -2759,4 +2849,185 @@ async function excluirTreinamentoDireto(id, nome) {
   } catch (e) {
     alert('Erro de rede: ' + (e.message || e));
   }
+}
+
+
+/* ============================================================
+   BANNER por entidade (curso / treinamento / drone)
+   Upload separado da galeria. POST/DELETE /midia/{entidade}/{id}/banner
+   ============================================================ */
+function carregarBanner(entidade, entidadeId, kind, urlInicial) {
+  const preview = document.getElementById(kind + 'BannerPreview');
+  const btnDel  = document.getElementById(kind + 'BannerExcluirBtn');
+  if (!preview) return;
+  if (urlInicial) {
+    preview.innerHTML = '<img src="' + esc(urlInicial) + '" alt="Banner">';
+    if (btnDel) btnDel.style.display = '';
+  } else {
+    preview.innerHTML = '<div class="sup-banner-preview-vazio">'
+      + '<i class="bi bi-image"></i>Nenhum banner enviado ainda.</div>';
+    if (btnDel) btnDel.style.display = 'none';
+  }
+}
+
+async function _uploadBanner(ev, entidade, entidadeId, kind) {
+  const file = (ev.target.files || [])[0];
+  if (!file) return;
+  if (!entidadeId) { toast('Salve primeiro antes de enviar o banner.', 'error'); return; }
+  const fd = new FormData();
+  fd.append('file', file);
+  try {
+    const res = await fetch(API + '/midia/' + entidade + '/' + entidadeId + '/banner', {
+      method: 'POST', credentials: 'include',
+      headers: { 'X-Auth-Token': _token() },
+      body: fd,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      toast(data.detail || ('Erro ' + res.status), 'error');
+      return;
+    }
+    toast('Banner enviado!', 'success');
+    carregarBanner(entidade, entidadeId, kind, data.banner_url);
+  } catch (e) {
+    toast('Falha no upload: ' + (e.message || e), 'error');
+  }
+  ev.target.value = '';
+}
+
+async function _excluirBanner(entidade, entidadeId, kind) {
+  if (!confirm('Remover o banner atual?')) return;
+  const r = await apiFetch('/midia/' + entidade + '/' + entidadeId + '/banner', { method: 'DELETE' });
+  if (!r.success) { toast(r.detail || 'Erro ao remover.', 'error'); return; }
+  toast('Banner removido.', 'success');
+  carregarBanner(entidade, entidadeId, kind, null);
+}
+
+function uploadBannerCurso(ev)  { return _uploadBanner(ev, 'servico',     document.getElementById('cursoId').value, 'curso'); }
+function uploadBannerTreino(ev) { return _uploadBanner(ev, 'treinamento', document.getElementById('treinoId').value, 'treino'); }
+function uploadBannerDrone(ev)  { return _uploadBanner(ev, 'drone',       document.getElementById('droneId').value, 'drone'); }
+function excluirBannerCurso()   { return _excluirBanner('servico',     document.getElementById('cursoId').value, 'curso'); }
+function excluirBannerTreino()  { return _excluirBanner('treinamento', document.getElementById('treinoId').value, 'treino'); }
+function excluirBannerDrone()   { return _excluirBanner('drone',       document.getElementById('droneId').value, 'drone'); }
+
+
+/* ============================================================
+   MÓDULOS — aulas/tópicos dentro de cursos/treinamentos/drones
+   GET/POST /{entidade}/{id}/modulos, PUT/DELETE /modulos/{id}
+   ============================================================ */
+async function carregarModulos(entidade, entidadeId, kind) {
+  if (!entidadeId) return;
+  const r = await apiFetch('/' + entidade + '/' + entidadeId + '/modulos');
+  const mods = r.success ? (r.modulos || []) : [];
+  // Guarda em cache no DOM pra abrir editor sem buscar de novo
+  const box = document.getElementById(kind + 'ModulosLista');
+  if (box) box._modulos = mods;
+  _renderModulos(kind, entidade, entidadeId, mods);
+}
+
+function _renderModulos(kind, entidade, entidadeId, modulos) {
+  const box = document.getElementById(kind + 'ModulosLista');
+  if (!box) return;
+  if (!modulos.length) {
+    box.innerHTML = '<div class="sup-help" style="padding:10px;background:#fafafa;border-radius:6px">' +
+      'Nenhum módulo cadastrado ainda. Clique em "Adicionar módulo".</div>';
+    return;
+  }
+  box.innerHTML = modulos.map((m, idx) => {
+    const dur  = m.duracao_min ? '<span><i class="bi bi-clock"></i> ' + m.duracao_min + ' min</span>' : '';
+    const tops = (m.topicos && m.topicos.length)
+      ? '<span><i class="bi bi-card-checklist"></i> ' + m.topicos.length + ' tópico' + (m.topicos.length === 1 ? '' : 's') + '</span>'
+      : '';
+    return '<div class="sup-modulo-item" data-modulo-id="' + m.id + '" '
+      + 'onclick="_abrirEditorModuloPorId(\'' + entidade + '\',\'' + entidadeId + '\',\'' + kind + '\',' + m.id + ')">'
+      + '<div class="sup-modulo-num">' + String(idx + 1).padStart(2, '0') + '</div>'
+      + '<div class="sup-modulo-body">'
+      +   '<div class="sup-modulo-titulo">' + esc(m.titulo) + '</div>'
+      +   '<div class="sup-modulo-meta">' + dur + tops + '</div>'
+      + '</div>'
+      + '<div class="sup-modulo-actions">'
+      +   '<button type="button" title="Editar"><i class="bi bi-pencil"></i></button>'
+      + '</div></div>';
+  }).join('');
+}
+
+// Resolve o módulo do cache do DOM e abre o editor (evita problema de
+// serializar JSON dentro de onclick).
+function _abrirEditorModuloPorId(entidade, entidadeId, kind, moduloId) {
+  const box = document.getElementById(kind + 'ModulosLista');
+  const mods = (box && box._modulos) || [];
+  const m = mods.find(x => x.id === moduloId);
+  abrirModuloEditor(entidade, entidadeId, kind, m || null);
+}
+
+function abrirModuloEditor(entidade, entidadeId, kind, modulo) {
+  if (!entidadeId) {
+    toast('Salve primeiro o curso/treinamento/drone antes de adicionar módulos.', 'error');
+    return;
+  }
+  document.getElementById('moduloEntidade').value   = entidade;
+  document.getElementById('moduloEntidadeId').value = entidadeId;
+  document.getElementById('moduloKind').value       = kind;
+  document.getElementById('moduloId').value         = modulo && modulo.id ? modulo.id : '';
+  document.getElementById('moduloTitulo').value     = (modulo && modulo.titulo) || '';
+  document.getElementById('moduloDescricao').value  = (modulo && modulo.descricao) || '';
+  document.getElementById('moduloDuracao').value    = (modulo && modulo.duracao_min) || '';
+  document.getElementById('moduloTopicos').value    = (modulo && modulo.topicos ? modulo.topicos.join('\n') : '');
+  document.getElementById('modModuloTitulo').textContent = modulo ? 'Editar módulo' : 'Novo módulo';
+  document.getElementById('moduloExcluirBtn').style.display = modulo ? '' : 'none';
+  document.getElementById('erroModulo').textContent = '';
+  abrirModal('modalModulo');
+}
+
+async function salvarModulo() {
+  const id          = document.getElementById('moduloId').value;
+  const entidade    = document.getElementById('moduloEntidade').value;
+  const entidadeId  = document.getElementById('moduloEntidadeId').value;
+  const kind        = document.getElementById('moduloKind').value;
+  const titulo      = document.getElementById('moduloTitulo').value.trim();
+  const descricao   = document.getElementById('moduloDescricao').value.trim();
+  const duracao_min = document.getElementById('moduloDuracao').value;
+  const topicosRaw  = document.getElementById('moduloTopicos').value;
+  const topicos = topicosRaw.split('\n').map(s => s.trim()).filter(Boolean);
+
+  if (!titulo) {
+    document.getElementById('erroModulo').textContent = 'Título é obrigatório.';
+    return;
+  }
+  const payload = {
+    titulo,
+    descricao: descricao || null,
+    duracao_min: duracao_min ? parseInt(duracao_min) : null,
+    topicos,
+  };
+
+  let r;
+  if (id) {
+    r = await apiFetch('/modulos/' + id, { method: 'PUT', body: JSON.stringify(payload) });
+  } else {
+    r = await apiFetch('/' + entidade + '/' + entidadeId + '/modulos', {
+      method: 'POST', body: JSON.stringify(payload),
+    });
+  }
+  if (!r.success) {
+    document.getElementById('erroModulo').textContent = r.detail || 'Erro ao salvar.';
+    return;
+  }
+  toast(id ? 'Módulo atualizado.' : 'Módulo criado.', 'success');
+  fecharModal('modalModulo');
+  carregarModulos(entidade, entidadeId, kind);
+}
+
+async function excluirModuloAtual() {
+  const id = document.getElementById('moduloId').value;
+  if (!id) return;
+  const entidade   = document.getElementById('moduloEntidade').value;
+  const entidadeId = document.getElementById('moduloEntidadeId').value;
+  const kind       = document.getElementById('moduloKind').value;
+  if (!confirm('Excluir este módulo?')) return;
+  const r = await apiFetch('/modulos/' + id, { method: 'DELETE' });
+  if (!r.success) { toast(r.detail || 'Erro.', 'error'); return; }
+  toast('Módulo excluído.', 'success');
+  fecharModal('modalModulo');
+  carregarModulos(entidade, entidadeId, kind);
 }

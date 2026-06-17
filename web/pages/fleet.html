@@ -7,9 +7,9 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/fleet.css?v=2026-06-15">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/fleet.css?v=2026-06-16cpe4">
   <!-- Config global (define API_BASE_URL = http://127.0.0.1:8000) -->
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-06-15"></script>
@@ -3808,12 +3808,25 @@ function renderCalendar() {
 
   let html = '';
   for (let i = 0; i < firstDay; i++) html += '<div class="cal-cell other-month"></div>';
+  // Data de hoje pra desabilitar click em dias passados (segue regra do saveReservation)
+  const hojeStr = today.toISOString().split('T')[0];
   for (let d = 1; d <= daysInMonth; d++) {
     const isToday = isThisMonth && d === today.getDate();
+    const dd = String(d).padStart(2, '0');
+    const mm = String(_calMonth).padStart(2, '0');
+    const dateStr = _calYear + '-' + mm + '-' + dd;
+    const isPast = dateStr < hojeStr;
     const reservas = byDay[d] || [];
     const dots = reservas.map(r => '<span class="cal-dot '+r.status+'" title="'+r.placa+' '+r.horario_inicio+'-'+r.horario_fim+'"></span>').join('');
-    const dblClick = reservas.length ? ' ondblclick="showDayDetail('+d+')" style="cursor:pointer" title="Duplo clique para ver detalhes"' : '';
-    html += '<div class="cal-cell'+(isToday?' today':'')+'"'+dblClick+'>'
+    // Click único: abre Nova Reserva pré-preenchida; duplo click: detalhes do dia
+    // (só em dias com reservas). Dias passados ficam não-clicáveis.
+    const tipPast = isPast ? 'Não é possível reservar em datas passadas' : 'Clique para criar nova reserva' + (reservas.length ? ' • Duplo clique para ver as reservas deste dia' : '');
+    const handlers = isPast
+      ? ' style="cursor:not-allowed;opacity:.55" title="'+tipPast+'"'
+      : ' onclick="onCalCellClick(\''+dateStr+'\')"'
+        + (reservas.length ? ' ondblclick="onCalCellDblClick('+d+')"' : '')
+        + ' style="cursor:pointer" title="'+tipPast+'"';
+    html += '<div class="cal-cell'+(isToday?' today':'')+(isPast?' past':'')+'"'+handlers+'>'
       + '<div class="cal-day">'+d+'</div>'
       + (dots || '')
       + (reservas.length ? '<div style="font-size:9px;color:#6B7280;margin-top:2px">'+reservas.length+' reserva(s)</div>' : '')
@@ -3876,7 +3889,7 @@ function showDayDetail(day) {
   openModal('modalDayDetail');
 }
 
-async function openReservationModal() {
+async function openReservationModal(prefillDate) {
   if (!allVehicles.length) await loadVehicles();
   const sel = document.getElementById('resVehicle');
   // Veículos ativos = disponíveis. Manutenção agendada futura é só um aviso,
@@ -3889,11 +3902,31 @@ async function openReservationModal() {
         return '<option value="'+v.id+'">'+v.placa+' — '+v.modelo+warn+'</option>';
       }).join('');
   document.getElementById('resDestino').value = '';
-  document.getElementById('resData').value = new Date().toISOString().split('T')[0];
+  // Se veio data pré-preenchida (clique no calendário), usa ela; senão, hoje.
+  // Datas passadas viram hoje pra não cair na validação "agendamento retroativo".
+  const hojeStr = new Date().toISOString().split('T')[0];
+  const dataUsada = (prefillDate && prefillDate >= hojeStr) ? prefillDate : hojeStr;
+  document.getElementById('resData').value = dataUsada;
   document.getElementById('resDataFim').value = '';  // opcional; vazio = mesmo dia
   document.getElementById('resInicio').value = '08:00';
   document.getElementById('resFim').value = '18:00';
   openModal('modalReservation');
+}
+
+// ─── Click no calendário: abre Nova Reserva pré-preenchida com a data.
+//     Se o usuário fizer duplo clique num dia COM reservas, mostra os detalhes
+//     em vez de criar nova reserva (o timer cancela a abertura do modal).
+let _calClickTimer = null;
+function onCalCellClick(dateStr) {
+  if (_calClickTimer) return;
+  _calClickTimer = setTimeout(() => {
+    _calClickTimer = null;
+    openReservationModal(dateStr);
+  }, 230);
+}
+function onCalCellDblClick(day) {
+  if (_calClickTimer) { clearTimeout(_calClickTimer); _calClickTimer = null; }
+  showDayDetail(day);
 }
 
 async function saveReservation() {

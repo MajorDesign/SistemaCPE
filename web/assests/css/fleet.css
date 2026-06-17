@@ -1598,3 +1598,516 @@ body.fleet-body iframe { max-width: 100%; height: auto; }
 .cc-card-row.zero {
   opacity: .35;
 }
+
+/* =====================================================================
+   ============ REFRESH CPE 2026-06-16 — Linguagem técnica unificada =====
+   Override APENAS visual. Zero mudança de classe/ID/estrutura.
+   Skill /frontend-design — pin: ferramenta interna de frota.
+   ===================================================================== */
+
+/* ─── Fonte unificada DM Sans ─── */
+.fleet-body,
+.fleet-body input,
+.fleet-body select,
+.fleet-body textarea,
+.fleet-body button,
+.fleet-modal,
+.fleet-modal input,
+.fleet-modal select,
+.fleet-modal textarea,
+.fleet-modal button {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif !important;
+}
+.fleet-body { -webkit-font-smoothing: antialiased; }
+
+/* ─── Topbar: refinar título + badge ─── */
+.fleet-topbar-title {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: -.015em !important;
+  color: var(--fleet-dark) !important;
+}
+.fleet-topbar-badge {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  font-size: .66rem !important;
+  letter-spacing: .14em !important;
+  border-radius: 2px !important;
+  padding: 4px 10px !important;
+}
+
+/* ─── Cards e fleet-card: cantos mais técnicos (12px → 4px) ─── */
+.fleet-card,
+.fleet-stat-card,
+.fleet-chart-card,
+.fleet-table-wrapper,
+.fleet-vehicle-card,
+.fleet-table-container {
+  border-radius: 4px !important;
+}
+.fleet-card {
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.fleet-card-title {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .68rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .14em !important;
+  text-transform: uppercase !important;
+  color: var(--fleet-muted) !important;
+}
+.fleet-card-value {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 800 !important;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em !important;
+}
+
+/* ─── Stat-cards: hairline amarelo no hover (signature) ─── */
+.fleet-stat-card {
+  position: relative;
+  overflow: hidden;
+  transition: background .18s;
+}
+.fleet-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--fleet-primary);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform .3s cubic-bezier(.2,.8,.2,1);
+}
+.fleet-stat-card:hover::before { transform: scaleX(1); }
+
+/* Stat-icon roxo → preto+amarelo (CPE) */
+.fleet-stat-icon.purple {
+  background: rgba(255,193,7,.12) !important;
+  color: #B8870C !important;
+}
+
+/* ─── Tabela: refinada técnica ─── */
+.fleet-table thead th {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .68rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .14em !important;
+  text-transform: uppercase !important;
+  color: var(--fleet-muted) !important;
+  border-bottom: 2px solid var(--fleet-dark) !important;
+  background: transparent !important;
+}
+.fleet-table tbody td {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+.fleet-table tbody tr:hover td { background: #FAF8F2 !important; }
+
+/* ─── Badges: refinadas com radius técnico ─── */
+.fleet-badge {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  border-radius: 2px !important;
+  letter-spacing: .04em !important;
+  font-weight: 600 !important;
+  text-transform: none;
+}
+/* Roxos legados (retornado, revisao) → amarelo escuro técnico */
+.fleet-badge.retornado,
+.fleet-badge.revisao { background: rgba(184,135,12,.12) !important; color: #92400E !important; }
+/* Azuis (em_viagem, devolvido) → preto+amarelo CPE pra unificar */
+.fleet-badge.em_viagem,
+.fleet-badge.devolvido { background: #1A1A1A !important; color: var(--fleet-primary) !important; }
+
+/* ─── Botões refinados ─── */
+.btn-fleet {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  border-radius: 4px !important;
+  letter-spacing: .02em !important;
+  transition: background .15s, color .15s, transform .15s, box-shadow .15s, border-color .15s !important;
+}
+.btn-fleet:hover { transform: translateY(-1px); }
+.btn-fleet-primary {
+  background: var(--fleet-dark) !important;
+  color: var(--fleet-primary) !important;
+  border: 1px solid var(--fleet-dark) !important;
+}
+.btn-fleet-primary:hover {
+  background: #000 !important;
+  color: var(--fleet-primary) !important;
+  box-shadow: 0 6px 16px rgba(15,20,25,.2);
+}
+.btn-fleet-secondary {
+  background: #fff !important;
+  color: var(--fleet-muted) !important;
+  border: 1px solid var(--fleet-border) !important;
+}
+.btn-fleet-secondary:hover {
+  color: var(--fleet-dark) !important;
+  border-color: var(--fleet-dark) !important;
+  background: #fff !important;
+}
+.btn-fleet-danger {
+  background: transparent !important;
+  color: var(--fleet-danger) !important;
+  border: 1px solid var(--fleet-danger) !important;
+}
+.btn-fleet-danger:hover {
+  background: var(--fleet-danger) !important;
+  color: #fff !important;
+}
+
+/* ─── Forms ─── */
+.fleet-label {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .68rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+  color: var(--fleet-muted) !important;
+}
+.fleet-input,
+.fleet-select,
+.fleet-textarea {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  border-radius: 4px !important;
+  border-width: 1px !important;
+}
+.fleet-input:focus,
+.fleet-select:focus,
+.fleet-textarea:focus {
+  border-color: var(--fleet-dark) !important;
+  box-shadow: 0 0 0 3px rgba(255,193,7,.25) !important;
+}
+
+/* ─── Modais: header preto + ruler amarelo + X vermelho ─── */
+.fleet-modal {
+  border-radius: 6px !important;
+  border: 1px solid var(--fleet-dark) !important;
+  box-shadow: 0 24px 80px rgba(15,20,25,.18) !important;
+  /* NÃO usar overflow:hidden — quebra o scroll interno do modal.
+     O scroll original (.fleet-modal { overflow-y: auto }) deve continuar. */
+}
+.fleet-modal-header {
+  background: #0A0A0A !important;
+  color: #fff !important;
+  border-bottom: none !important;
+  padding: 18px 24px !important;
+  position: relative;
+}
+.fleet-modal-header::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg,
+    var(--fleet-primary) 0%, var(--fleet-primary) 18%,
+    rgba(255,193,7,0) 18%, rgba(255,193,7,0) 100%);
+}
+.fleet-modal-title {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  letter-spacing: -.005em !important;
+  color: #fff !important;
+  display: flex; align-items: center; gap: 12px;
+}
+.fleet-modal-title i { color: var(--fleet-primary); }
+/* Botão X vermelho */
+.fleet-modal-close {
+  background: transparent !important;
+  border: 1px solid rgba(231,76,60,.35) !important;
+  border-radius: 3px !important;
+  width: 32px; height: 32px;
+  padding: 0 !important;
+  color: #E74C3C !important;
+  font-size: 0 !important;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background .18s, transform .18s, border-color .18s, color .18s;
+  position: relative;
+}
+.fleet-modal-close::before {
+  content: '\F659'; /* bi-x-lg */
+  font-family: 'bootstrap-icons';
+  font-size: 1rem;
+  font-weight: 700;
+  color: #E74C3C;
+}
+.fleet-modal-close:hover {
+  background: #E74C3C !important;
+  border-color: #E74C3C !important;
+  transform: rotate(90deg);
+}
+.fleet-modal-close:hover::before { color: #fff; }
+
+/* Modal body em papel + footer */
+.fleet-modal-body {
+  background: #F5F4ED !important;
+  padding: 22px 24px !important;
+}
+.fleet-modal-footer {
+  background: #ECEAE0 !important;
+  border-top: 1px solid var(--fleet-border) !important;
+  border-radius: 0 !important;
+}
+
+/* ─── Toasts: border-left técnico em vez de cards coloridos amplos ─── */
+.fleet-toast-item {
+  border-radius: 3px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  background: #fff !important;
+  border: 1px solid var(--fleet-border) !important;
+  box-shadow: 0 8px 24px rgba(15,20,25,.12) !important;
+  color: var(--fleet-dark) !important;
+}
+.fleet-toast-item.success {
+  border-left: 3px solid #16A34A !important;
+  color: #145C3A !important;
+}
+.fleet-toast-item.error {
+  border-left: 3px solid #DC2626 !important;
+  color: #8B2D24 !important;
+}
+.fleet-toast-item.info {
+  border-left: 3px solid var(--fleet-primary) !important;
+  color: var(--fleet-dark) !important;
+  background: #FAF8F2 !important;
+}
+
+/* ─── Calendar refinado ─── */
+.cal-header {
+  background: var(--fleet-dark) !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+  font-size: .68rem !important;
+}
+.cal-cell.today { background: rgba(255,193,7,.22) !important; }
+.cal-cell.today .cal-day { color: #B8870C !important; }
+.cal-cell:hover { background: #FAF8F2 !important; }
+/* Dia clicável: feedback de hover técnico (hairline amarelo no topo) */
+.cal-cell[onclick]:not(.past):hover {
+  background: #FFF8E1 !important;
+  box-shadow: inset 0 2px 0 0 #FFC107;
+}
+.cal-cell.past {
+  background: #F8F8F4 !important;
+}
+.cal-cell.past:hover { background: #F8F8F4 !important; box-shadow: none; }
+
+/* ─── Vehicle card refinado ─── */
+.fleet-vehicle-card {
+  border-radius: 4px !important;
+  border-width: 1px !important;
+}
+.fleet-vehicle-card:hover {
+  border-color: var(--fleet-dark) !important;
+  box-shadow: 0 8px 24px rgba(15,20,25,.08) !important;
+}
+.fleet-vehicle-placa {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  border-radius: 3px !important;
+  letter-spacing: 3px !important;
+}
+.fleet-vehicle-model {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+
+/* ─── Painel de notificações: refinar ─── */
+#notifPanel {
+  border-radius: 4px !important;
+  border-color: var(--fleet-border) !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+
+/* ─── Sidebar: ruler amarelo embaixo do logo (signature) ─── */
+.fleet-sidebar-logo {
+  position: relative;
+}
+.fleet-sidebar-logo::after {
+  content: '';
+  position: absolute; left: 16px; right: 16px; bottom: 0;
+  height: 1px;
+  background: linear-gradient(90deg,
+    var(--fleet-primary) 0%, var(--fleet-primary) 30%,
+    rgba(255,193,7,.0) 30%, rgba(255,193,7,.0) 100%);
+}
+
+/* ─── Stagger sutil nos cards (movimento técnico) ─── */
+@keyframes fleetCardEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fleet-stat-card,
+.fleet-vehicle-card,
+.fleet-card {
+  animation: fleetCardEnter .38s cubic-bezier(.2,.8,.2,1) both;
+}
+.fleet-stat-card:nth-child(1),
+.fleet-vehicle-card:nth-child(1) { animation-delay: .04s; }
+.fleet-stat-card:nth-child(2),
+.fleet-vehicle-card:nth-child(2) { animation-delay: .08s; }
+.fleet-stat-card:nth-child(3),
+.fleet-vehicle-card:nth-child(3) { animation-delay: .12s; }
+.fleet-stat-card:nth-child(4),
+.fleet-vehicle-card:nth-child(4) { animation-delay: .16s; }
+.fleet-stat-card:nth-child(n+5),
+.fleet-vehicle-card:nth-child(n+5) { animation-delay: .2s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fleet-stat-card,
+  .fleet-vehicle-card,
+  .fleet-card { animation: none; }
+  .fleet-stat-card::before,
+  .fleet-vehicle-card { transition: none !important; }
+}
+
+/* =====================================================================
+   ============ REFRESH CPE MOBILE 2026-06-16b — Empilhamento responsivo =
+   Skill /frontend-design — pin: técnico usa o checklist no celular,
+   dentro do veículo, com o dedo molhado. Tudo precisa caber, ser grande
+   e legível sem zoom. Mantra: "uma coisa por vez, do tamanho do dedo".
+   ===================================================================== */
+
+/* ─── Mobile médio: tablet em retrato e celulares grandes (≤ 600px) ─── */
+@media (max-width: 600px) {
+  /* GRID DE FOTOS DA INSPEÇÃO VISUAL — 1 par por linha, sempre.
+     Era repeat(2,1fr) abaixo de 700px; aqui forço 1 coluna pra dar
+     respiro a cada par de fotos (REFERÊNCIA + INSPEÇÃO ATUAL). */
+  .cl-photo-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  /* Cada item (FRENTE, LATERAL, etc) fica espaçoso */
+  .cl-photo-item {
+    padding: 14px !important;
+    border-radius: 6px !important;
+  }
+
+  /* Label do ângulo (FRENTE, LATERAL...) maior e legível */
+  .cl-photo-label {
+    font-size: 14px !important;
+    letter-spacing: .08em !important;
+    margin-bottom: 10px !important;
+    color: #0F1419 !important;
+    white-space: normal !important; /* não trunca em mobile */
+  }
+
+  /* REF + INSPEÇÃO continuam lado a lado mas com gap maior */
+  .cl-photo-row {
+    gap: 12px !important;
+  }
+
+  /* Sub-label (REFERÊNCIA / INSPEÇÃO ATUAL) maior */
+  .cl-photo-sub-label {
+    font-size: 11px !important;
+    letter-spacing: .08em !important;
+    margin-bottom: 6px !important;
+  }
+
+  /* Box da foto BEM maior — fácil de ver e de tocar pra fotografar */
+  .cl-photo-box { height: 150px !important; }
+  .cl-photo-upload { min-height: 150px !important; }
+  .cl-photo-upload span { font-size: 11px !important; }
+
+  /* Header de seção e títulos legíveis */
+  .checklist-section-title {
+    font-size: 14px !important;
+    padding: 10px 14px !important;
+  }
+  .checklist-trip-section-title { font-size: 15px !important; }
+
+  /* Áreas internas do checklist com mais respiro */
+  .checklist-header-form,
+  .checklist-trip-section,
+  .checklist-obs-area { padding: 16px !important; }
+
+  /* Modal: aproveita 100% da tela disponível */
+  .fleet-modal-overlay {
+    padding: 8px !important;
+    align-items: stretch !important; /* vai pro topo, sem centralizar verticalmente */
+  }
+  .fleet-modal,
+  .fleet-modal.wide,
+  .fleet-modal.full {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: calc(100vh - 16px) !important;
+    margin: 0 !important;
+    border-radius: 4px !important;
+  }
+  .fleet-modal-body { padding: 16px !important; }
+  .fleet-modal-header { padding: 14px 16px !important; }
+
+  /* Footer: botões em pilha, primário em cima por ergonomia mobile */
+  .fleet-modal-footer {
+    flex-direction: column-reverse !important;
+    gap: 8px !important;
+    padding: 12px 16px !important;
+  }
+  .fleet-modal-footer .btn-fleet { width: 100% !important; }
+}
+
+/* ─── Mobile pequeno (≤ 420px iPhone SE etc): empilha tudo de verdade ─── */
+@media (max-width: 420px) {
+  /* REF e INSPEÇÃO ATUAL empilhadas (REFERÊNCIA em cima, foto/upload embaixo).
+     É o "um do lado do outro JAMAIS" que você pediu. */
+  .cl-photo-row {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* Fotos ainda maiores em telas pequenas */
+  .cl-photo-box { height: 200px !important; }
+  .cl-photo-upload { min-height: 200px !important; }
+  .cl-photo-upload span { font-size: 12px !important; }
+
+  /* Labels reorganizados pra ficar mais visuais */
+  .cl-photo-sub-label {
+    text-align: left !important;
+    font-size: 10px !important;
+  }
+
+  /* Modal sem padding lateral pra ganhar largura */
+  .fleet-modal-overlay { padding: 4px !important; }
+  .fleet-modal,
+  .fleet-modal.wide,
+  .fleet-modal.full {
+    max-height: calc(100vh - 8px) !important;
+    border-radius: 2px !important;
+    border: none !important;
+  }
+
+  /* Grade de assinaturas (saída + retorno) empilhada */
+  .checklist-sig-row { grid-template-columns: 1fr !important; gap: 18px !important; }
+
+  /* Section header empilha tudo */
+  .fleet-section-header h2 { font-size: 16px !important; }
+
+  /* Top-bar reduzido */
+  .fleet-topbar-title { font-size: 14px !important; }
+
+  /* Inspeção principal e outras grades 2-col → 1 col */
+  .checklist-inspection-area,
+  .vehicle-photos-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+  .vehicle-photo-preview { height: 160px !important; }
+
+  /* Inline grids do JS (1197, 3109, 3110, 3856) — força 1 coluna */
+  [style*="grid-template-columns:repeat(2,1fr)"],
+  [style*="grid-template-columns: repeat(2, 1fr)"],
+  [style*="grid-template-columns:1fr 1fr"],
+  [style*="grid-template-columns: 1fr 1fr"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ─── Mobile pequeno em landscape — não desperdiça altura ─── */
+@media (max-width: 700px) and (orientation: landscape) {
+  .cl-photo-box { height: 120px !important; }
+  .cl-photo-upload { min-height: 120px !important; }
+  .fleet-modal,
+  .fleet-modal.wide,
+  .fleet-modal.full { max-height: calc(100vh - 16px) !important; }
+}

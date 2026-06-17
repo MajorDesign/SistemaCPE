@@ -10,6 +10,11 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
+  <!-- ✅ DM Sans (padrão CPE) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
   <!-- ✅ LINK DO LAYOUT.CSS -->
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
 
@@ -174,6 +179,596 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 40px; color: #16A34A;
     }
+
+    /* =================================================================
+       ============ REFRESH CPE 2026-06-16 — Linguagem técnica unificada ===
+       Escopo body.login-page. Não toca em layout.css (regra global).
+       Foco: tipografia DM Sans + modais .fa-* CPE + mobile sem zoom iOS.
+       ================================================================= */
+
+    /* ─── Fonte DM Sans ─── */
+    body.login-page,
+    body.login-page input,
+    body.login-page select,
+    body.login-page textarea,
+    body.login-page button {
+      font-family: 'DM Sans', system-ui, -apple-system, sans-serif !important;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── Anti-zoom iOS: inputs precisam de font-size >= 16px ─── */
+    body.login-page .form-input,
+    body.login-page input.form-input,
+    body.login-page .fa-field input,
+    body.login-page .fa-field select,
+    body.login-page #fpEmail,
+    body.login-page #faEmail {
+      font-size: 16px !important;
+    }
+
+    /* ─── Login title/subtitle tipografia ─── */
+    body.login-page .login-title {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 800 !important;
+      letter-spacing: -.025em !important;
+    }
+    body.login-page .login-subtitle {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      letter-spacing: .02em;
+    }
+
+    /* ─── Form labels ─── */
+    body.login-page .form-label {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .72rem !important;
+      font-weight: 600 !important;
+      letter-spacing: .1em !important;
+      text-transform: uppercase !important;
+    }
+    body.login-page .form-label i { color: #B8870C !important; }
+
+    /* ─── Botão de login: já preto+amarelo, só refinar ─── */
+    body.login-page .login-button {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      letter-spacing: .02em !important;
+      font-size: 15px !important;
+      min-height: 48px;
+    }
+
+    /* ─── Links "Primeiro acesso" e "Esqueci minha senha" ─── */
+    body.login-page .fa-link {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: 14px !important;
+      color: #5C6370 !important;
+      transition: color .15s;
+      border-radius: 3px !important;
+      padding: 10px 8px !important;
+    }
+    body.login-page .fa-link:hover {
+      color: #0F1419 !important;
+      background: rgba(255,193,7,.06);
+      text-decoration: none !important;
+    }
+    body.login-page .fa-link strong { color: #B8870C !important; }
+
+    /* =================================================================
+       MODAIS .fa-* — Padrão CPE (preto + ruler amarelo + X vermelho)
+       Aplica em #faOverlay (Primeiro acesso) e #fpOverlay (Esqueci senha)
+       ================================================================= */
+
+    body.login-page .fa-modal {
+      border-radius: 6px !important;
+      border: 1px solid #1A1A1A !important;
+      box-shadow: 0 24px 80px rgba(15,20,25,.4) !important;
+      /* overflow:hidden OK — body interno tem overflow-y:auto separado */
+    }
+
+    /* Header preto + ruler amarelo (vence o gradient amarelo do .fa-header) */
+    body.login-page .fa-header {
+      background: #0A0A0A !important;
+      background-image: none !important;
+      color: #fff !important;
+      padding: 18px 22px !important;
+      position: relative;
+    }
+    body.login-page .fa-header::after {
+      content: '';
+      position: absolute; left: 0; right: 0; bottom: 0;
+      height: 3px;
+      background: linear-gradient(90deg,
+        #FFC107 0%, #FFC107 18%,
+        rgba(255,193,7,0) 18%, rgba(255,193,7,0) 100%);
+    }
+    body.login-page .fa-header h3 {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 700 !important;
+      font-size: 17px !important;
+      letter-spacing: -.005em !important;
+      color: #fff !important;
+      display: flex; align-items: center; gap: 10px;
+    }
+    body.login-page .fa-header h3 i { color: #FFC107 !important; }
+    body.login-page .fa-header p {
+      color: rgba(255,255,255,.6) !important;
+      font-size: 12px !important;
+      margin-top: 4px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+    }
+
+    /* Botão fechar — X vermelho */
+    body.login-page .fa-close {
+      background: transparent !important;
+      border: 1px solid rgba(231,76,60,.35) !important;
+      border-radius: 3px !important;
+      width: 32px; height: 32px;
+      color: #E74C3C !important;
+      transition: background .18s, transform .18s, border-color .18s, color .18s;
+    }
+    body.login-page .fa-close:hover {
+      background: #E74C3C !important;
+      border-color: #E74C3C !important;
+      color: #fff !important;
+      transform: rotate(90deg);
+    }
+    body.login-page .fa-close i { font-size: 14px; }
+
+    /* Body em papel */
+    body.login-page .fa-body {
+      background: #F5F4ED !important;
+      padding: 22px !important;
+    }
+
+    /* ─── Stepper ─── */
+    body.login-page .fa-stepper-item {
+      border-radius: 2px !important;
+      background: #D8D5C8 !important;
+    }
+    body.login-page .fa-stepper-item.active {
+      background: #FFC107 !important;
+    }
+    body.login-page .fa-stepper-item.done {
+      background: #1B7F4E !important;
+    }
+
+    /* ─── Fields ─── */
+    body.login-page .fa-field label {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .72rem !important;
+      font-weight: 600 !important;
+      letter-spacing: .1em !important;
+      text-transform: uppercase !important;
+      color: #5C6370 !important;
+      display: flex; align-items: center; gap: 6px;
+    }
+    body.login-page .fa-field label i { color: #B8870C !important; }
+    body.login-page .fa-field input,
+    body.login-page .fa-field select {
+      background: #fff !important;
+      border: 1px solid #D8D5C8 !important;
+      border-radius: 4px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      color: #0F1419 !important;
+      padding: 12px 14px !important;
+      min-height: 44px; /* touch target */
+    }
+    body.login-page .fa-field input:focus,
+    body.login-page .fa-field select:focus {
+      border-color: #1A1A1A !important;
+      box-shadow: 0 0 0 3px rgba(255,193,7,.25) !important;
+    }
+    body.login-page .fa-field .hint {
+      color: #7B8088 !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: 12px !important;
+    }
+
+    /* ─── Password bar ─── */
+    body.login-page .fa-pwd-bar { background: #D8D5C8 !important; border-radius: 2px !important; }
+    body.login-page .fa-pwd-bar.fraca::before  { background: #C0392B !important; }
+    body.login-page .fa-pwd-bar.media::before  { background: #B8870C !important; }
+    body.login-page .fa-pwd-bar.forte::before  { background: #1B7F4E !important; }
+    body.login-page .fa-pwd-toggle:hover { color: #1A1A1A !important; }
+
+    /* ─── Grupo list e cards ─── */
+    body.login-page .fa-grupo-list {
+      background: #fff !important;
+      border: 1px solid #D8D5C8 !important;
+      border-radius: 4px !important;
+    }
+    body.login-page .fa-grupo-card {
+      background: #fff !important;
+      border: 1px solid #D8D5C8 !important;
+      border-radius: 3px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      transition: border-color .15s, background .15s;
+    }
+    body.login-page .fa-grupo-card:hover {
+      border-color: #FFC107 !important;
+      background: #FAF8F2 !important;
+    }
+    body.login-page .fa-grupo-card.selected {
+      border-color: #1A1A1A !important;
+      border-left: 3px solid #FFC107 !important;
+      background: #FAF8F2 !important;
+    }
+    body.login-page .fa-grupo-card .nome { color: #0F1419 !important; font-family: 'DM Sans', system-ui, sans-serif !important; }
+    body.login-page .fa-grupo-card .dept { color: #5C6370 !important; }
+    body.login-page .fa-grupo-card .dept i { color: #B8870C !important; }
+    body.login-page .fa-grupo-card .desc { color: #7B8088 !important; }
+
+    /* ─── Actions e botões ─── */
+    body.login-page .fa-actions {
+      border-top: 1px solid #D8D5C8 !important;
+    }
+    body.login-page .fa-btn {
+      border-radius: 4px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 600 !important;
+      letter-spacing: .02em !important;
+      font-size: 14px !important;
+      min-height: 44px; /* touch target mobile */
+      border: 1px solid transparent !important;
+      transition: background .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s !important;
+    }
+    body.login-page .fa-btn-primary {
+      background: #1A1A1A !important;
+      background-image: none !important;
+      color: #FFC107 !important;
+      border-color: #1A1A1A !important;
+    }
+    body.login-page .fa-btn-primary:hover:not(:disabled) {
+      background: #000 !important;
+      color: #FFC107 !important;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(15,20,25,.25);
+    }
+    body.login-page .fa-btn-primary:disabled {
+      opacity: .45 !important;
+    }
+    body.login-page .fa-btn-secondary {
+      background: #fff !important;
+      color: #5C6370 !important;
+      border-color: #D8D5C8 !important;
+    }
+    body.login-page .fa-btn-secondary:hover {
+      color: #0F1419 !important;
+      border-color: #1A1A1A !important;
+    }
+
+    /* ─── Alerts técnicos (border-left + papel) ─── */
+    body.login-page .fa-alert {
+      border-radius: 3px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: 13px !important;
+      background: #fff !important;
+      border: 1px solid #D8D5C8 !important;
+      border-left-width: 3px !important;
+    }
+    body.login-page .fa-alert.info {
+      border-left-color: #FFC107 !important;
+      background: #FAF8F2 !important;
+      color: #0F1419 !important;
+    }
+    body.login-page .fa-alert.info i { color: #B8870C !important; }
+    body.login-page .fa-alert.success {
+      border-left-color: #1B7F4E !important;
+      background: rgba(27,127,78,.06) !important;
+      color: #145C3A !important;
+    }
+    body.login-page .fa-alert.success i { color: #1B7F4E !important; }
+    body.login-page .fa-alert.warning {
+      border-left-color: #B8870C !important;
+      background: #FAF8F2 !important;
+      color: #5C3D02 !important;
+    }
+    body.login-page .fa-alert.warning i { color: #B8870C !important; }
+    body.login-page .fa-alert.danger {
+      border-left-color: #C0392B !important;
+      background: rgba(192,57,43,.06) !important;
+      color: #8B2D24 !important;
+    }
+    body.login-page .fa-alert.danger i { color: #C0392B !important; }
+
+    /* ─── Step 3 icon: verde sólido CPE ─── */
+    body.login-page .fa-step-3-icon {
+      background: #1B7F4E !important;
+      color: #fff !important;
+    }
+
+    /* ─── Seletor de ambiente dev (canto inferior) refinado ─── */
+    body.login-page #envSwitcher {
+      border-radius: 4px !important;
+      border: 1px solid #D8D5C8 !important;
+      box-shadow: 0 4px 16px rgba(15,20,25,.10) !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+    }
+
+    /* =================================================================
+       RESPONSIVIDADE MOBILE — sem necessidade de zoom no celular
+       ================================================================= */
+
+    /* Tablet: ajustes leves */
+    @media (max-width: 768px) {
+      body.login-page .fa-body { padding: 18px !important; }
+      body.login-page .fa-header { padding: 16px 18px !important; }
+      body.login-page .fa-header h3 { font-size: 16px !important; }
+    }
+
+    /* Mobile: modal fullscreen, sem margens, conteúdo confortável pro dedo */
+    @media (max-width: 540px) {
+      body.login-page .fa-overlay {
+        padding: 0 !important;
+      }
+      body.login-page .fa-modal {
+        max-width: 100% !important;
+        max-height: 100vh !important;
+        min-height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+        animation: faInMobile .25s ease;
+      }
+      @keyframes faInMobile {
+        from { transform: translateY(40px); opacity: 0; }
+        to   { transform: translateY(0); opacity: 1; }
+      }
+      body.login-page .fa-header { padding: 16px !important; }
+      body.login-page .fa-header h3 { font-size: 15px !important; }
+      body.login-page .fa-header p  { font-size: 11px !important; }
+      body.login-page .fa-body { padding: 16px !important; }
+      body.login-page .fa-field { margin-bottom: 14px !important; }
+      body.login-page .fa-field input,
+      body.login-page .fa-field select {
+        padding: 12px 14px !important;
+        min-height: 48px; /* touch target maior no mobile */
+      }
+      body.login-page .fa-actions {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+      }
+      body.login-page .fa-btn {
+        flex: 1 1 100% !important;
+        min-height: 48px;
+        font-size: 15px !important;
+      }
+      body.login-page .fa-grupo-list {
+        max-height: 240px !important;
+      }
+      body.login-page .fa-grupo-card {
+        padding: 10px !important;
+      }
+      body.login-page .fa-grupo-card .nome { font-size: 13px !important; }
+      /* Esconde seletor de ambiente em mobile (dá pouco espaço pro form) */
+      body.login-page #envSwitcher {
+        bottom: 8px !important;
+        right: 8px !important;
+        padding: 4px 8px !important;
+        font-size: 11px !important;
+      }
+    }
+
+    /* Telas BEM pequenas (< 360px): empilha tudo */
+    @media (max-width: 360px) {
+      body.login-page .fa-header h3 { font-size: 14px !important; }
+      body.login-page .fa-body { padding: 14px !important; }
+      body.login-page #envSwitcher { display: none !important; }
+    }
+
+    /* Tela em paisagem mobile (altura baixa): reduz padding pra caber */
+    @media (max-height: 600px) and (orientation: landscape) {
+      body.login-page .fa-grupo-list { max-height: 160px !important; }
+      body.login-page .fa-body { padding: 14px 18px !important; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      body.login-page .fa-modal { animation: none !important; }
+    }
+
+    /* =================================================================
+       WELCOME OVERLAY — tela de boas-vindas pós-login
+       Skill /frontend-design — degradê amarelo CPE, tipografia
+       contrastante em preto, logo invertida, créditos no rodapé.
+       ================================================================= */
+    .welcome-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 99999;
+      background: linear-gradient(135deg,
+        #FFE082 0%,
+        #FFD54A 30%,
+        #FFC107 60%,
+        #B8870C 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 26px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .35s ease;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      padding: 20px 20px 70px;
+      overflow: hidden;
+    }
+    .welcome-overlay.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    /* Ruler técnico preto no topo (signature CPE inversa) */
+    .welcome-overlay::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg,
+        #1A1A1A 0%, #1A1A1A 22%,
+        rgba(26,26,26,0) 22%, rgba(26,26,26,0) 100%);
+    }
+    /* Hairline preto curto na base direita */
+    .welcome-overlay::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg,
+        rgba(26,26,26,0) 0%, rgba(26,26,26,0) 78%,
+        #1A1A1A 78%, #1A1A1A 100%);
+    }
+
+    /* Logo CPE em BRANCO flutuando no fundo amarelo (sem caixa).
+       Aplicamos brightness(0) invert(1) pra converter o PNG pra branco
+       puro, mantendo a transparência original. Drop-shadow dá profundidade. */
+    .welcome-logo {
+      width: 220px;
+      max-width: 60vw;
+      height: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      animation: welcomeLogoIn .65s cubic-bezier(.2,.8,.2,1) both;
+    }
+    .welcome-logo img {
+      width: 100%;
+      height: auto;
+      max-height: 130px;
+      object-fit: contain;
+      /* Branco puro + sombra suave preta translúcida (dá relevo no amarelo) */
+      filter:
+        brightness(0) invert(1)
+        drop-shadow(0 8px 16px rgba(15,20,25,.18))
+        drop-shadow(0 2px 4px rgba(15,20,25,.12));
+    }
+    /* Hairline preto técnico embaixo da logo (signature CPE) */
+    .welcome-logo::after {
+      content: '';
+      position: absolute;
+      bottom: -14px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60px;
+      height: 2px;
+      background: rgba(15,20,25,.6);
+      border-radius: 1px;
+    }
+
+    .welcome-eyebrow {
+      font-size: .68rem;
+      font-weight: 700;
+      letter-spacing: .32em;
+      text-transform: uppercase;
+      color: #1A1A1A;
+      animation: welcomeIn .5s .2s ease both;
+      text-align: center;
+    }
+
+    .welcome-title {
+      font-size: clamp(1.7rem, 4.5vw, 2.4rem);
+      font-weight: 800;
+      letter-spacing: -.02em;
+      color: #0F1419;
+      text-align: center;
+      margin: 0;
+      animation: welcomeIn .55s .3s ease both;
+      line-height: 1.1;
+    }
+    .welcome-title .welcome-name {
+      color: #0F1419;
+      display: inline-block;
+      position: relative;
+    }
+    /* Sublinhado preto no nome (signature técnica) */
+    .welcome-title .welcome-name::after {
+      content: '';
+      position: absolute;
+      left: 8%; right: 8%; bottom: -6px;
+      height: 3px;
+      background: #1A1A1A;
+      border-radius: 2px;
+    }
+
+    .welcome-subtitle {
+      font-size: .92rem;
+      color: rgba(15,20,25,.65);
+      text-align: center;
+      margin: 0;
+      letter-spacing: .01em;
+      animation: welcomeIn .55s .42s ease both;
+    }
+
+    .welcome-spinner {
+      width: 36px; height: 36px;
+      border: 2.5px solid rgba(26,26,26,.18);
+      border-top-color: #1A1A1A;
+      border-radius: 50%;
+      animation:
+        welcomeSpinIn .5s .55s ease both,
+        welcomeSpin 1s linear infinite .55s;
+    }
+
+    /* Créditos no rodapé */
+    .welcome-credits {
+      position: absolute;
+      bottom: 24px;
+      left: 0; right: 0;
+      text-align: center;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: .76rem;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: rgba(15,20,25,.55);
+      animation: welcomeIn .55s .65s ease both;
+      padding: 0 20px;
+    }
+    .welcome-credits strong {
+      color: #0F1419;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+    .welcome-credits .credits-divider {
+      display: inline-block;
+      width: 20px;
+      height: 1px;
+      background: #1A1A1A;
+      vertical-align: middle;
+      margin: 0 10px 4px;
+      opacity: .4;
+    }
+
+    @keyframes welcomeLogoIn {
+      from { opacity: 0; transform: translateY(14px) scale(.92); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes welcomeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes welcomeSpinIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes welcomeSpin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 540px) {
+      .welcome-logo { width: 170px; }
+      .welcome-logo img { max-height: 90px; }
+      .welcome-logo::after { width: 40px; bottom: -10px; }
+      .welcome-overlay { gap: 22px; padding-bottom: 60px; }
+      .welcome-credits { font-size: .68rem; letter-spacing: .1em; }
+      .welcome-credits .credits-divider { width: 14px; margin: 0 6px 3px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .welcome-logo,
+      .welcome-eyebrow,
+      .welcome-title,
+      .welcome-subtitle,
+      .welcome-spinner,
+      .welcome-credits { animation: none !important; }
+      .welcome-spinner { animation: welcomeSpin 1.2s linear infinite !important; }
+    }
   </style>
 
 </head>
@@ -181,6 +776,25 @@
 <body class="login-page">
   <!-- ✅ BACKGROUND COM GRADIENTE -->
   <div class="login-background"></div>
+
+  <!-- ============================================================ -->
+  <!-- WELCOME OVERLAY — aparece após login bem-sucedido             -->
+  <!-- ============================================================ -->
+  <div class="welcome-overlay" id="welcomeOverlay" aria-hidden="true">
+    <div class="welcome-logo">
+      <img src="/SistemaCPE/web/assests/images/logocpe.png" alt="CPE" onerror="this.style.display='none'">
+    </div>
+    <div class="welcome-eyebrow">CPE Control · Acesso autorizado</div>
+    <h1 class="welcome-title">
+      Bem-vindo,<br>
+      <span class="welcome-name" id="welcomeUserName">—</span>
+    </h1>
+    <p class="welcome-subtitle" id="welcomeSubtitle">Carregando seu espaço de trabalho…</p>
+    <div class="welcome-spinner" role="status" aria-label="Carregando"></div>
+    <div class="welcome-credits">
+      Desenvolvido por <span class="credits-divider"></span> <strong>Jonathan Lopes</strong>
+    </div>
+  </div>
 
   <!-- ✅ WRAPPER -->
   <div class="login-wrapper">
