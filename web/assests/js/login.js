@@ -282,9 +282,26 @@
         return;
       }
 
-      setTimeout(() => {
-        window.location.href = redirectUrl;
-      }, 1000);
+      // ─── Welcome overlay: tela de boas-vindas personalizada
+      //     Mostra logo CPE + "Bem-vindo, <Primeiro Nome>" antes de redirecionar.
+      //     Se o overlay não existir (compat com paginas antigas), redireciona direto.
+      const welcomeEl = document.getElementById("welcomeOverlay");
+      if (welcomeEl) {
+        const fullName = (data.user && data.user.name) || "Usuário";
+        // Usa só o primeiro nome se tiver vários; se só tem um, mantém integral
+        const firstName = String(fullName).trim().split(/\s+/)[0] || fullName;
+        const nameEl = document.getElementById("welcomeUserName");
+        if (nameEl) nameEl.textContent = firstName;
+        // Fade-in
+        welcomeEl.classList.add("show");
+        welcomeEl.setAttribute("aria-hidden", "false");
+        // Esconde o alerta verde do login pra não duplicar feedback
+        if (successAlert) successAlert.style.display = "none";
+        // Aguarda 5s pra dar tempo de ler + sentir o momento, depois navega
+        setTimeout(() => { window.location.href = redirectUrl; }, 5000);
+      } else {
+        setTimeout(() => { window.location.href = redirectUrl; }, 1000);
+      }
       // [FIM] Redirecionar
 
     } catch (err) {

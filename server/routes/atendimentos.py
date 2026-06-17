@@ -1325,7 +1325,11 @@ def listar_equipamentos(servico_id: int, request: Request):
     try:
         _servico_ou_404(cursor, servico_id)
         cursor.execute("""
-            SELECT e.* FROM atend_equipamentos e
+            SELECT e.*,
+                   (SELECT arquivo FROM atend_midia_fotos
+                    WHERE entidade='equipamento' AND entidade_id=e.id
+                    ORDER BY ordem, id LIMIT 1) AS foto_capa
+            FROM atend_equipamentos e
             JOIN atend_equipamento_vinculos v ON v.equipamento_id = e.id
             WHERE v.entidade='servico' AND v.entidade_id=%s
             ORDER BY e.ordem, e.nome
@@ -1345,7 +1349,11 @@ def listar_equipamentos_treino(treinamento_id: int, request: Request):
     try:
         _treinamento_ou_404(cursor, treinamento_id)
         cursor.execute("""
-            SELECT e.* FROM atend_equipamentos e
+            SELECT e.*,
+                   (SELECT arquivo FROM atend_midia_fotos
+                    WHERE entidade='equipamento' AND entidade_id=e.id
+                    ORDER BY ordem, id LIMIT 1) AS foto_capa
+            FROM atend_equipamentos e
             JOIN atend_equipamento_vinculos v ON v.equipamento_id = e.id
             WHERE v.entidade='treinamento' AND v.entidade_id=%s
             ORDER BY e.ordem, e.nome
@@ -2381,7 +2389,10 @@ def listar_equipamentos_drone(drone_id: int, request: Request):
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute("""
-            SELECT e.id, e.nome, e.descricao
+            SELECT e.id, e.nome, e.descricao,
+                   (SELECT arquivo FROM atend_midia_fotos
+                    WHERE entidade='equipamento' AND entidade_id=e.id
+                    ORDER BY ordem, id LIMIT 1) AS foto_capa
             FROM atend_equipamentos e
             JOIN atend_equipamento_vinculos v ON v.equipamento_id=e.id
             WHERE v.entidade='drone' AND v.entidade_id=%s AND e.ativo=1
@@ -2407,7 +2418,11 @@ _TABELA_POR_ENTIDADE = {
     "servico":      "atend_servicos",
     "treinamento":  "atend_treinamentos",
     "equipamento":  "atend_equipamentos",
+    "drone":        "atend_drones",
 }
+
+# Entidades que tem modulos / banner (equipamento nao tem).
+_MODULOS_ENTIDADES = ("servico", "treinamento", "drone")
 
 
 def _validar_entidade(entidade: str, entidade_id: int, cursor):
@@ -2567,6 +2582,264 @@ def _request_eh_funcionario_cpe(request: Request) -> bool:
     return _resolve_user_id(request) is not None
 
 
+# =====================================================================
+# BANNER — foto-destaque de servico / treinamento / drone.
+# Upload separado da galeria. Salva URL na coluna banner_url da entidade.
+# =====================================================================
+@router.post("/midia/{entidade}/{entidade_id}/banner")
+async def upload_banner(entidade: str, entidade_id: int, request: Request,
+                        file: UploadFile = File(...)):
+    _exigir_admin_suporte(request)
+    if entidade not in _MODULOS_ENTIDADES:
+        raise HTTPException(status_code=400,
+                            detail=f"Banner so e suportado em: {', '.join(_MODULOS_ENTIDADES)}")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in _FOTO_EXTS:
+        raise HTTPException(status_code=400,
+                            detail=f"Extensao nao permitida ({ext}). Use: {', '.join(_FOTO_EXTS)}")
+    _UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+    filename = f"{entidade}_{entidade_id}_banner_{_uuid.uuid4().hex[:10]}{ext}"
+    destino = _UPLOAD_ROOT / filename
+    with open(destino, "wb") as out:
+        while True:
+            chunk = await file.read(64 * 1024)
+            if not chunk:
+                break
+            out.write(chunk)
+    arquivo_url = f"{_UPLOAD_URL_BASE}/{filename}"
+    tabela = _TABELA_POR_ENTIDADE[entidade]
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _validar_entidade(entidade, entidade_id, cursor)
+        # Apaga banner anterior do disco (se houver)
+        cursor.execute(f"SELECT banner_url FROM {tabela} WHERE id=%s", (entidade_id,))
+        antigo = cursor.fetchone()
+        if antigo and antigo.get("banner_url"):
+            rel = (antigo["banner_url"] or "").replace(_UPLOAD_URL_BASE, "").lstrip("/")
+            if rel:
+                try:
+                    (_UPLOAD_ROOT / rel).unlink(missing_ok=True)
+                except Exception:
+                    pass
+        cursor.execute(f"UPDATE {tabela} SET banner_url=%s WHERE id=%s",
+                       (arquivo_url, entidade_id))
+        conn.commit()
+        return {"success": True, "banner_url": arquivo_url}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/midia/{entidade}/{entidade_id}/banner")
+def excluir_banner(entidade: str, entidade_id: int, request: Request):
+    _exigir_admin_suporte(request)
+    if entidade not in _MODULOS_ENTIDADES:
+        raise HTTPException(status_code=400, detail="Entidade nao suporta banner")
+    tabela = _TABELA_POR_ENTIDADE[entidade]
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(f"SELECT banner_url FROM {tabela} WHERE id=%s", (entidade_id,))
+        row = cursor.fetchone()
+        if row and row.get("banner_url"):
+            rel = (row["banner_url"] or "").replace(_UPLOAD_URL_BASE, "").lstrip("/")
+            if rel:
+                try:
+                    (_UPLOAD_ROOT / rel).unlink(missing_ok=True)
+                except Exception:
+                    pass
+        cursor.execute(f"UPDATE {tabela} SET banner_url=NULL WHERE id=%s", (entidade_id,))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# =====================================================================
+# MODULOS — aulas/topicos dentro de cursos, treinamentos ou drones.
+# Polimorfico (atend_modulos com entidade + entidade_id).
+# Topicos sao gravados como JSON (lista de strings).
+# =====================================================================
+import json as _json
+
+
+def _normalizar_topicos(raw) -> Optional[str]:
+    """Aceita lista, string com quebras de linha, ou null. Retorna JSON ou None."""
+    if raw is None:
+        return None
+    if isinstance(raw, list):
+        items = [str(x).strip() for x in raw if str(x).strip()]
+    elif isinstance(raw, str):
+        items = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+    else:
+        return None
+    return _json.dumps(items, ensure_ascii=False) if items else None
+
+
+def _modulos_de(cursor, entidade: str, entidade_id: int) -> list:
+    cursor.execute("""
+        SELECT id, titulo, descricao, duracao_min, topicos, ordem
+        FROM atend_modulos
+        WHERE entidade=%s AND entidade_id=%s
+        ORDER BY ordem, id
+    """, (entidade, entidade_id))
+    rows = cursor.fetchall()
+    for r in rows:
+        if r.get("topicos"):
+            try:
+                r["topicos"] = _json.loads(r["topicos"])
+            except Exception:
+                r["topicos"] = []
+        else:
+            r["topicos"] = []
+    return rows
+
+
+@router.get("/{entidade}/{entidade_id}/modulos")
+def listar_modulos(entidade: str, entidade_id: int, request: Request):
+    _exigir_view_suporte(request)
+    if entidade not in _MODULOS_ENTIDADES:
+        raise HTTPException(status_code=400, detail="Entidade nao suporta modulos")
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _validar_entidade(entidade, entidade_id, cursor)
+        return {"success": True, "modulos": _modulos_de(cursor, entidade, entidade_id)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/{entidade}/{entidade_id}/modulos")
+def criar_modulo(entidade: str, entidade_id: int, request: Request, data: dict):
+    _exigir_admin_suporte(request)
+    if entidade not in _MODULOS_ENTIDADES:
+        raise HTTPException(status_code=400, detail="Entidade nao suporta modulos")
+    titulo = (data.get("titulo") or "").strip()
+    if not titulo:
+        raise HTTPException(status_code=400, detail="Titulo obrigatorio")
+    descricao = (data.get("descricao") or "").strip() or None
+    duracao_min = data.get("duracao_min")
+    if duracao_min is not None:
+        try:
+            duracao_min = int(duracao_min)
+            if duracao_min < 0:
+                duracao_min = None
+        except (TypeError, ValueError):
+            duracao_min = None
+    topicos_json = _normalizar_topicos(data.get("topicos"))
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _validar_entidade(entidade, entidade_id, cursor)
+        cursor.execute("""
+            INSERT INTO atend_modulos (entidade, entidade_id, titulo, descricao,
+                                       duracao_min, topicos, ordem)
+            VALUES (%s, %s, %s, %s, %s, %s,
+                    COALESCE((SELECT MAX(ordem)+1 FROM atend_modulos m
+                              WHERE m.entidade=%s AND m.entidade_id=%s), 0))
+        """, (entidade, entidade_id, titulo, descricao, duracao_min, topicos_json,
+              entidade, entidade_id))
+        conn.commit()
+        return {"success": True, "id": cursor.lastrowid}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.put("/modulos/{modulo_id}")
+def editar_modulo(modulo_id: int, request: Request, data: dict):
+    _exigir_admin_suporte(request)
+    sets = []
+    params = []
+    if "titulo" in data:
+        t = (data.get("titulo") or "").strip()
+        if not t:
+            raise HTTPException(status_code=400, detail="Titulo nao pode ficar vazio")
+        sets.append("titulo=%s"); params.append(t)
+    if "descricao" in data:
+        d = (data.get("descricao") or "").strip() or None
+        sets.append("descricao=%s"); params.append(d)
+    if "duracao_min" in data:
+        dm = data.get("duracao_min")
+        if dm is not None:
+            try:
+                dm = int(dm)
+                if dm < 0:
+                    dm = None
+            except (TypeError, ValueError):
+                dm = None
+        sets.append("duracao_min=%s"); params.append(dm)
+    if "topicos" in data:
+        sets.append("topicos=%s"); params.append(_normalizar_topicos(data.get("topicos")))
+    if "ordem" in data:
+        try:
+            sets.append("ordem=%s"); params.append(int(data["ordem"]))
+        except (TypeError, ValueError):
+            pass
+    if not sets:
+        return {"success": True, "noop": True}
+    params.append(modulo_id)
+    conn = get_db_or_404()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(f"UPDATE atend_modulos SET {', '.join(sets)} WHERE id=%s", params)
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Modulo nao encontrado")
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/modulos/{modulo_id}")
+def excluir_modulo(modulo_id: int, request: Request):
+    _exigir_admin_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM atend_modulos WHERE id=%s", (modulo_id,))
+        if cursor.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Modulo nao encontrado")
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/{entidade}/{entidade_id}/modulos/reordenar")
+def reordenar_modulos(entidade: str, entidade_id: int, request: Request, data: dict):
+    """Recebe {ids: [id1, id2, ...]} na ordem desejada."""
+    _exigir_admin_suporte(request)
+    if entidade not in _MODULOS_ENTIDADES:
+        raise HTTPException(status_code=400, detail="Entidade nao suporta modulos")
+    ids = data.get("ids") or []
+    if not isinstance(ids, list):
+        raise HTTPException(status_code=400, detail="Lista de ids invalida")
+    conn = get_db_or_404()
+    cursor = conn.cursor()
+    try:
+        for ordem, mid in enumerate(ids):
+            try:
+                cursor.execute("""
+                    UPDATE atend_modulos SET ordem=%s
+                    WHERE id=%s AND entidade=%s AND entidade_id=%s
+                """, (ordem, int(mid), entidade, entidade_id))
+            except (TypeError, ValueError):
+                continue
+        conn.commit()
+        return {"success": True, "total": len(ids)}
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @router.get("/publico/agendas")
 def pub_listar_agendas(request: Request, tipo: str = None):
     """Agendas ativas, com suas ofertas (tela inicial publica).
@@ -2612,7 +2885,7 @@ def _pub_listar_ofertas(cursor, agenda_id: int, entidade: str) -> list:
     elif entidade == "drone":         tabela = "atend_drones"
     else: raise ValueError("entidade invalida: " + str(entidade))
     cursor.execute(f"""
-        SELECT id, nome, descricao, duracao_min, instrutor,
+        SELECT id, nome, descricao, duracao_min, instrutor, banner_url,
                COALESCE(vendedor_nome,
                         (SELECT name FROM users WHERE id = vendedor_id)) AS vendedor
         FROM {tabela}
@@ -2630,6 +2903,7 @@ def _pub_listar_ofertas(cursor, agenda_id: int, entidade: str) -> list:
             "WHERE entidade=%s AND entidade_id=%s ORDER BY ordem, id",
             (entidade, it["id"]))
         it["videos"] = cursor.fetchall()
+        it["modulos"] = _modulos_de(cursor, entidade, it["id"])
     return itens
 
 

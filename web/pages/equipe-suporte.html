@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Equipe de Suporte — CPE</title>
 
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/equipe-suporte.css?v=2026-06-05">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/equipe-suporte.css?v=2026-06-16f">
 
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-06-03"></script>
@@ -30,7 +32,7 @@
     <aside class="sup-sidebar" id="supSidebar">
       <div class="sup-sidebar-logo">
         <img src="/SistemaCPE/web/assests/images/logocpe.png" alt="CPE">
-        <span class="sup-sidebar-logo-text">Suporte</span>
+        <span class="sup-sidebar-logo-text">Suporte<small>Painel interno</small></span>
       </div>
       <a href="/SistemaCPE/index.html" class="sup-back-link">
         <i class="bi bi-arrow-left-circle"></i><span>Voltar ao Sistema</span>
@@ -76,7 +78,7 @@
           <i class="bi bi-list"></i>
         </button>
         <span class="sup-topbar-title" id="topbarTitle">Dashboard</span>
-        <span class="sup-badge-mod"><i class="bi bi-headset"></i> EQUIPE DE SUPORTE</span>
+        <span class="sup-badge-mod">EQUIPE · SUPORTE</span>
         <div class="sup-topbar-actions">
           <div class="sup-notif-wrap" id="supNotifWrap" onclick="toggleNotifPanel()"
                title="Notificações">
@@ -173,7 +175,7 @@
       <!-- ====== AGENDAS (config por unidade) ====== -->
       <section class="sup-page" id="page-agendas">
         <div class="sup-page-header">
-          <span class="sup-page-title">Agendas por unidade</span>
+          <span class="sup-page-title" data-stn="STN · AG / Unidades">Agendas por unidade</span>
           <span class="sup-spacer"></span>
           <button class="btn-sup btn-sup-ghost" onclick="copiarLinkPublico()"
                   title="Link único para clientes agendarem (escolhem online ou presencial)">
@@ -199,7 +201,7 @@
       <!-- ====== CALENDÁRIO ====== -->
       <section class="sup-page" id="page-calendario">
         <div class="sup-page-header">
-          <span class="sup-page-title">Calendário</span>
+          <span class="sup-page-title" data-stn="STN · CAL / Operação">Calendário</span>
           <select class="sup-select" id="calAgendaSel" style="max-width:300px"
                   onchange="onCalAgendaChange()"></select>
           <span class="sup-spacer"></span>
@@ -235,7 +237,7 @@
       <!-- ====== CURSOS ====== -->
       <section class="sup-page" id="page-cursos">
         <div class="sup-page-header">
-          <span class="sup-page-title">Cursos por unidade</span>
+          <span class="sup-page-title" data-stn="STN · CUR / Catálogo">Cursos por unidade</span>
         </div>
         <div class="sup-card">
           <div class="sup-page-header" style="margin-bottom:14px">
@@ -265,7 +267,7 @@
       <!-- ====== TREINAMENTOS ====== -->
       <section class="sup-page" id="page-treinamentos">
         <div class="sup-page-header">
-          <span class="sup-page-title">Treinamentos por unidade</span>
+          <span class="sup-page-title" data-stn="STN · TRN / Catálogo">Treinamentos por unidade</span>
         </div>
         <div class="sup-card">
           <div class="sup-page-header" style="margin-bottom:14px">
@@ -295,7 +297,7 @@
       <!-- ====== DRONES (espelho de treinamentos, sem colisão com curso/treino) ====== -->
       <section class="sup-page" id="page-drones">
         <div class="sup-page-header">
-          <span class="sup-page-title">Drones por unidade</span>
+          <span class="sup-page-title" data-stn="STN · DRN / Catálogo">Drones por unidade</span>
         </div>
         <div class="sup-card">
           <p class="sup-help" style="margin-bottom:14px">
@@ -330,7 +332,7 @@
       <!-- ====== EQUIPAMENTOS ====== -->
       <section class="sup-page" id="page-equipamentos">
         <div class="sup-page-header">
-          <span class="sup-page-title">Catálogo de Equipamentos</span>
+          <span class="sup-page-title" data-stn="STN · EQ / Inventário">Catálogo de Equipamentos</span>
           <span class="sup-spacer"></span>
           <button class="btn-sup btn-sup-primary" id="btnAddEquip" onclick="novoEquipamento()" data-need-admin>
             <i class="bi bi-plus-lg"></i> Novo equipamento
@@ -359,7 +361,7 @@
       <!-- ====== CLIENTES ====== -->
       <section class="sup-page" id="page-clientes">
         <div class="sup-page-header">
-          <span class="sup-page-title">Base de Clientes</span>
+          <span class="sup-page-title" data-stn="STN · CL / Cadastros">Base de Clientes</span>
           <span class="sup-spacer"></span>
           <input type="text" class="sup-input" id="buscaCliente"
                  placeholder="Buscar nome, e-mail, empresa..."
@@ -392,7 +394,7 @@
       <!-- ====== FERIADOS ====== -->
       <section class="sup-page" id="page-feriados">
         <div class="sup-page-header">
-          <span class="sup-page-title">Feriados</span>
+          <span class="sup-page-title" data-stn="STN · FR / Bloqueios">Feriados</span>
           <span class="sup-spacer"></span>
           <button class="btn-sup btn-sup-primary" onclick="abrirModalFeriado()" data-need-admin>
             <i class="bi bi-plus-lg"></i> Adicionar feriado
@@ -641,6 +643,45 @@
           </div>
         </div>
 
+        <!-- Banner (só visível ao editar) -->
+        <div id="cursoBannerWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-image-alt"></i> Banner do curso
+            <span class="sup-help" style="margin-left:8px;font-weight:400">
+              Foto principal exibida como hero no agendamento público.
+            </span>
+          </div>
+          <div id="cursoBannerPreview" class="sup-banner-preview"></div>
+          <div style="margin-top:8px">
+            <input type="file" id="cursoBannerInput" accept="image/*" style="display:none"
+                   onchange="uploadBannerCurso(event)">
+            <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                    onclick="document.getElementById('cursoBannerInput').click()">
+              <i class="bi bi-upload"></i> Enviar banner
+            </button>
+            <button type="button" class="btn-sup btn-sup-danger btn-sup-sm" id="cursoBannerExcluirBtn"
+                    onclick="excluirBannerCurso()" style="display:none;margin-left:6px">
+              <i class="bi bi-trash"></i> Remover
+            </button>
+            <span class="sup-help" style="margin-left:8px">JPG, PNG ou WEBP — 1 imagem</span>
+          </div>
+        </div>
+
+        <!-- Módulos (só visível ao editar) -->
+        <div id="cursoModulosWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-list-ol"></i> Módulos do curso
+            <span class="sup-help" style="margin-left:8px;font-weight:400">
+              Conteúdo programático: cada módulo tem título, duração e tópicos.
+            </span>
+          </div>
+          <div id="cursoModulosLista" style="margin-bottom:10px"></div>
+          <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                  onclick="abrirModuloEditor('servico', document.getElementById('cursoId').value, 'curso')">
+            <i class="bi bi-plus-circle"></i> Adicionar módulo
+          </button>
+        </div>
+
         <!-- Mídia (só visível ao editar — precisa de servico_id) -->
         <div id="cursoMidiaWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
           <div class="sup-card-title" style="margin-bottom:10px">
@@ -784,6 +825,40 @@
               <i class="bi bi-check-lg"></i> Criar e vincular
             </button>
           </div>
+        </div>
+
+        <!-- Banner do treinamento -->
+        <div id="treinoBannerWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-image-alt"></i> Banner do treinamento
+            <span class="sup-help" style="margin-left:8px;font-weight:400">Hero do modal público.</span>
+          </div>
+          <div id="treinoBannerPreview" class="sup-banner-preview"></div>
+          <div style="margin-top:8px">
+            <input type="file" id="treinoBannerInput" accept="image/*" style="display:none"
+                   onchange="uploadBannerTreino(event)">
+            <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                    onclick="document.getElementById('treinoBannerInput').click()">
+              <i class="bi bi-upload"></i> Enviar banner
+            </button>
+            <button type="button" class="btn-sup btn-sup-danger btn-sup-sm" id="treinoBannerExcluirBtn"
+                    onclick="excluirBannerTreino()" style="display:none;margin-left:6px">
+              <i class="bi bi-trash"></i> Remover
+            </button>
+            <span class="sup-help" style="margin-left:8px">JPG, PNG ou WEBP — 1 imagem</span>
+          </div>
+        </div>
+
+        <!-- Módulos do treinamento -->
+        <div id="treinoModulosWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-list-ol"></i> Módulos do treinamento
+          </div>
+          <div id="treinoModulosLista" style="margin-bottom:10px"></div>
+          <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                  onclick="abrirModuloEditor('treinamento', document.getElementById('treinoId').value, 'treino')">
+            <i class="bi bi-plus-circle"></i> Adicionar módulo
+          </button>
         </div>
 
         <div id="treinoMidiaWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
@@ -942,6 +1017,40 @@
               <i class="bi bi-check-lg"></i> Criar e vincular
             </button>
           </div>
+        </div>
+
+        <!-- Banner do drone -->
+        <div id="droneBannerWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-image-alt"></i> Banner do drone
+            <span class="sup-help" style="margin-left:8px;font-weight:400">Hero do modal público.</span>
+          </div>
+          <div id="droneBannerPreview" class="sup-banner-preview"></div>
+          <div style="margin-top:8px">
+            <input type="file" id="droneBannerInput" accept="image/*" style="display:none"
+                   onchange="uploadBannerDrone(event)">
+            <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                    onclick="document.getElementById('droneBannerInput').click()">
+              <i class="bi bi-upload"></i> Enviar banner
+            </button>
+            <button type="button" class="btn-sup btn-sup-danger btn-sup-sm" id="droneBannerExcluirBtn"
+                    onclick="excluirBannerDrone()" style="display:none;margin-left:6px">
+              <i class="bi bi-trash"></i> Remover
+            </button>
+            <span class="sup-help" style="margin-left:8px">JPG, PNG ou WEBP — 1 imagem</span>
+          </div>
+        </div>
+
+        <!-- Módulos do drone -->
+        <div id="droneModulosWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
+          <div class="sup-card-title" style="margin-bottom:10px">
+            <i class="bi bi-list-ol"></i> Módulos
+          </div>
+          <div id="droneModulosLista" style="margin-bottom:10px"></div>
+          <button type="button" class="btn-sup btn-sup-secondary btn-sup-sm"
+                  onclick="abrirModuloEditor('drone', document.getElementById('droneId').value, 'drone')">
+            <i class="bi bi-plus-circle"></i> Adicionar módulo
+          </button>
         </div>
 
         <div id="droneMidiaWrap" style="display:none;border-top:1px solid var(--sup-border);padding-top:14px;margin-top:14px">
@@ -1422,6 +1531,58 @@
     </div>
   </div>
 
+  <!-- ============ MODAL: EDITAR MÓDULO ============ -->
+  <div class="sup-modal-overlay" id="modalModulo">
+    <div class="sup-modal" style="max-width:560px">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title">
+          <i class="bi bi-list-ol"></i> <span id="modModuloTitulo">Novo módulo</span>
+        </span>
+        <button class="sup-modal-close" onclick="fecharModal('modalModulo')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroModulo"></div>
+        <input type="hidden" id="moduloId">
+        <input type="hidden" id="moduloEntidade">
+        <input type="hidden" id="moduloEntidadeId">
+        <input type="hidden" id="moduloKind">
+
+        <div class="sup-field">
+          <label>Título do módulo *</label>
+          <input type="text" class="sup-input" id="moduloTitulo" maxlength="200"
+                 placeholder="Ex: Introdução ao Apache 3">
+        </div>
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>Duração (minutos)</label>
+            <input type="number" class="sup-input" id="moduloDuracao" min="0" placeholder="Ex: 60">
+          </div>
+        </div>
+        <div class="sup-field">
+          <label>Descrição</label>
+          <textarea class="sup-input" id="moduloDescricao" rows="3"
+                    placeholder="Resumo do que será abordado neste módulo."></textarea>
+        </div>
+        <div class="sup-field">
+          <label>Tópicos (1 por linha)</label>
+          <textarea class="sup-input" id="moduloTopicos" rows="5"
+                    placeholder="Configuração inicial&#10;Coleta de dados&#10;Pós-processamento"></textarea>
+          <span class="sup-help">Cada linha vira um tópico/aula dentro do módulo.</span>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-danger" id="moduloExcluirBtn" onclick="excluirModuloAtual()"
+                style="display:none">
+          <i class="bi bi-trash"></i> Excluir
+        </button>
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalModulo')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarModulo()">
+          <i class="bi bi-check-lg"></i> Salvar módulo
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ MODAL: DUPLICAR (curso ou treinamento) ============ -->
   <div class="sup-modal-overlay" id="modalDuplicar">
     <div class="sup-modal">
@@ -1483,6 +1644,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/equipe-suporte.js?v=2026-06-05"></script>
+  <script src="/SistemaCPE/web/assests/js/equipe-suporte.js?v=2026-06-16c"></script>
 </body>
 </html>

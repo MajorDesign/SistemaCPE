@@ -5,9 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Agendamento — CPE Tecnologia</title>
 
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/agendar.css?v=2026-06-05">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/agendar.css?v=2026-06-16c">
 
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
 </head>
@@ -15,28 +17,52 @@
 
   <div class="ag-topbar">
     <img src="/SistemaCPE/web/assests/images/logocpe.png" alt="CPE">
-    <span class="ag-topbar-logo">CPE Tecnologia</span>
+    <span class="ag-topbar-logo">CPE Tecnologia<small>Geomensura · Drones · GNSS</small></span>
+    <span class="ag-topbar-stn">
+      <span class="dot" aria-hidden="true"></span>
+      <span class="stn-full">EST · ATENDIMENTO PÚBLICO ·</span>
+      <b>BR / 2026</b>
+    </span>
   </div>
 
   <!-- ============ ESCOLHA DA MODALIDADE (tela inicial) ============ -->
   <section id="viewModalidade" class="ag-modalidade-wrap">
     <div class="ag-modalidade-inner">
-      <div class="ag-modalidade-badge">
-        <i class="bi bi-calendar2-check"></i> Agendamento de Treinamento
+
+      <div class="ag-modalidade-intro">
+        <div class="ag-modalidade-eyebrow">
+          <span class="rule" aria-hidden="true"></span>
+          <span>EST. 01 <b>/ Modo de atendimento</b></span>
+        </div>
+
+        <h1 class="ag-modalidade-headline">
+          Como prefere ser <em>atendido</em>?
+        </h1>
+
+        <p class="ag-modalidade-sub">
+          Você está iniciando o agendamento de um treinamento ou
+          demonstração técnica. Selecione o modo abaixo para definir
+          o próximo passo.
+        </p>
+
+        <div class="ag-modalidade-meta">
+          <span>Passo</span><b>01 / 03</b>
+          <span>Tempo médio</span><b>~ 2 min</b>
+          <span>Confirmação</span><b>por e-mail</b>
+        </div>
       </div>
-      <h1 class="ag-modalidade-headline">Como você quer ser atendido?</h1>
-      <p class="ag-modalidade-sub">Escolha a modalidade do seu treinamento para começar.</p>
 
       <div class="ag-modalidade-grid">
         <button type="button" class="ag-modalidade-card presencial"
                 onclick="escolherModalidade('presencial')">
+          <div class="ag-modalidade-card-stn">STN · PT-01</div>
           <div class="ag-modalidade-icon">
             <i class="bi bi-buildings"></i>
           </div>
           <div class="ag-modalidade-titulo">Presencial</div>
           <div class="ag-modalidade-desc">
-            Atendimento em uma de nossas unidades CPE.
-            Você escolhe a unidade no próximo passo.
+            Em uma das unidades CPE Tecnologia. Você escolhe a sede
+            no próximo passo, com endereço e horários.
           </div>
           <div class="ag-modalidade-cta">
             Escolher unidade <i class="bi bi-arrow-right"></i>
@@ -45,34 +71,35 @@
 
         <button type="button" class="ag-modalidade-card online"
                 onclick="escolherModalidade('online')">
+          <div class="ag-modalidade-card-stn">STN · OL-02</div>
           <div class="ag-modalidade-icon">
             <i class="bi bi-camera-video"></i>
           </div>
           <div class="ag-modalidade-titulo">Online</div>
           <div class="ag-modalidade-desc">
-            Atendimento remoto por videochamada,
-            sem precisar ir até uma unidade.
+            Atendimento remoto por videochamada ao vivo, sem precisar
+            ir até uma unidade. Link enviado por e-mail.
           </div>
           <div class="ag-modalidade-cta">
-            Agendar online <i class="bi bi-arrow-right"></i>
+            Iniciar agendamento <i class="bi bi-arrow-right"></i>
           </div>
         </button>
-      </div>
 
-      <p class="ag-modalidade-footer">
-        <i class="bi bi-shield-check"></i>
-        Suas informações são tratadas com total confidencialidade.
-      </p>
+        <p class="ag-modalidade-footer">
+          <i class="bi bi-shield-check"></i>
+          Dados tratados com confidencialidade
+        </p>
 
-      <!-- Badge: aparece SÓ se o visitante for funcionário CPE logado.
-           Mostra que ele tem acesso adicional aos cursos (privados). -->
-      <div id="cpeFuncBadge" style="display:none;margin-top:18px;text-align:center">
-        <div style="display:inline-flex;align-items:center;gap:8px;
-                    background:#1A1A1A;color:#FFC107;padding:8px 16px;
-                    border-radius:999px;font-size:.85rem;font-weight:600;
-                    box-shadow:0 4px 12px rgba(0,0,0,.15)">
-          <i class="bi bi-shield-fill-check"></i>
-          Logado como funcionário CPE — você também vê <strong>cursos e drones privados</strong>
+        <!-- Badge: visível só pra funcionário CPE logado (cursos privados). -->
+        <div id="cpeFuncBadge" style="display:none">
+          <div style="display:inline-flex;align-items:center;gap:8px;
+                      background:#1A1A1A;color:#FFC107;padding:8px 16px;
+                      font-family:var(--ff-mono);font-size:.7rem;
+                      letter-spacing:.1em;text-transform:uppercase;
+                      font-weight:600;border-left:2px solid #FFC107">
+            <i class="bi bi-shield-fill-check"></i>
+            Funcionário CPE · cursos e drones privados liberados
+          </div>
         </div>
       </div>
     </div>
@@ -85,18 +112,21 @@
         <a href="#" onclick="voltarModalidade(); return false;" class="ag-voltar-link">
           <i class="bi bi-arrow-left"></i> Trocar modalidade
         </a>
-        <h1>CPE Tecnologia</h1>
+        <h1>Unidades CPE no Brasil</h1>
       </div>
     </div>
     <div class="ag-content">
-      <div class="ag-section-title">Escolha a unidade</div>
+      <div class="ag-section-title">
+        <span>EST. 02 <b>/ Escolha de unidade</b></span>
+      </div>
       <div class="ag-search">
         <i class="bi bi-search"></i>
-        <input type="text" id="buscaAgenda" placeholder="Busca por unidade ou serviço..."
+        <input type="search" id="buscaAgenda" autocomplete="off"
+               placeholder="Buscar por unidade, serviço ou termo…"
                oninput="renderCards()">
       </div>
       <div class="ag-cards" id="cardsAgendas">
-        <div class="ag-loading">Carregando unidades...</div>
+        <div class="ag-loading">Carregando unidades…</div>
       </div>
     </div>
   </section>
@@ -151,17 +181,18 @@
   <section id="viewForm" style="display:none">
     <div class="ag-content">
       <div class="ag-form-wrap">
-        <div class="ag-form-title">Novo Agendamento</div>
+        <div class="ag-form-title-eyebrow">EST. 03 / Agendamento</div>
+        <h2 class="ag-form-title">Novo agendamento</h2>
 
         <div class="ag-steps">
           <div class="ag-step active" id="step1">
-            <div class="ag-step-num">1</div>
-            <div class="ag-step-label">Dados do Agendamento</div>
+            <div class="ag-step-num">01</div>
+            <div class="ag-step-label">Dados</div>
           </div>
           <div class="ag-step-line"></div>
           <div class="ag-step" id="step2">
-            <div class="ag-step-num">2</div>
-            <div class="ag-step-label">Informações Adicionais</div>
+            <div class="ag-step-num">02</div>
+            <div class="ag-step-label">Identificação</div>
           </div>
         </div>
 
@@ -169,7 +200,7 @@
 
         <!-- ===== PASSO 1 ===== -->
         <div id="passo1">
-          <div class="ag-step-heading">Dados do Agendamento</div>
+          <div class="ag-step-heading" data-stn="STN · 01">Dados do agendamento</div>
           <div class="ag-fieldset">
             <div class="ag-field">
               <label>Agenda <span class="ag-req">*</span></label>
@@ -228,7 +259,7 @@
 
         <!-- ===== PASSO 2 ===== -->
         <div id="passo2" style="display:none">
-          <div class="ag-step-heading">Informações Adicionais</div>
+          <div class="ag-step-heading" data-stn="STN · 02">Identificação</div>
           <div class="ag-fieldset">
             <div class="ag-field">
               <label>Nome completo <span class="ag-req">*</span></label>
@@ -255,7 +286,7 @@
             </div>
           </div>
 
-          <div class="ag-step-heading">Dados Adicionais</div>
+          <div class="ag-step-heading" data-stn="STN · 02b">Dados adicionais</div>
           <div class="ag-fieldset">
             <div class="ag-field" id="boxEquipamentos">
               <label>Equipamento <span class="ag-req">*</span></label>
@@ -302,6 +333,6 @@
     </div>
   </section>
 
-  <script src="/SistemaCPE/web/assests/js/agendar.js?v=2026-06-05"></script>
+  <script src="/SistemaCPE/web/assests/js/agendar.js?v=2026-06-16"></script>
 </body>
 </html>

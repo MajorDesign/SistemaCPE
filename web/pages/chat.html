@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Chat — CPE Control</title>
 
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
 
@@ -28,10 +28,11 @@
 
     body {
       margin: 0;
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'DM Sans', system-ui, sans-serif;
       background: var(--chat-bg-3);
       color: var(--chat-text);
       overflow: hidden;
+      -webkit-font-smoothing: antialiased;
     }
 
     /* Chat ocupa a tela inteira — esconde navbar/sidebar do sistema (o
@@ -351,7 +352,7 @@
     .msg-group { display: flex; gap: 12px; }
     .msg-avatar {
       width: 38px; height: 38px; border-radius: 50%;
-      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      background: #2B2B2B; color: var(--chat-accent); border: 1px solid #3A3A3A;
       color: #fff; display: flex; align-items: center; justify-content: center;
       font-weight: 700; font-size: 0.85rem; flex-shrink: 0;
     }
@@ -424,7 +425,7 @@
     .member-item:hover { background: #2A2A2A; color: var(--chat-text); }
     .member-avatar {
       width: 30px; height: 30px; border-radius: 50%;
-      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      background: #2B2B2B; color: var(--chat-accent); border: 1px solid #3A3A3A;
       color: #fff; display: flex; align-items: center; justify-content: center;
       font-weight: 700; font-size: 0.72rem;
       position: relative; flex-shrink: 0;
@@ -711,7 +712,7 @@
     }
     .chat-mention-item .av {
       width: 26px; height: 26px; border-radius: 50%;
-      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      background: #2B2B2B; color: var(--chat-accent); border: 1px solid #3A3A3A;
       color: #fff; font-weight: 700; font-size: 0.72rem;
       display: flex; align-items: center; justify-content: center;
     }
@@ -971,7 +972,7 @@
     .call-modal .call-avatar {
       width: 110px; height: 110px; border-radius: 50%;
       margin: 12px auto;
-      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      background: #2B2B2B; color: var(--chat-accent); border: 1px solid #3A3A3A;
       color: #fff; font-size: 2.6rem; font-weight: 700;
       display: flex; align-items: center; justify-content: center;
       animation: pulseAvatar 1.6s ease-in-out infinite;
@@ -1065,7 +1066,7 @@
     .voice-peer-card.self { border-color: var(--chat-accent); }
     .voice-peer-card .avatar-big {
       width: 80px; height: 80px; border-radius: 50%;
-      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      background: #2B2B2B; color: var(--chat-accent); border: 1px solid #3A3A3A;
       color: #fff; font-weight: 700; font-size: 1.8rem;
       display: flex; align-items: center; justify-content: center;
     }
@@ -1292,7 +1293,7 @@
     .chat-user-row input[type="checkbox"] { accent-color: var(--chat-accent); }
     .chat-user-row .av {
       width: 28px; height: 28px; border-radius: 50%;
-      background: linear-gradient(135deg, #6366F1, #8B5CF6);
+      background: #2B2B2B; color: var(--chat-accent); border: 1px solid #3A3A3A;
       color: #fff; font-weight: 700; font-size: 0.72rem;
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
@@ -1321,7 +1322,7 @@
       font-weight: 600; text-transform: uppercase;
     }
     .chat-member-row .role-badge.owner { background: var(--chat-accent); color: #1A1A1A; }
-    .chat-member-row .role-badge.admin { background: #6366F1; color: #fff; }
+    .chat-member-row .role-badge.admin { background: var(--chat-accent-dim); color: #1A1A1A; }
     .chat-member-row .remove-btn {
       background: transparent; border: none; color: #DC2626;
       cursor: pointer; padding: 4px 8px; border-radius: 4px;
@@ -1335,6 +1336,156 @@
       .chat-members { display: none; }
       .chat-app.mobile-show-sidebar .chat-sidebar { display: flex; }
       .chat-app.mobile-show-sidebar .chat-main { display: none; }
+    }
+
+    /* =================================================================
+       REFRESH CPE — Signature do design system (skill /frontend-design)
+       Refinos finais: rulers amarelos nos headers, hover/active CPE,
+       typography técnica nas labels de seção.
+       ================================================================= */
+
+    /* Header "USUÁRIOS DO SISTEMA" — ruler amarelo (signature CPE) */
+    .chat-members-header {
+      position: relative;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: .66rem !important;
+      letter-spacing: .18em !important;
+      color: #B8870C !important;
+      padding: 14px 16px 12px !important;
+      border-bottom: none !important;
+    }
+    .chat-members-header::after {
+      content: '';
+      position: absolute; left: 0; right: 0; bottom: 0;
+      height: 2px;
+      background: linear-gradient(90deg,
+        var(--chat-accent) 0%, var(--chat-accent) 22%,
+        transparent 22%, transparent 100%);
+    }
+
+    /* Categorias na sidebar (CANAIS / CANAIS DE VOZ / MENSAGENS DIRETAS) */
+    .chat-category {
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-size: .64rem !important;
+      letter-spacing: .18em !important;
+      color: #B8870C !important;
+      padding: 14px 14px 6px !important;
+      position: relative;
+    }
+    .chat-category:hover { color: var(--chat-accent) !important; }
+    .chat-category::after {
+      content: '';
+      position: absolute;
+      left: 14px; bottom: 2px;
+      width: 18px; height: 1px;
+      background: var(--chat-accent);
+      opacity: .4;
+    }
+
+    /* Header da sidebar (Voltar ao sistema + Reunião) */
+    .chat-sidebar-header {
+      position: relative;
+    }
+    .chat-sidebar-header::after {
+      content: '';
+      position: absolute; left: 0; right: 0; bottom: 0;
+      height: 2px;
+      background: linear-gradient(90deg,
+        var(--chat-accent) 0%, var(--chat-accent) 28%,
+        transparent 28%, transparent 100%);
+    }
+
+    /* Avatar dos membros: risca amarela embaixo (signature, como users.html) */
+    .member-avatar {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-weight: 700 !important;
+      letter-spacing: 0;
+    }
+    .member-avatar::before {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 2px; right: 2px;
+      height: 1px;
+      background: var(--chat-accent);
+      opacity: .4;
+      border-radius: 2px;
+    }
+
+    /* member-item hover: borda lateral amarela (estilo "selecionado") */
+    .member-item {
+      position: relative;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      transition: background .12s, color .12s;
+    }
+    .member-item::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 50%; transform: translateY(-50%);
+      width: 2px; height: 0;
+      background: var(--chat-accent);
+      transition: height .15s;
+    }
+    .member-item:hover::before { height: 22px; }
+
+    /* Refino do "Selecione um canal" central (state vazio) */
+    .chat-main {
+      font-family: 'DM Sans', system-ui, sans-serif;
+    }
+
+    /* Refino das mensagens — tipografia técnica */
+    .msg-author {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      letter-spacing: -.005em;
+    }
+
+    /* Botão "Reunião" no header sidebar — confirmar CPE */
+    .chat-sidebar-header .btn,
+    .chat-sidebar-header button[onclick*="reun"i],
+    .chat-sidebar-header button[onclick*="meet"i] {
+      background: var(--chat-accent) !important;
+      color: #1A1A1A !important;
+      border: 1px solid var(--chat-accent) !important;
+      border-radius: 3px !important;
+      font-family: 'DM Sans', system-ui, sans-serif !important;
+      font-weight: 700 !important;
+      font-size: .8rem !important;
+      letter-spacing: .02em !important;
+      padding: 6px 12px !important;
+      transition: background .15s, transform .15s, box-shadow .15s;
+    }
+    .chat-sidebar-header button[onclick*="reun"i]:hover,
+    .chat-sidebar-header button[onclick*="meet"i]:hover {
+      background: #FFD54A !important;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(255, 193, 7, .35);
+    }
+
+    /* Scrollbar customizada CPE em todas as listas */
+    .chat-members-list::-webkit-scrollbar,
+    .chat-channels-list::-webkit-scrollbar,
+    .chat-main::-webkit-scrollbar {
+      width: 6px;
+    }
+    .chat-members-list::-webkit-scrollbar-track,
+    .chat-channels-list::-webkit-scrollbar-track,
+    .chat-main::-webkit-scrollbar-track {
+      background: var(--chat-bg-1);
+    }
+    .chat-members-list::-webkit-scrollbar-thumb,
+    .chat-channels-list::-webkit-scrollbar-thumb,
+    .chat-main::-webkit-scrollbar-thumb {
+      background: #353535;
+      border-radius: 2px;
+    }
+    .chat-members-list::-webkit-scrollbar-thumb:hover,
+    .chat-channels-list::-webkit-scrollbar-thumb:hover,
+    .chat-main::-webkit-scrollbar-thumb:hover {
+      background: var(--chat-accent-dim);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .member-item::before,
+      .chat-sidebar-header button:hover { transition: none !important; }
     }
   </style>
 
@@ -2182,7 +2333,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/SistemaCPE/web/assests/js/nav.js"></script>
+<script src="/SistemaCPE/web/assests/js/nav.js?v=2026-06-17"></script>
 
 <script>
 /* =====================================================================
@@ -2710,7 +2861,7 @@ function _renderMembrosServer() {
               ${_esc(r.nome)}</span>`;
     }).join('');
     return `<div class="chat-member-row">
-      <div class="av" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#8B5CF6);
+      <div class="av" style="width:28px;height:28px;border-radius:50%;background:#2B2B2B;color:var(--chat-accent);border:1px solid #3A3A3A;
                 color:#fff;font-weight:700;font-size:0.72rem;display:flex;align-items:center;justify-content:center;overflow:hidden">
         ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
       </div>
@@ -2964,7 +3115,7 @@ function _renderCargoMembros() {
   box.innerHTML = _cargoMembrosCache.map(m => `
     <div style="display:flex;align-items:center;gap:8px;padding:5px 8px;
                 border-bottom:1px solid var(--chat-border);font-size:0.85rem">
-      <div style="width:24px;height:24px;border-radius:50%;background:#6366F1;color:#fff;
+      <div style="width:24px;height:24px;border-radius:50%;background:#2B2B2B;color:var(--chat-accent);border:1px solid #3A3A3A;
                   display:flex;align-items:center;justify-content:center;font-size:0.7rem;
                   font-weight:700;overflow:hidden">
         ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
@@ -3019,7 +3170,7 @@ async function _filtrarMembrosPraCargo(q) {
     <div onclick="atribuirCargoAoUser(${m.user_id})"
          style="padding:6px 8px;cursor:pointer;display:flex;align-items:center;gap:8px;
                 border-bottom:1px solid var(--chat-border);font-size:0.85rem">
-      <div style="width:22px;height:22px;border-radius:50%;background:#6366F1;color:#fff;
+      <div style="width:22px;height:22px;border-radius:50%;background:#2B2B2B;color:var(--chat-accent);border:1px solid #3A3A3A;
                   display:flex;align-items:center;justify-content:center;font-size:0.65rem;
                   font-weight:700;overflow:hidden">
         ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
@@ -3638,7 +3789,7 @@ function _renderItemVoz(c) {
         <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(p.name)}</span>
         ${p.mic_on ? '<i class="bi bi-mic-fill" style="color:#10B981;font-size:0.75rem"></i>'
                    : '<i class="bi bi-mic-mute-fill" style="color:#EF4444;font-size:0.75rem"></i>'}
-        ${p.cam_on ? '<i class="bi bi-camera-video-fill" style="color:#3B82F6;font-size:0.75rem"></i>' : ''}
+        ${p.cam_on ? '<i class="bi bi-camera-video-fill" style="color:var(--chat-accent);font-size:0.75rem"></i>' : ''}
         ${p.share_on ? '<i class="bi bi-display-fill" style="color:#A855F7;font-size:0.75rem"></i>' : ''}
       </div>`).join('');
   }
@@ -4202,7 +4353,7 @@ async function _renderMembrosDoCanal(c) {
       const roleBadge = m.role_no_canal === 'owner'
         ? '<i class="bi bi-star-fill" style="color:var(--chat-accent);font-size:0.65rem" title="Dono"></i>'
         : m.role_no_canal === 'admin'
-        ? '<i class="bi bi-shield-fill" style="color:#3B82F6;font-size:0.65rem" title="Admin"></i>'
+        ? '<i class="bi bi-shield-fill" style="color:var(--chat-accent);font-size:0.65rem" title="Admin"></i>'
         : '';
       const voiceIcon = inVoice
         ? '<i class="bi bi-mic-fill" style="color:#10B981;font-size:0.75rem" title="Na sala de voz"></i>'
@@ -5022,7 +5173,7 @@ function _renderMembrosConfig() {
                     : m.role_no_canal === 'admin' ? 'admin' : '';
     const canRemove = podeRemover && m.role_no_canal !== 'owner' && m.user_id !== _self.id;
     return `<div class="chat-member-row">
-      <div class="av" style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#8B5CF6);
+      <div class="av" style="width:28px;height:28px;border-radius:50%;background:#2B2B2B;color:var(--chat-accent);border:1px solid #3A3A3A;
                 color:#fff;font-weight:700;font-size:0.72rem;display:flex;align-items:center;justify-content:center;overflow:hidden">
         ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
       </div>

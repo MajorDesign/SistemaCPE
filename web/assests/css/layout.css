@@ -106,9 +106,20 @@
     height: var(--navbar-height);
     background: var(--navbar-bg);
     z-index: 1000;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 4px 14px rgba(15, 20, 25, 0.16);
     width: 100%;
-    border-bottom: 3px solid var(--navbar-border);
+    border-bottom: 1px solid rgba(255, 193, 7, 0.12);
+  }
+  /* Régua técnica amarela embaixo da navbar — sinaliza "norte" da prancha.
+     14% amarelo + 86% transparente. Substitui a borda chapada de 3px. */
+  #navbar-container::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -2px;
+    height: 2px; pointer-events: none;
+    background: linear-gradient(90deg,
+      var(--primary) 0%, var(--primary) 14%,
+      transparent 14%, transparent 100%);
   }
   
   .navbar-top {
@@ -273,10 +284,10 @@
     height: 100%;
     overflow: hidden;
     background-color: var(--sidebar-bg);
-    border-right: 2px solid var(--primary);
+    border-right: 1px solid rgba(0, 0, 0, 0.06);
     z-index: 100;
     position: relative;
-    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 4px 0 18px rgba(15, 20, 25, 0.04);
   }
   
   .sidebar-wrapper {
@@ -386,30 +397,44 @@
     color: var(--sidebar-text);
     text-decoration: none;
     font-size: 0.9rem;
-    transition: var(--transition-fast);
+    transition: background-color .18s, color .18s, padding-left .18s;
     white-space: nowrap;
     margin: 0 0.5rem;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
-    border-left: 3px solid transparent;
     font-weight: 500;
+    position: relative;
   }
-  
+  /* Hairline amarelo vertical à esquerda — animado scaleY (cresce de cima
+     pra baixo no hover/ativo). Substitui o border-left chapado + box-shadow.
+     Sinaliza item ativo de forma elegante, técnica e silenciosa. */
+  .menu-link::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 10px; bottom: 10px;
+    width: 3px; background: var(--primary);
+    transform: scaleY(0); transform-origin: center;
+    transition: transform .2s ease;
+    border-radius: 1px;
+  }
+
   .menu-link:hover {
     background-color: var(--sidebar-hover);
     color: var(--primary);
+    padding-left: 1rem;
   }
-  
+  .menu-link:hover::before { transform: scaleY(.5); }
+
   .menu-item.active .menu-link {
-    background-color: rgba(255, 193, 7, 0.15);
+    background-color: rgba(255, 193, 7, 0.10);
     color: var(--primary);
-    border-left-color: var(--primary);
     font-weight: 700;
-    box-shadow: inset -2px 0 0 var(--primary);
+    padding-left: 1rem;
   }
-  
+  .menu-item.active .menu-link::before { transform: scaleY(1); }
+
   .menu-item.active .menu-link:hover {
-    background-color: rgba(255, 193, 7, 0.25);
+    background-color: rgba(255, 193, 7, 0.18);
   }
   
   .menu-icon {

@@ -133,33 +133,60 @@ function renderCards() {
     .filter(a => _ofertasDe(a).length > 0)
     .filter(a => {
       if (!busca) return true;
-      const naOferta = _ofertasDe(a).some(s => s.nome.toLowerCase().includes(busca));
-      return a.nome.toLowerCase().includes(busca) || naOferta;
+      // Busca em multiplos campos: nome da unidade, descricao da unidade,
+      // e em cada oferta (nome + descricao). Cobre termos que o usuario
+      // ve no card, na topbar (geomensura/drones/gnss) e no detalhe.
+      const hayUnidade =
+        (a.nome || '').toLowerCase().includes(busca) ||
+        (a.descricao || '').toLowerCase().includes(busca);
+      const hayOferta = _ofertasDe(a).some(s =>
+        (s.nome || '').toLowerCase().includes(busca) ||
+        (s.descricao || '').toLowerCase().includes(busca));
+      return hayUnidade || hayOferta;
     });
   const box = el('cardsAgendas');
   if (!lista.length) {
     box.innerHTML = '<div class="ag-loading">Nenhuma unidade encontrada.</div>';
     return;
   }
-  box.innerHTML = lista.map(a => {
+  box.innerHTML = lista.map((a, idx) => {
     const ofertas = _ofertasDe(a);
     const total = ofertas.length;
-    const btnSrv = total
-      ? `<button type="button" class="ag-card-srv-btn"
-            onclick="abrirModalServicos(${a.id})">
-          <i class="bi bi-list-check"></i>
-          <span>Ver ${_labelOferta(total)}</span>
-          <i class="bi bi-chevron-right ag-card-srv-chev"></i>
-         </button>`
-      : `<div class="ag-card-srv-empty">
-          <i class="bi bi-info-circle"></i> Nenhum atendimento disponível
-         </div>`;
-    return `<div class="ag-card">
+    const stn = `STN · UN-${String(idx + 1).padStart(2, '0')}`;
+    if (total === 0) {
+      // Sem ofertas: card nao clicavel, atalho de "agendar nesta unidade" como CTA
+      return `<div class="ag-card ag-card-vazia">
+        <div class="ag-card-stn">${stn}</div>
+        <div class="ag-card-nome">${esc(a.nome)}</div>
+        ${a.descricao ? `<div class="ag-card-desc">${esc(a.descricao)}</div>` : ''}
+        <div class="ag-card-srv-empty">
+          <i class="bi bi-info-circle"></i> Sem atendimentos cadastrados
+        </div>
+        <button class="ag-btn ag-btn-block" style="margin-top:14px"
+                onclick="abrirForm(${a.id})">
+          <i class="bi bi-calendar-check"></i> Agendar nesta unidade</button>
+      </div>`;
+    }
+    // Com ofertas: card INTEIRO eh clicavel -> abre modal de atendimentos.
+    // Banner amarelo no rodape mostra o numero como afirmacao de valor.
+    // Atalho discreto "Agendar direto" para quem ja sabe o que quer
+    // (chama stopPropagation pra nao abrir o modal).
+    const labelExplora = total === 1 ? 'atendimento disponível' : 'atendimentos disponíveis';
+    return `<div class="ag-card" role="button" tabindex="0"
+                 onclick="abrirModalServicos(${a.id})"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();abrirModalServicos(${a.id});}">
+      <div class="ag-card-stn">${stn}</div>
       <div class="ag-card-nome">${esc(a.nome)}</div>
       ${a.descricao ? `<div class="ag-card-desc">${esc(a.descricao)}</div>` : ''}
-      ${btnSrv}
-      <button class="ag-btn ag-btn-block" onclick="abrirForm(${a.id})">
-        <i class="bi bi-calendar-check"></i> Agendar</button>
+      <button type="button" class="ag-card-direto"
+              onclick="event.stopPropagation(); abrirForm(${a.id})">
+        Já sabe o que quer? Agendar direto <i class="bi bi-arrow-up-right"></i>
+      </button>
+      <div class="ag-card-srv-banner">
+        <span class="ag-card-srv-count">${total}</span>
+        <span class="ag-card-srv-label">${labelExplora}</span>
+        <i class="bi bi-arrow-right ag-card-srv-chev"></i>
+      </div>
     </div>`;
   }).join('');
 }
@@ -260,21 +287,84 @@ function abrirDetalheOferta(itemId, kind) {
                                    :                          'Curso';
   el('detalheTitulo').textContent = item.nome;
 
-  // body
+  // body — Hero (banner ou primeira foto) + carrossel + módulos + descrição
   const fotos = item.fotos || [];
   const videos = item.videos || [];
-  const heroFoto = fotos.length
-    ? `<img class="ag-detalhe-hero" src="${esc(fotos[0].arquivo)}" alt=""
-            onclick="abrirFotoLightbox('${esc(fotos[0].arquivo)}')">`
-    : '';
-  const galeriaSec = fotos.length > 1
+  const modulos = item.modulos || [];
+  const iconKind = kind === 'treinamento' ? 'bi-mortarboard-fill'
+                 : kind === 'drone'       ? 'bi-airplane-engines-fill'
+                 :                          'bi-pc-display';
+
+  // HERO: prioridade ao banner_url (campo dedicado); fallback pra 1a foto da galeria.
+  const heroSrc = item.banner_url || (fotos[0] && fotos[0].arquivo) || null;
+  const heroBlock = heroSrc
+    ? `<div class="ag-detalhe-hero-wrap ${item.banner_url ? 'has-banner' : ''}">
+         <img class="ag-detalhe-hero" src="${esc(heroSrc)}" alt=""
+              onclick="abrirFotoLightbox('${esc(heroSrc)}')">
+       </div>`
+    : `<div class="ag-detalhe-hero-wrap">
+         <div class="ag-detalhe-hero-placeholder"><i class="bi ${iconKind}"></i></div>
+       </div>`;
+
+  // CARROSSEL: todas as fotos da galeria (incluindo a usada como hero se NÃO houver banner_url separado).
+  // Quando há banner_url dedicado, carrossel mostra TODAS as fotos da galeria.
+  // Quando não há, o carrossel mostra a partir da SEGUNDA foto (a primeira virou hero).
+  const fotosCarrossel = item.banner_url ? fotos : fotos.slice(1);
+  const carrosselSec = fotosCarrossel.length > 0
     ? `<div class="ag-detalhe-secao">
         <div class="ag-detalhe-secao-titulo"><i class="bi bi-images"></i> Galeria</div>
-        <div class="ag-detalhe-galeria">${fotos.slice(1).map(f =>
-          `<img src="${esc(f.arquivo)}" alt="" onclick="abrirFotoLightbox('${esc(f.arquivo)}')">`
-        ).join('')}</div>
+        <div class="ag-carrossel" data-total="${fotosCarrossel.length}">
+          <div class="ag-carrossel-track">
+            ${fotosCarrossel.map((f, i) => `
+              <div class="ag-carrossel-slide" data-idx="${i}">
+                <img src="${esc(f.arquivo)}" alt="" onclick="abrirFotoLightbox('${esc(f.arquivo)}')">
+              </div>
+            `).join('')}
+          </div>
+          ${fotosCarrossel.length > 1 ? `
+            <button type="button" class="ag-carrossel-nav prev" aria-label="Anterior"
+                    onclick="carrosselNav(-1)"><i class="bi bi-chevron-left"></i></button>
+            <button type="button" class="ag-carrossel-nav next" aria-label="Próximo"
+                    onclick="carrosselNav(1)"><i class="bi bi-chevron-right"></i></button>
+            <div class="ag-carrossel-dots">
+              ${fotosCarrossel.map((_, i) => `
+                <button type="button" class="ag-carrossel-dot ${i === 0 ? 'active' : ''}"
+                        data-idx="${i}" onclick="carrosselGoto(${i})"
+                        aria-label="Foto ${i + 1}"></button>
+              `).join('')}
+            </div>
+          ` : ''}
+        </div>
       </div>`
     : '';
+
+  // MÓDULOS: lista numerada, expansível.
+  const modulosSec = modulos.length
+    ? `<div class="ag-detalhe-secao">
+        <div class="ag-detalhe-secao-titulo">
+          <i class="bi bi-list-ol"></i> Conteúdo programático
+          <span class="ag-detalhe-secao-aside">${modulos.length} módulo${modulos.length === 1 ? '' : 's'}</span>
+        </div>
+        <div class="ag-modulos">${modulos.map((m, i) => {
+          const dur = m.duracao_min ? `<span class="ag-modulo-dur"><i class="bi bi-clock"></i> ${m.duracao_min} min</span>` : '';
+          const topicos = (m.topicos && m.topicos.length)
+            ? `<ul class="ag-modulo-topicos">${m.topicos.map(t => `<li><i class="bi bi-check2"></i>${esc(t)}</li>`).join('')}</ul>`
+            : '';
+          const desc = m.descricao ? `<div class="ag-modulo-desc">${esc(m.descricao)}</div>` : '';
+          return `<div class="ag-modulo">
+            <div class="ag-modulo-head">
+              <div class="ag-modulo-num">${String(i + 1).padStart(2, '0')}</div>
+              <div class="ag-modulo-info">
+                <div class="ag-modulo-titulo">${esc(m.titulo)}</div>
+                ${dur}
+              </div>
+            </div>
+            ${(desc || topicos) ? `<div class="ag-modulo-body">${desc}${topicos}</div>` : ''}
+          </div>`;
+        }).join('')}</div>
+      </div>`
+    : '';
+
   const videosSec = videos.length
     ? `<div class="ag-detalhe-secao">
         <div class="ag-detalhe-secao-titulo"><i class="bi bi-camera-video"></i> Vídeos</div>
@@ -294,16 +384,21 @@ function abrirDetalheOferta(itemId, kind) {
     : '';
 
   el('detalheBody').innerHTML = `
-    ${heroFoto}
-    <div class="ag-detalhe-meta">
-      <span class="ag-oferta-meta"><i class="bi bi-clock"></i> ${item.duracao_min} min</span>
-      ${item.instrutor ? `<span class="ag-oferta-meta"><i class="bi bi-person-badge"></i> Instrutor: ${esc(item.instrutor)}</span>` : ''}
-      ${item.vendedor  ? `<span class="ag-oferta-meta"><i class="bi bi-person-vcard"></i> Vendedor: ${esc(item.vendedor)}</span>` : ''}
+    ${heroBlock}
+    <div class="ag-detalhe-content">
+      <div class="ag-detalhe-meta">
+        <span class="ag-oferta-meta"><i class="bi bi-clock"></i> ${item.duracao_min} min</span>
+        ${item.instrutor ? `<span class="ag-oferta-meta"><i class="bi bi-person-badge"></i> ${esc(item.instrutor)}</span>` : ''}
+        ${item.vendedor  ? `<span class="ag-oferta-meta"><i class="bi bi-person-vcard"></i> ${esc(item.vendedor)}</span>` : ''}
+      </div>
+      ${descSec}
+      ${modulosSec}
+      ${carrosselSec}
+      ${videosSec}
     </div>
-    ${descSec}
-    ${galeriaSec}
-    ${videosSec}
   `;
+  // Inicializa carrossel (auto-play + estado interno)
+  _inicializarCarrossel();
 
   // botao "Agendar este" — fecha tudo e abre o form com a oferta pre-selecionada
   const labelKind = kind === 'treinamento' ? 'treinamento'
@@ -320,9 +415,62 @@ function abrirDetalheOferta(itemId, kind) {
   el('modalDetalhe').classList.add('show');
 }
 
+/* ===== Carrossel de fotos do detalhe =====
+   Setas + dots + auto-play (5s, pausa quando o usuário interage). */
+let _carEl = null;
+let _carIdx = 0;
+let _carTotal = 0;
+let _carTimer = null;
+
+function _inicializarCarrossel() {
+  if (_carTimer) { clearInterval(_carTimer); _carTimer = null; }
+  _carEl = document.querySelector('#detalheBody .ag-carrossel');
+  if (!_carEl) { _carIdx = 0; _carTotal = 0; return; }
+  _carTotal = parseInt(_carEl.dataset.total || '0', 10);
+  _carIdx = 0;
+  _aplicarCarrossel();
+  if (_carTotal > 1) {
+    _carTimer = setInterval(() => carrosselNav(1, /*auto*/true), 5000);
+    // Pausa auto-play quando o usuário interage
+    _carEl.addEventListener('mouseenter', _pausarCarrossel);
+    _carEl.addEventListener('mouseleave', _retomarCarrossel);
+  }
+}
+function _pausarCarrossel() {
+  if (_carTimer) { clearInterval(_carTimer); _carTimer = null; }
+}
+function _retomarCarrossel() {
+  if (!_carTimer && _carTotal > 1) {
+    _carTimer = setInterval(() => carrosselNav(1, true), 5000);
+  }
+}
+function _aplicarCarrossel() {
+  if (!_carEl) return;
+  const track = _carEl.querySelector('.ag-carrossel-track');
+  if (track) track.style.transform = `translateX(-${_carIdx * 100}%)`;
+  _carEl.querySelectorAll('.ag-carrossel-dot').forEach((d, i) => {
+    d.classList.toggle('active', i === _carIdx);
+  });
+}
+function carrosselNav(delta, auto) {
+  if (!_carEl || _carTotal < 2) return;
+  if (!auto) _pausarCarrossel();  // interação manual reseta auto-play
+  _carIdx = (_carIdx + delta + _carTotal) % _carTotal;
+  _aplicarCarrossel();
+  if (!auto) _retomarCarrossel();
+}
+function carrosselGoto(idx) {
+  if (!_carEl || idx < 0 || idx >= _carTotal) return;
+  _pausarCarrossel();
+  _carIdx = idx;
+  _aplicarCarrossel();
+  _retomarCarrossel();
+}
+
 function fecharDetalhe(ev) {
   if (ev && ev.target && ev.target.id !== 'modalDetalhe') return;
   el('modalDetalhe').classList.remove('show');
+  if (_carTimer) { clearInterval(_carTimer); _carTimer = null; }
 }
 
 function abrirFotoLightbox(src) {

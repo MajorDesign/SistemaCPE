@@ -7,9 +7,9 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/settings.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/settings.css?v=2026-06-16cpe">
 
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-06-03"></script>
@@ -101,8 +101,23 @@
           <div id="perfilAlert"></div>
 
           <div class="cfg-profile-header">
-            <div class="cfg-avatar" id="profileAvatar">?</div>
-            <div>
+            <div class="cfg-avatar-wrap">
+              <div class="cfg-avatar" id="profileAvatar" onclick="document.getElementById('avatarInput').click()" title="Clique para trocar a foto">
+                <span id="avatarInitials">?</span>
+                <img id="avatarImg" alt="" style="display:none">
+                <div class="cfg-avatar-overlay">
+                  <i class="bi bi-camera-fill"></i>
+                </div>
+              </div>
+              <input type="file" id="avatarInput" accept="image/jpeg,image/png,image/webp,image/gif" hidden onchange="onAvatarFileChange(event)">
+              <div class="cfg-avatar-actions">
+                <button type="button" class="cfg-btn cfg-btn-secondary cfg-btn-sm" onclick="document.getElementById('avatarInput').click()" id="btnTrocarFoto">
+                  <i class="bi bi-camera"></i> <span>Trocar foto</span>
+                </button>
+              </div>
+              <p class="cfg-avatar-hint">JPG, PNG, WEBP ou GIF — até 2 MB</p>
+            </div>
+            <div class="cfg-profile-info">
               <div class="cfg-profile-name" id="profileName">—</div>
               <div class="cfg-profile-email" id="profileEmail">—</div>
               <span class="cfg-role-badge" id="profileRole">—</span>
@@ -396,16 +411,23 @@
     try {
       const r = await fetch(`${API_BASE_URL}/api/users/${currentUser.id}`);
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      const u = await r.json();
+      const raw = await r.json();
+      // Backend pode retornar {success, user: {...}} OU o user direto.
+      // Lê resiliente pra cobrir as duas formas.
+      const u = (raw && raw.user) ? raw.user : raw;
+      console.log('[PERFIL/LOAD] resposta:', raw);
 
       currentUser = { ...currentUser, ...u };
       localStorage.setItem('cpe_user', JSON.stringify(currentUser));
 
       const iniciais = (u.name || '?').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-      document.getElementById('profileAvatar').textContent = iniciais;
+      document.getElementById('avatarInitials').textContent = iniciais;
       document.getElementById('profileName').textContent   = u.name  || '—';
       document.getElementById('profileEmail').textContent  = u.email || '—';
       document.getElementById('profileRole').textContent   = traduzirRole(u.role);
+
+      // Avatar: usa avatar_url do banco se houver, senão mostra iniciais
+      renderAvatar(u.avatar_url);
 
       document.getElementById('perfNome').value     = u.name     || '';
       document.getElementById('perfEmail').value    = u.email    || '';
@@ -414,6 +436,115 @@
       showAlert('perfilAlert', 'Erro ao carregar perfil: ' + err.message);
     }
   }
+
+  // ============================================================
+  // AVATAR — upload, preview e troca de foto
+  // ============================================================
+  function renderAvatar(avatarUrl) {
+    const img = document.getElementById('avatarImg');
+    const initials = document.getElementById('avatarInitials');
+    if (avatarUrl) {
+      // cache-buster pra forçar atualização após upload
+      const url = avatarUrl + (avatarUrl.includes('?') ? '' : `?t=${Date.now()}`);
+      img.src = url;
+      img.style.display = 'block';
+      initials.style.display = 'none';
+    } else {
+      img.style.display = 'none';
+      img.src = '';
+      initials.style.display = '';
+    }
+  }
+
+  function _getToken() {
+    return localStorage.getItem('cpe_token')
+        || sessionStorage.getItem('cpe_token')
+        || '';
+  }
+
+  async function onAvatarFileChange(e) {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    // Validações cliente (espelham as do backend)
+    const okTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (!okTypes.includes(file.type)) {
+      showAlert('perfilAlert', 'Formato não suportado. Use JPG, PNG, WEBP ou GIF.');
+      e.target.value = '';
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showAlert('perfilAlert', 'Imagem maior que 2 MB. Escolha uma menor.');
+      e.target.value = '';
+      return;
+    }
+
+    // Preview imediato (DataURL) enquanto sobe
+    const reader = new FileReader();
+    reader.onload = () => {
+      document.getElementById('avatarImg').src = reader.result;
+      document.getElementById('avatarImg').style.display = 'block';
+      document.getElementById('avatarInitials').style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+
+    // Upload
+    const btn = document.getElementById('btnTrocarFoto');
+    const oldHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> <span>Enviando...</span>';
+
+    const url = `${API_BASE_URL}/api/chat/me/avatar`;
+    const token = _getToken();
+    console.log('[AVATAR/UPLOAD] →', url);
+    console.log('[AVATAR/UPLOAD]   file:', file.name, file.type, file.size, 'bytes');
+    console.log('[AVATAR/UPLOAD]   token presente?', !!token, token ? '(len=' + token.length + ')' : '');
+
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const headers = {};
+      if (token) headers['X-Auth-Token'] = token;
+
+      const r = await fetch(url, {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: fd,
+      });
+      console.log('[AVATAR/UPLOAD] ← status', r.status, r.statusText);
+
+      // Lê body como texto primeiro (sobrevive a resposta vazia/HTML)
+      const raw = await r.text();
+      console.log('[AVATAR/UPLOAD] ← body:', raw.substring(0, 300));
+      let data = {};
+      try { data = JSON.parse(raw); } catch { /* ignora se não for JSON */ }
+
+      if (!r.ok) {
+        throw new Error(data.detail || (raw && raw.substring(0, 120)) || 'HTTP ' + r.status);
+      }
+      if (!data.success || !data.avatar_url) {
+        throw new Error('Resposta sem avatar_url: ' + raw.substring(0, 120));
+      }
+
+      // Atualiza estado local
+      currentUser.avatar_url = data.avatar_url;
+      localStorage.setItem('cpe_user', JSON.stringify(currentUser));
+      renderAvatar(data.avatar_url);
+      cfgToast('Foto atualizada!');
+      console.log('[AVATAR/UPLOAD] ✓ salvo em', data.avatar_url);
+    } catch (err) {
+      console.error('[AVATAR/UPLOAD] ✗', err);
+      showAlert('perfilAlert', 'Erro ao enviar foto: ' + err.message);
+      // Reverte preview pro estado anterior
+      renderAvatar(currentUser.avatar_url || null);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = oldHtml;
+      e.target.value = '';
+    }
+  }
+
 
   function traduzirRole(role) {
     const mapa = { ADMIN: 'Administrador', TI: 'TI', USER: 'Usuário', RESPONSAVEL_GRUPO: 'Responsável de Grupo' };

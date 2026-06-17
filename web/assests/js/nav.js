@@ -209,11 +209,17 @@ function renderNavbar() {
     }
   }
 
-  const initials = userData.name 
+  const initials = userData.name
     ? userData.name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2)
     : "V";
 
   const userName = userData.name || "Visitante";
+
+  // Avatar: se o user tem foto salva (avatar_url), renderiza <img>;
+  // senão, mostra as iniciais. Cache-buster `?t=...` evita ver foto antiga.
+  const avatarHtml = userData.avatar_url
+    ? `<img src="${escapeHtml(userData.avatar_url)}${userData.avatar_url.includes('?') ? '' : '?t=' + Date.now()}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`
+    : escapeHtml(initials);
 
   navbarContainer.innerHTML = `
     <div class="navbar-top">
@@ -253,7 +259,7 @@ function renderNavbar() {
           <i class="bi bi-question-circle"></i>
         </button>
         <div class="navbar-user-section">
-          <div class="user-avatar-navbar" title="${escapeHtml(userName)}">${initials}</div>
+          <div class="user-avatar-navbar" title="${escapeHtml(userName)}" style="overflow:hidden">${avatarHtml}</div>
           <span class="navbar-user-name">${escapeHtml(userName)}</span>
           <button class="navbar-icon-btn btn-logout-navbar" onclick="handleLogout(event)" title="Sair">
             <i class="bi bi-box-arrow-right"></i>

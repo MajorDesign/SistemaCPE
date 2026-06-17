@@ -2135,3 +2135,1306 @@
   height: 100%;
   object-fit: cover;
 }
+
+/* =====================================================================
+   ============ REFRESH CPE 2026 — Linguagem técnica unificada ============
+   Override no final do arquivo. Mesma estetica das outras paginas:
+   DM Sans + papel #F5F4ED + preto/amarelo + hairlines tecnicos.
+   So afeta a area .main-content desta pagina (escopo seguro).
+   ===================================================================== */
+
+.main-content,
+.main-content input,
+.main-content select,
+.main-content textarea,
+.main-content button {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+}
+.main-content { -webkit-font-smoothing: antialiased; }
+
+/* ---- Top-bar da página: título com hierarquia técnica ---- */
+.main-content .top-bar h1 {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -.015em;
+  color: #0F1419;
+}
+.main-content .top-bar h1 i { color: #B8870B; }
+
+/* ---- Action bar: botões pretos com hairlines técnicos ---- */
+.main-content .action-bar .btn {
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  transition: transform .15s, box-shadow .15s, background .15s;
+}
+.main-content .action-bar .btn:hover { transform: translateY(-1px); }
+
+.main-content .action-bar .btn-primary {
+  background: #1A1A1A; color: #FFC107; border-color: #1A1A1A;
+}
+.main-content .action-bar .btn-primary:hover {
+  background: #000; box-shadow: 0 5px 14px rgba(15,20,25,.2);
+}
+.main-content .action-bar .btn-warning {
+  background: #fff; color: #0F1419; border-color: #D8D5C8;
+}
+.main-content .action-bar .btn-warning:hover {
+  border-color: #1A1A1A; background: #fff; color: #0F1419;
+}
+.main-content .action-bar .btn-danger {
+  background: #fff; color: #C0392B; border-color: #D8D5C8;
+}
+.main-content .action-bar .btn-danger:hover {
+  border-color: #C0392B; background: rgba(192,57,43,.04); color: #C0392B;
+}
+.main-content .action-bar .btn-info {
+  background: #fff; color: #1D4ED8; border-color: #D8D5C8;
+}
+.main-content .action-bar .btn-info:hover {
+  border-color: #1D4ED8; background: rgba(29,78,216,.04); color: #1D4ED8;
+}
+
+/* ---- Search: hairline preto inferior em vez de border completa ---- */
+.main-content .search-filters .input-group {
+  border: none;
+  border-bottom: 1px solid #1A1A1A;
+  border-radius: 0;
+}
+.main-content .search-filters .input-group-text,
+.main-content .search-filters .form-control {
+  background: transparent;
+  border: none;
+  font-size: .92rem;
+}
+.main-content .search-filters .form-control:focus {
+  box-shadow: none; border: none;
+}
+.main-content .search-filters .input-group-text i { color: #1A1A1A; }
+.main-content .search-filters .form-control::placeholder {
+  color: #5C6370;
+}
+.main-content .search-filters > .btn-outline-secondary {
+  border-radius: 4px; border-color: #D8D5C8;
+  color: #5C6370;
+}
+.main-content .search-filters > .btn-outline-secondary:hover {
+  border-color: #1A1A1A; color: #0F1419; background: transparent;
+}
+
+/* ---- Advanced filters: papel quente com hairline ---- */
+.main-content .advanced-filters {
+  background: #ECEAE0;
+  border: 1px solid #D8D5C8;
+  border-radius: 4px;
+  border-left: 3px solid #FFC107;
+}
+.main-content .advanced-filters .form-select {
+  border-radius: 4px; border-color: #D8D5C8;
+}
+
+/* ---- Tabs de visão (Todos / Meus / Para mim) ---- */
+.main-content .tickets-view-tabs {
+  border-bottom: 1px solid #D8D5C8;
+  padding-bottom: 0;
+  gap: 4px;
+}
+.main-content .tickets-view-tabs .nav-link {
+  border-radius: 0;
+  background: transparent;
+  color: #5C6370;
+  font-weight: 500;
+  padding: 10px 14px;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  font-size: .9rem;
+  transition: color .15s, border-color .15s;
+}
+.main-content .tickets-view-tabs .nav-link:hover {
+  color: #0F1419; background: transparent;
+}
+.main-content .tickets-view-tabs .nav-link.active {
+  background: transparent;
+  color: #0F1419; font-weight: 700;
+  border-bottom-color: #FFC107;
+}
+.main-content .tickets-view-tabs .nav-link .badge {
+  background: #ECEAE0 !important; color: #5C6370 !important;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 600; font-size: .68rem;
+  letter-spacing: .08em; text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  border-radius: 2px;
+  padding: 3px 7px;
+}
+.main-content .tickets-view-tabs .nav-link.active .badge {
+  background: #1A1A1A !important; color: #FFC107 !important;
+}
+
+/* ---- Stats bar: grade técnica monocromática ---- */
+.main-content .stats-bar {
+  gap: 1px;
+  background: #D8D5C8;
+  border: 1px solid #D8D5C8;
+  border-radius: 4px;
+  overflow: hidden;
+  padding: 0;
+}
+.main-content .stats-bar .stat-item {
+  background: #fff;
+  border: none;
+  border-radius: 0;
+  padding: 16px 18px;
+  text-align: left;
+  position: relative;
+  transition: background .18s;
+}
+.main-content .stats-bar .stat-item::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px; background: #FFC107;
+  transform: scaleX(0); transform-origin: left;
+  transition: transform .25s ease;
+}
+.main-content .stats-bar .stat-item:hover {
+  background: #FAF8F2;
+  border: none; box-shadow: none;
+}
+.main-content .stats-bar .stat-item:hover::before { transform: scaleX(1); }
+.main-content .stats-bar .stat-label {
+  font-size: .68rem;
+  color: #5C6370;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.main-content .stats-bar .stat-value {
+  font-size: 1.8rem; font-weight: 800;
+  color: #0F1419;
+  letter-spacing: -.025em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* ---- Tabela: header underline preto + hover papel ---- */
+.main-content .table-responsive {
+  border: 1px solid #D8D5C8;
+  border-radius: 4px;
+}
+.main-content .table thead th {
+  background: transparent;
+  color: #5C6370;
+  font-weight: 500;
+  font-size: .7rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  border-bottom: 2px solid #1A1A1A;
+  padding: 12px 14px;
+}
+.main-content .table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #D8D5C8;
+  color: #0F1419;
+  vertical-align: middle;
+}
+.main-content .table tbody tr:hover {
+  background: #FAF8F2;
+}
+.main-content .table tbody tr.table-active {
+  background: rgba(255,193,7,.08);
+}
+.main-content .table tbody tr.table-active:hover {
+  background: rgba(255,193,7,.14);
+}
+
+/* ---- Badges genéricos: quadrados técnicos ---- */
+.main-content .badge {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 600;
+  border-radius: 2px;
+  letter-spacing: .04em;
+  padding: 4px 8px;
+  font-size: .72rem;
+}
+
+/* ---- Pagination bar ---- */
+.main-content .pagination-bar {
+  display: flex; justify-content: space-between;
+  align-items: center; flex-wrap: wrap; gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid #D8D5C8;
+}
+.main-content .pagination-bar .btn-outline-secondary {
+  border-color: #D8D5C8; color: #5C6370;
+  border-radius: 4px;
+}
+.main-content .pagination-bar .btn-outline-secondary:hover {
+  border-color: #1A1A1A; color: #0F1419; background: transparent;
+}
+.main-content .pagination-bar input[type=number] {
+  font-variant-numeric: tabular-nums; font-weight: 600;
+}
+
+/* ---- Dashboard SLA toggle ---- */
+.main-content .dashboard-sla-toggle {
+  background: #1A1A1A;
+  color: #FFC107;
+  border-color: #1A1A1A;
+  border-radius: 4px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+.main-content .dashboard-sla-toggle:hover {
+  background: #000;
+  color: #FFC107;
+  border-color: #1A1A1A;
+}
+
+/* ---- Alertas ---- */
+.main-content .alert {
+  border-radius: 2px;
+  border-left: 3px solid currentColor;
+  font-size: .9rem;
+}
+.main-content .alert-danger  { background: rgba(192,57,43,.06); color: #C0392B; border-color: rgba(192,57,43,.2); border-left-color: #C0392B; }
+.main-content .alert-success { background: rgba(27,127,78,.08); color: #1B7F4E; border-color: rgba(27,127,78,.2); border-left-color: #1B7F4E; }
+.main-content .alert-warning { background: rgba(255,193,7,.1);  color: #B8870B; border-color: rgba(255,193,7,.3); border-left-color: #FFC107; }
+.main-content .alert-info    { background: rgba(29,78,216,.06); color: #1D4ED8; border-color: rgba(29,78,216,.2); border-left-color: #1D4ED8; }
+
+/* ---- Modal de detalhe: header preto com linha amarela ---- */
+.main-content + #ticketDetailModal .modal-content,
+#ticketDetailModal .modal-content {
+  border-radius: 6px;
+  border: 1px solid #1A1A1A;
+  overflow: hidden;
+}
+#ticketDetailModal .ticket-detail-header {
+  background: #1A1A1A;
+  color: #fff;
+  padding: 14px 20px;
+  position: relative;
+}
+#ticketDetailModal .ticket-detail-header::after {
+  content: ''; position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg,
+    #FFC107 0%, #FFC107 18%,
+    transparent 18%, transparent 100%);
+}
+#ticketDetailModal .ticket-header-title {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+#ticketDetailModal .ticket-header-title i { color: #FFC107; }
+#ticketDetailModal .ticket-header-title small { color: rgba(255,255,255,.5) !important; }
+
+/* ---- Abas internas do detalhe ---- */
+#ticketDetailModal .ticket-detail-tab {
+  background: transparent;
+  color: #5C6370;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-weight: 500;
+  padding: 10px 16px;
+  transition: color .15s, border-color .15s;
+}
+#ticketDetailModal .ticket-detail-tab:hover { color: #0F1419; }
+#ticketDetailModal .ticket-detail-tab.active {
+  color: #0F1419;
+  border-bottom-color: #FFC107;
+  font-weight: 700;
+}
+
+/* ---- Section titles do modal ---- */
+#ticketDetailModal .section-title,
+#ticketDetailModal .action-section-title {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 600;
+  font-size: .95rem;
+  color: #0F1419;
+  letter-spacing: -.01em;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #D8D5C8;
+}
+#ticketDetailModal .section-title i,
+#ticketDetailModal .action-section-title i { color: #B8870B; }
+
+/* ---- Modal Form (novo/editar): preto + amarelo ---- */
+.ticket-form-header {
+  background: #1A1A1A !important;
+  color: #fff !important;
+  position: relative;
+}
+.ticket-form-header::after {
+  content: ''; position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #FFC107 0%, #FFC107 22%, transparent 22%, transparent 100%);
+}
+.ticket-form-header .modal-title {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 600; letter-spacing: -.01em;
+}
+.ticket-form-header .modal-title i { color: #FFC107; }
+.ticket-form-content {
+  border-radius: 6px;
+  border: 1px solid #1A1A1A;
+  overflow: hidden;
+}
+.ticket-form-body .form-label {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: #5C6370;
+}
+.ticket-form-body .form-label i.text-primary {
+  color: #B8870B !important;
+}
+.ticket-form-body .form-control,
+.ticket-form-body .form-select {
+  border-color: #D8D5C8;
+  border-radius: 4px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.ticket-form-body .form-control:focus,
+.ticket-form-body .form-select:focus {
+  border-color: #1A1A1A;
+  box-shadow: 0 0 0 3px rgba(255,193,7,.22);
+}
+.ticket-form-footer {
+  background: #ECEAE0 !important;
+  border-top: 1px solid #D8D5C8 !important;
+}
+.ticket-form-footer .btn {
+  border-radius: 4px;
+  font-weight: 600;
+}
+.ticket-form-footer .btn-danger {
+  background: transparent; color: #C0392B; border: 1px solid #C0392B;
+}
+.ticket-form-footer .btn-danger:hover {
+  background: #C0392B; color: #fff;
+}
+.ticket-form-footer .btn-success {
+  background: #1A1A1A; color: #FFC107; border: 1px solid #1A1A1A;
+}
+.ticket-form-footer .btn-success:hover {
+  background: #000; color: #FFC107; border-color: #1A1A1A;
+}
+
+/* ---- Win-buttons (janela do modal detalhe) ---- */
+#ticketDetailModal .win-btn,
+#ticketDetailModal2 .win-btn {
+  background: transparent;
+  color: rgba(255,255,255,.7);
+  border: none;
+  width: 36px; height: 28px;
+  border-radius: 2px;
+  transition: background .15s, color .15s;
+}
+#ticketDetailModal .win-btn:hover { color: #FFC107; background: rgba(255,255,255,.06); }
+#ticketDetailModal .win-btn-close:hover { background: #C0392B; color: #fff; }
+
+/* ---- RESPONSIVIDADE — mobile ---- */
+@media (max-width: 768px) {
+  .main-content .action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .main-content .action-bar .btn-group {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  .main-content .action-bar .btn-group .btn {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    font-size: .82rem;
+    padding: 8px 10px;
+  }
+  .main-content .search-filters {
+    width: 100%; min-width: 0;
+  }
+  .main-content .search-filters .input-group {
+    max-width: none;
+  }
+  .main-content .stats-bar {
+    grid-template-columns: repeat(2, 1fr);
+    display: grid;
+  }
+  .main-content .stats-bar .stat-item {
+    padding: 12px 14px;
+  }
+  .main-content .stats-bar .stat-value { font-size: 1.4rem; }
+  .main-content .tickets-view-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .main-content .tickets-view-tabs .nav-link {
+    white-space: nowrap;
+    padding: 8px 12px;
+    font-size: .85rem;
+  }
+  .main-content .table {
+    font-size: .82rem;
+  }
+  .main-content .table thead th,
+  .main-content .table tbody td {
+    padding: 8px 10px;
+  }
+  .main-content .pagination-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+  .main-content .pagination-bar .page-controls {
+    justify-content: center;
+  }
+  #ticketDetailModal .modal-dialog,
+  #ticketModal .modal-dialog,
+  #assignModal .modal-dialog,
+  #forwardModal .modal-dialog,
+  #devolverModal .modal-dialog,
+  #reabrirModal .modal-dialog,
+  #finalizarModal .modal-dialog {
+    margin: 0;
+    max-width: 100%;
+    min-height: 100vh;
+  }
+  #ticketDetailModal .modal-content,
+  .ticket-form-content {
+    border-radius: 0;
+    min-height: 100vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content .stats-bar { grid-template-columns: 1fr; }
+  .main-content .stats-bar .stat-value { font-size: 1.6rem; }
+  .main-content .action-bar .btn-group .btn { flex: 1 1 100%; }
+}
+
+/* ---- Movimento sutil: stagger nos stat-items + linhas tabela ---- */
+@keyframes ticketsEnter {
+  to { opacity: 1; transform: translateY(0); }
+}
+.main-content .stats-bar .stat-item,
+.main-content .table tbody tr {
+  opacity: 0; transform: translateY(6px);
+  animation: ticketsEnter .42s cubic-bezier(.2,.8,.2,1) forwards;
+}
+.main-content .stats-bar .stat-item:nth-child(1) { animation-delay: .04s; }
+.main-content .stats-bar .stat-item:nth-child(2) { animation-delay: .08s; }
+.main-content .stats-bar .stat-item:nth-child(3) { animation-delay: .12s; }
+.main-content .stats-bar .stat-item:nth-child(4) { animation-delay: .16s; }
+.main-content .table tbody tr:nth-child(1)  { animation-delay: .14s; }
+.main-content .table tbody tr:nth-child(2)  { animation-delay: .17s; }
+.main-content .table tbody tr:nth-child(3)  { animation-delay: .20s; }
+.main-content .table tbody tr:nth-child(4)  { animation-delay: .23s; }
+.main-content .table tbody tr:nth-child(5)  { animation-delay: .26s; }
+.main-content .table tbody tr:nth-child(6)  { animation-delay: .29s; }
+.main-content .table tbody tr:nth-child(7)  { animation-delay: .32s; }
+.main-content .table tbody tr:nth-child(n+8) { animation-delay: .35s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .main-content .stats-bar .stat-item,
+  .main-content .table tbody tr {
+    animation: none; opacity: 1; transform: none;
+  }
+  .main-content .stats-bar .stat-item::before {
+    transition: none;
+  }
+}
+
+/* =====================================================================
+   REFRESH CPE — Modal de Detalhe do Ticket (conteúdo interno)
+   Vence as cores roxas #667eea legadas das classes
+   .description-box, .reply-menu-tab, .ticket-quick-info,
+   .action-section, .detail-row, etc.
+   Skill /frontend-design 2026-06-16
+   ===================================================================== */
+
+/* ─── Descrição do chamado: fundo papel + border-left amarelo ─── */
+#ticketDetailModal .description-box,
+#ticketDetailModal2 .description-box {
+  background: #FAF8F2 !important;
+  border: 1px solid #D8D5C8 !important;
+  border-left: 3px solid #FFC107 !important;
+  border-radius: 3px !important;
+  color: #0F1419 !important;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  padding: 14px 18px !important;
+  line-height: 1.6 !important;
+  font-size: .9rem !important;
+}
+#ticketDetailModal .description-box::-webkit-scrollbar-thumb,
+#ticketDetailModal2 .description-box::-webkit-scrollbar-thumb,
+#ticketDetailModal .comments-list::-webkit-scrollbar-thumb,
+#ticketDetailModal2 .comments-list::-webkit-scrollbar-thumb {
+  background: #1A1A1A !important;
+}
+#ticketDetailModal .description-box::-webkit-scrollbar-thumb:hover,
+#ticketDetailModal2 .description-box::-webkit-scrollbar-thumb:hover,
+#ticketDetailModal .comments-list::-webkit-scrollbar-thumb:hover,
+#ticketDetailModal2 .comments-list::-webkit-scrollbar-thumb:hover {
+  background: #FFC107 !important;
+}
+#ticketDetailModal .description-box::-webkit-scrollbar-track,
+#ticketDetailModal2 .description-box::-webkit-scrollbar-track,
+#ticketDetailModal .comments-list::-webkit-scrollbar-track,
+#ticketDetailModal2 .comments-list::-webkit-scrollbar-track {
+  background: #ECEAE0 !important;
+}
+
+/* ─── Toggle de comentários: hover preto, não azul ─── */
+#ticketDetailModal .section-title.section-title--toggle:hover {
+  color: #0F1419 !important;
+}
+#ticketDetailModal .section-title.section-title--toggle .bi-chevron-up,
+#ticketDetailModal .section-title.section-title--toggle .bi-chevron-down {
+  color: #B8870B !important;
+}
+
+/* ─── Quick info: chips técnicos em vez de banner roxo ─── */
+#ticketDetailModal .ticket-quick-info,
+#ticketDetailModal2 .ticket-quick-info {
+  background: #fff !important;
+  border: 1px solid #D8D5C8 !important;
+  border-left: 3px solid #FFC107 !important;
+  border-radius: 3px !important;
+  padding: 8px 14px !important;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: .8rem !important;
+  column-gap: 18px !important;
+  align-items: center;
+}
+#ticketDetailModal .info-row .label,
+#ticketDetailModal2 .info-row .label {
+  color: #B8870B !important;
+  font-size: .92rem !important;
+}
+#ticketDetailModal .info-row strong,
+#ticketDetailModal .info-row span,
+#ticketDetailModal2 .info-row strong,
+#ticketDetailModal2 .info-row span {
+  color: #0F1419 !important;
+  font-weight: 500 !important;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+/* ─── Tabs internas "Responder / Comentário Interno" ─── */
+#ticketDetailModal .reply-menu-tabs {
+  border-bottom: 1px solid #D8D5C8 !important;
+  margin-bottom: 18px !important;
+  gap: 4px !important;
+}
+#ticketDetailModal .reply-menu-tab {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  color: #5C6370 !important;
+  font-weight: 500 !important;
+  font-size: .88rem !important;
+  border-bottom: 2px solid transparent !important;
+  padding: 10px 14px !important;
+  transition: color .15s, border-color .15s !important;
+}
+#ticketDetailModal .reply-menu-tab:hover {
+  color: #0F1419 !important;
+}
+#ticketDetailModal .reply-menu-tab.active {
+  color: #0F1419 !important;
+  border-bottom-color: #FFC107 !important;
+  font-weight: 700 !important;
+}
+#ticketDetailModal .reply-menu-tab i { color: #B8870B; }
+
+/* ─── Form labels do reply ─── */
+#ticketDetailModal .reply-block .form-label {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .68rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+  color: #5C6370 !important;
+  margin-bottom: 6px !important;
+  display: flex; align-items: center; gap: 8px;
+}
+#ticketDetailModal .reply-block .form-label i { color: #B8870B; }
+
+#ticketDetailModal .reply-block .form-control,
+#ticketDetailModal .reply-block textarea.form-control {
+  background: #fff !important;
+  border: 1px solid #D8D5C8 !important;
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .9rem !important;
+  color: #0F1419 !important;
+  min-height: 130px;
+  padding: 12px 14px !important;
+}
+#ticketDetailModal .reply-block .form-control:focus {
+  border-color: #1A1A1A !important;
+  box-shadow: 0 0 0 3px rgba(255, 193, 7, .25) !important;
+}
+#ticketDetailModal .reply-block .form-control::placeholder {
+  color: #A8AAB2;
+  font-style: italic;
+}
+#ticketDetailModal .reply-block .text-muted {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .76rem !important;
+  color: #7B8088 !important;
+}
+
+/* ─── Botões dentro do reply-block ─── */
+#ticketDetailModal .reply-block .btn-success {
+  background: #1A1A1A !important;
+  color: #FFC107 !important;
+  border: 1px solid #1A1A1A !important;
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  font-size: .9rem !important;
+  letter-spacing: .02em !important;
+  padding: 11px 16px !important;
+  transition: background .15s, transform .15s, box-shadow .15s;
+}
+#ticketDetailModal .reply-block .btn-success:hover {
+  background: #000 !important;
+  color: #FFC107 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 20, 25, .2);
+}
+#ticketDetailModal .reply-block .btn-warning {
+  background: #FFC107 !important;
+  color: #1A1A1A !important;
+  border: 1px solid #FFC107 !important;
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  font-size: .9rem !important;
+  padding: 11px 16px !important;
+  transition: background .15s, transform .15s, box-shadow .15s;
+}
+#ticketDetailModal .reply-block .btn-warning:hover {
+  background: #FFD54A !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(255, 193, 7, .35);
+}
+#ticketDetailModal .reply-block .btn-outline-secondary {
+  background: #fff !important;
+  color: #5C6370 !important;
+  border: 1px solid #D8D5C8 !important;
+  border-radius: 3px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  font-size: .82rem !important;
+}
+#ticketDetailModal .reply-block .btn-outline-secondary:hover {
+  color: #0F1419 !important;
+  border-color: #1A1A1A !important;
+  background: #fff !important;
+}
+
+/* ─── Action sections (tab Ações): fundo papel + border-left amarelo ─── */
+#ticketDetailModal .action-section {
+  background: #FAF8F2 !important;
+  border: 1px solid #D8D5C8 !important;
+  border-left: 3px solid #FFC107 !important;
+  border-radius: 3px !important;
+  padding: 18px 20px !important;
+}
+#ticketDetailModal .action-section-title {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .85rem !important;
+  font-weight: 600 !important;
+  color: #0F1419 !important;
+  letter-spacing: -.005em !important;
+  border-bottom: 1px solid #D8D5C8 !important;
+  padding-bottom: 10px !important;
+  margin-bottom: 14px !important;
+}
+#ticketDetailModal .action-section-title i { color: #B8870B !important; }
+#ticketDetailModal .action-section .select-action label {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .68rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+  color: #5C6370 !important;
+}
+#ticketDetailModal .action-section .form-select {
+  border: 1px solid #D8D5C8 !important;
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+}
+#ticketDetailModal .action-section .form-select:focus {
+  border-color: #1A1A1A !important;
+  box-shadow: 0 0 0 3px rgba(255, 193, 7, .22) !important;
+}
+
+/* Botões dentro de action-section */
+#ticketDetailModal .action-section .btn-success {
+  background: #1A1A1A !important;
+  color: #FFC107 !important;
+  border: 1px solid #1A1A1A !important;
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  letter-spacing: .02em !important;
+  transition: background .15s, transform .15s, box-shadow .15s;
+}
+#ticketDetailModal .action-section .btn-success:hover {
+  background: #000 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 20, 25, .2);
+}
+#ticketDetailModal .action-section .btn-warning {
+  background: #FFC107 !important;
+  color: #1A1A1A !important;
+  border: 1px solid #FFC107 !important;
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+}
+#ticketDetailModal .action-section .btn-warning:hover {
+  background: #FFD54A !important;
+  transform: translateY(-1px);
+}
+
+/* ─── Tab Detalhes: detail-row em papel ─── */
+#ticketDetailModal .detail-row {
+  background: #FAF8F2 !important;
+  border: 1px solid #D8D5C8 !important;
+  border-left: 3px solid #FFC107 !important;
+  border-radius: 3px !important;
+  padding: 16px 18px !important;
+}
+#ticketDetailModal .detail-label {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .66rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .14em !important;
+  text-transform: uppercase !important;
+  color: #5C6370 !important;
+  margin-bottom: 4px !important;
+  display: flex; align-items: center; gap: 6px;
+}
+#ticketDetailModal .detail-label i { color: #B8870B; }
+#ticketDetailModal .detail-value {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .92rem !important;
+  font-weight: 500 !important;
+  color: #0F1419 !important;
+}
+
+/* SLA bar: cores técnicas */
+#ticketDetailModal #detailSLABar {
+  background: #ECEAE0 !important;
+  border: 1px solid #D8D5C8;
+  height: 8px !important;
+  border-radius: 2px !important;
+}
+#ticketDetailModal #detailSLABarFill {
+  border-radius: 2px;
+}
+
+/* Botões SLA pausa/retoma */
+#ticketDetailModal .action-section .btn-outline-warning,
+#ticketDetailModal .detail-row .btn-outline-warning {
+  background: #fff !important;
+  color: #B8870B !important;
+  border: 1px solid #B8870B !important;
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+}
+#ticketDetailModal .action-section .btn-outline-warning:hover,
+#ticketDetailModal .detail-row .btn-outline-warning:hover {
+  background: #FFC107 !important;
+  color: #1A1A1A !important;
+}
+#ticketDetailModal .action-section .btn-outline-success,
+#ticketDetailModal .detail-row .btn-outline-success {
+  background: #fff !important;
+  color: #1B7F4E !important;
+  border: 1px solid #1B7F4E !important;
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+}
+#ticketDetailModal .action-section .btn-outline-success:hover,
+#ticketDetailModal .detail-row .btn-outline-success:hover {
+  background: #1B7F4E !important;
+  color: #fff !important;
+}
+
+/* ─── Footer do modal detalhe: Assumir/Desistir/Encaminhar/Deletar ─── */
+#ticketDetailModal .modal-footer {
+  background: #F5F4ED !important;
+  border-top: 1px solid #D8D5C8 !important;
+  padding: 12px 22px !important;
+}
+#ticketDetailModal .modal-footer .btn {
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  font-size: .82rem !important;
+  letter-spacing: .02em !important;
+  padding: 8px 16px !important;
+  transition: background .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s;
+  border: 1px solid transparent !important;
+}
+#ticketDetailModal .modal-footer .btn-success {
+  background: #1A1A1A !important;
+  color: #FFC107 !important;
+  border-color: #1A1A1A !important;
+}
+#ticketDetailModal .modal-footer .btn-success:hover {
+  background: #000 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 20, 25, .2);
+}
+#ticketDetailModal .modal-footer .btn-warning {
+  background: #FFC107 !important;
+  color: #1A1A1A !important;
+  border-color: #FFC107 !important;
+}
+#ticketDetailModal .modal-footer .btn-warning:hover {
+  background: #FFD54A !important;
+  transform: translateY(-1px);
+}
+#ticketDetailModal .modal-footer .btn-danger {
+  background: transparent !important;
+  color: #C0392B !important;
+  border-color: #C0392B !important;
+}
+#ticketDetailModal .modal-footer .btn-danger:hover {
+  background: #C0392B !important;
+  color: #fff !important;
+  transform: translateY(-1px);
+}
+#ticketDetailModal .modal-footer .btn-outline-secondary,
+#ticketDetailModal .modal-footer .btn-secondary {
+  background: #fff !important;
+  color: #5C6370 !important;
+  border-color: #D8D5C8 !important;
+}
+#ticketDetailModal .modal-footer .btn-outline-secondary:hover,
+#ticketDetailModal .modal-footer .btn-secondary:hover {
+  color: #0F1419 !important;
+  border-color: #1A1A1A !important;
+  background: #fff !important;
+}
+
+/* Comments list refinada */
+#ticketDetailModal .comments-list {
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+/* Section title divider hairline preto */
+#ticketDetailModal .section-title {
+  border-bottom: 1px solid #D8D5C8 !important;
+  padding-bottom: 8px !important;
+  margin-bottom: 14px !important;
+}
+
+/* =====================================================================
+   MODAIS PEQUENOS — Reabrir / Desistir / Finalizar / Encaminhar
+   Padronização CPE: header preto + ruler + body papel + botões CPE
+   ===================================================================== */
+
+body #reabrirModal .modal-dialog,
+body #devolverModal .modal-dialog,
+body #finalizarModal .modal-dialog,
+body #forwardModal .modal-dialog {
+  max-width: 520px !important;
+  width: 100% !important;
+}
+body #finalizarModal .modal-dialog { max-width: 600px !important; }
+
+body #reabrirModal .modal-content,
+body #devolverModal .modal-content,
+body #finalizarModal .modal-content,
+body #forwardModal .modal-content {
+  border-radius: 6px !important;
+  border: 1px solid #1A1A1A !important;
+  box-shadow: 0 24px 80px rgba(15, 20, 25, .18) !important;
+  overflow: hidden;
+  background: #fff !important;
+  padding: 0 !important;
+  max-width: none !important;
+  width: 100% !important;
+  animation: none !important;
+}
+
+/* Header preto + ruler amarelo */
+body #reabrirModal .modal-header,
+body #devolverModal .modal-header,
+body #finalizarModal .modal-header,
+body #forwardModal .modal-header {
+  background: #0A0A0A !important;
+  color: #fff !important;
+  border-bottom: none !important;
+  padding: 18px 24px !important;
+  margin: 0 !important;
+  position: relative;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px;
+}
+body #reabrirModal .modal-header::after,
+body #devolverModal .modal-header::after,
+body #finalizarModal .modal-header::after,
+body #forwardModal .modal-header::after {
+  content: '';
+  position: absolute; left: 0; right: 0; bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg,
+    #FFC107 0%, #FFC107 18%,
+    rgba(255, 193, 7, 0) 18%, rgba(255, 193, 7, 0) 100%);
+}
+body #reabrirModal .modal-title,
+body #devolverModal .modal-title,
+body #finalizarModal .modal-title,
+body #forwardModal .modal-title {
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 1rem !important;
+  letter-spacing: -.005em !important;
+  text-transform: none !important;
+  color: #fff !important;
+  margin: 0 !important;
+  display: inline-flex; align-items: center; gap: 12px;
+  flex-wrap: wrap;
+}
+body #reabrirModal .modal-title i,
+body #devolverModal .modal-title i,
+body #finalizarModal .modal-title i,
+body #forwardModal .modal-title i {
+  color: #FFC107 !important;
+  font-size: 1.2rem !important;
+}
+body #reabrirModal .modal-eyebrow,
+body #devolverModal .modal-eyebrow,
+body #finalizarModal .modal-eyebrow,
+body #forwardModal .modal-eyebrow {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: .58rem;
+  font-weight: 600;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .55);
+  padding: 3px 9px;
+  border: 1px solid rgba(255, 193, 7, .4);
+  border-radius: 2px;
+}
+
+/* Botão fechar — X vermelho */
+body #reabrirModal .btn-close,
+body #devolverModal .btn-close,
+body #finalizarModal .btn-close,
+body #forwardModal .btn-close {
+  background: transparent !important;
+  background-image: none !important;
+  border: 1px solid rgba(231, 76, 60, .35) !important;
+  border-radius: 3px !important;
+  width: 32px; height: 32px;
+  padding: 0 !important;
+  margin: 0 !important;
+  filter: none !important;
+  opacity: 1 !important;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 0;
+  cursor: pointer;
+  transition: background .18s, transform .18s, border-color .18s;
+  flex-shrink: 0;
+}
+body #reabrirModal .btn-close::before,
+body #devolverModal .btn-close::before,
+body #finalizarModal .btn-close::before,
+body #forwardModal .btn-close::before {
+  content: '\F659'; /* bi-x-lg */
+  font-family: 'bootstrap-icons';
+  font-size: 1rem;
+  font-weight: 700;
+  color: #E74C3C;
+}
+body #reabrirModal .btn-close:hover,
+body #devolverModal .btn-close:hover,
+body #finalizarModal .btn-close:hover,
+body #forwardModal .btn-close:hover {
+  background: #E74C3C !important;
+  border-color: #E74C3C !important;
+  transform: rotate(90deg);
+}
+body #reabrirModal .btn-close:hover::before,
+body #devolverModal .btn-close:hover::before,
+body #finalizarModal .btn-close:hover::before,
+body #forwardModal .btn-close:hover::before { color: #fff; }
+
+/* Body em papel + labels técnicos */
+body #reabrirModal .modal-body,
+body #devolverModal .modal-body,
+body #finalizarModal .modal-body,
+body #forwardModal .modal-body {
+  background: #F5F4ED !important;
+  padding: 22px 26px !important;
+  margin: 0 !important;
+}
+
+/* Parágrafo intro */
+body #reabrirModal .reabrir-intro,
+body #devolverModal .reabrir-intro,
+body #finalizarModal .reabrir-intro {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: .88rem;
+  color: #5C6370;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+body #reabrirModal .reabrir-intro strong,
+body #devolverModal .reabrir-intro strong,
+body #finalizarModal .reabrir-intro strong {
+  color: #0F1419;
+  font-weight: 600;
+}
+
+/* Bloco de regras (substitui alert-warning amarelo) */
+body #reabrirModal .reabrir-rules {
+  background: #fff;
+  border: 1px solid #D8D5C8;
+  border-left: 3px solid #FFC107;
+  border-radius: 3px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+body #reabrirModal .reabrir-rules-head {
+  display: flex; align-items: center; gap: 8px;
+  font-size: .85rem;
+  font-weight: 600;
+  color: #0F1419;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #ECEAE0;
+}
+body #reabrirModal .reabrir-rules-head i {
+  color: #B8870B;
+  font-size: 1rem;
+}
+body #reabrirModal .reabrir-rules-list {
+  margin: 0;
+  padding-left: 22px;
+  font-size: .82rem;
+  color: #5C6370;
+  line-height: 1.6;
+}
+body #reabrirModal .reabrir-rules-list li { margin-bottom: 4px; }
+body #reabrirModal .reabrir-rules-list strong {
+  color: #0F1419;
+  font-weight: 700;
+}
+
+/* Form labels e inputs */
+body #reabrirModal .modal-body .form-label,
+body #devolverModal .modal-body .form-label,
+body #finalizarModal .modal-body .form-label,
+body #forwardModal .modal-body .form-label {
+  display: flex !important; align-items: center; gap: 8px;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .68rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .12em !important;
+  text-transform: uppercase !important;
+  color: #5C6370 !important;
+  margin-bottom: 6px !important;
+}
+body #reabrirModal .modal-body .form-label i,
+body #devolverModal .modal-body .form-label i,
+body #finalizarModal .modal-body .form-label i,
+body #forwardModal .modal-body .form-label i {
+  color: #B8870B !important;
+  font-size: .95rem !important;
+}
+body #reabrirModal .modal-body .form-control,
+body #reabrirModal .modal-body .form-select,
+body #devolverModal .modal-body .form-control,
+body #devolverModal .modal-body .form-select,
+body #finalizarModal .modal-body .form-control,
+body #finalizarModal .modal-body .form-select,
+body #forwardModal .modal-body .form-control,
+body #forwardModal .modal-body .form-select {
+  background: #fff !important;
+  border: 1px solid #D8D5C8 !important;
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-size: .9rem !important;
+  color: #0F1419 !important;
+  padding: 10px 13px !important;
+}
+body #reabrirModal .modal-body .form-control:focus,
+body #reabrirModal .modal-body .form-select:focus,
+body #devolverModal .modal-body .form-control:focus,
+body #devolverModal .modal-body .form-select:focus,
+body #finalizarModal .modal-body .form-control:focus,
+body #finalizarModal .modal-body .form-select:focus,
+body #forwardModal .modal-body .form-control:focus,
+body #forwardModal .modal-body .form-select:focus {
+  border-color: #1A1A1A !important;
+  box-shadow: 0 0 0 3px rgba(255, 193, 7, .25) !important;
+  outline: none !important;
+}
+body #reabrirModal .modal-body textarea.form-control,
+body #devolverModal .modal-body textarea.form-control,
+body #finalizarModal .modal-body textarea.form-control,
+body #forwardModal .modal-body textarea.form-control {
+  min-height: 90px;
+  resize: vertical;
+}
+body #reabrirModal .modal-body .form-text,
+body #devolverModal .modal-body .form-text,
+body #finalizarModal .modal-body .form-text,
+body #forwardModal .modal-body .form-text {
+  font-size: .74rem !important;
+  color: #7B8088 !important;
+  margin-top: 5px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+body #reabrirModal .modal-body .text-danger,
+body #devolverModal .modal-body .text-danger,
+body #finalizarModal .modal-body .text-danger,
+body #forwardModal .modal-body .text-danger {
+  color: #C0392B !important;
+}
+
+/* Alert danger interno */
+body #reabrirModal .modal-body .alert-danger,
+body #devolverModal .modal-body .alert-danger,
+body #finalizarModal .modal-body .alert-danger,
+body #forwardModal .modal-body .alert-danger {
+  background: rgba(192, 57, 43, .06) !important;
+  border: 1px solid rgba(192, 57, 43, .25) !important;
+  border-left: 3px solid #C0392B !important;
+  color: #8B2D24 !important;
+  border-radius: 3px !important;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+/* Footer + botões */
+body #reabrirModal .modal-footer,
+body #devolverModal .modal-footer,
+body #finalizarModal .modal-footer,
+body #forwardModal .modal-footer {
+  background: #ECEAE0 !important;
+  border-top: 1px solid #D8D5C8 !important;
+  padding: 12px 22px !important;
+  margin: 0 !important;
+  gap: 8px;
+}
+body #reabrirModal .modal-footer .btn,
+body #devolverModal .modal-footer .btn,
+body #finalizarModal .modal-footer .btn,
+body #forwardModal .modal-footer .btn {
+  border-radius: 4px !important;
+  font-family: 'DM Sans', system-ui, sans-serif !important;
+  font-weight: 600 !important;
+  font-size: .88rem !important;
+  letter-spacing: .02em !important;
+  padding: 9px 18px !important;
+  border: 1px solid transparent !important;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: background .15s, color .15s, border-color .15s, transform .15s, box-shadow .15s;
+}
+body #reabrirModal .modal-footer .btn-secondary,
+body #devolverModal .modal-footer .btn-secondary,
+body #finalizarModal .modal-footer .btn-secondary,
+body #forwardModal .modal-footer .btn-secondary {
+  background: #fff !important;
+  color: #5C6370 !important;
+  border-color: #D8D5C8 !important;
+}
+body #reabrirModal .modal-footer .btn-secondary:hover,
+body #devolverModal .modal-footer .btn-secondary:hover,
+body #finalizarModal .modal-footer .btn-secondary:hover,
+body #forwardModal .modal-footer .btn-secondary:hover {
+  color: #0F1419 !important;
+  border-color: #1A1A1A !important;
+  transform: translateY(-1px);
+}
+body #reabrirModal .modal-footer .btn-primary,
+body #devolverModal .modal-footer .btn-primary,
+body #finalizarModal .modal-footer .btn-primary,
+body #forwardModal .modal-footer .btn-primary {
+  background: #1A1A1A !important;
+  color: #FFC107 !important;
+  border-color: #1A1A1A !important;
+}
+body #reabrirModal .modal-footer .btn-primary:hover,
+body #devolverModal .modal-footer .btn-primary:hover,
+body #finalizarModal .modal-footer .btn-primary:hover,
+body #forwardModal .modal-footer .btn-primary:hover {
+  background: #000 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15, 20, 25, .2);
+}
+body #reabrirModal .modal-footer .btn-warning,
+body #devolverModal .modal-footer .btn-warning,
+body #finalizarModal .modal-footer .btn-warning,
+body #forwardModal .modal-footer .btn-warning {
+  background: #FFC107 !important;
+  color: #1A1A1A !important;
+  border-color: #FFC107 !important;
+}
+body #reabrirModal .modal-footer .btn-warning:hover,
+body #devolverModal .modal-footer .btn-warning:hover,
+body #finalizarModal .modal-footer .btn-warning:hover,
+body #forwardModal .modal-footer .btn-warning:hover {
+  background: #FFD54A !important;
+  transform: translateY(-1px);
+}
+body #reabrirModal .modal-footer .btn-danger,
+body #devolverModal .modal-footer .btn-danger,
+body #finalizarModal .modal-footer .btn-danger,
+body #forwardModal .modal-footer .btn-danger {
+  background: transparent !important;
+  color: #C0392B !important;
+  border-color: #C0392B !important;
+}
+body #reabrirModal .modal-footer .btn-danger:hover,
+body #devolverModal .modal-footer .btn-danger:hover,
+body #finalizarModal .modal-footer .btn-danger:hover,
+body #forwardModal .modal-footer .btn-danger:hover {
+  background: #C0392B !important;
+  color: #fff !important;
+  transform: translateY(-1px);
+}
+
+/* Mobile */
+@media (max-width: 540px) {
+  body #reabrirModal .modal-dialog,
+  body #devolverModal .modal-dialog,
+  body #finalizarModal .modal-dialog,
+  body #forwardModal .modal-dialog {
+    margin: 0 !important;
+    max-width: 100% !important;
+    min-height: 100vh;
+  }
+  body #reabrirModal .modal-content,
+  body #devolverModal .modal-content,
+  body #finalizarModal .modal-content,
+  body #forwardModal .modal-content {
+    border-radius: 0 !important;
+    border: none !important;
+    min-height: 100vh;
+  }
+  body #reabrirModal .modal-eyebrow,
+  body #devolverModal .modal-eyebrow,
+  body #finalizarModal .modal-eyebrow,
+  body #forwardModal .modal-eyebrow { display: none; }
+}

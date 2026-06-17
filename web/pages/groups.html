@@ -8,7 +8,7 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Inter:wght@400;500;600&display=swap"
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap"
     rel="stylesheet">
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/app.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/components.css">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/groups.css">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/groups.css?v=2026-06-16c">
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-06-03"></script>
   <script>pageGuard('GROUPS');</script>
@@ -69,14 +69,12 @@
           <h2 class="page-title">
             <i class="bi bi-folder-plus"></i> Meus Grupos
           </h2>
-          <div style="display:flex;gap:8px;">
-            <button class="btn btn-sm" onclick="toggleDeptPanel()" title="Gerenciar departamentos"
-              style="background:#ffc107;color:#333;border:none;border-radius:6px;font-size:.82rem;font-weight:500;padding:6px 14px;">
-              <i class="bi bi-building me-1"></i>Departamentos
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-sm" onclick="toggleDeptPanel()" title="Gerenciar departamentos">
+              <i class="bi bi-building"></i> Departamentos
             </button>
-            <button class="btn btn-sm" onclick="toggleUnitPanel()" title="Gerenciar unidades"
-              style="background:#0dcaf0;color:#fff;border:none;border-radius:6px;font-size:.82rem;font-weight:500;padding:6px 14px;">
-              <i class="bi bi-geo-alt me-1"></i>Unidades
+            <button class="btn btn-sm" onclick="toggleUnitPanel()" title="Gerenciar unidades">
+              <i class="bi bi-geo-alt"></i> Unidades
             </button>
             <button class="btn-new-group" id="btnNewGroup" data-bs-toggle="modal" data-bs-target="#groupModal">
               <i class="bi bi-plus-lg"></i> Novo Grupo
@@ -179,11 +177,12 @@
   <!-- MODAL: Novo/Editar Grupo -->
   <!-- ============================================================ -->
   <div class="modal fade" id="groupModal" tabindex="-1" aria-labelledby="groupModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header">
           <h5 class="modal-title" id="groupModalLabel">
-            <i class="bi bi-plus-square"></i> Novo Grupo
+            <i class="bi bi-plus-square"></i> <span id="groupModalTitleText">Novo Grupo</span>
+            <span class="modal-eyebrow">CPE / GRUPOS</span>
           </h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
@@ -197,55 +196,57 @@
 
           <!-- ===== FORM ===== -->
           <form id="groupForm" novalidate>
-            <!-- Departamento -->
-            <div class="mb-3">
-              <label for="groupDepartment" class="form-label">
-                <i class="bi bi-building"></i> Departamento <span class="text-danger">*</span>
-              </label>
-              <select class="form-select" id="groupDepartment" required>
-                <option value="">— Selecione o departamento —</option>
-              </select>
-            </div>
+            <div class="row g-3">
+              <!-- Departamento -->
+              <div class="col-md-6">
+                <label for="groupDepartment" class="form-label">
+                  <i class="bi bi-building"></i> Departamento <span class="text-danger">*</span>
+                </label>
+                <select class="form-select" id="groupDepartment" required>
+                  <option value="">— Selecione o departamento —</option>
+                </select>
+              </div>
 
-            <!-- Nome do Grupo -->
-            <div class="mb-3">
-              <label for="groupName" class="form-label">
-                <i class="bi bi-input-cursor"></i> Nome do Grupo <span class="text-danger">*</span>
-              </label>
-              <input
-                type="text"
-                class="form-control"
-                id="groupName"
-                placeholder="Ex: Suporte Técnico"
-                required
-                minlength="3"
-                maxlength="255"
-              />
-              <small class="form-text text-muted">Mínimo 3 caracteres</small>
-            </div>
+              <!-- Nome do Grupo -->
+              <div class="col-md-6">
+                <label for="groupName" class="form-label">
+                  <i class="bi bi-input-cursor"></i> Nome do Grupo <span class="text-danger">*</span>
+                </label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="groupName"
+                  placeholder="Ex: Suporte Técnico"
+                  required
+                  minlength="3"
+                  maxlength="255"
+                />
+                <small class="form-text text-muted">Mínimo 3 caracteres</small>
+              </div>
 
-            <!-- Descrição -->
-            <div class="mb-3">
-              <label for="groupDescription" class="form-label">
-                <i class="bi bi-file-text"></i> Descrição
-              </label>
-              <textarea
-                class="form-control"
-                id="groupDescription"
-                rows="4"
-                placeholder="Descreva o propósito deste grupo..."
-                maxlength="500"
-              ></textarea>
-              <small class="form-text text-muted">Opcional - Máximo 500 caracteres</small>
+              <!-- Descrição -->
+              <div class="col-12">
+                <label for="groupDescription" class="form-label">
+                  <i class="bi bi-file-text"></i> Descrição
+                </label>
+                <textarea
+                  class="form-control"
+                  id="groupDescription"
+                  rows="4"
+                  placeholder="Descreva o propósito deste grupo..."
+                  maxlength="500"
+                ></textarea>
+                <small class="form-text text-muted">Opcional · Máximo 500 caracteres</small>
+              </div>
             </div>
 
             <!-- Botões -->
-            <div class="d-flex gap-2">
-              <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
-                <i class="bi bi-check-lg"></i> Criar Grupo
-              </button>
+            <div class="d-flex gap-2 mt-4 pt-3" style="border-top:1px solid #D8D5C8">
               <button type="button" class="btn btn-secondary flex-grow-1" data-bs-dismiss="modal">
                 <i class="bi bi-x-lg"></i> Cancelar
+              </button>
+              <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
+                <i class="bi bi-check-lg"></i> Criar Grupo
               </button>
             </div>
           </form>
@@ -260,7 +261,7 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/api.js"></script>
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/js/nav.js"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-06-17"></script>
 
   <!-- ============================================================ -->
   <!-- 🔧 VARIÁVEIS GLOBAIS -->
@@ -679,7 +680,7 @@
       }
 
       selectedGroupId = groupId;
-      document.getElementById("groupModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> Editar Grupo';
+      document.getElementById("groupModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> <span id="groupModalTitleText">Editar Grupo</span> <span class="modal-eyebrow">CPE / GRUPOS</span>';
       document.getElementById("groupName").value = group.name;
       document.getElementById("groupDescription").value = group.description || '';
       document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Grupo';
@@ -1148,7 +1149,7 @@
       console.log("[GROUPS/MODAL] 📂 Modal aberto");
 
       if (!selectedGroupId) {
-        document.getElementById("groupModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> Novo Grupo';
+        document.getElementById("groupModalLabel").innerHTML = '<i class="bi bi-plus-square"></i> <span id="groupModalTitleText">Novo Grupo</span> <span class="modal-eyebrow">CPE / GRUPOS</span>';
         document.getElementById("groupForm").reset();
         document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Grupo';
       }
@@ -1210,19 +1211,20 @@
   <!-- ============================================================ -->
   <div class="modal fade" id="categoriasModal" tabindex="-1" aria-hidden="true"
        data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width:980px;">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
       <div class="modal-content">
 
-        <div class="modal-header" style="background:#fff; border-bottom:2px solid #f59e0b; padding:14px 20px;">
-          <div style="display:flex; align-items:center; gap:12px;">
-            <div style="width:40px;height:40px;background:linear-gradient(135deg,#fef3c7,#fde68a);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-              <i class="bi bi-tags-fill" style="color:#ffc107;font-size:1.2rem;"></i>
+        <div class="modal-header">
+          <div class="cat-modal-head">
+            <div class="cat-modal-icon">
+              <i class="bi bi-tags-fill"></i>
             </div>
-            <div>
-              <h5 class="modal-title mb-0" style="color:#1f2937;font-weight:700;font-size:1rem;">
-                Categorias — <span id="catModalGroupName" style="color:#6f42c1;"></span>
+            <div class="cat-modal-titles">
+              <h5 class="modal-title">
+                Categorias <span class="cat-modal-sep">—</span> <span id="catModalGroupName"></span>
+                <span class="modal-eyebrow">CPE / CATEGORIAS</span>
               </h5>
-              <small style="color:#9ca3af;font-size:.75rem;">Gerencie categorias e subcategorias do grupo</small>
+              <small class="cat-modal-sub">Gerencie categorias e subcategorias do grupo</small>
             </div>
           </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
@@ -1234,22 +1236,21 @@
           <div id="catModalAlert" class="alert alert-danger d-none m-3 mb-0"></div>
           <div id="catModalSuccess" class="alert alert-success d-none m-3 mb-0"></div>
 
-          <div class="row g-0" style="height:560px;">
+          <div class="row g-0 cat-modal-grid">
 
             <!-- ===== COLUNA ESQUERDA: Lista de categorias ===== -->
-            <div class="col-md-5 border-end d-flex flex-column" style="background:#f9fafb;">
+            <div class="col-md-5 cat-col-left d-flex flex-column">
               <!-- Cabeçalho da coluna -->
-              <div style="padding:12px 16px; background:#fff; border-bottom:1px solid #e5e7eb; display:flex; align-items:center; justify-content:space-between;">
-                <span style="font-weight:600; font-size:.85rem; color:#374151;">
-                  <i class="bi bi-list-ul me-1" style="color:#f59e0b;"></i> Categorias
+              <div class="cat-col-head">
+                <span class="cat-col-head-title">
+                  <i class="bi bi-list-ul"></i> Categorias
                 </span>
-                <button style="background:#fef3c7;color:#ffc107;border:1px solid #fde68a;border-radius:6px;font-size:.78rem;font-weight:600;padding:4px 10px;cursor:pointer;"
-                        onclick="abrirFormCategoria()">
+                <button class="cat-btn-new" onclick="abrirFormCategoria()">
                   <i class="bi bi-plus-lg"></i> Nova
                 </button>
               </div>
               <!-- Lista -->
-              <div id="catLista" style="padding:12px; overflow-y:auto; flex:1;">
+              <div id="catLista" class="cat-list">
                 <div class="text-muted text-center py-4">
                   <i class="bi bi-hourglass-split"></i> Carregando...
                 </div>
@@ -1257,8 +1258,8 @@
             </div>
 
             <!-- ===== COLUNA DIREITA: Formulário ===== -->
-            <div class="col-md-7 d-flex flex-column">
-              <div class="p-3" style="flex:1; overflow-y:auto;">
+            <div class="col-md-7 cat-col-right d-flex flex-column">
+              <div class="cat-form-wrap">
 
                 <!-- Form: Nova/Editar Categoria -->
                 <div id="formCategoriaDiv" class="d-none">
@@ -1281,11 +1282,11 @@
                   </div>
 
                   <!-- SLA Total -->
-                  <div class="mb-3 p-3 rounded" style="background:#f0f4ff; border:1px solid #c7d2fe;">
-                    <div class="d-flex align-items-center mb-2">
-                      <span class="badge me-2" style="background:#6f42c1;"><i class="bi bi-stopwatch-fill"></i></span>
-                      <span class="fw-semibold">SLA Total</span>
-                      <small class="text-muted ms-2">— prazo máximo para resolução completa</small>
+                  <div class="cat-sla-box cat-sla-total">
+                    <div class="cat-sla-head">
+                      <span class="cat-sla-badge"><i class="bi bi-stopwatch-fill"></i></span>
+                      <span class="cat-sla-title">SLA Total</span>
+                      <small class="cat-sla-hint">— prazo máximo para resolução completa</small>
                     </div>
                     <div class="row g-2">
                       <div class="col-4">
@@ -1308,11 +1309,11 @@
                   </div>
 
                   <!-- SLA Primeira Resposta -->
-                  <div class="mb-4 p-3 rounded" style="background:#f0fff4; border:1px solid #86efac;">
-                    <div class="d-flex align-items-center mb-2">
-                      <span class="badge me-2 bg-success"><i class="bi bi-reply-fill"></i></span>
-                      <span class="fw-semibold">SLA Primeira Resposta</span>
-                      <small class="text-muted ms-2">— prazo para 1º contato do suporte</small>
+                  <div class="cat-sla-box cat-sla-pr">
+                    <div class="cat-sla-head">
+                      <span class="cat-sla-badge cat-sla-badge-green"><i class="bi bi-reply-fill"></i></span>
+                      <span class="cat-sla-title">SLA Primeira Resposta</span>
+                      <small class="cat-sla-hint">— prazo para 1º contato do suporte</small>
                     </div>
                     <div class="row g-2">
                       <div class="col-4">
@@ -1335,12 +1336,12 @@
                   </div>
 
                   <!-- Campos personalizados (categoria) -->
-                  <div class="mb-4 p-3 rounded" style="background:#fffbeb; border:1px solid #fde68a;">
+                  <div class="cat-fields-box">
                     <div class="form-check mb-1">
                       <input class="form-check-input" type="checkbox" id="catTemCampos"
                              onchange="toggleCampos('cat')">
-                      <label class="form-check-label fw-semibold" for="catTemCampos">
-                        <i class="bi bi-input-cursor-text" style="color:#f59e0b;"></i>
+                      <label class="form-check-label cat-fields-label" for="catTemCampos">
+                        <i class="bi bi-input-cursor-text"></i>
                         Exige campos personalizados ao abrir ticket
                       </label>
                     </div>
@@ -1371,10 +1372,10 @@
                   <h6 class="fw-bold mb-1" id="formSubTitulo">
                     <i class="bi bi-diagram-2"></i> Nova Subcategoria
                   </h6>
-                  <div class="alert alert-light border py-2 px-3 mb-3 small">
-                    <i class="bi bi-folder-fill text-warning me-1"></i>
-                    Categoria pai: <strong id="formSubCatNome"></strong>
-                    <span class="text-muted ms-1">— SLA deixado em branco herda da categoria pai</span>
+                  <div class="cat-parent-info">
+                    <i class="bi bi-folder-fill"></i>
+                    <span>Categoria pai: <strong id="formSubCatNome"></strong></span>
+                    <small>SLA deixado em branco herda da categoria pai</small>
                   </div>
                   <input type="hidden" id="editandoSubcategoriaId">
                   <input type="hidden" id="subCategoriaPaiId">
@@ -1393,11 +1394,11 @@
                   </div>
 
                   <!-- SLA Total (subcategoria) -->
-                  <div class="mb-3 p-3 rounded" style="background:#f0f4ff; border:1px solid #c7d2fe;">
-                    <div class="d-flex align-items-center mb-2">
-                      <span class="badge me-2" style="background:#6f42c1;"><i class="bi bi-stopwatch-fill"></i></span>
-                      <span class="fw-semibold">SLA Total</span>
-                      <small class="text-muted ms-2">— sobrescreve o da categoria pai</small>
+                  <div class="cat-sla-box cat-sla-total">
+                    <div class="cat-sla-head">
+                      <span class="cat-sla-badge"><i class="bi bi-stopwatch-fill"></i></span>
+                      <span class="cat-sla-title">SLA Total</span>
+                      <small class="cat-sla-hint">— sobrescreve o da categoria pai</small>
                     </div>
                     <div class="row g-2">
                       <div class="col-4">
@@ -1420,11 +1421,11 @@
                   </div>
 
                   <!-- SLA Primeira Resposta (subcategoria) -->
-                  <div class="mb-4 p-3 rounded" style="background:#f0fff4; border:1px solid #86efac;">
-                    <div class="d-flex align-items-center mb-2">
-                      <span class="badge me-2 bg-success"><i class="bi bi-reply-fill"></i></span>
-                      <span class="fw-semibold">SLA Primeira Resposta</span>
-                      <small class="text-muted ms-2">— sobrescreve o da categoria pai</small>
+                  <div class="cat-sla-box cat-sla-pr">
+                    <div class="cat-sla-head">
+                      <span class="cat-sla-badge cat-sla-badge-green"><i class="bi bi-reply-fill"></i></span>
+                      <span class="cat-sla-title">SLA Primeira Resposta</span>
+                      <small class="cat-sla-hint">— sobrescreve o da categoria pai</small>
                     </div>
                     <div class="row g-2">
                       <div class="col-4">
@@ -1447,12 +1448,12 @@
                   </div>
 
                   <!-- Campos personalizados (subcategoria) -->
-                  <div class="mb-4 p-3 rounded" style="background:#fffbeb; border:1px solid #fde68a;">
+                  <div class="cat-fields-box">
                     <div class="form-check mb-1">
                       <input class="form-check-input" type="checkbox" id="subTemCampos"
                              onchange="toggleCampos('sub')">
-                      <label class="form-check-label fw-semibold" for="subTemCampos">
-                        <i class="bi bi-input-cursor-text" style="color:#f59e0b;"></i>
+                      <label class="form-check-label cat-fields-label" for="subTemCampos">
+                        <i class="bi bi-input-cursor-text"></i>
                         Exige campos personalizados ao abrir ticket
                       </label>
                     </div>
@@ -1479,11 +1480,12 @@
                 </div>
 
                 <!-- Estado vazio -->
-                <div id="formVazioDiv" class="text-center text-muted py-5">
-                  <div style="width:64px;height:64px;background:#fef9ee;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
-                    <i class="bi bi-tags" style="font-size:1.6rem;color:#f59e0b;opacity:.55;"></i>
+                <div id="formVazioDiv" class="cat-empty">
+                  <div class="cat-empty-icon">
+                    <i class="bi bi-tags"></i>
                   </div>
-                  <p class="mb-0 small">Selecione uma categoria ou clique em<br><strong style="color:#6f42c1;">+ Nova</strong> para começar.</p>
+                  <p class="cat-empty-title">Selecione uma categoria</p>
+                  <p class="cat-empty-sub">ou clique em <strong>+ Nova</strong> para começar.</p>
                 </div>
 
               </div>
@@ -1491,11 +1493,11 @@
           </div>
         </div>
 
-        <div class="modal-footer" style="background:#fafafa; border-top:1px solid #e5e7eb; padding:10px 20px;">
-          <small style="color:#9ca3af; margin-right:auto;">
-            <i class="bi bi-info-circle me-1" style="color:#f59e0b;"></i> Alterações são salvas imediatamente
+        <div class="modal-footer cat-modal-footer">
+          <small class="cat-footer-info">
+            <i class="bi bi-info-circle"></i> Alterações são salvas imediatamente
           </small>
-          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" class="btn cat-btn-close" data-bs-dismiss="modal">Fechar</button>
         </div>
 
       </div>
