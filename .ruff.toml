@@ -43,20 +43,10 @@ ignore = [
 "tools/*" = ["F401", "F811"]
 "server/app.py" = ["F811"]    # rebind de variável em hot-reload é tolerável aqui
 
-# ---------------------------------------------------------------------
-# DÍVIDA TÉCNICA CONHECIDA — F821 (undefined name) legados.
-# Bugs REAIS que existem em prod mas precisam de revisão cuidadosa pra
-# corrigir (envolvem fluxo de notificações). Ignorados aqui pra não
-# bloquear commits — mas DEVEM ser arrumados quando der.
-#
-# TODO(rastreio): tickets.py:2560 chama criar_notificacao_multipla() que
-#   não está importado/definido. Sob o fluxo de resposta de ticket, dá
-#   NameError em runtime e quebra a notificação.
-#
-# TODO(rastreio): notificacao_service.py:128 usa variável `mensagem`
-#   nunca atribuída. Sob criação de notificação de ticket, NameError.
-# ---------------------------------------------------------------------
-"server/routes/tickets.py" = ["F821"]
-"server/services/notificacao_service.py" = ["F821"]
+# Per-file ignores residuais (não-bugs)
 "server/services/permissao_service.py" = ["F811"]      # rebind padrão do projeto
 "server/services/PermissaoService.py" = ["F811"]       # idem
+
+# Histórico: F821 em tickets.py:2560 e notificacao_service.py:128 foram
+# corrigidos em 2026-06-17 (NameError silenciado por except Error que só
+# captura mysql.connector.Error, não Python builtins).
