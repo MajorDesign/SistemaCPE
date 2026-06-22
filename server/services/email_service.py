@@ -548,6 +548,263 @@ def email_equipe_novo_agendamento(
     return subject, html
 
 
+def email_ticket_para_grupo(
+    *, ticket_numero: str, assunto: str, descricao: str,
+    grupo: str, prioridade: str, solicitante_nome: str,
+    destinatario_nome: str,
+) -> tuple[str, str]:
+    """Email broadcast pra todos do grupo quando um chamado novo (ou devolvido /
+    encaminhado) entra na fila do grupo, sem responsavel atribuido ainda."""
+    subject = f"[Chamado {ticket_numero}] Novo chamado aguardando atendimento"
+    body = f"""
+        <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
+        <p>Há um novo chamado <strong>aguardando atendimento</strong> na fila
+        do seu grupo. Qualquer pessoa do grupo pode assumi-lo no sistema.</p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+          <tbody>
+            {_info_box("Nº do chamado", ticket_numero)}
+            {_info_box("Assunto", assunto)}
+            {_info_box("Solicitante", solicitante_nome)}
+            {_info_box("Setor", grupo)}
+            {_info_box("Prioridade", prioridade)}
+          </tbody>
+        </table>
+
+        <div style="margin:14px 0;padding:12px 14px;background:#f9fafb;
+                    border-left:4px solid #667eea;border-radius:6px;">
+          <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">Descrição</div>
+          <div style="white-space:pre-wrap;">{_escape(descricao)}</div>
+        </div>
+
+        <p>Após alguém do grupo assumir o chamado, apenas o responsável
+        receberá as atualizações seguintes.</p>
+    """
+    html = _BASE_TEMPLATE.format(title="Novo chamado na fila do grupo", tag="Aguardando atendimento", body=body)
+    return subject, html
+
+
+def email_ticket_atribuido(
+    *, ticket_numero: str, assunto: str,
+    destinatario_nome: str, atribuidor_nome: str, e_proprio_solicitante: bool = False,
+) -> tuple[str, str]:
+    """Email pro novo responsavel (ou pro solicitante avisando quem pegou)."""
+    if e_proprio_solicitante:
+        subject = f"[Chamado {ticket_numero}] Seu chamado foi assumido"
+        titulo = "Seu chamado foi assumido"
+        msg = (
+            f"<p>Seu chamado <strong>{_escape(ticket_numero)}</strong> foi "
+            f"assumido por <strong>{_escape(atribuidor_nome)}</strong> e já "
+            f"está em atendimento.</p>"
+        )
+    else:
+        subject = f"[Chamado {ticket_numero}] Atribuído a você"
+        titulo = "Chamado atribuído a você"
+        msg = (
+            f"<p>O chamado <strong>{_escape(ticket_numero)}</strong> foi "
+            f"atribuído a você por <strong>{_escape(atribuidor_nome)}</strong>. "
+            f"A partir de agora você é o responsável e receberá todas as "
+            f"atualizações deste chamado.</p>"
+        )
+    body = f"""
+        <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
+        {msg}
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+          <tbody>
+            {_info_box("Nº do chamado", ticket_numero)}
+            {_info_box("Assunto", assunto)}
+          </tbody>
+        </table>
+    """
+    html = _BASE_TEMPLATE.format(title=titulo, tag="Atribuição", body=body)
+    return subject, html
+
+
+def email_ticket_status_alterado(
+    *, ticket_numero: str, assunto: str,
+    status_anterior: str, status_novo: str,
+    autor_nome: str, destinatario_nome: str,
+) -> tuple[str, str]:
+    """Email quando o status do ticket muda."""
+    subject = f"[Chamado {ticket_numero}] Status: {status_novo}"
+    body = f"""
+        <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
+        <p>O status do chamado <strong>{_escape(ticket_numero)}</strong> foi
+        atualizado por <strong>{_escape(autor_nome)}</strong>.</p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+          <tbody>
+            {_info_box("Nº do chamado", ticket_numero)}
+            {_info_box("Assunto", assunto)}
+            {_info_box("Status anterior", status_anterior)}
+            {_info_box("Status atual", status_novo)}
+          </tbody>
+        </table>
+    """
+    html = _BASE_TEMPLATE.format(title="Status do chamado atualizado", tag="Atualização", body=body)
+    return subject, html
+
+
+def email_ticket_encaminhado(
+    *, ticket_numero: str, assunto: str,
+    grupo_origem: str, grupo_destino: str, motivo: str,
+    autor_nome: str, destinatario_nome: str,
+    e_solicitante: bool = False,
+) -> tuple[str, str]:
+    """Email quando o ticket é encaminhado pra outro grupo."""
+    subject = f"[Chamado {ticket_numero}] Encaminhado para {grupo_destino}"
+    if e_solicitante:
+        msg = (
+            f"<p>Seu chamado <strong>{_escape(ticket_numero)}</strong> foi "
+            f"encaminhado de <strong>{_escape(grupo_origem)}</strong> para "
+            f"<strong>{_escape(grupo_destino)}</strong> por "
+            f"<strong>{_escape(autor_nome)}</strong>. O novo grupo dará "
+            f"continuidade no atendimento.</p>"
+        )
+    else:
+        msg = (
+            f"<p>O chamado <strong>{_escape(ticket_numero)}</strong> foi "
+            f"encaminhado para o seu grupo (<strong>{_escape(grupo_destino)}</strong>) "
+            f"por <strong>{_escape(autor_nome)}</strong>, vindo de "
+            f"<strong>{_escape(grupo_origem)}</strong>.</p>"
+        )
+    motivo_html = ""
+    if motivo:
+        motivo_html = f"""
+            <div style="margin:14px 0;padding:12px 14px;background:#f9fafb;
+                        border-left:4px solid #667eea;border-radius:6px;">
+              <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">Motivo</div>
+              <div style="white-space:pre-wrap;">{_escape(motivo)}</div>
+            </div>
+        """
+    body = f"""
+        <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
+        {msg}
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+          <tbody>
+            {_info_box("Nº do chamado", ticket_numero)}
+            {_info_box("Assunto", assunto)}
+            {_info_box("Origem", grupo_origem)}
+            {_info_box("Destino", grupo_destino)}
+          </tbody>
+        </table>
+        {motivo_html}
+    """
+    html = _BASE_TEMPLATE.format(title="Chamado encaminhado", tag="Encaminhamento", body=body)
+    return subject, html
+
+
+def email_ticket_devolvido(
+    *, ticket_numero: str, assunto: str,
+    devolvedor_nome: str, motivo: str, destinatario_nome: str,
+) -> tuple[str, str]:
+    """Email quando o responsavel devolve o ticket pra fila do grupo."""
+    subject = f"[Chamado {ticket_numero}] Voltou para a fila do grupo"
+    motivo_html = ""
+    if motivo:
+        motivo_html = f"""
+            <div style="margin:14px 0;padding:12px 14px;background:#f9fafb;
+                        border-left:4px solid #f59e0b;border-radius:6px;">
+              <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">Motivo da devolução</div>
+              <div style="white-space:pre-wrap;">{_escape(motivo)}</div>
+            </div>
+        """
+    body = f"""
+        <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
+        <p>O chamado <strong>{_escape(ticket_numero)}</strong> foi devolvido
+        para a fila do grupo por <strong>{_escape(devolvedor_nome)}</strong>.
+        Qualquer pessoa do grupo pode assumi-lo novamente.</p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+          <tbody>
+            {_info_box("Nº do chamado", ticket_numero)}
+            {_info_box("Assunto", assunto)}
+          </tbody>
+        </table>
+        {motivo_html}
+    """
+    html = _BASE_TEMPLATE.format(title="Chamado devolvido para a fila", tag="Aguardando atendimento", body=body)
+    return subject, html
+
+
+def email_ticket_reaberto(
+    *, ticket_numero: str, assunto: str,
+    solicitante_nome: str, justificativa: str, destinatario_nome: str,
+    e_solicitante: bool = False,
+) -> tuple[str, str]:
+    """Email quando o solicitante reabre um chamado resolvido."""
+    subject = f"[Chamado {ticket_numero}] Reaberto"
+    if e_solicitante:
+        msg = (
+            f"<p>Confirmamos que você reabriu o chamado "
+            f"<strong>{_escape(ticket_numero)}</strong>. Em breve um responsável "
+            f"dará continuidade no atendimento.</p>"
+        )
+    else:
+        msg = (
+            f"<p>O chamado <strong>{_escape(ticket_numero)}</strong> foi reaberto "
+            f"por <strong>{_escape(solicitante_nome)}</strong>. Por favor, "
+            f"dê continuidade no atendimento.</p>"
+        )
+    body = f"""
+        <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
+        {msg}
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+          <tbody>
+            {_info_box("Nº do chamado", ticket_numero)}
+            {_info_box("Assunto", assunto)}
+          </tbody>
+        </table>
+        <div style="margin:14px 0;padding:12px 14px;background:#fef2f2;
+                    border-left:4px solid #DC2626;border-radius:6px;">
+          <div style="font-size:12px;color:#7f1d1d;margin-bottom:4px;font-weight:600;">
+            Justificativa da reabertura
+          </div>
+          <div style="white-space:pre-wrap;">{_escape(justificativa)}</div>
+        </div>
+    """
+    html = _BASE_TEMPLATE.format(title="Chamado reaberto", tag="Reabertura", body=body)
+    return subject, html
+
+
+def email_ticket_comentario_interno(
+    *, ticket_numero: str, assunto: str,
+    autor_nome: str, mensagem: str, destinatario_nome: str,
+) -> tuple[str, str]:
+    """Email pra equipe quando alguem posta um comentario interno.
+    NUNCA enviado ao solicitante (é uma nota interna entre a equipe)."""
+    subject = f"[Chamado {ticket_numero}] Novo comentário interno"
+    body = f"""
+        <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
+        <p><strong>{_escape(autor_nome)}</strong> postou um <strong>comentário
+        interno</strong> no chamado <strong>{_escape(ticket_numero)}</strong>:</p>
+
+        <div style="margin:14px 0;padding:14px 16px;background:#fef3c7;
+                    border-left:4px solid #d97706;border-radius:6px;">
+          <div style="font-size:12px;color:#92400e;margin-bottom:6px;font-weight:600;">
+            🔒 Visível apenas para a equipe
+          </div>
+          <div style="white-space:pre-wrap;">{_escape(mensagem)}</div>
+        </div>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+          <tbody>
+            {_info_box("Nº do chamado", ticket_numero)}
+            {_info_box("Assunto", assunto)}
+          </tbody>
+        </table>
+    """
+    html = _BASE_TEMPLATE.format(title="Novo comentário interno", tag="Nota da equipe", body=body)
+    return subject, html
+
+
 def email_ticket_finalizado(
     *, ticket_numero: str, assunto: str, solicitante_nome: str,
     finalizador_nome: str, solucao: str
