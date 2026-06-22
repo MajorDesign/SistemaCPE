@@ -1901,11 +1901,15 @@ async def reabrir_ticket(ticket_id: int, payload: ReopenPayload):
 
         ticket_db = validar_ticket_existe(cursor, ticket_id)
 
-        # Apenas o solicitante pode reabrir
-        if ticket_db["solicitante_id"] != payload.usuario_id:
+        # Reabertura: solicitante OU admin (ADMIN/TI/MANAGER).
+        # Demais usuarios sem ser solicitante recebem 403.
+        usuario_reabrir = validar_usuario_existe(cursor, payload.usuario_id)
+        role_reabrir = usuario_reabrir.get("role") or "USER"
+        e_admin_reabrir = role_reabrir in ROLES_ADMIN
+        if (not e_admin_reabrir) and ticket_db["solicitante_id"] != payload.usuario_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas quem abriu o chamado pode reabrí-lo."
+                detail="Apenas quem abriu o chamado ou um administrador pode reabri-lo."
             )
 
         # Ticket precisa estar Resolvido (4)
@@ -1964,8 +1968,8 @@ async def reabrir_ticket(ticket_id: int, payload: ReopenPayload):
         conexao.commit()
 
         # Registrar interação com justificativa
-        usuario   = validar_usuario_existe(cursor, payload.usuario_id)
-        nome      = usuario.get("name") or f"Usuário #{payload.usuario_id}"
+        # (usuario_reabrir ja foi carregado no inicio da funcao)
+        nome      = usuario_reabrir.get("name") or f"Usuário #{payload.usuario_id}"
         cursor.execute(
             """
             INSERT INTO ticket_interacoes
