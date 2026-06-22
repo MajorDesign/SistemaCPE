@@ -251,6 +251,21 @@ class TicketResposta(BaseModel):
     prioridade_id: int
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+    # Campos enriquecidos via JOIN no GET /{id} (todos opcionais —
+    # nao chegam em todos os endpoints que usam este schema).
+    id_alfanumerica: Optional[str] = None
+    descricao_inicial: Optional[str] = None
+    categoria_id: Optional[int] = None
+    subcategoria_id: Optional[int] = None
+    categoria_nome: Optional[str] = None
+    subcategoria_nome: Optional[str] = None
+    group_name: Optional[str] = None
+    solicitante_nome: Optional[str] = None
+    solicitante_email: Optional[str] = None
+    responsavel_nome: Optional[str] = None
+    campos_personalizados: Optional[list] = None
+    reopen_count: Optional[int] = None
+    origem: Optional[str] = None
 
 class InteracaoCriar(BaseModel):
     ticket_id: int = Field(..., gt=0)
