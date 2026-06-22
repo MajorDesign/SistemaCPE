@@ -459,24 +459,32 @@
       <div class="main-content" style="flex: 1;">
         
         <!-- TOP BAR -->
-        <div class="top-bar">
+        <div class="top-bar" style="display:flex;align-items:center;gap:12px">
           <button class="menu-toggle" id="menuToggle">
             <i class="bi bi-list"></i>
           </button>
-          <h1>Dashboard</h1>
+          <h1 style="margin:0">Dashboard</h1>
+          <button type="button" class="btn-dash-personalize" id="btnDashPersonalize"
+                  onclick="abrirModalPersonalizarDash()"
+                  style="margin-left:auto;background:#1A1A1A;color:#FFC107;border:1px solid #1A1A1A;border-radius:4px;padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background .15s,transform .15s">
+            <i class="bi bi-sliders"></i> Personalizar
+          </button>
         </div>
 
         <!-- CONTENT -->
         <div class="content">
 
+          <!-- Cada widget tem data-dash-widget="<id>" pra personalizacao
+               funcionar (ID estavel mesmo que a ordem do DOM mude). -->
+
           <!-- Saudação -->
-          <p class="dash-saudacao" id="dashSaudacao">Carregando...</p>
+          <p class="dash-saudacao" id="dashSaudacao" data-dash-widget="saudacao">Carregando...</p>
 
           <!-- Atalhos rápidos -->
-          <div class="atalhos-bar" id="dashAtalhos"></div>
+          <div class="atalhos-bar" id="dashAtalhos" data-dash-widget="atalhos"></div>
 
           <!-- KPIs (4 cards) -->
-          <div class="kpi-grid" id="dashKpis">
+          <div class="kpi-grid" id="dashKpis" data-dash-widget="kpis">
             <div class="dash-empty" style="grid-column:1/-1">
               <i class="bi bi-hourglass-split"></i>
               Carregando indicadores...
@@ -484,7 +492,7 @@
           </div>
 
           <!-- Banner: próxima reserva (oculto se não houver) -->
-          <a class="reserva-banner" id="dashReservaBanner" href="#" style="display:none">
+          <a class="reserva-banner" id="dashReservaBanner" data-dash-widget="reserva" href="#" style="display:none">
             <div class="icon"><i class="bi bi-calendar-event-fill"></i></div>
             <div style="flex:1;">
               <div class="titulo" id="dashReservaTit">—</div>
@@ -496,10 +504,28 @@
             </div>
           </a>
 
+          <!-- Tickets atribuidos ao usuario logado -->
+          <div class="dash-panel" data-dash-widget="meus_tickets" id="dashMeusTicketsPanel">
+            <h3 class="dash-panel-title">
+              <i class="bi bi-ticket-detailed-fill" style="color:#2563EB"></i>
+              Tickets atribuídos a mim
+              <span class="badge" id="dashMeusTicketsCount">0</span>
+              <a href="/SistemaCPE/web/pages/tickets.html?vista=para_mim"
+                 style="margin-left:auto;font-size:12px;color:#6B7280;font-weight:500;text-decoration:none">
+                Ver todos <i class="bi bi-arrow-right"></i>
+              </a>
+            </h3>
+            <div id="dashMeusTickets">
+              <div class="dash-empty">
+                <i class="bi bi-hourglass-split"></i> Carregando...
+              </div>
+            </div>
+          </div>
+
           <!-- 2 colunas: agenda do dia + pendências -->
           <div class="dash-row">
             <!-- Agenda do dia -->
-            <div class="dash-panel">
+            <div class="dash-panel" data-dash-widget="agenda">
               <h3 class="dash-panel-title">
                 <i class="bi bi-calendar2-event-fill" style="color:#FFC107"></i>
                 Agenda do dia
@@ -513,7 +539,7 @@
             </div>
 
             <!-- Caixa de pendências -->
-            <div class="dash-panel">
+            <div class="dash-panel" data-dash-widget="pendencias">
               <h3 class="dash-panel-title">
                 <i class="bi bi-list-check" style="color:#DC2626"></i>
                 O que precisa de você agora
@@ -530,7 +556,7 @@
           <!-- 2 colunas: avaliações do grupo (RESP.GRUPO) + frota (RESP.GRUPO Frotas) -->
           <div class="dash-row" id="dashRowGestao" style="display:none">
             <!-- Avaliações do grupo -->
-            <a class="dash-panel" id="dashAvaliacoes" href="/SistemaCPE/web/pages/avaliacoes.html"
+            <a class="dash-panel" id="dashAvaliacoes" data-dash-widget="avaliacoes" href="/SistemaCPE/web/pages/avaliacoes.html"
                style="display:none;text-decoration:none;color:inherit">
               <h3 class="dash-panel-title">
                 <i class="bi bi-star-fill" style="color:#F59E0B"></i>
@@ -541,7 +567,7 @@
             </a>
 
             <!-- Widgets de frota -->
-            <a class="dash-panel" id="dashFrota" href="/SistemaCPE/web/pages/fleet.html"
+            <a class="dash-panel" id="dashFrota" data-dash-widget="frota" href="/SistemaCPE/web/pages/fleet.html"
                style="display:none;text-decoration:none;color:inherit">
               <h3 class="dash-panel-title">
                 <i class="bi bi-truck" style="color:#2563EB"></i>
@@ -731,6 +757,16 @@
         renderProximaReserva(data.proxima_reserva);
         renderAvaliacoes(data.avaliacoes);
         renderFrota(data.frota);
+
+        // Fetch independente: "Tickets atribuidos a mim" usa GET /api/tickets/
+        // com vista=para_mim. Falha aqui nao derruba o resto da dashboard.
+        loadMeusTickets(user, apiBase).catch(err =>
+          console.warn('[DASH] meus_tickets falhou:', err)
+        );
+
+        // Personalizacao: captura quais widgets o user pode ver e aplica preferencias
+        snapshotNaturalVisibleDash();
+        aplicarPersonalizacaoDash();
 
         console.log("[INDEX] ✓ Dashboard carregada");
       } catch (err) {
@@ -949,6 +985,81 @@
       `;
     }
 
+    // ---- Widget: Tickets atribuidos a mim (todos os roles) ---------
+    // Status: 1=aberto, 2=em-andamento, 3=aguardando, 4=resolvido, 5=fechado
+    // Mostramos so 1/2/3 (em aberto) — finalizados nao precisam de acao.
+    const _TICKET_STATUS_META = {
+      1: { label: 'Aberto',         cls: 'open',        cor: '#2563EB' },
+      2: { label: 'Em andamento',   cls: 'in-progress', cor: '#D97706' },
+      3: { label: 'Aguardando',     cls: 'waiting',     cor: '#9333EA' },
+      4: { label: 'Resolvido',      cls: 'resolved',    cor: '#16A34A' },
+      5: { label: 'Fechado',        cls: 'closed',      cor: '#6B7280' },
+    };
+
+    async function loadMeusTickets(user, apiBase) {
+      const cont  = document.getElementById('dashMeusTickets');
+      const count = document.getElementById('dashMeusTicketsCount');
+      if (!cont) return;
+      try {
+        const url = `${apiBase}/api/tickets/?usuario_id=${user.id}&vista=para_mim&limite=50`;
+        const r = await fetch(url);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const todos = await r.json();
+        // Mantem apenas os em aberto (status 1/2/3)
+        const abertos = (Array.isArray(todos) ? todos : [])
+          .filter(t => [1, 2, 3].includes(t.status_id));
+        renderMeusTickets(abertos);
+        if (count) count.textContent = abertos.length;
+      } catch (err) {
+        console.warn('[INDEX] Erro ao carregar meus tickets:', err);
+        cont.innerHTML = `
+          <div class="dash-empty">
+            <i class="bi bi-exclamation-triangle"></i>
+            Não foi possível carregar seus tickets.
+          </div>`;
+        if (count) count.textContent = '!';
+      }
+    }
+
+    function renderMeusTickets(tickets) {
+      const cont = document.getElementById('dashMeusTickets');
+      if (!cont) return;
+      if (!tickets.length) {
+        cont.innerHTML = `
+          <div class="dash-empty">
+            <i class="bi bi-check-circle"></i>
+            Nenhum ticket atribuído a você no momento.
+          </div>`;
+        return;
+      }
+      // Top 5 mais recentes (ordem que o backend ja retorna)
+      const top = tickets.slice(0, 5);
+      cont.innerHTML = top.map(t => {
+        const st = _TICKET_STATUS_META[t.status_id] || _TICKET_STATUS_META[1];
+        const titulo = escapeHtml(t.titulo || t.title || 'Sem título');
+        const numero = escapeHtml(t.id_alfanumerica || t.numero || `#${t.id}`);
+        const grupo  = escapeHtml(t.group_name || '—');
+        const slaEstourou = t.sla?.calculo?.estourado || t.sla?.estourou_em;
+        const href = `/SistemaCPE/web/pages/tickets.html?ticket=${encodeURIComponent(t.id)}`;
+        return `
+          <a class="meu-ticket-item" href="${href}">
+            <div class="meu-ticket-num">${numero}</div>
+            <div class="meu-ticket-info">
+              <div class="meu-ticket-titulo">${titulo}</div>
+              <div class="meu-ticket-meta">
+                <span class="meu-ticket-status status-${st.cls}" style="background:${st.cor}15;color:${st.cor};border-color:${st.cor}40">
+                  ${escapeHtml(st.label)}
+                </span>
+                <span class="meu-ticket-grupo"><i class="bi bi-people"></i> ${grupo}</span>
+                ${slaEstourou ? '<span class="meu-ticket-sla"><i class="bi bi-clock-history"></i> SLA estourado</span>' : ''}
+              </div>
+            </div>
+            <i class="bi bi-chevron-right meu-ticket-chev"></i>
+          </a>
+        `;
+      }).join('');
+    }
+
     // Esconde a row "gestão" se nenhum dos 2 painéis está visível
     function checkDashRowGestao() {
       const row    = document.getElementById('dashRowGestao');
@@ -998,7 +1109,243 @@
     });
     // [FIM] Error Handlers
 
+
+    // ============================================================
+    // PERSONALIZACAO DA DASHBOARD (Nivel 1 MVP — pure frontend)
+    // ============================================================
+    // - localStorage key: cpe_dashboard_hidden = ["frota","avaliacoes"]
+    // - "Natural visible" = widgets que o backend liberou pro user
+    //   (capturados logo apos os render*). So esses entram na lista
+    //   de personalizacao. Quem nao tem permissao nem aparece.
+    // - Reverter completo: localStorage.removeItem('cpe_dashboard_hidden')
+    // ============================================================
+
+    const DASH_PERSO_KEY = 'cpe_dashboard_hidden';
+    const DASH_WIDGETS_META = [
+      { id: 'saudacao',     label: 'Saudação',                        icon: 'bi-emoji-smile' },
+      { id: 'atalhos',      label: 'Atalhos rápidos',                 icon: 'bi-lightning-charge' },
+      { id: 'kpis',         label: 'Indicadores (KPIs)',              icon: 'bi-bar-chart' },
+      { id: 'reserva',      label: 'Próxima reserva de sala',         icon: 'bi-calendar-event' },
+      { id: 'meus_tickets', label: 'Tickets atribuídos a mim',        icon: 'bi-ticket-detailed' },
+      { id: 'agenda',       label: 'Agenda do dia',                   icon: 'bi-calendar2-event' },
+      { id: 'pendencias',   label: 'O que precisa de você agora',     icon: 'bi-list-check' },
+      { id: 'avaliacoes',   label: 'Avaliações do seu grupo',         icon: 'bi-star' },
+      { id: 'frota',        label: 'Painel de Frotas',                icon: 'bi-truck' },
+    ];
+
+    function _dashLoadHidden() {
+      try {
+        const raw = localStorage.getItem(DASH_PERSO_KEY);
+        if (!raw) return [];
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr.filter(x => typeof x === 'string') : [];
+      } catch (_e) { return []; }
+    }
+
+    function _dashSaveHidden(arr) {
+      try { localStorage.setItem(DASH_PERSO_KEY, JSON.stringify(arr)); }
+      catch (e) { console.warn('[DASH] localStorage indisponivel', e); }
+    }
+
+    // Captura quais widgets sao "naturalmente visiveis" para esse user
+    // (os que o backend liberou). Roda uma vez apos loadDashboardData().
+    function snapshotNaturalVisibleDash() {
+      const visiveis = [];
+      document.querySelectorAll('[data-dash-widget]').forEach(el => {
+        const wid = el.dataset.dashWidget;
+        // Memoriza o display original para podermos restaurar exatamente
+        if (el.dataset.dashOriginalDisplay === undefined) {
+          el.dataset.dashOriginalDisplay = el.style.display || '';
+        }
+        const disp = window.getComputedStyle(el).display;
+        if (disp !== 'none') visiveis.push(wid);
+      });
+      window.__dashNaturalVisible = visiveis;
+      console.log('[DASH] Widgets disponiveis para este user:', visiveis);
+    }
+
+    function aplicarPersonalizacaoDash() {
+      const hidden = _dashLoadHidden();
+      const naturais = window.__dashNaturalVisible || [];
+      document.querySelectorAll('[data-dash-widget]').forEach(el => {
+        const wid = el.dataset.dashWidget;
+        // So mexemos em widgets que o user TEM permissao de ver
+        if (!naturais.includes(wid)) return;
+        if (hidden.includes(wid)) {
+          el.style.display = 'none';
+        } else {
+          el.style.display = el.dataset.dashOriginalDisplay || '';
+        }
+      });
+      // Row de gestao some quando ambos (avaliacoes + frota) estao escondidos
+      if (typeof checkDashRowGestao === 'function') {
+        try { checkDashRowGestao(); } catch (_e) {}
+      }
+    }
+
+    function abrirModalPersonalizarDash() {
+      const lista = document.getElementById('dashPersoList');
+      const hidden = _dashLoadHidden();
+      const naturais = window.__dashNaturalVisible || [];
+
+      if (!naturais.length) {
+        lista.innerHTML =
+          `<div class="text-center text-muted p-3">
+             <i class="bi bi-info-circle"></i>
+             Nenhum widget disponivel para personalizar ainda.
+             Aguarde a dashboard terminar de carregar.
+           </div>`;
+      } else {
+        const items = DASH_WIDGETS_META
+          .filter(w => naturais.includes(w.id))
+          .map(w => `
+            <label class="dash-perso-row">
+              <input type="checkbox" class="form-check-input"
+                     data-perso-wid="${w.id}"
+                     ${hidden.includes(w.id) ? '' : 'checked'}>
+              <i class="bi ${w.icon} dash-perso-icon"></i>
+              <span class="dash-perso-label">${w.label}</span>
+            </label>
+          `).join('');
+        lista.innerHTML = items;
+      }
+
+      const modalEl = document.getElementById('modalPersonalizeDash');
+      bootstrap.Modal.getOrCreateInstance(modalEl).show();
+    }
+
+    function salvarPersonalizarDash() {
+      const checkboxes = document.querySelectorAll('#dashPersoList input[type="checkbox"][data-perso-wid]');
+      const hidden = [];
+      checkboxes.forEach(cb => { if (!cb.checked) hidden.push(cb.dataset.persoWid); });
+      _dashSaveHidden(hidden);
+      aplicarPersonalizacaoDash();
+      const modalEl = document.getElementById('modalPersonalizeDash');
+      bootstrap.Modal.getInstance(modalEl)?.hide();
+    }
+
+    function restaurarPadraoDash() {
+      _dashSaveHidden([]);
+      // Marca todos checkboxes como checked
+      document.querySelectorAll('#dashPersoList input[type="checkbox"][data-perso-wid]')
+        .forEach(cb => { cb.checked = true; });
+      aplicarPersonalizacaoDash();
+    }
+
   </script>
+
+  <!-- ============================================================ -->
+  <!-- MODAL: PERSONALIZAR DASHBOARD                                -->
+  <!-- ============================================================ -->
+  <div class="modal fade" id="modalPersonalizeDash" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius:6px;border:1px solid #1A1A1A">
+        <div class="modal-header" style="background:#1A1A1A;color:#fff;border-bottom:3px solid #FFC107">
+          <h5 class="modal-title" style="font-weight:700;display:flex;align-items:center;gap:8px;margin:0">
+            <i class="bi bi-sliders" style="color:#FFC107"></i>
+            Personalizar dashboard
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body" style="padding:18px 20px">
+          <p style="color:#6B7280;font-size:13px;margin:0 0 14px 0">
+            Marque o que voce quer ver na sua dashboard. As mudancas sao salvas
+            no seu navegador.
+          </p>
+          <div id="dashPersoList" class="dash-perso-list">
+            <div class="text-center text-muted p-3">
+              <i class="bi bi-hourglass-split"></i> Carregando...
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer" style="border-top:1px solid #E5E7EB;padding:12px 20px">
+          <button type="button" class="btn btn-sm"
+                  style="background:transparent;color:#6B7280;border:none;font-weight:600"
+                  onclick="restaurarPadraoDash()">
+            <i class="bi bi-arrow-counterclockwise"></i> Restaurar padrao
+          </button>
+          <div style="flex:1"></div>
+          <button type="button" class="btn btn-sm"
+                  style="background:#fff;color:#1A1A1A;border:1px solid #E5E7EB;font-weight:600"
+                  data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-sm"
+                  style="background:#1A1A1A;color:#FFC107;border:1px solid #1A1A1A;font-weight:700"
+                  onclick="salvarPersonalizarDash()">
+            <i class="bi bi-check-lg"></i> Aplicar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    /* Botao Personalizar — hover */
+    .btn-dash-personalize:hover { background:#2A2A2A !important; transform:translateY(-1px); }
+    .btn-dash-personalize:active { transform:translateY(0); }
+
+    /* Lista de widgets no modal */
+    .dash-perso-list { display:flex; flex-direction:column; gap:6px; }
+    .dash-perso-row {
+      display:flex; align-items:center; gap:12px;
+      padding:10px 12px; border:1px solid #E5E7EB; border-radius:4px;
+      cursor:pointer; transition:background .12s, border-color .12s;
+      user-select:none; margin:0;
+    }
+    .dash-perso-row:hover { background:#FAFAFA; border-color:#1A1A1A; }
+    .dash-perso-row input[type="checkbox"] {
+      width:18px; height:18px; cursor:pointer; flex-shrink:0; margin:0;
+      accent-color:#1A1A1A;
+    }
+    .dash-perso-icon {
+      font-size:18px; color:#1A1A1A; width:22px; text-align:center; flex-shrink:0;
+    }
+    .dash-perso-label {
+      font-size:14px; color:#1A1A1A; font-weight:500; flex:1;
+    }
+    .dash-perso-row:has(input:not(:checked)) { opacity:.55; }
+    .dash-perso-row:has(input:not(:checked)) .dash-perso-icon { color:#9CA3AF; }
+
+    /* Widget "Tickets atribuidos a mim" */
+    #dashMeusTicketsPanel .dash-panel-title { display:flex; align-items:center; gap:8px; }
+    .meu-ticket-item {
+      display:flex; align-items:center; gap:12px;
+      padding:10px 12px; margin-top:6px;
+      border:1px solid #E5E7EB; border-radius:4px;
+      text-decoration:none; color:inherit;
+      transition:background .12s, border-color .12s, transform .12s;
+    }
+    .meu-ticket-item:hover {
+      background:#FAFAFA; border-color:#1A1A1A;
+      transform:translateX(2px);
+    }
+    .meu-ticket-num {
+      font-family: 'JetBrains Mono', 'Consolas', monospace;
+      font-size:11px; font-weight:700; color:#1A1A1A;
+      background:#FFC107; padding:4px 8px; border-radius:3px;
+      white-space:nowrap; flex-shrink:0;
+    }
+    .meu-ticket-info { flex:1; min-width:0; }
+    .meu-ticket-titulo {
+      font-size:13px; font-weight:600; color:#1A1A1A;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      margin-bottom:3px;
+    }
+    .meu-ticket-meta {
+      display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+      font-size:11px; color:#6B7280;
+    }
+    .meu-ticket-status {
+      padding:2px 8px; border-radius:3px; font-weight:600;
+      font-size:10px; text-transform:uppercase; letter-spacing:.4px;
+      border:1px solid;
+    }
+    .meu-ticket-grupo { display:inline-flex; align-items:center; gap:3px; }
+    .meu-ticket-sla {
+      display:inline-flex; align-items:center; gap:3px;
+      color:#DC2626; font-weight:600;
+    }
+    .meu-ticket-chev { color:#9CA3AF; font-size:16px; flex-shrink:0; }
+  </style>
 
 </body>
 

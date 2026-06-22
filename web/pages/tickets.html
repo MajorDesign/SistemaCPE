@@ -616,6 +616,16 @@
               </div>
               <div class="detail-row">
                 <div class="detail-col">
+                  <span class="detail-label">Categoria</span>
+                  <span class="detail-value" id="detailCategoria">—</span>
+                </div>
+                <div class="detail-col">
+                  <span class="detail-label">Subcategoria</span>
+                  <span class="detail-value" id="detailSubcategoria">—</span>
+                </div>
+              </div>
+              <div class="detail-row">
+                <div class="detail-col">
                   <span class="detail-label">Status</span>
                   <span id="detailStatus"></span>
                 </div>
@@ -821,14 +831,15 @@
                 <input type="email" class="form-control" id="ticketEmail" placeholder="Seu e-mail" readonly>
               </div>
 
-              <!-- GRUPO -->
+              <!-- SETOR DE DESTINO -->
               <div class="col-md-6">
                 <label class="form-label">
-                  <i class="bi bi-diagram-3 text-primary"></i> Grupo/Setor <span class="text-danger">*</span>
+                  <i class="bi bi-diagram-3 text-primary"></i> Setor de destino <span class="text-danger">*</span>
                 </label>
                 <select class="form-select" id="ticketGroupName" required>
-                  <option value="">Carregando grupos...</option>
+                  <option value="">Selecione o setor que vai atender...</option>
                 </select>
+                <small class="text-muted">Para qual setor o chamado deve ser direcionado</small>
               </div>
 
               <!-- PRIORIDADE -->
@@ -848,8 +859,7 @@
               <!-- CATEGORIA -->
               <div class="col-md-6 d-none" id="ticketCategoriaDiv">
                 <label class="form-label">
-                  <i class="bi bi-folder text-primary"></i> Categoria
-                  <small class="text-muted">(opcional)</small>
+                  <i class="bi bi-folder text-primary"></i> Categoria <span class="text-danger">*</span>
                 </label>
                 <select class="form-select" id="ticketCategoria">
                   <option value="">Selecione uma categoria...</option>
@@ -859,8 +869,7 @@
               <!-- SUBCATEGORIA -->
               <div class="col-md-6 d-none" id="ticketSubcategoriaDiv">
                 <label class="form-label">
-                  <i class="bi bi-diagram-2 text-primary"></i> Subcategoria
-                  <small class="text-muted">(opcional)</small>
+                  <i class="bi bi-diagram-2 text-primary"></i> Subcategoria <span class="text-danger">*</span>
                 </label>
                 <select class="form-select" id="ticketSubcategoria">
                   <option value="">Selecione uma subcategoria...</option>
@@ -1375,7 +1384,7 @@
        ======================================== -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-06-17"></script>
-  <script src="/SistemaCPE/web/assests/js/tickets.js"></script>
+  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-06-22b"></script>
 
 </body>
 

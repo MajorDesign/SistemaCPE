@@ -719,7 +719,10 @@ function populateGroupDropdown() {
   }
 }
 
-/** Carrega categorias do grupo selecionado e popula o select de categoria */
+/** Carrega categorias do grupo selecionado e popula o select de categoria.
+ *  Se o grupo tem categorias cadastradas, exibe e marca 'required'.
+ *  Se nao tem, oculta e remove 'required' (evita travar o submit do form).
+ */
 async function carregarCategoriasTicket(groupId) {
   const catDiv    = document.getElementById('ticketCategoriaDiv');
   const catSelect = document.getElementById('ticketCategoria');
@@ -732,6 +735,7 @@ async function carregarCategoriasTicket(groupId) {
 
     if (!cats.length) {
       catDiv.classList.add('d-none');
+      catSelect.required = false;
       return;
     }
 
@@ -739,6 +743,7 @@ async function carregarCategoriasTicket(groupId) {
       cats.map(c => `<option value="${c.id}" data-subs='${JSON.stringify(c.subcategorias || [])}'>${c.nome}</option>`).join('');
 
     catDiv.classList.remove('d-none');
+    catSelect.required = true;
 
     // Ao mudar categoria, popular subcategorias + recarregar campos custom
     catSelect.onchange = () => {
@@ -815,7 +820,9 @@ async function carregarCamposTicket() {
   }
 }
 
-/** Preenche o select de subcategorias com base na categoria escolhida */
+/** Preenche o select de subcategorias com base na categoria escolhida.
+ *  Se a categoria tem subcategorias, exibe e marca 'required'. Senao oculta.
+ */
 function preencherSubcategorias(subs) {
   const subDiv    = document.getElementById('ticketSubcategoriaDiv');
   const subSelect = document.getElementById('ticketSubcategoria');
@@ -825,6 +832,7 @@ function preencherSubcategorias(subs) {
 
   if (!subs.length) {
     subDiv.classList.add('d-none');
+    subSelect.required = false;
     return;
   }
 
@@ -835,6 +843,7 @@ function preencherSubcategorias(subs) {
     subSelect.appendChild(opt);
   });
   subDiv.classList.remove('d-none');
+  subSelect.required = true;
 
   // Ao trocar a subcategoria, recarrega os campos personalizados
   subSelect.onchange = () => carregarCamposTicket();
@@ -848,8 +857,8 @@ function resetCategoriaSubcategoria() {
   const subSel  = document.getElementById('ticketSubcategoria');
   if (catDiv)  catDiv.classList.add('d-none');
   if (subDiv)  subDiv.classList.add('d-none');
-  if (catSel)  catSel.innerHTML = '<option value="">Selecione uma categoria...</option>';
-  if (subSel)  subSel.innerHTML = '<option value="">Selecione uma subcategoria...</option>';
+  if (catSel)  { catSel.innerHTML = '<option value="">Selecione uma categoria...</option>'; catSel.required = false; }
+  if (subSel)  { subSel.innerHTML = '<option value="">Selecione uma subcategoria...</option>'; subSel.required = false; }
   // Esconde os campos personalizados ao trocar de grupo
   const camposWrap = document.getElementById('ticketCamposCustomWrap');
   const camposCont = document.getElementById('ticketCamposCustom');
@@ -1199,19 +1208,31 @@ async function submitAssign(e) {
 // 15. MODAL DE DETALHE DO TICKET
 // =========================================
 
-/** Busca o detalhe do ticket e mostra os campos personalizados preenchidos */
+/** Busca o detalhe do ticket e preenche:
+ *   - categoria / subcategoria (a partir do JOIN do backend)
+ *   - campos personalizados preenchidos (campos_personalizados[])
+ */
 async function carregarCamposDetalhe(id) {
   const row  = document.getElementById('detailCamposCustomRow');
   const cont = document.getElementById('detailCamposCustom');
-  if (!row || !cont) return;
-  row.style.display = 'none';
-  cont.innerHTML = '';
+  const elCat = document.getElementById('detailCategoria');
+  const elSub = document.getElementById('detailSubcategoria');
+  if (elCat) elCat.textContent = '—';
+  if (elSub) elSub.textContent = '—';
+  if (row)  row.style.display = 'none';
+  if (cont) cont.innerHTML = '';
   try {
     const res = await fetch(`${API_BASE}/tickets/${id}`);
     if (!res.ok) return;
     const data = await res.json();
+
+    // Categoria / Subcategoria (novos)
+    if (elCat) elCat.textContent = data.categoria_nome    || '—';
+    if (elSub) elSub.textContent = data.subcategoria_nome || '—';
+
+    // Campos personalizados
     const campos = data.campos_personalizados || [];
-    if (!campos.length) return;
+    if (!campos.length || !cont || !row) return;
     cont.innerHTML = campos.map(c => {
       let val = c.valor || '—';
       if (c.tipo === 'data' && c.valor) {

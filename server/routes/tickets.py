@@ -75,12 +75,26 @@ try:
         email_ticket_criado,
         email_resposta_publica,
         email_ticket_finalizado,
+        email_ticket_para_grupo,
+        email_ticket_atribuido,
+        email_ticket_status_alterado,
+        email_ticket_encaminhado,
+        email_ticket_devolvido,
+        email_ticket_reaberto,
+        email_ticket_comentario_interno,
     )
 except Exception:
     def enviar_email(*a, **kw): pass
-    def email_ticket_criado(**kw):     return ("", "")
-    def email_resposta_publica(**kw):  return ("", "")
-    def email_ticket_finalizado(**kw): return ("", "")
+    def email_ticket_criado(**kw):              return ("", "")
+    def email_resposta_publica(**kw):           return ("", "")
+    def email_ticket_finalizado(**kw):          return ("", "")
+    def email_ticket_para_grupo(**kw):          return ("", "")
+    def email_ticket_atribuido(**kw):           return ("", "")
+    def email_ticket_status_alterado(**kw):     return ("", "")
+    def email_ticket_encaminhado(**kw):         return ("", "")
+    def email_ticket_devolvido(**kw):           return ("", "")
+    def email_ticket_reaberto(**kw):            return ("", "")
+    def email_ticket_comentario_interno(**kw):  return ("", "")
 
 logger = logging.getLogger(__name__)
 LOG_SEPARADOR = "=" * 100
@@ -454,6 +468,91 @@ def criar_notificacao_no_banco(conexao, ticket_id: int, usuario_id: int, tipo: s
 # ========================================
 # FIM DA FUNÇÃO - 31/03/2026 15:00
 # ========================================
+
+
+# ========================================
+# 📧 HELPER - destinatarios de email pra atualizacoes do ticket
+# Data: 2026-06-22 (Fase B)
+# Regra acordada com o user:
+#   - Ticket SEM responsavel: broadcast pra todos do grupo
+#   - Ticket COM responsavel: SO o responsavel atual (grupo nao recebe mais)
+#   - Solicitante SEMPRE recebe (a menos que incluir_solicitante=False)
+#   - Autor do evento e sempre excluido (nao recebe o proprio email)
+# ========================================
+
+def _destinatarios_email_ticket(
+    cursor,
+    ticket_id: int,
+    autor_id: Optional[int] = None,
+    incluir_solicitante: bool = True,
+    forcar_grupo: bool = False,
+) -> list[dict]:
+    """Retorna lista de dicts {id, name, email} pros destinatarios de email
+    de uma atualizacao do ticket.
+
+    forcar_grupo=True ignora o responsavel atual e sempre faz broadcast pro
+    grupo (usado em devolucao e criacao, onde o "estado pos-evento" e fila).
+    """
+    cursor.execute(
+        """
+        SELECT t.solicitante_id, t.responsavel_id, t.group_id,
+               sol.email AS sol_email, sol.name AS sol_nome,
+               resp.email AS resp_email, resp.name AS resp_nome
+          FROM tickets t
+          LEFT JOIN users sol  ON sol.id = t.solicitante_id
+          LEFT JOIN users resp ON resp.id = t.responsavel_id
+         WHERE t.id = %s
+        """,
+        (ticket_id,),
+    )
+    tk = cursor.fetchone() or {}
+
+    destinatarios: list[dict] = []
+    seen_ids: set[int] = set()
+    autor_id = autor_id or -1
+
+    # 1) Solicitante
+    if incluir_solicitante and tk.get("solicitante_id") and tk["solicitante_id"] != autor_id:
+        if tk.get("sol_email"):
+            destinatarios.append({
+                "id": tk["solicitante_id"],
+                "name": tk.get("sol_nome") or "",
+                "email": tk["sol_email"],
+            })
+            seen_ids.add(tk["solicitante_id"])
+
+    # 2) Responsavel atual OU broadcast pro grupo
+    if (not forcar_grupo) and tk.get("responsavel_id"):
+        if tk["responsavel_id"] != autor_id and tk["responsavel_id"] not in seen_ids:
+            if tk.get("resp_email"):
+                destinatarios.append({
+                    "id": tk["responsavel_id"],
+                    "name": tk.get("resp_nome") or "",
+                    "email": tk["resp_email"],
+                })
+                seen_ids.add(tk["responsavel_id"])
+    else:
+        # Broadcast: todos do grupo, exceto autor e quem ja esta na lista
+        if tk.get("group_id"):
+            cursor.execute(
+                """
+                SELECT id, name, email FROM users
+                 WHERE group_id = %s AND is_active = 1 AND id != %s
+                """,
+                (tk["group_id"], autor_id),
+            )
+            for m in cursor.fetchall():
+                if m["id"] in seen_ids: continue
+                if not m.get("email"): continue
+                destinatarios.append({
+                    "id": m["id"],
+                    "name": m.get("name") or "",
+                    "email": m["email"],
+                })
+                seen_ids.add(m["id"])
+
+    return destinatarios
+
 
 # ========================================
 # FIM DA FUNÇÃO AUXILIAR - 31/03/2026 14:42
@@ -993,14 +1092,18 @@ async def obter_ticket(ticket_id: int = Path(..., gt=0)):
             """
             SELECT
                 t.*,
-                u.name  AS solicitante_nome,
-                u.email AS solicitante_email,
-                r.name  AS responsavel_nome,
-                g.name  AS group_name
+                u.name   AS solicitante_nome,
+                u.email  AS solicitante_email,
+                r.name   AS responsavel_nome,
+                g.name   AS group_name,
+                cat.nome AS categoria_nome,
+                sub.nome AS subcategoria_nome
             FROM tickets t
             LEFT JOIN users u          ON t.solicitante_id = u.id
             LEFT JOIN users r          ON t.responsavel_id = r.id
-            LEFT JOIN `cpe_grupo` g ON t.group_id = g.id
+            LEFT JOIN `cpe_grupo` g    ON t.group_id = g.id
+            LEFT JOIN categorias cat   ON t.categoria_id = cat.id
+            LEFT JOIN subcategorias sub ON t.subcategoria_id = sub.id
             WHERE t.id = %s
             """,
             (ticket_id,)
@@ -1129,12 +1232,33 @@ async def assumir_ticket(ticket_id: int, payload: AssumiPayload):
             )
             conexao.commit()
 
-        # Notificar solicitante
+        # Notificar solicitante (in-app)
         criar_notificacao_no_banco(
             conexao, ticket_id, ticket_db["solicitante_id"],
             "ticket_atribuido",
             f"Seu chamado foi assumido por {nome_usuario}"
         )
+
+        # Email pro solicitante avisando quem assumiu (B.4)
+        try:
+            cursor.execute(
+                "SELECT t.id_alfanumerica, t.assunto, sol.email, sol.name "
+                "FROM tickets t LEFT JOIN users sol ON sol.id = t.solicitante_id "
+                "WHERE t.id = %s",
+                (ticket_id,),
+            )
+            tk = cursor.fetchone() or {}
+            if tk.get("email"):
+                subj, html = email_ticket_atribuido(
+                    ticket_numero=tk.get("id_alfanumerica") or str(ticket_id),
+                    assunto=tk.get("assunto") or "",
+                    destinatario_nome=tk.get("name") or "",
+                    atribuidor_nome=nome_usuario,
+                    e_proprio_solicitante=True,
+                )
+                enviar_email(tk["email"], subj, html)
+        except Exception as e_mail:
+            logger.warning(f"[EMAIL] falha ao agendar e-mail de assumir: {e_mail}")
 
         logger.info(f"  ✅ Ticket #{ticket_id} assumido por {nome_usuario}")
         return {"success": True, "message": f"Chamado assumido por {nome_usuario}"}
@@ -1216,7 +1340,7 @@ async def devolver_ticket(ticket_id: int, payload: DevolverPayload):
             )
             conexao.commit()
 
-        # Notificar RESPONSAVEL_GRUPO do grupo
+        # Notificar RESPONSAVEL_GRUPO do grupo (in-app)
         cursor.execute(
             "SELECT id FROM users WHERE group_id = %s AND role = 'RESPONSAVEL_GRUPO' AND is_active = 1",
             (ticket_db["group_id"],)
@@ -1227,6 +1351,31 @@ async def devolver_ticket(ticket_id: int, payload: DevolverPayload):
                 "ticket_devolvido",
                 f"{nome_usuario} devolveu o chamado para a fila{motivo_txt}"
             )
+
+        # Email: broadcast pro grupo (volta pra fila) + solicitante (B.5)
+        try:
+            cursor.execute(
+                "SELECT id_alfanumerica, assunto FROM tickets WHERE id = %s",
+                (ticket_id,),
+            )
+            tk = cursor.fetchone() or {}
+            ticket_numero_email = tk.get("id_alfanumerica") or str(ticket_id)
+            assunto_email = tk.get("assunto") or ""
+            # Apos o UPDATE acima, responsavel_id ja eh NULL → o helper
+            # vai retornar solicitante + grupo automaticamente.
+            for d in _destinatarios_email_ticket(
+                cursor, ticket_id, autor_id=payload.usuario_id,
+            ):
+                subj, html = email_ticket_devolvido(
+                    ticket_numero=ticket_numero_email,
+                    assunto=assunto_email,
+                    devolvedor_nome=nome_usuario,
+                    motivo=payload.motivo or "",
+                    destinatario_nome=d["name"],
+                )
+                enviar_email(d["email"], subj, html)
+        except Exception as e_mail:
+            logger.warning(f"[EMAIL] falha ao agendar e-mail de devolucao: {e_mail}")
 
         logger.info(f"  ✅ Ticket #{ticket_id} devolvido por {nome_usuario}")
         return {"success": True, "message": "Chamado devolvido para a fila"}
@@ -1463,7 +1612,7 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
 
         conexao.commit()
 
-        # Notificar RESPONSAVEL_GRUPO do novo grupo
+        # Notificar RESPONSAVEL_GRUPO do novo grupo (in-app)
         cursor.execute(
             "SELECT id FROM users WHERE group_id = %s AND role = 'RESPONSAVEL_GRUPO' AND is_active = 1",
             (payload.group_id,)
@@ -1475,6 +1624,61 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
                 "ticket_encaminhado",
                 f"Ticket encaminhado para '{nome_grupo_destino}' por {nome_usuario}: {ticket_db.get('assunto', '')}"
             )
+
+        # Email: solicitante (aviso de encaminhamento) + broadcast novo grupo (B.6)
+        try:
+            cursor.execute(
+                "SELECT t.id_alfanumerica, t.assunto, sol.email AS sol_email, "
+                "sol.name AS sol_nome FROM tickets t "
+                "LEFT JOIN users sol ON sol.id = t.solicitante_id "
+                "WHERE t.id = %s",
+                (ticket_id,),
+            )
+            tk = cursor.fetchone() or {}
+            ticket_numero_email = tk.get("id_alfanumerica") or str(ticket_id)
+            assunto_email = tk.get("assunto") or ""
+
+            # Nome do grupo origem (antes do encaminhamento)
+            cursor.execute("SELECT name FROM `cpe_grupo` WHERE id = %s", (ticket_db["group_id"],))
+            grupo_origem_row = cursor.fetchone()
+            nome_grupo_origem = grupo_origem_row["name"] if grupo_origem_row else f"Grupo #{ticket_db['group_id']}"
+
+            # Solicitante
+            if tk.get("sol_email") and ticket_db.get("solicitante_id") != payload.usuario_id:
+                subj, html = email_ticket_encaminhado(
+                    ticket_numero=ticket_numero_email,
+                    assunto=assunto_email,
+                    grupo_origem=nome_grupo_origem,
+                    grupo_destino=nome_grupo_destino,
+                    motivo=payload.motivo or "",
+                    autor_nome=nome_usuario,
+                    destinatario_nome=tk.get("sol_nome") or "",
+                    e_solicitante=True,
+                )
+                enviar_email(tk["sol_email"], subj, html)
+
+            # Broadcast pro novo grupo (incluir_solicitante=False -> ja enviei
+            # acima; forcar_grupo respeita o estado atual -- responsavel_id pode
+            # ja ter sido setado por admin)
+            for d in _destinatarios_email_ticket(
+                cursor, ticket_id,
+                autor_id=payload.usuario_id,
+                incluir_solicitante=False,
+                forcar_grupo=(novo_responsavel_id is None),
+            ):
+                subj, html = email_ticket_encaminhado(
+                    ticket_numero=ticket_numero_email,
+                    assunto=assunto_email,
+                    grupo_origem=nome_grupo_origem,
+                    grupo_destino=nome_grupo_destino,
+                    motivo=payload.motivo or "",
+                    autor_nome=nome_usuario,
+                    destinatario_nome=d["name"],
+                    e_solicitante=False,
+                )
+                enviar_email(d["email"], subj, html)
+        except Exception as e_mail:
+            logger.warning(f"[EMAIL] falha ao agendar e-mail de encaminhamento: {e_mail}")
 
         logger.info(f"  ✅ Ticket #{ticket_id} encaminhado para '{nome_grupo_destino}' por {nome_usuario}")
         return {
@@ -1758,13 +1962,57 @@ async def reabrir_ticket(ticket_id: int, payload: ReopenPayload):
         )
         conexao.commit()
 
-        # Notificar responsável (se houver)
+        # Notificar responsável (in-app, se houver)
         if ticket_db.get("responsavel_id"):
             criar_notificacao_no_banco(
                 conexao, ticket_id, ticket_db["responsavel_id"],
                 "ticket_reaberto",
                 f"O chamado foi reaberto por {nome}: {payload.justificativa[:100]}"
             )
+
+        # Email: confirmacao pro solicitante + aviso pro responsavel atual
+        # (ou broadcast pro grupo se ticket sem responsavel) (B.7)
+        try:
+            cursor.execute(
+                "SELECT t.id_alfanumerica, t.assunto, sol.email AS sol_email, "
+                "sol.name AS sol_nome FROM tickets t "
+                "LEFT JOIN users sol ON sol.id = t.solicitante_id "
+                "WHERE t.id = %s",
+                (ticket_id,),
+            )
+            tk = cursor.fetchone() or {}
+            ticket_numero_email = tk.get("id_alfanumerica") or str(ticket_id)
+            assunto_email = tk.get("assunto") or ""
+
+            # Confirmacao pro proprio solicitante (autor da reabertura)
+            if tk.get("sol_email"):
+                subj, html = email_ticket_reaberto(
+                    ticket_numero=ticket_numero_email,
+                    assunto=assunto_email,
+                    solicitante_nome=nome,
+                    justificativa=payload.justificativa,
+                    destinatario_nome=tk.get("sol_nome") or "",
+                    e_solicitante=True,
+                )
+                enviar_email(tk["sol_email"], subj, html)
+
+            # Responsavel atual ou grupo (incluir_solicitante=False -> ja avisado)
+            for d in _destinatarios_email_ticket(
+                cursor, ticket_id,
+                autor_id=payload.usuario_id,
+                incluir_solicitante=False,
+            ):
+                subj, html = email_ticket_reaberto(
+                    ticket_numero=ticket_numero_email,
+                    assunto=assunto_email,
+                    solicitante_nome=nome,
+                    justificativa=payload.justificativa,
+                    destinatario_nome=d["name"],
+                    e_solicitante=False,
+                )
+                enviar_email(d["email"], subj, html)
+        except Exception as e_mail:
+            logger.warning(f"[EMAIL] falha ao agendar e-mail de reabertura: {e_mail}")
 
         novo_reopen = reopen_count + 1
         logger.info(f"  ✅ Ticket #{ticket_id} reaberto por {nome} ({novo_reopen}/3)")
@@ -1825,6 +2073,35 @@ async def criar_ticket(payload: TicketCriar):
         # Data: 31/03/2026 16:00
         # ========================================
         
+        # ── Categoria/Subcategoria obrigatorias quando o grupo tem opcoes ──
+        # Regra: se o grupo selecionado tem categorias cadastradas e ativas,
+        # exigir categoria_id. Se a categoria escolhida tem subcategorias
+        # ativas, exigir subcategoria_id. Grupos sem catalogo passam sem
+        # categoria (evita travar grupos novos antes do admin cadastrar).
+        cursor.execute(
+            "SELECT COUNT(*) AS n FROM categorias "
+            "WHERE group_id = %s AND ativo = 1",
+            (payload.group_id,),
+        )
+        n_cats_grupo = (cursor.fetchone() or {}).get("n", 0)
+        if n_cats_grupo and not payload.categoria_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Selecione a categoria do chamado.",
+            )
+        if payload.categoria_id:
+            cursor.execute(
+                "SELECT COUNT(*) AS n FROM subcategorias "
+                "WHERE categoria_id = %s AND ativo = 1",
+                (payload.categoria_id,),
+            )
+            n_subs_cat = (cursor.fetchone() or {}).get("n", 0)
+            if n_subs_cat and not payload.subcategoria_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Selecione a subcategoria do chamado.",
+                )
+
         # ── Validar campos personalizados obrigatórios da categoria/subcat ──
         # Monta {campo_id: valor} do payload e confere os campos obrigatórios.
         valores_por_campo = {}
@@ -2009,16 +2286,39 @@ async def criar_ticket(payload: TicketCriar):
                 grupo_destino = (gd or {}).get("name") or "—"
 
                 prio_map = {1: "Baixa", 2: "Média", 3: "Alta", 4: "Urgente"}
+                ticket_numero_email = id_alfanumerica or str(ticket_id)
+                prioridade_label = prio_map.get(payload.prioridade_id, "Média")
                 subj, html = email_ticket_criado(
                     para=sol["email"],
-                    ticket_numero=id_alfanumerica or str(ticket_id),
+                    ticket_numero=ticket_numero_email,
                     assunto=payload.assunto,
                     descricao=payload.descricao_inicial,
                     grupo=grupo_destino,
-                    prioridade=prio_map.get(payload.prioridade_id, "Média"),
+                    prioridade=prioridade_label,
                     solicitante_nome=sol.get("nome") or "",
                 )
                 enviar_email(sol["email"], subj, html)
+
+                # Broadcast pro grupo de destino (exceto solicitante, se ele
+                # mesmo for do grupo). "Primordial" pelo user: quem nao esta
+                # logado precisa saber via email que ha chamado novo na fila.
+                destinatarios_grupo = _destinatarios_email_ticket(
+                    cursor, ticket_id,
+                    autor_id=payload.solicitante_id,
+                    incluir_solicitante=False,
+                    forcar_grupo=True,
+                )
+                for d in destinatarios_grupo:
+                    subj_g, html_g = email_ticket_para_grupo(
+                        ticket_numero=ticket_numero_email,
+                        assunto=payload.assunto,
+                        descricao=payload.descricao_inicial,
+                        grupo=grupo_destino,
+                        prioridade=prioridade_label,
+                        solicitante_nome=sol.get("nome") or "",
+                        destinatario_nome=d["name"],
+                    )
+                    enviar_email(d["email"], subj_g, html_g)
         except Exception as e_mail:
             logger.warning(f"[EMAIL] falha ao agendar e-mail de criação: {e_mail}")
 
@@ -2214,6 +2514,61 @@ async def atualizar_ticket(
                     "atribuido",
                     f"Um chamado foi atribuído a você"
                 )
+
+        # Email: status alterado e/ou nova atribuicao (B.8)
+        # status: solicitante + responsavel atual (ou grupo se sem responsavel)
+        # atribuicao: novo responsavel (com flag de "voce foi atribuido")
+        # Pula: finalizar (4) e fechar (5) — finalizar tem fluxo proprio,
+        #       fechar geralmente nao precisa de e-mail extra.
+        try:
+            _STATUS_LABELS = {1: "Aberto", 2: "Em andamento", 3: "Aguardando",
+                              4: "Resolvido", 5: "Fechado"}
+            cursor.execute(
+                "SELECT t.id_alfanumerica, t.assunto, autor.name AS autor_nome "
+                "FROM tickets t LEFT JOIN users autor ON autor.id = %s "
+                "WHERE t.id = %s",
+                (usuario_id, ticket_id),
+            )
+            tk = cursor.fetchone() or {}
+            ticket_numero_email = tk.get("id_alfanumerica") or str(ticket_id)
+            assunto_email = tk.get("assunto") or ""
+            autor_nome = tk.get("autor_nome") or "Equipe"
+
+            # 1) Status alterado (exceto finalizar/fechar)
+            if payload.status_id is not None and payload.status_id not in (4, 5):
+                status_anterior = _STATUS_LABELS.get(ticket_db.get("status_id"), "—")
+                status_novo     = _STATUS_LABELS.get(payload.status_id, str(payload.status_id))
+                for d in _destinatarios_email_ticket(
+                    cursor, ticket_id, autor_id=usuario_id,
+                ):
+                    subj, html = email_ticket_status_alterado(
+                        ticket_numero=ticket_numero_email,
+                        assunto=assunto_email,
+                        status_anterior=status_anterior,
+                        status_novo=status_novo,
+                        autor_nome=autor_nome,
+                        destinatario_nome=d["name"],
+                    )
+                    enviar_email(d["email"], subj, html)
+
+            # 2) Atribuicao manual (admin/responsavel_grupo via PUT)
+            if payload.responsavel_id is not None and payload.responsavel_id != ticket_db.get("responsavel_id"):
+                cursor.execute(
+                    "SELECT name, email FROM users WHERE id = %s",
+                    (payload.responsavel_id,),
+                )
+                novo_resp = cursor.fetchone()
+                if novo_resp and novo_resp.get("email"):
+                    subj, html = email_ticket_atribuido(
+                        ticket_numero=ticket_numero_email,
+                        assunto=assunto_email,
+                        destinatario_nome=novo_resp.get("name") or "",
+                        atribuidor_nome=autor_nome,
+                        e_proprio_solicitante=False,
+                    )
+                    enviar_email(novo_resp["email"], subj, html)
+        except Exception as e_mail:
+            logger.warning(f"[EMAIL] falha ao agendar e-mail de atualizacao: {e_mail}")
 
         cursor.execute("SELECT * FROM tickets WHERE id = %s", (ticket_id,))
         atualizado = convert_datetime_to_string(cursor.fetchone())
@@ -2645,6 +3000,36 @@ async def criar_interacao(payload: InteracaoCriar):
                     enviar_email(em, subj, html)
             except Exception as e_mail:
                 logger.warning(f"[EMAIL] falha ao agendar e-mail de resposta: {e_mail}")
+
+        # ── E-mail de comentário INTERNO (B.9) ──
+        # Nunca vai pro solicitante; vai pro responsavel atual (ou broadcast
+        # pro grupo se ticket sem responsavel).
+        else:
+            try:
+                cursor.execute(
+                    "SELECT id_alfanumerica, assunto FROM tickets WHERE id = %s",
+                    (payload.ticket_id,),
+                )
+                tk = cursor.fetchone() or {}
+                ticket_numero = tk.get("id_alfanumerica") or str(payload.ticket_id)
+                assunto_email = tk.get("assunto") or ""
+                autor_nome    = registro.get("usuario_nome") or ""
+
+                for d in _destinatarios_email_ticket(
+                    cursor, payload.ticket_id,
+                    autor_id=payload.usuario_id,
+                    incluir_solicitante=False,
+                ):
+                    subj, html = email_ticket_comentario_interno(
+                        ticket_numero=ticket_numero,
+                        assunto=assunto_email,
+                        autor_nome=autor_nome,
+                        mensagem=payload.mensagem,
+                        destinatario_nome=d["name"],
+                    )
+                    enviar_email(d["email"], subj, html)
+            except Exception as e_mail:
+                logger.warning(f"[EMAIL] falha ao agendar e-mail de comentario interno: {e_mail}")
 
         log_fim("sucesso", interacao_id=interacao_id, notificacoes_enviadas=len(usuarios_para_notificar))
         return resposta
