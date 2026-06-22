@@ -503,12 +503,23 @@ def _destinatarios_email_ticket(
     autor_id: Optional[int] = None,
     incluir_solicitante: bool = True,
     forcar_grupo: bool = False,
-) -> list[dict]:
-    """Retorna lista de dicts {id, name, email} pros destinatarios de email
-    de uma atualizacao do ticket.
+) -> tuple[Optional[dict], Optional[dict], list[str]]:
+    """Retorna tupla (solicitante, responsavel_individual, grupo_emails).
 
-    forcar_grupo=True ignora o responsavel atual e sempre faz broadcast pro
-    grupo (usado em devolucao e criacao, onde o "estado pos-evento" e fila).
+    - solicitante: dict {id, name, email} OU None
+        Email INDIVIDUAL do solicitante (a menos que ele seja o autor
+        do evento ou incluir_solicitante=False).
+    - responsavel_individual: dict {id, name, email} OU None
+        Email INDIVIDUAL do responsavel ATUAL (a menos que ele seja o autor,
+        nao haja responsavel, ou forcar_grupo=True).
+    - grupo_emails: list[str]
+        Lista de emails dos membros do grupo (broadcast via BCC). Preenchido
+        APENAS quando nao ha responsavel individual a ser notificado.
+        Exclui autor + solicitante (se ja tratado individual) + responsavel
+        (se ja tratado).
+
+    Uso: solicitante + responsavel_individual via enviar_email() (personalizado);
+    grupo_emails via enviar_email_bcc() (1 conexao SMTP, sem expor RCPT).
     """
     cursor.execute(
         """
@@ -524,51 +535,48 @@ def _destinatarios_email_ticket(
     )
     tk = cursor.fetchone() or {}
 
-    destinatarios: list[dict] = []
-    seen_ids: set[int] = set()
-    autor_id = autor_id or -1
+    autor_id_safe = autor_id or -1
+    excluir_ids: set[int] = {autor_id_safe}
 
-    # 1) Solicitante
-    if incluir_solicitante and tk.get("solicitante_id") and tk["solicitante_id"] != autor_id:
+    # 1) Solicitante (individual)
+    solicitante = None
+    if incluir_solicitante and tk.get("solicitante_id") and tk["solicitante_id"] != autor_id_safe:
         if tk.get("sol_email"):
-            destinatarios.append({
+            solicitante = {
                 "id": tk["solicitante_id"],
                 "name": tk.get("sol_nome") or "",
                 "email": tk["sol_email"],
-            })
-            seen_ids.add(tk["solicitante_id"])
+            }
+            excluir_ids.add(tk["solicitante_id"])
 
-    # 2) Responsavel atual OU broadcast pro grupo
+    # 2) Responsavel individual (so se ha responsavel e nao forcar_grupo)
+    responsavel_individual = None
     if (not forcar_grupo) and tk.get("responsavel_id"):
-        if tk["responsavel_id"] != autor_id and tk["responsavel_id"] not in seen_ids:
+        if tk["responsavel_id"] != autor_id_safe and tk["responsavel_id"] not in excluir_ids:
             if tk.get("resp_email"):
-                destinatarios.append({
+                responsavel_individual = {
                     "id": tk["responsavel_id"],
                     "name": tk.get("resp_nome") or "",
                     "email": tk["resp_email"],
-                })
-                seen_ids.add(tk["responsavel_id"])
-    else:
-        # Broadcast: todos do grupo, exceto autor e quem ja esta na lista
-        if tk.get("group_id"):
-            cursor.execute(
-                """
-                SELECT id, name, email FROM users
-                 WHERE group_id = %s AND is_active = 1 AND id != %s
-                """,
-                (tk["group_id"], autor_id),
-            )
-            for m in cursor.fetchall():
-                if m["id"] in seen_ids: continue
-                if not m.get("email"): continue
-                destinatarios.append({
-                    "id": m["id"],
-                    "name": m.get("name") or "",
-                    "email": m["email"],
-                })
-                seen_ids.add(m["id"])
+                }
+                excluir_ids.add(tk["responsavel_id"])
 
-    return destinatarios
+    # 3) Grupo (BCC) — so quando NAO ha responsavel individual
+    grupo_emails: list[str] = []
+    if responsavel_individual is None and tk.get("group_id"):
+        cursor.execute(
+            """
+            SELECT id, email FROM users
+             WHERE group_id = %s AND is_active = 1
+            """,
+            (tk["group_id"],),
+        )
+        for m in cursor.fetchall():
+            if m["id"] in excluir_ids: continue
+            if not m.get("email"): continue
+            grupo_emails.append(m["email"])
+
+    return solicitante, responsavel_individual, grupo_emails
 
 
 # ========================================
@@ -1369,28 +1377,40 @@ async def devolver_ticket(ticket_id: int, payload: DevolverPayload):
                 f"{nome_usuario} devolveu o chamado para a fila{motivo_txt}"
             )
 
-        # Email: broadcast pro grupo (volta pra fila) + solicitante (B.5)
+        # Email: solicitante individual + broadcast pro grupo via BCC (B.5)
         try:
             cursor.execute(
-                "SELECT id_alfanumerica, assunto FROM tickets WHERE id = %s",
+                "SELECT t.id_alfanumerica, t.assunto, g.name AS grupo_nome "
+                "FROM tickets t LEFT JOIN cpe_grupo g ON g.id = t.group_id "
+                "WHERE t.id = %s",
                 (ticket_id,),
             )
             tk = cursor.fetchone() or {}
             ticket_numero_email = tk.get("id_alfanumerica") or str(ticket_id)
             assunto_email = tk.get("assunto") or ""
-            # Apos o UPDATE acima, responsavel_id ja eh NULL → o helper
-            # vai retornar solicitante + grupo automaticamente.
-            for d in _destinatarios_email_ticket(
+            grupo_nome = tk.get("grupo_nome") or "—"
+            # Apos UPDATE responsavel_id eh NULL → helper retorna (solicitante, None, grupo)
+            sol_d, _, grupo_emails = _destinatarios_email_ticket(
                 cursor, ticket_id, autor_id=payload.usuario_id,
-            ):
+            )
+            if sol_d:
                 subj, html = email_ticket_devolvido(
                     ticket_numero=ticket_numero_email,
                     assunto=assunto_email,
                     devolvedor_nome=nome_usuario,
                     motivo=payload.motivo or "",
-                    destinatario_nome=d["name"],
+                    destinatario_nome=sol_d["name"],
                 )
-                enviar_email(d["email"], subj, html)
+                enviar_email(sol_d["email"], subj, html)
+            if grupo_emails:
+                subj, html = email_ticket_devolvido(
+                    ticket_numero=ticket_numero_email,
+                    assunto=assunto_email,
+                    devolvedor_nome=nome_usuario,
+                    motivo=payload.motivo or "",
+                    destinatario_nome=f"Equipe {grupo_nome}",
+                )
+                enviar_email_bcc(grupo_emails, subj, html)
         except Exception as e_mail:
             logger.warning(f"[EMAIL] falha ao agendar e-mail de devolucao: {e_mail}")
 
@@ -1674,15 +1694,14 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
                 )
                 enviar_email(tk["sol_email"], subj, html)
 
-            # Broadcast pro novo grupo (incluir_solicitante=False -> ja enviei
-            # acima; forcar_grupo respeita o estado atual -- responsavel_id pode
-            # ja ter sido setado por admin)
-            for d in _destinatarios_email_ticket(
+            # Resto: ou 1 responsavel individual (se admin setou) ou BCC grupo
+            _, resp_d, grupo_emails = _destinatarios_email_ticket(
                 cursor, ticket_id,
                 autor_id=payload.usuario_id,
                 incluir_solicitante=False,
                 forcar_grupo=(novo_responsavel_id is None),
-            ):
+            )
+            if resp_d:
                 subj, html = email_ticket_encaminhado(
                     ticket_numero=ticket_numero_email,
                     assunto=assunto_email,
@@ -1690,10 +1709,22 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
                     grupo_destino=nome_grupo_destino,
                     motivo=payload.motivo or "",
                     autor_nome=nome_usuario,
-                    destinatario_nome=d["name"],
+                    destinatario_nome=resp_d["name"],
                     e_solicitante=False,
                 )
-                enviar_email(d["email"], subj, html)
+                enviar_email(resp_d["email"], subj, html)
+            if grupo_emails:
+                subj, html = email_ticket_encaminhado(
+                    ticket_numero=ticket_numero_email,
+                    assunto=assunto_email,
+                    grupo_origem=nome_grupo_origem,
+                    grupo_destino=nome_grupo_destino,
+                    motivo=payload.motivo or "",
+                    autor_nome=nome_usuario,
+                    destinatario_nome=f"Equipe {nome_grupo_destino}",
+                    e_solicitante=False,
+                )
+                enviar_email_bcc(grupo_emails, subj, html)
         except Exception as e_mail:
             logger.warning(f"[EMAIL] falha ao agendar e-mail de encaminhamento: {e_mail}")
 
@@ -2017,21 +2048,39 @@ async def reabrir_ticket(ticket_id: int, payload: ReopenPayload):
                 )
                 enviar_email(tk["sol_email"], subj, html)
 
-            # Responsavel atual ou grupo (incluir_solicitante=False -> ja avisado)
-            for d in _destinatarios_email_ticket(
+            # Resto: responsavel individual (se houver) OU grupo BCC
+            _, resp_d, grupo_emails = _destinatarios_email_ticket(
                 cursor, ticket_id,
                 autor_id=payload.usuario_id,
                 incluir_solicitante=False,
-            ):
+            )
+            if resp_d:
                 subj, html = email_ticket_reaberto(
                     ticket_numero=ticket_numero_email,
                     assunto=assunto_email,
                     solicitante_nome=nome,
                     justificativa=payload.justificativa,
-                    destinatario_nome=d["name"],
+                    destinatario_nome=resp_d["name"],
                     e_solicitante=False,
                 )
-                enviar_email(d["email"], subj, html)
+                enviar_email(resp_d["email"], subj, html)
+            if grupo_emails:
+                # Busca nome do grupo do ticket pra saudacao "Equipe X"
+                cursor.execute(
+                    "SELECT g.name FROM tickets t LEFT JOIN cpe_grupo g ON g.id = t.group_id WHERE t.id = %s",
+                    (ticket_id,),
+                )
+                grow = cursor.fetchone()
+                gnome = (grow or {}).get("name") or "do grupo"
+                subj, html = email_ticket_reaberto(
+                    ticket_numero=ticket_numero_email,
+                    assunto=assunto_email,
+                    solicitante_nome=nome,
+                    justificativa=payload.justificativa,
+                    destinatario_nome=f"Equipe {gnome}",
+                    e_solicitante=False,
+                )
+                enviar_email_bcc(grupo_emails, subj, html)
         except Exception as e_mail:
             logger.warning(f"[EMAIL] falha ao agendar e-mail de reabertura: {e_mail}")
 
@@ -2323,15 +2372,14 @@ async def criar_ticket(payload: TicketCriar):
                 # Broadcast pro grupo de destino (exceto solicitante, se ele
                 # mesmo for do grupo). "Primordial" pelo user: quem nao esta
                 # logado precisa saber via email que ha chamado novo na fila.
-                # Usa BCC: 1 unica conexao SMTP em vez de N (escala melhor,
-                # evita rate-limit do servidor de email).
-                destinatarios_grupo = _destinatarios_email_ticket(
+                # Usa BCC: 1 unica conexao SMTP em vez de N.
+                _, _, grupo_emails = _destinatarios_email_ticket(
                     cursor, ticket_id,
                     autor_id=payload.solicitante_id,
                     incluir_solicitante=False,
                     forcar_grupo=True,
                 )
-                if destinatarios_grupo:
+                if grupo_emails:
                     subj_g, html_g = email_ticket_para_grupo(
                         ticket_numero=ticket_numero_email,
                         assunto=payload.assunto,
@@ -2341,10 +2389,7 @@ async def criar_ticket(payload: TicketCriar):
                         solicitante_nome=sol.get("nome") or "",
                         destinatario_nome=f"Equipe {grupo_destino}",
                     )
-                    enviar_email_bcc(
-                        [d["email"] for d in destinatarios_grupo],
-                        subj_g, html_g,
-                    )
+                    enviar_email_bcc(grupo_emails, subj_g, html_g)
         except Exception as e_mail:
             logger.warning(f"[EMAIL] falha ao agendar e-mail de criação: {e_mail}")
 
@@ -2564,18 +2609,36 @@ async def atualizar_ticket(
             if payload.status_id is not None and payload.status_id not in (4, 5):
                 status_anterior = _STATUS_LABELS.get(ticket_db.get("status_id"), "—")
                 status_novo     = _STATUS_LABELS.get(payload.status_id, str(payload.status_id))
-                for d in _destinatarios_email_ticket(
+                sol_d, resp_d, grupo_emails = _destinatarios_email_ticket(
                     cursor, ticket_id, autor_id=usuario_id,
-                ):
+                )
+                for ind in (sol_d, resp_d):
+                    if not ind: continue
                     subj, html = email_ticket_status_alterado(
                         ticket_numero=ticket_numero_email,
                         assunto=assunto_email,
                         status_anterior=status_anterior,
                         status_novo=status_novo,
                         autor_nome=autor_nome,
-                        destinatario_nome=d["name"],
+                        destinatario_nome=ind["name"],
                     )
-                    enviar_email(d["email"], subj, html)
+                    enviar_email(ind["email"], subj, html)
+                if grupo_emails:
+                    cursor.execute(
+                        "SELECT g.name FROM tickets t LEFT JOIN cpe_grupo g ON g.id = t.group_id WHERE t.id = %s",
+                        (ticket_id,),
+                    )
+                    grow = cursor.fetchone()
+                    gnome = (grow or {}).get("name") or "do grupo"
+                    subj, html = email_ticket_status_alterado(
+                        ticket_numero=ticket_numero_email,
+                        assunto=assunto_email,
+                        status_anterior=status_anterior,
+                        status_novo=status_novo,
+                        autor_nome=autor_nome,
+                        destinatario_nome=f"Equipe {gnome}",
+                    )
+                    enviar_email_bcc(grupo_emails, subj, html)
 
             # 2) Atribuicao manual (admin/responsavel_grupo via PUT)
             if payload.responsavel_id is not None and payload.responsavel_id != ticket_db.get("responsavel_id"):
@@ -3041,19 +3104,35 @@ async def criar_interacao(payload: InteracaoCriar):
                 assunto_email = tk.get("assunto") or ""
                 autor_nome    = registro.get("usuario_nome") or ""
 
-                for d in _destinatarios_email_ticket(
+                _, resp_d, grupo_emails = _destinatarios_email_ticket(
                     cursor, payload.ticket_id,
                     autor_id=payload.usuario_id,
                     incluir_solicitante=False,
-                ):
+                )
+                if resp_d:
                     subj, html = email_ticket_comentario_interno(
                         ticket_numero=ticket_numero,
                         assunto=assunto_email,
                         autor_nome=autor_nome,
                         mensagem=payload.mensagem,
-                        destinatario_nome=d["name"],
+                        destinatario_nome=resp_d["name"],
                     )
-                    enviar_email(d["email"], subj, html)
+                    enviar_email(resp_d["email"], subj, html)
+                if grupo_emails:
+                    cursor.execute(
+                        "SELECT g.name FROM tickets t LEFT JOIN cpe_grupo g ON g.id = t.group_id WHERE t.id = %s",
+                        (payload.ticket_id,),
+                    )
+                    grow = cursor.fetchone()
+                    gnome = (grow or {}).get("name") or "do grupo"
+                    subj, html = email_ticket_comentario_interno(
+                        ticket_numero=ticket_numero,
+                        assunto=assunto_email,
+                        autor_nome=autor_nome,
+                        mensagem=payload.mensagem,
+                        destinatario_nome=f"Equipe {gnome}",
+                    )
+                    enviar_email_bcc(grupo_emails, subj, html)
             except Exception as e_mail:
                 logger.warning(f"[EMAIL] falha ao agendar e-mail de comentario interno: {e_mail}")
 
