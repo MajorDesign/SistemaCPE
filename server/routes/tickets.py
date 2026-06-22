@@ -72,6 +72,7 @@ except Exception:
 try:
     from services.email_service import (
         enviar_email,
+        enviar_email_bcc,
         email_ticket_criado,
         email_resposta_publica,
         email_ticket_finalizado,
@@ -85,6 +86,7 @@ try:
     )
 except Exception:
     def enviar_email(*a, **kw): pass
+    def enviar_email_bcc(*a, **kw): pass
     def email_ticket_criado(**kw):              return ("", "")
     def email_resposta_publica(**kw):           return ("", "")
     def email_ticket_finalizado(**kw):          return ("", "")
@@ -2321,13 +2323,15 @@ async def criar_ticket(payload: TicketCriar):
                 # Broadcast pro grupo de destino (exceto solicitante, se ele
                 # mesmo for do grupo). "Primordial" pelo user: quem nao esta
                 # logado precisa saber via email que ha chamado novo na fila.
+                # Usa BCC: 1 unica conexao SMTP em vez de N (escala melhor,
+                # evita rate-limit do servidor de email).
                 destinatarios_grupo = _destinatarios_email_ticket(
                     cursor, ticket_id,
                     autor_id=payload.solicitante_id,
                     incluir_solicitante=False,
                     forcar_grupo=True,
                 )
-                for d in destinatarios_grupo:
+                if destinatarios_grupo:
                     subj_g, html_g = email_ticket_para_grupo(
                         ticket_numero=ticket_numero_email,
                         assunto=payload.assunto,
@@ -2335,9 +2339,12 @@ async def criar_ticket(payload: TicketCriar):
                         grupo=grupo_destino,
                         prioridade=prioridade_label,
                         solicitante_nome=sol.get("nome") or "",
-                        destinatario_nome=d["name"],
+                        destinatario_nome=f"Equipe {grupo_destino}",
                     )
-                    enviar_email(d["email"], subj_g, html_g)
+                    enviar_email_bcc(
+                        [d["email"] for d in destinatarios_grupo],
+                        subj_g, html_g,
+                    )
         except Exception as e_mail:
             logger.warning(f"[EMAIL] falha ao agendar e-mail de criação: {e_mail}")
 
