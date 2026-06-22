@@ -156,6 +156,95 @@ def enviar_email(
         _enviar_sync(destinatarios, assunto, html, texto, reply_to, perfil)
 
 
+def enviar_email_bcc(
+    destinatarios: Iterable[str],
+    assunto: str,
+    html: str,
+    texto: Optional[str] = None,
+    reply_to: Optional[str] = None,
+    async_send: bool = True,
+    perfil: str = "default",
+) -> None:
+    """Envia 1 unica mensagem com lista BCC (sem expor destinatarios entre si).
+
+    Use isto para broadcasts pro grupo: 1 conexao SMTP em vez de N, evita
+    rate-limit, e cada destinatario recebe sem ver os outros emails.
+
+    Diferencas vs enviar_email com lista:
+    - enviar_email([a,b,c]) -> 1 msg com To: a, b, c (todos veem todos)
+    - enviar_email_bcc([a,b,c]) -> 1 msg com To: <self>, RCPT a, b, c
+                                   (cada um ve so o proprio email)
+    """
+    lista = [e.strip() for e in destinatarios if e and "@" in (e or "")]
+    if not lista:
+        logger.warning(f"[EMAIL-BCC] sem destinatários válidos para assunto='{assunto}'")
+        return
+
+    if async_send:
+        t = threading.Thread(
+            target=_enviar_sync_bcc,
+            args=(lista, assunto, html, texto, reply_to, perfil),
+            daemon=True,
+        )
+        t.start()
+    else:
+        _enviar_sync_bcc(lista, assunto, html, texto, reply_to, perfil)
+
+
+def _enviar_sync_bcc(
+    destinatarios: list[str],
+    assunto: str,
+    html: str,
+    texto: Optional[str],
+    reply_to: Optional[str],
+    perfil: str = "default",
+) -> None:
+    cfg = _get_cfg(perfil)
+    if not smtp_configurado(perfil):
+        logger.warning(
+            f"[EMAIL-BCC] SMTP ({perfil}) nao configurado — assunto='{assunto}' "
+            f"destinatarios={len(destinatarios)} (defina "
+            f"{'AGENDA_' if perfil == 'agenda' else ''}SMTP_HOST/USER/FROM no .env)"
+        )
+        return
+
+    msg = EmailMessage()
+    msg["Subject"] = assunto
+    msg["From"]    = formataddr((cfg["from_name"], cfg["from_addr"]))
+    # To: aponta pro proprio remetente; destinatarios reais vao via RCPT TO
+    msg["To"]      = formataddr((cfg["from_name"], cfg["from_addr"]))
+    msg["Message-ID"] = make_msgid(domain=cfg["from_addr"].split("@", 1)[-1] or "cpe")
+    if reply_to:
+        msg["Reply-To"] = reply_to
+    msg.set_content(texto or _html_to_text(html))
+    msg.add_alternative(html, subtype="html")
+
+    try:
+        if cfg["use_ssl"]:
+            ctx = ssl.create_default_context()
+            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=ctx, timeout=30) as smtp:
+                smtp.login(cfg["user"], cfg["password"])
+                # send_message com to_addrs explicito faz BCC real (RCPT TO sem expor)
+                smtp.send_message(msg, from_addr=cfg["from_addr"], to_addrs=destinatarios)
+        else:
+            with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as smtp:
+                smtp.ehlo()
+                if cfg["use_tls"]:
+                    smtp.starttls(context=ssl.create_default_context())
+                    smtp.ehlo()
+                if cfg["user"] and cfg["password"]:
+                    smtp.login(cfg["user"], cfg["password"])
+                smtp.send_message(msg, from_addr=cfg["from_addr"], to_addrs=destinatarios)
+        logger.info(
+            f"[EMAIL-BCC] ✅ Enviado (1 msg, {len(destinatarios)} RCPT): "
+            f"assunto='{assunto}'"
+        )
+    except Exception as err:
+        logger.error(
+            f"[EMAIL-BCC] ❌ Falha ao enviar para {len(destinatarios)} destinatarios: {err}"
+        )
+
+
 # =====================================================================
 # Templates HTML — identidade CPE Control (#FFC107 amarelo / #1A1A1A preto)
 # =====================================================================
