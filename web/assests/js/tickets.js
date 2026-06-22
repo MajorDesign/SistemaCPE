@@ -380,10 +380,10 @@ function applyDetailPermissions(ticket) {
   if (sectionFinalizar)
     sectionFinalizar.style.display = (isResponsavelDoTicket && !ticketEncerrado) ? '' : 'none';
 
-  // ── Seção "Reabrir": APENAS o solicitante, quando resolvido, até 3 vezes ──
+  // ── Seção "Reabrir": solicitante OU admin, quando resolvido, até 3 vezes ──
   const sectionReabrir = document.getElementById('sectionReabrirChamado');
   if (sectionReabrir) {
-    if (isSolicitante && ticketResolvido) {
+    if ((isSolicitante || admin) && ticketResolvido) {
       sectionReabrir.style.display = '';
       const esgotado = document.getElementById('reabrirEsgotado');
       const btnReabrir = document.getElementById('btnReopenChamado');
