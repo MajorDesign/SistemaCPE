@@ -234,6 +234,27 @@
           </div>
         </div>
 
+        <!-- ===== Notificações por e-mail (transacional, FASE C-a) ===== -->
+        <div class="cfg-card" style="margin-top:18px">
+          <div class="cfg-card-title"><i class="bi bi-envelope-paper"></i> Notificações por e-mail</div>
+          <p class="cfg-card-subtitle">Escolha quais tipos de evento de ticket você quer receber por e-mail. Padrão: todos ligados.</p>
+
+          <div id="emailPrefsAlert"></div>
+          <div id="emailPrefsList">
+            <div class="cfg-setting-item">
+              <div class="cfg-setting-name" style="color:#9CA3AF">
+                <i class="bi bi-hourglass-split"></i> Carregando preferências...
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px">
+            <button class="cfg-btn cfg-btn-primary" onclick="salvarEmailPrefs()">
+              <i class="bi bi-check-lg"></i> Salvar preferências de e-mail
+            </button>
+          </div>
+        </div>
+
       </div>
 
       <!-- ===== SEÇÃO: APARÊNCIA ===== -->
@@ -340,6 +361,7 @@
 
       await carregarPerfil();
       carregarPreferencias();
+      carregarEmailPrefs();
       verificarCarbonio();
       carregarModulos();
     } catch (err) {
@@ -675,6 +697,78 @@
     });
     localStorage.setItem(NOTIF_KEY, JSON.stringify(prefs));
     cfgToast('Preferências de notificações salvas!');
+  }
+
+  // ============================================================
+  // NOTIFICAÇÕES POR E-MAIL (FASE C-a, persiste no backend)
+  // ============================================================
+  async function carregarEmailPrefs() {
+    const lista = document.getElementById('emailPrefsList');
+    if (!lista || !currentUser?.id) return;
+    try {
+      const r = await fetch(
+        `${API_BASE_URL}/api/users/${currentUser.id}/email-preferencias?requisitante_id=${currentUser.id}`
+      );
+      if (!r.ok) {
+        lista.innerHTML = `<div class="cfg-setting-item"><div class="cfg-setting-name" style="color:#DC2626">
+          <i class="bi bi-exclamation-triangle"></i> Não foi possível carregar (HTTP ${r.status})
+        </div></div>`;
+        return;
+      }
+      const data = await r.json();
+      const prefs = data.preferencias || {};
+      const html = Object.entries(prefs).map(([tipo, info]) => `
+        <div class="cfg-setting-item">
+          <div>
+            <div class="cfg-setting-name">${escapeAttr(info.label || tipo)}</div>
+            <div class="cfg-setting-desc" style="color:#9CA3AF;font-size:11px;">${tipo}</div>
+          </div>
+          <label class="cfg-switch">
+            <input type="checkbox" data-email-tipo="${tipo}" ${info.ativo ? 'checked' : ''}>
+            <span class="cfg-slider"></span>
+          </label>
+        </div>
+      `).join('');
+      lista.innerHTML = html || `<div class="cfg-setting-item"><div class="cfg-setting-name">
+        Nenhum tipo de evento disponível.</div></div>`;
+    } catch (e) {
+      console.warn('[EMAIL-PREFS]', e);
+      lista.innerHTML = `<div class="cfg-setting-item"><div class="cfg-setting-name" style="color:#DC2626">
+        <i class="bi bi-exclamation-triangle"></i> Erro de rede ao carregar
+      </div></div>`;
+    }
+  }
+
+  async function salvarEmailPrefs() {
+    if (!currentUser?.id) return;
+    const inputs = document.querySelectorAll('#emailPrefsList input[type="checkbox"][data-email-tipo]');
+    const preferencias = {};
+    inputs.forEach(cb => { preferencias[cb.dataset.emailTipo] = cb.checked; });
+    try {
+      const r = await fetch(
+        `${API_BASE_URL}/api/users/${currentUser.id}/email-preferencias?requisitante_id=${currentUser.id}`,
+        {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ preferencias }),
+        }
+      );
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        cfgToast('Falha ao salvar: ' + (err.detail || `HTTP ${r.status}`), true);
+        return;
+      }
+      cfgToast('Preferências de e-mail salvas!');
+    } catch (e) {
+      console.error('[EMAIL-PREFS] salvar', e);
+      cfgToast('Erro de rede ao salvar', true);
+    }
+  }
+
+  function escapeAttr(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+    }[c]));
   }
 
   // ============================================================
