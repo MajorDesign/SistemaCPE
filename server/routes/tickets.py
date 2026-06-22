@@ -503,23 +503,17 @@ def _destinatarios_email_ticket(
     autor_id: Optional[int] = None,
     incluir_solicitante: bool = True,
     forcar_grupo: bool = False,
+    tipo_evento: Optional[str] = None,
 ) -> tuple[Optional[dict], Optional[dict], list[str]]:
     """Retorna tupla (solicitante, responsavel_individual, grupo_emails).
 
     - solicitante: dict {id, name, email} OU None
-        Email INDIVIDUAL do solicitante (a menos que ele seja o autor
-        do evento ou incluir_solicitante=False).
     - responsavel_individual: dict {id, name, email} OU None
-        Email INDIVIDUAL do responsavel ATUAL (a menos que ele seja o autor,
-        nao haja responsavel, ou forcar_grupo=True).
-    - grupo_emails: list[str]
-        Lista de emails dos membros do grupo (broadcast via BCC). Preenchido
-        APENAS quando nao ha responsavel individual a ser notificado.
-        Exclui autor + solicitante (se ja tratado individual) + responsavel
-        (se ja tratado).
+    - grupo_emails: list[str] (broadcast BCC)
 
-    Uso: solicitante + responsavel_individual via enviar_email() (personalizado);
-    grupo_emails via enviar_email_bcc() (1 conexao SMTP, sem expor RCPT).
+    tipo_evento: se fornecido, consulta user_email_preferencias e remove
+    quem optou OUT desse tipo (de qualquer das 3 categorias). Falha
+    silenciosa se a tabela/modulo nao estiver disponivel.
     """
     cursor.execute(
         """
@@ -562,7 +556,7 @@ def _destinatarios_email_ticket(
                 excluir_ids.add(tk["responsavel_id"])
 
     # 3) Grupo (BCC) — so quando NAO ha responsavel individual
-    grupo_emails: list[str] = []
+    grupo_membros: list[dict] = []
     if responsavel_individual is None and tk.get("group_id"):
         cursor.execute(
             """
@@ -574,9 +568,44 @@ def _destinatarios_email_ticket(
         for m in cursor.fetchall():
             if m["id"] in excluir_ids: continue
             if not m.get("email"): continue
-            grupo_emails.append(m["email"])
+            grupo_membros.append(m)
 
+    # 4) Filtro de preferencias de email (opt-out por tipo). Falha silenciosa
+    # se modulo nao carregar (ex: migration ainda nao aplicada).
+    if tipo_evento:
+        try:
+            from routes.email_preferencias import filtrar_optouts
+            ids_pra_checar: list[int] = []
+            if solicitante: ids_pra_checar.append(solicitante["id"])
+            if responsavel_individual: ids_pra_checar.append(responsavel_individual["id"])
+            ids_pra_checar.extend(m["id"] for m in grupo_membros)
+            opt_outs = filtrar_optouts(cursor, ids_pra_checar, tipo_evento)
+            if solicitante and solicitante["id"] in opt_outs:
+                solicitante = None
+            if responsavel_individual and responsavel_individual["id"] in opt_outs:
+                responsavel_individual = None
+            grupo_membros = [m for m in grupo_membros if m["id"] not in opt_outs]
+        except Exception as e:
+            logger.warning(f"[EMAIL-PREFS] falha ao consultar opt-outs ({tipo_evento}): {e}")
+
+    grupo_emails = [m["email"] for m in grupo_membros]
     return solicitante, responsavel_individual, grupo_emails
+
+
+def _user_aceita_email(cursor, user_id: Optional[int], tipo_evento: str) -> bool:
+    """True se user_id pode receber email do tipo_evento (default: True).
+
+    Usado nos envios DIRETOS (sem passar por _destinatarios_email_ticket).
+    Falha silenciosa = aceita (conservador).
+    """
+    if not user_id:
+        return False
+    try:
+        from routes.email_preferencias import filtrar_optouts
+        return user_id not in filtrar_optouts(cursor, [user_id], tipo_evento)
+    except Exception as e:
+        logger.warning(f"[EMAIL-PREFS] falha _user_aceita_email ({tipo_evento}): {e}")
+        return True
 
 
 # ========================================
@@ -1273,7 +1302,7 @@ async def assumir_ticket(ticket_id: int, payload: AssumiPayload):
                 (ticket_id,),
             )
             tk = cursor.fetchone() or {}
-            if tk.get("email"):
+            if tk.get("email") and _user_aceita_email(cursor, ticket_db.get("solicitante_id"), "ticket_atribuido"):
                 subj, html = email_ticket_atribuido(
                     ticket_numero=tk.get("id_alfanumerica") or str(ticket_id),
                     assunto=tk.get("assunto") or "",
@@ -1392,6 +1421,7 @@ async def devolver_ticket(ticket_id: int, payload: DevolverPayload):
             # Apos UPDATE responsavel_id eh NULL → helper retorna (solicitante, None, grupo)
             sol_d, _, grupo_emails = _destinatarios_email_ticket(
                 cursor, ticket_id, autor_id=payload.usuario_id,
+                tipo_evento="ticket_devolvido",
             )
             if sol_d:
                 subj, html = email_ticket_devolvido(
@@ -1700,6 +1730,7 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
                 autor_id=payload.usuario_id,
                 incluir_solicitante=False,
                 forcar_grupo=(novo_responsavel_id is None),
+                tipo_evento="ticket_encaminhado",
             )
             if resp_d:
                 subj, html = email_ticket_encaminhado(
@@ -1884,7 +1915,7 @@ async def finalizar_ticket(ticket_id: int, payload: FinalizarPayload):
                 (ticket_id,)
             )
             sol = cursor.fetchone()
-            if sol and sol.get("email"):
+            if sol and sol.get("email") and _user_aceita_email(cursor, ticket_db.get("solicitante_id"), "ticket_finalizado"):
                 subj, html = email_ticket_finalizado(
                     ticket_numero=sol.get("id_alfanumerica") or str(ticket_id),
                     assunto=sol.get("assunto") or "",
@@ -2053,6 +2084,7 @@ async def reabrir_ticket(ticket_id: int, payload: ReopenPayload):
                 cursor, ticket_id,
                 autor_id=payload.usuario_id,
                 incluir_solicitante=False,
+                tipo_evento="ticket_reaberto",
             )
             if resp_d:
                 subj, html = email_ticket_reaberto(
@@ -2358,16 +2390,17 @@ async def criar_ticket(payload: TicketCriar):
                 prio_map = {1: "Baixa", 2: "Média", 3: "Alta", 4: "Urgente"}
                 ticket_numero_email = id_alfanumerica or str(ticket_id)
                 prioridade_label = prio_map.get(payload.prioridade_id, "Média")
-                subj, html = email_ticket_criado(
-                    para=sol["email"],
-                    ticket_numero=ticket_numero_email,
-                    assunto=payload.assunto,
-                    descricao=payload.descricao_inicial,
-                    grupo=grupo_destino,
-                    prioridade=prioridade_label,
-                    solicitante_nome=sol.get("nome") or "",
-                )
-                enviar_email(sol["email"], subj, html)
+                if _user_aceita_email(cursor, payload.solicitante_id, "ticket_criado"):
+                    subj, html = email_ticket_criado(
+                        para=sol["email"],
+                        ticket_numero=ticket_numero_email,
+                        assunto=payload.assunto,
+                        descricao=payload.descricao_inicial,
+                        grupo=grupo_destino,
+                        prioridade=prioridade_label,
+                        solicitante_nome=sol.get("nome") or "",
+                    )
+                    enviar_email(sol["email"], subj, html)
 
                 # Broadcast pro grupo de destino (exceto solicitante, se ele
                 # mesmo for do grupo). "Primordial" pelo user: quem nao esta
@@ -2378,6 +2411,7 @@ async def criar_ticket(payload: TicketCriar):
                     autor_id=payload.solicitante_id,
                     incluir_solicitante=False,
                     forcar_grupo=True,
+                    tipo_evento="ticket_aberto_grupo",
                 )
                 if grupo_emails:
                     subj_g, html_g = email_ticket_para_grupo(
@@ -2611,6 +2645,7 @@ async def atualizar_ticket(
                 status_novo     = _STATUS_LABELS.get(payload.status_id, str(payload.status_id))
                 sol_d, resp_d, grupo_emails = _destinatarios_email_ticket(
                     cursor, ticket_id, autor_id=usuario_id,
+                    tipo_evento="ticket_status_alterado",
                 )
                 for ind in (sol_d, resp_d):
                     if not ind: continue
@@ -2647,7 +2682,8 @@ async def atualizar_ticket(
                     (payload.responsavel_id,),
                 )
                 novo_resp = cursor.fetchone()
-                if novo_resp and novo_resp.get("email"):
+                if (novo_resp and novo_resp.get("email")
+                    and _user_aceita_email(cursor, payload.responsavel_id, "ticket_atribuido")):
                     subj, html = email_ticket_atribuido(
                         ticket_numero=ticket_numero_email,
                         assunto=assunto_email,
@@ -3070,12 +3106,17 @@ async def criar_interacao(payload: InteracaoCriar):
                 ticket_numero = tk.get("id_alfanumerica") or str(payload.ticket_id)
                 autor_nome    = registro.get("usuario_nome") or ""
 
+                # Notifica solicitante + responsavel (exceto autor da mensagem)
+                # respeitando opt-out em ticket_resposta_publica.
                 destinatarios = []
-                # Notifica todos os envolvidos exceto o autor da mensagem
-                if tk.get("sol_email") and ticket_db.get("solicitante_id") != payload.usuario_id:
+                if (tk.get("sol_email")
+                    and ticket_db.get("solicitante_id") != payload.usuario_id
+                    and _user_aceita_email(cursor, ticket_db.get("solicitante_id"), "ticket_resposta_publica")):
                     destinatarios.append((tk["sol_email"], tk.get("sol_nome") or ""))
-                if tk.get("resp_email") and ticket_db.get("responsavel_id") and \
-                   ticket_db.get("responsavel_id") != payload.usuario_id:
+                if (tk.get("resp_email")
+                    and ticket_db.get("responsavel_id")
+                    and ticket_db.get("responsavel_id") != payload.usuario_id
+                    and _user_aceita_email(cursor, ticket_db.get("responsavel_id"), "ticket_resposta_publica")):
                     destinatarios.append((tk["resp_email"], tk.get("resp_nome") or ""))
 
                 for em, nm in destinatarios:
@@ -3108,6 +3149,7 @@ async def criar_interacao(payload: InteracaoCriar):
                     cursor, payload.ticket_id,
                     autor_id=payload.usuario_id,
                     incluir_solicitante=False,
+                    tipo_evento="ticket_comentario_interno",
                 )
                 if resp_d:
                     subj, html = email_ticket_comentario_interno(

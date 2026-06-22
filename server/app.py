@@ -1729,6 +1729,16 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ REGISTRAR ROUTER DE PREFERENCIAS DE EMAIL (por usuario)
+try:
+    from routes.email_preferencias import router as email_prefs_router
+    app.include_router(email_prefs_router)
+    logger.info("✅ Router de Email Preferencias registrado: /api/users/{id}/email-preferencias")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Email Preferencias: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ REGISTRAR ROUTER DE EQUIPE DE SUPORTE (agendas de atendimento)
 try:
     from routes.atendimentos import router as atendimentos_router
