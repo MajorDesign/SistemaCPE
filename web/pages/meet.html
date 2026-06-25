@@ -478,6 +478,31 @@
         <option value="">Padrão do sistema</option>
       </select>
 
+      <!-- Legendas + tradução em tempo real (browser-only) -->
+      <div style="margin-top:14px;padding:12px;background:rgba(255,193,7,0.08);border:1px solid rgba(255,193,7,0.3);border-radius:6px">
+        <label style="display:flex;align-items:center;gap:8px;margin-top:0;cursor:pointer">
+          <input type="checkbox" id="gateLegendasOn" style="width:16px;height:16px;cursor:pointer">
+          <span style="font-weight:600">💬 Ativar legendas com tradução</span>
+        </label>
+        <div id="gateLegendasOpts" style="display:none;margin-top:10px">
+          <label for="gateLegendasFrom" style="font-size:12px;color:#9CA3AF;margin-top:8px">Meu idioma (o que eu falo)</label>
+          <select id="gateLegendasFrom">
+            <option value="pt-BR" selected>Português (Brasil)</option>
+            <option value="en-US">English (US)</option>
+          </select>
+          <label for="gateLegendasTo" style="font-size:12px;color:#9CA3AF;margin-top:8px">Ver legendas em</label>
+          <select id="gateLegendasTo">
+            <option value="pt-BR" selected>Português (Brasil)</option>
+            <option value="en-US">English (US)</option>
+          </select>
+          <div style="font-size:11px;color:#9CA3AF;margin-top:8px;line-height:1.4">
+            <i class="bi bi-info-circle"></i> Funciona melhor no Chrome/Edge.
+            Cada participante escolhe seu idioma — quem fala português vê legendas
+            em português; quem fala inglês recebe em inglês.
+          </div>
+        </div>
+      </div>
+
       <div class="gate-actions">
         <button class="gate-cancelar" onclick="gateCancelar()">
           <i class="bi bi-x-lg"></i> Cancelar
@@ -725,6 +750,34 @@ async function _gateListarDispositivos() {
   } catch (e) {
     console.warn('[GATE] enumerateDevices fail:', e);
   }
+  // Legendas+traducao: restaura preferencias salvas + toggle dos selects
+  _gateInitLegendas();
+}
+
+function _gateInitLegendas() {
+  const onCb = document.getElementById('gateLegendasOn');
+  const opts = document.getElementById('gateLegendasOpts');
+  const selFrom = document.getElementById('gateLegendasFrom');
+  const selTo   = document.getElementById('gateLegendasTo');
+  if (!onCb || !opts) return;
+  onCb.checked = localStorage.getItem('cpe_meet_legendas_on') === '1';
+  if (selFrom) selFrom.value = localStorage.getItem('cpe_meet_legendas_from') || 'pt-BR';
+  if (selTo)   selTo.value   = localStorage.getItem('cpe_meet_legendas_to')   || 'pt-BR';
+  opts.style.display = onCb.checked ? '' : 'none';
+  onCb.onchange = () => { opts.style.display = onCb.checked ? '' : 'none'; };
+  // Web Speech API support detection — desabilita se navegador nao suporta
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    onCb.checked = false; onCb.disabled = true;
+    opts.style.display = 'none';
+    const wrap = onCb.closest('div');
+    if (wrap) {
+      const aviso = document.createElement('div');
+      aviso.style.cssText = 'font-size:11px;color:#DC2626;margin-top:6px';
+      aviso.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Seu navegador não suporta reconhecimento de fala. Use Chrome ou Edge.';
+      wrap.appendChild(aviso);
+    }
+  }
 }
 
 function _gatePopularSelect(id, devices, labelFallback) {
@@ -834,11 +887,22 @@ async function entrarNaReuniao() {
   if (spkId) localStorage.setItem('cpe_chat_speakerId', spkId);
   else localStorage.removeItem('cpe_chat_speakerId');
 
+  // Preferencias de legenda+traducao (persistem entre reunioes)
+  const legendasOn   = document.getElementById('gateLegendasOn').checked;
+  const legendasFrom = document.getElementById('gateLegendasFrom').value || 'pt-BR';
+  const legendasTo   = document.getElementById('gateLegendasTo').value   || 'pt-BR';
+  localStorage.setItem('cpe_meet_legendas_on',   legendasOn ? '1' : '0');
+  localStorage.setItem('cpe_meet_legendas_from', legendasFrom);
+  localStorage.setItem('cpe_meet_legendas_to',   legendasTo);
+
   document.getElementById('gateBtn').disabled = true;
   // Estado inicial pra carregar mais tarde em _entrarNaSala
   window._gatePrefs = {
     micOn: _gateMicOn,
     camOn: _gateCamOn,
+    legendasOn,
+    legendasFrom,
+    legendasTo,
   };
   // Passa o stream de preview adiante (evita pedir camera de novo)
   if (_gatePreviewStream) window._gatePreviewStream = _gatePreviewStream;
@@ -936,6 +1000,151 @@ async function _entrarNaSala() {
   _atualizarBotoes();
   if (!_state.ws) _conectarWS();
   _renderGrid();
+  // Inicia legendas+traducao se o usuario optou no gate
+  if (window._gatePrefs && window._gatePrefs.legendasOn) {
+    _iniciarLegendas(window._gatePrefs.legendasFrom, window._gatePrefs.legendasTo);
+  }
+}
+
+/* ============ Legendas + traducao (browser-only) ============ */
+const _legendas = {
+  on: false,
+  recognition: null,
+  fromLang: 'pt-BR',
+  toLang: 'pt-BR',
+  cache: new Map(),             // chave 'pt-BR|en-US|texto' -> traducao
+  ultimaLegenda: null,          // timeout pra esconder overlay
+};
+
+function _iniciarLegendas(fromLang, toLang) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    console.warn('[LEGENDAS] navegador sem SpeechRecognition');
+    return;
+  }
+  _legendas.on = true;
+  _legendas.fromLang = fromLang || 'pt-BR';
+  _legendas.toLang   = toLang   || 'pt-BR';
+  _criarOverlayLegendas();
+
+  const rec = new SR();
+  rec.lang = _legendas.fromLang;
+  rec.continuous = true;
+  rec.interimResults = false;     // so frases completas (evita ruido)
+  rec.maxAlternatives = 1;
+
+  rec.onresult = (ev) => {
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const r = ev.results[i];
+      if (!r.isFinal) continue;
+      const texto = (r[0]?.transcript || '').trim();
+      if (!texto) continue;
+      // Envia pros outros peers via WS
+      _enviarLegendaWS(texto, _legendas.fromLang);
+      // Mostra na propria tela (auto-monitor — opcional)
+      _mostrarLegenda(_state.displayName || 'Você', texto, _legendas.fromLang);
+    }
+  };
+  rec.onerror = (e) => {
+    console.warn('[LEGENDAS] erro:', e.error);
+    // Auto-restart em alguns erros comuns (no-speech timeout, etc)
+    if (e.error === 'no-speech' || e.error === 'aborted') {
+      try { rec.start(); } catch {}
+    }
+  };
+  rec.onend = () => {
+    // Reinicia automaticamente enquanto legendas estiver ativa
+    if (_legendas.on) {
+      try { rec.start(); } catch {}
+    }
+  };
+  try {
+    rec.start();
+    _legendas.recognition = rec;
+    console.log('[LEGENDAS] iniciado (from=' + _legendas.fromLang + ' to=' + _legendas.toLang + ')');
+  } catch (e) {
+    console.warn('[LEGENDAS] start fail:', e);
+  }
+}
+
+function _pararLegendas() {
+  _legendas.on = false;
+  if (_legendas.recognition) {
+    try { _legendas.recognition.stop(); } catch {}
+    _legendas.recognition = null;
+  }
+  const ov = document.getElementById('captionOverlay');
+  if (ov) ov.remove();
+}
+
+function _criarOverlayLegendas() {
+  if (document.getElementById('captionOverlay')) return;
+  const div = document.createElement('div');
+  div.id = 'captionOverlay';
+  div.style.cssText = [
+    'position:fixed', 'bottom:90px', 'left:50%', 'transform:translateX(-50%)',
+    'max-width:80%', 'background:rgba(0,0,0,0.78)', 'color:#fff',
+    'padding:10px 18px', 'border-radius:8px', 'font-size:16px',
+    'line-height:1.4', 'z-index:9000', 'display:none', 'pointer-events:none',
+    'border-left:4px solid #FFC107', 'box-shadow:0 4px 14px rgba(0,0,0,0.4)',
+    'font-family:Segoe UI,Roboto,Arial,sans-serif',
+  ].join(';');
+  document.body.appendChild(div);
+}
+
+function _enviarLegendaWS(texto, sourceLang) {
+  if (!_state.ws || _state.ws.readyState !== 1) return;
+  try {
+    _state.ws.send(JSON.stringify({
+      type: 'meeting_caption',
+      text: texto,
+      source_lang: sourceLang,
+      from_name: _state.displayName || '',
+    }));
+  } catch (e) { console.warn('[LEGENDAS] send fail:', e); }
+}
+
+async function _traduzirTexto(texto, fromLang, toLang) {
+  // Mesma lingua, retorna original
+  if (!texto || fromLang === toLang) return texto;
+  // Cache
+  const key = fromLang + '|' + toLang + '|' + texto;
+  if (_legendas.cache.has(key)) return _legendas.cache.get(key);
+  // MyMemory: free 5000/dia/IP, sem auth
+  const langPair = fromLang.split('-')[0] + '|' + toLang.split('-')[0];
+  const url = 'https://api.mymemory.translated.net/get?q='
+            + encodeURIComponent(texto) + '&langpair=' + encodeURIComponent(langPair);
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    const traduzido = data?.responseData?.translatedText || texto;
+    _legendas.cache.set(key, traduzido);
+    return traduzido;
+  } catch (e) {
+    console.warn('[LEGENDAS] translate fail:', e);
+    return texto;     // fallback: mostra original
+  }
+}
+
+async function _mostrarLegenda(nomePessoa, textoOriginal, sourceLang) {
+  const ov = document.getElementById('captionOverlay');
+  if (!ov) return;
+  // Traduz se necessario (no idioma escolhido por ESTE usuario)
+  const textoFinal = await _traduzirTexto(textoOriginal, sourceLang, _legendas.toLang);
+  ov.innerHTML = '<strong style="color:#FFC107">' + _escHtml(nomePessoa) + ':</strong> '
+               + _escHtml(textoFinal);
+  ov.style.display = 'block';
+  if (_legendas.ultimaLegenda) clearTimeout(_legendas.ultimaLegenda);
+  _legendas.ultimaLegenda = setTimeout(() => {
+    if (ov) ov.style.display = 'none';
+  }, 7000);
+}
+
+function _escHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
+  }[c]));
 }
 
 /* ============ WebSocket ============ */
@@ -1095,6 +1304,12 @@ async function _onWsEvent(data) {
     case 'meeting_ended':
       alert('🚪 O host encerrou a sala.');
       location.href = '/SistemaCPE/index.html';
+      break;
+    case 'meeting_caption':
+      // Legenda de outro peer — traduz pro idioma local e mostra
+      if (_legendas.on) {
+        _mostrarLegenda(data.from_name || 'Participante', data.text || '', data.source_lang || 'pt-BR');
+      }
       break;
   }
 }
@@ -1365,6 +1580,7 @@ async function sairSala() {
   try { _state.ws?.close(); } catch {}
   if (_state.pingTimer)    { clearInterval(_state.pingTimer);    _state.pingTimer = null; }
   if (_state.hostPollTimer){ clearInterval(_state.hostPollTimer); _state.hostPollTimer = null; }
+  _pararLegendas();
   _state.localStream?.getTracks().forEach(t => t.stop());
   _state.screenStream?.getTracks().forEach(t => t.stop());
   location.href = '/SistemaCPE/index.html';

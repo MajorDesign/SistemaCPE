@@ -658,6 +658,20 @@ async def meeting_ws(websocket: WebSocket):
                     "peer_id": peer_id,
                     "mic_on": mic, "cam_on": cam, "share_on": shr,
                 }, except_peer=peer_id)
+            elif t == "meeting_caption":
+                # Legenda (texto transcrito do mic local). Broadcast pros
+                # outros peers do room — cada um traduz no proprio cliente
+                # pro idioma escolhido. Sem persistencia.
+                texto = (data.get("text") or "").strip()[:500]
+                if not texto:
+                    continue
+                await manager.broadcast(m["id"], {
+                    "type": "meeting_caption",
+                    "peer_id": peer_id,
+                    "text": texto,
+                    "source_lang": (data.get("source_lang") or "pt-BR")[:10],
+                    "from_name": (data.get("from_name") or "")[:80],
+                }, except_peer=peer_id)
             elif t == "ping":
                 await websocket.send_text(json.dumps({"type": "pong"}))
             # outros types sao ignorados silenciosamente
