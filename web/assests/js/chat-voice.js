@@ -11,10 +11,43 @@
    - Suporta: voz, video, screen share. Toggle dinamico via replaceTrack.
    ===================================================================== */
 (function () {
+  // Fallback se o fetch ao backend falhar (mantem comportamento legado).
   const STUN_SERVERS = [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
   ];
+
+  // Cache cliente de iceServers efemeros (TURN+STUN da Cloudflare).
+  // 1 fetch a cada ~50min; promise compartilhada evita N requests simultaneos.
+  const _ICE_CACHE = { servers: null, expiresAt: 0, fetching: null };
+  function _apiBase() {
+    return (typeof API_BASE_URL !== 'undefined' && API_BASE_URL) ? API_BASE_URL : '';
+  }
+  async function _getIceServers() {
+    const now = Date.now();
+    if (_ICE_CACHE.servers && now < _ICE_CACHE.expiresAt) return _ICE_CACHE.servers;
+    if (_ICE_CACHE.fetching) return _ICE_CACHE.fetching;
+    _ICE_CACHE.fetching = (async () => {
+      try {
+        const r = await fetch(`${_apiBase()}/api/meetings/turn-credentials`);
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        const ice = (data && data.iceServers) || STUN_SERVERS;
+        _ICE_CACHE.servers   = ice;
+        _ICE_CACHE.expiresAt = Date.now() + 50 * 60 * 1000;
+        console.log(`[ICE-voice] ${ice.length} server(s) (source=${data?.source})`);
+        return ice;
+      } catch (e) {
+        console.warn('[ICE-voice] fetch falhou, usando STUN fallback:', e);
+        return STUN_SERVERS;
+      } finally {
+        _ICE_CACHE.fetching = null;
+      }
+    })();
+    return _ICE_CACHE.fetching;
+  }
+  // Expose para o caller poder pre-aquecer o cache antes de entrar
+  window.preloadVoiceIceServers = _getIceServers;
 
   // Estado global do modulo
   window._voiceState = {
@@ -46,6 +79,10 @@
     const st = window._voiceState;
     if (st.canalId === channelId) return;        // ja conectado
     if (st.canalId) await window.voiceSair();    // sai do anterior primeiro
+
+    // 0) Pre-carrega ICE servers (TURN+STUN da Cloudflare) antes de
+    //    qualquer RTCPeerConnection. Cache local; tolera falha.
+    await _getIceServers().catch(() => {});
 
     // 1) Tenta capturar mic. Se o user escolheu dispositivo especifico em
     //    Configuracoes -> Voz e video, usa ele; senao 'audio: true' simples
@@ -145,7 +182,9 @@
   function _connectToPeer(peerInfo, initiator) {
     const st = window._voiceState;
     if (st.peers.has(peerInfo.peer_id)) return;
-    const pc = new RTCPeerConnection({ iceServers: STUN_SERVERS });
+    // Usa cache de ICE pre-carregado em _enterVoice. Fallback STUN se vazio.
+    const iceServers = _ICE_CACHE.servers || STUN_SERVERS;
+    const pc = new RTCPeerConnection({ iceServers });
     const entry = {
       user_id: peerInfo.user_id,
       name: peerInfo.name || `Usuário #${peerInfo.user_id}`,
