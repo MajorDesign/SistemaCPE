@@ -167,6 +167,79 @@ manager = MeetingConnManager()
 
 
 # ---------------------------------------------------------------------
+# TURN / STUN — gera ICE servers efêmeros via Cloudflare Realtime TURN
+# Cache em memoria: 1 fetch real a cada ~50min (TTL 1h na CF, renova
+# 10min antes do expire). Sem env config -> fallback STUN-only.
+# ---------------------------------------------------------------------
+
+import os
+import time as _time
+
+_ICE_CACHE: dict = {"ice_servers": None, "expires_at": 0.0}
+
+_ICE_STUN_FALLBACK = [
+    {"urls": ["stun:stun.l.google.com:19302"]},
+    {"urls": ["stun:stun1.l.google.com:19302"]},
+]
+
+
+def _fetch_cloudflare_turn() -> Optional[list]:
+    """Chama API do Cloudflare Realtime TURN. Retorna iceServers ou None."""
+    key_id = (os.getenv("CLOUDFLARE_TURN_KEY_ID") or "").strip()
+    token  = (os.getenv("CLOUDFLARE_TURN_KEY_TOKEN") or "").strip()
+    if not key_id or not token:
+        return None
+    try:
+        import requests as _requests
+        r = _requests.post(
+            f"https://rtc.live.cloudflare.com/v1/turn/keys/{key_id}/credentials/generate-ice-servers",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
+            json={"ttl": 3600},   # 1 hora
+            timeout=8,
+        )
+        if r.status_code != 201:
+            logger.warning(f"[TURN] CF retornou HTTP {r.status_code}: {r.text[:200]}")
+            return None
+        data = r.json()
+        ice = data.get("iceServers")
+        if not isinstance(ice, list) or not ice:
+            logger.warning(f"[TURN] CF response sem iceServers: {data}")
+            return None
+        return ice
+    except Exception as e:
+        logger.warning(f"[TURN] erro chamando CF: {e}")
+        return None
+
+
+@router.get("/turn-credentials")
+async def get_turn_credentials():
+    """Retorna {iceServers:[...]} pra ser usado no RTCPeerConnection do cliente.
+
+    Comportamento:
+    - Sem CLOUDFLARE_TURN_KEY_ID/TOKEN no .env -> STUN-only (fallback).
+    - Com config -> credentials efemeros da Cloudflare (TTL 1h),
+      renovados em background a cada ~50min (cache em memoria).
+    - Falha na CF -> fallback STUN, log warning, NAO derruba a reuniao.
+    """
+    now = _time.time()
+    if _ICE_CACHE["ice_servers"] and now < _ICE_CACHE["expires_at"]:
+        return {"iceServers": _ICE_CACHE["ice_servers"], "source": "cache"}
+
+    # Tenta CF em thread (requests eh sync) pra nao bloquear event loop
+    ice = await asyncio.to_thread(_fetch_cloudflare_turn)
+    if ice:
+        _ICE_CACHE["ice_servers"] = ice
+        _ICE_CACHE["expires_at"]  = now + (50 * 60)   # 50 min cache
+        return {"iceServers": ice, "source": "cloudflare"}
+
+    # Fallback: STUN-only (mantem comportamento atual sem TURN)
+    return {"iceServers": _ICE_STUN_FALLBACK, "source": "stun-fallback"}
+
+
+# ---------------------------------------------------------------------
 # REST: criar/listar/encerrar
 # ---------------------------------------------------------------------
 @router.post("/")
