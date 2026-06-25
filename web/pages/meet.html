@@ -963,7 +963,14 @@ async function pedirEntrada(guestName) {
       _entrarNaSala();
     }
   } catch (e) {
-    alert('Erro: ' + e.message);
+    // Mensagem amigavel pra reuniao lotada (HTTP 403 do bloqueio
+    // MAX_MEETING_PARTICIPANTS). Demais erros usam fallback generico.
+    const msg = String(e.message || '');
+    if (msg.includes('lotada') || msg.includes('limite máximo') || msg.includes('limite maximo')) {
+      alert('🚫 ' + msg);
+    } else {
+      alert('Erro: ' + msg);
+    }
     document.getElementById('gateBtn').disabled = false;
   }
 }
@@ -1916,7 +1923,14 @@ async function aprovarGuest(peerId) {
     await _apiRest('POST', `/${_code}/approve/${peerId}`);
     _state.pending = _state.pending.filter(p => p.peer_id !== peerId);
     _renderPending();
-  } catch (e) { alert('Erro: ' + e.message); }
+  } catch (e) {
+    const msg = String(e.message || '');
+    if (msg.includes('limite máximo') || msg.includes('limite maximo') || msg.includes('lotada')) {
+      alert('🚫 ' + msg);
+    } else {
+      alert('Erro: ' + msg);
+    }
+  }
 }
 
 async function rejeitarGuest(peerId) {

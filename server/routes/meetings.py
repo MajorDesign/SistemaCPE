@@ -214,6 +214,31 @@ def _fetch_cloudflare_turn() -> Optional[list]:
         return None
 
 
+# ---------------------------------------------------------------------
+# Capacidade maxima de participantes por sala — protege qualidade do
+# mesh P2P. Default 8, configuravel via .env (MAX_MEETING_PARTICIPANTS).
+# Pra suportar mais precisa SFU — ver [[project_meet_capacidade_max]].
+# ---------------------------------------------------------------------
+
+def _max_participants() -> int:
+    """Le do .env a cada request (permite ajuste sem restart)."""
+    try:
+        v = int(os.getenv("MAX_MEETING_PARTICIPANTS", "8"))
+        return max(2, v)   # piso de seguranca
+    except (TypeError, ValueError):
+        return 8
+
+
+def _count_participantes_dentro(cursor, meeting_id: int) -> int:
+    cursor.execute(
+        "SELECT COUNT(*) FROM chat_meeting_participants "
+        "WHERE meeting_id=%s AND status='dentro'",
+        (meeting_id,),
+    )
+    row = cursor.fetchone()
+    return int(row[0]) if row else 0
+
+
 @router.get("/turn-credentials")
 async def get_turn_credentials():
     """Retorna {iceServers:[...]} pra ser usado no RTCPeerConnection do cliente.
@@ -419,6 +444,18 @@ async def request_entry(code: str, body: RequestEntryBody, request: Request):
     conn = get_chat_db_or_404()
     cur = conn.cursor()
     try:
+        # Bloqueio de capacidade: se vai entrar direto ('dentro'), conta.
+        # Pra quem fica 'aguardando' nao conta agora (so vai pesar quando
+        # for aprovado — checado no /approve).
+        if status == "dentro":
+            max_p = _max_participants()
+            atual = _count_participantes_dentro(cur, m["id"])
+            if atual >= max_p:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Reunião lotada ({atual}/{max_p}). Aguarde "
+                           f"alguém sair pra entrar.",
+                )
         cur.execute("""
             INSERT INTO chat_meeting_participants
               (meeting_id, peer_id, user_id, guest_name, guest_token, status)
@@ -466,6 +503,15 @@ async def approve_guest(code: str, peer_id: str, request: Request):
     conn = get_chat_db_or_404()
     cur = conn.cursor()
     try:
+        # Bloqueio de capacidade: nao deixa o host aprovar se ja cheio.
+        max_p = _max_participants()
+        atual = _count_participantes_dentro(cur, m["id"])
+        if atual >= max_p:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Reunião já está no limite máximo ({atual}/{max_p}). "
+                       f"Peça pra alguém sair antes de aprovar.",
+            )
         cur.execute("""
             UPDATE chat_meeting_participants
             SET status='dentro'
