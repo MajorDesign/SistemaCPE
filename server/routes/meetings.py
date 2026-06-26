@@ -215,6 +215,141 @@ def _fetch_cloudflare_turn() -> Optional[list]:
 
 
 # ---------------------------------------------------------------------
+# ATA DE REUNIAO — transcript via Web Speech (client-side) + resumo
+# via Gemini (Google Generative AI free tier).
+#
+# Em memoria, durante a gravacao: ATAS_EM_GRAVACAO[meeting_id] =
+# {"ata_id": int, "falas": [{"at": isostr, "autor": str, "texto": str,
+# "lang": str}]}. No /stop, serializa pro DB + dispara LLM em thread.
+# ---------------------------------------------------------------------
+
+ATAS_EM_GRAVACAO: dict = {}     # meeting_id -> {ata_id, falas}
+
+
+def _gemini_gerar_ata(transcript_text: str) -> Optional[str]:
+    """Chama Gemini Free Tier pra resumir o transcript em ata markdown.
+    Retorna o markdown OU None se nao tiver API key OU se a chamada falhar.
+    """
+    api_key = (os.getenv("GEMINI_API_KEY") or "").strip()
+    if not api_key:
+        return None
+    if not transcript_text or not transcript_text.strip():
+        return None
+
+    prompt = (
+        "Voce eh um secretario de reunioes. Dado o transcript abaixo de uma "
+        "reuniao corporativa, gere uma ATA em markdown estruturada em portugues "
+        "brasileiro com as seguintes secoes (use # e ## como cabecalhos):\n\n"
+        "1. Resumo executivo (2-3 frases do que foi a reuniao)\n"
+        "2. Topicos discutidos (lista com bullets)\n"
+        "3. Decisoes tomadas (se houver, lista)\n"
+        "4. Acoes pendentes (lista com responsavel quando mencionado e prazo se mencionado)\n"
+        "5. Proximos passos (se houver)\n\n"
+        "Seja conciso e objetivo. Nao invente informacoes que nao estao no transcript. "
+        "Se uma secao nao tem conteudo, omita-a.\n\n"
+        "---TRANSCRIPT DA REUNIAO---\n"
+        f"{transcript_text}\n"
+        "---FIM DO TRANSCRIPT---"
+    )
+
+    try:
+        import requests as _requests
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            "gemini-2.0-flash:generateContent?key=" + api_key
+        )
+        body = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.2,
+                "maxOutputTokens": 2048,
+            },
+        }
+        r = _requests.post(url, json=body, timeout=60)
+        if r.status_code != 200:
+            logger.warning(f"[ATA-LLM] Gemini retornou HTTP {r.status_code}: {r.text[:300]}")
+            return None
+        data = r.json()
+        candidates = data.get("candidates") or []
+        if not candidates:
+            logger.warning(f"[ATA-LLM] Gemini sem candidates: {data}")
+            return None
+        parts = candidates[0].get("content", {}).get("parts") or []
+        if not parts:
+            return None
+        return (parts[0].get("text") or "").strip() or None
+    except Exception as e:
+        logger.warning(f"[ATA-LLM] erro chamando Gemini: {e}")
+        return None
+
+
+def _gerar_ata_background(ata_id: int):
+    """Roda em thread separada apos /stop. Le falas serializadas do DB,
+    monta texto, chama Gemini, persiste ata_gerada + status final."""
+    import time as _t
+    conn = None
+    cur  = None
+    try:
+        conn = get_chat_db_or_404()
+        cur  = conn.cursor(dictionary=True)
+        cur.execute(
+            "SELECT id, transcript_bruto FROM chat_meeting_atas WHERE id = %s",
+            (ata_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return
+        try:
+            falas = json.loads(row.get("transcript_bruto") or "[]")
+        except Exception:
+            falas = []
+
+        # Monta texto plano: "Fulano (HH:MM): texto"
+        linhas = []
+        for f in falas:
+            autor = f.get("autor") or "Desconhecido"
+            at    = (f.get("at") or "")[11:16]   # extrai HH:MM do iso
+            txt   = (f.get("texto") or "").strip()
+            if not txt: continue
+            linhas.append(f"{autor} ({at}): {txt}")
+        transcript_text = "\n".join(linhas)
+
+        ata_md = _gemini_gerar_ata(transcript_text)
+        if ata_md:
+            cur.execute(
+                "UPDATE chat_meeting_atas SET ata_gerada=%s, status='pronta', "
+                "modelo_llm='gemini-2.0-flash' WHERE id=%s",
+                (ata_md, ata_id),
+            )
+        else:
+            # Sem LLM disponivel OU falha — salva transcript bruto como
+            # ata fallback (markdown simples) e marca 'pronta'.
+            fallback = "# Transcript bruto (resumo automatico indisponivel)\n\n"
+            fallback += transcript_text or "_(sem falas registradas)_"
+            cur.execute(
+                "UPDATE chat_meeting_atas SET ata_gerada=%s, status='pronta', "
+                "modelo_llm='fallback-bruto' WHERE id=%s",
+                (fallback, ata_id),
+            )
+        conn.commit()
+        logger.info(f"[ATA] ata_id={ata_id} processada e marcada 'pronta'")
+    except Exception as e:
+        logger.error(f"[ATA] erro processando ata_id={ata_id}: {e}")
+        try:
+            if cur:
+                cur.execute(
+                    "UPDATE chat_meeting_atas SET status='erro', erro_msg=%s WHERE id=%s",
+                    (str(e)[:500], ata_id),
+                )
+                conn.commit()
+        except Exception:
+            pass
+    finally:
+        if cur:  cur.close()
+        if conn: conn.close()
+
+
+# ---------------------------------------------------------------------
 # Capacidade maxima de participantes por sala — protege qualidade do
 # mesh P2P. Default 8, configuravel via .env (MAX_MEETING_PARTICIPANTS).
 # Pra suportar mais precisa SFU — ver [[project_meet_capacidade_max]].
@@ -563,6 +698,139 @@ async def reject_guest(code: str, peer_id: str, request: Request):
 
 
 # ---------------------------------------------------------------------
+# ATA: start (host) / stop (host) / get / list_me
+# ---------------------------------------------------------------------
+
+@router.post("/{code}/ata/start")
+async def ata_start(code: str, request: Request):
+    user = _exigir_user(request)
+    m = _meeting_by_code(code)
+    if not m:
+        raise HTTPException(status_code=404, detail="Sala nao encontrada")
+    if not _user_eh_host(m, user["id"]):
+        raise HTTPException(status_code=403, detail="So o host pode gravar a ata")
+
+    # Ja tem ata em gravacao?
+    if m["id"] in ATAS_EM_GRAVACAO:
+        raise HTTPException(status_code=409, detail="Ata ja esta sendo gravada")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """INSERT INTO chat_meeting_atas
+               (meeting_id, meeting_code, meeting_nome, criada_por_user_id, status)
+               VALUES (%s, %s, %s, %s, 'gravando')""",
+            (m["id"], code, m.get("nome") or "", user["id"]),
+        )
+        conn.commit()
+        ata_id = cur.lastrowid
+    finally:
+        cur.close(); conn.close()
+
+    ATAS_EM_GRAVACAO[m["id"]] = {"ata_id": ata_id, "falas": []}
+    await manager.broadcast(m["id"], {
+        "type": "meeting_ata_started",
+        "ata_id": ata_id,
+        "by_user_id": user["id"],
+        "by_user_name": user.get("name") or "",
+    })
+    logger.info(f"[ATA] iniciada ata_id={ata_id} meeting={m['id']} por user={user['id']}")
+    return {"success": True, "ata_id": ata_id}
+
+
+@router.post("/{code}/ata/stop")
+async def ata_stop(code: str, request: Request):
+    user = _exigir_user(request)
+    m = _meeting_by_code(code)
+    if not m:
+        raise HTTPException(status_code=404, detail="Sala nao encontrada")
+    if not _user_eh_host(m, user["id"]):
+        raise HTTPException(status_code=403, detail="So o host pode encerrar a ata")
+
+    grav = ATAS_EM_GRAVACAO.pop(m["id"], None)
+    if not grav:
+        raise HTTPException(status_code=409, detail="Nao ha ata sendo gravada")
+    ata_id = grav["ata_id"]
+    falas  = grav["falas"]
+
+    # Persiste transcript e marca 'gerando'
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """UPDATE chat_meeting_atas
+               SET status='gerando', finalizada_em=NOW(), transcript_bruto=%s
+               WHERE id=%s""",
+            (json.dumps(falas, default=str), ata_id),
+        )
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    # Avisa todos
+    await manager.broadcast(m["id"], {
+        "type": "meeting_ata_stopped",
+        "ata_id": ata_id,
+        "falas_total": len(falas),
+    })
+
+    # Dispara geracao em thread (Gemini ate ~30s)
+    import threading
+    threading.Thread(target=_gerar_ata_background, args=(ata_id,), daemon=True).start()
+    logger.info(f"[ATA] stop ata_id={ata_id} falas={len(falas)} -> 'gerando' (background)")
+    return {"success": True, "ata_id": ata_id, "status": "gerando", "falas_total": len(falas)}
+
+
+@router.get("/atas/me")
+async def atas_minhas(request: Request):
+    """Lista atas criadas pelo usuario logado (mais recentes primeiro)."""
+    user = _exigir_user(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute(
+            """SELECT id, meeting_code, meeting_nome, status, modelo_llm,
+                      iniciada_em, finalizada_em, erro_msg
+               FROM chat_meeting_atas
+               WHERE criada_por_user_id = %s
+               ORDER BY iniciada_em DESC
+               LIMIT 100""",
+            (user["id"],),
+        )
+        rows = cur.fetchall()
+    finally:
+        cur.close(); conn.close()
+    return {"atas": rows}
+
+
+@router.get("/atas/{ata_id}")
+async def ata_get(ata_id: int, request: Request):
+    """Detalhe de uma ata. Por enquanto so o criador acessa."""
+    user = _exigir_user(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute(
+            """SELECT * FROM chat_meeting_atas WHERE id = %s""",
+            (ata_id,),
+        )
+        row = cur.fetchone()
+    finally:
+        cur.close(); conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Ata nao encontrada")
+    if row["criada_por_user_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="Sem permissao pra ver esta ata")
+    # transcript_bruto vem como JSON string; parse
+    try:
+        row["transcript_bruto"] = json.loads(row.get("transcript_bruto") or "[]")
+    except Exception:
+        row["transcript_bruto"] = []
+    return row
+
+
+# ---------------------------------------------------------------------
 # Leave: sai da sala
 # ---------------------------------------------------------------------
 @router.post("/{code}/leave/{peer_id}")
@@ -784,13 +1052,26 @@ async def meeting_ws(websocket: WebSocket):
                 texto = (data.get("text") or "").strip()[:500]
                 if not texto:
                     continue
+                source_lang = (data.get("source_lang") or "pt-BR")[:10]
+                from_name   = (data.get("from_name") or "")[:80]
                 await manager.broadcast(m["id"], {
                     "type": "meeting_caption",
                     "peer_id": peer_id,
                     "text": texto,
-                    "source_lang": (data.get("source_lang") or "pt-BR")[:10],
-                    "from_name": (data.get("from_name") or "")[:80],
+                    "source_lang": source_lang,
+                    "from_name": from_name,
                 }, except_peer=peer_id)
+                # Se ata em gravacao, acumula em memoria pra serializar no /stop
+                grav = ATAS_EM_GRAVACAO.get(m["id"])
+                if grav:
+                    from datetime import datetime as _dt
+                    grav["falas"].append({
+                        "at":    _dt.utcnow().isoformat(timespec="seconds"),
+                        "autor": from_name or "Participante",
+                        "texto": texto,
+                        "lang":  source_lang,
+                        "peer_id": peer_id,
+                    })
             elif t == "ping":
                 await websocket.send_text(json.dumps({"type": "pong"}))
             # outros types sao ignorados silenciosamente
