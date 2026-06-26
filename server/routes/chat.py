@@ -291,7 +291,7 @@ def listar_canais(request: Request):
         uid = user["id"]
         cur.execute("""
             SELECT c.id, c.tipo, c.nome, c.descricao, c.grupo_id,
-                   c.server_id, c.categoria_id, c.criado_em,
+                   c.server_id, c.categoria_id, c.criado_em, c.ata_habilitada,
                    m.ultima_msg_lida_id, m.silenciado_ate,
                    (SELECT COUNT(*) FROM chat_messages msg
                       WHERE msg.channel_id = c.id
@@ -306,7 +306,7 @@ def listar_canais(request: Request):
               AND c.server_id IS NULL
             UNION ALL
             SELECT c.id, c.tipo, c.nome, c.descricao, c.grupo_id,
-                   c.server_id, c.categoria_id, c.criado_em,
+                   c.server_id, c.categoria_id, c.criado_em, c.ata_habilitada,
                    m.ultima_msg_lida_id, m.silenciado_ate,
                    (SELECT COUNT(*) FROM chat_messages msg
                       WHERE msg.channel_id = c.id
@@ -772,6 +772,7 @@ def detalhar_server(server_id: int, request: Request):
         # da whitelist.
         cur.execute("""
             SELECT c.id, c.tipo, c.nome, c.descricao, c.categoria_id, c.ordem,
+                   c.ata_habilitada,
                    EXISTS (SELECT 1 FROM chat_channel_role_access cra
                            WHERE cra.channel_id = c.id) AS tem_whitelist
             FROM chat_channels c
@@ -2068,6 +2069,9 @@ class CanalCreate(BaseModel):
                       description="canal de texto ou voz")
     server_id: Optional[int] = None
     categoria_id: Optional[int] = None
+    # Se tipo='voz' e True, primeiro user que entra recebe popup pra
+    # iniciar gravacao da ata. Ignorado pra tipo='canal'.
+    ata_habilitada: bool = False
 
 
 class CanalEdit(BaseModel):
@@ -2159,10 +2163,11 @@ async def criar_canal(body: CanalCreate, request: Request):
     chat = get_chat_db_or_404()
     ccur = chat.cursor()
     try:
+        ata_hab = 1 if (body.tipo == "voz" and body.ata_habilitada) else 0
         ccur.execute("""
-            INSERT INTO chat_channels (tipo, server_id, categoria_id, nome, descricao, criado_por)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """, (body.tipo, body.server_id, body.categoria_id, nome, body.descricao, user["id"]))
+            INSERT INTO chat_channels (tipo, server_id, categoria_id, nome, descricao, criado_por, ata_habilitada)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (body.tipo, body.server_id, body.categoria_id, nome, body.descricao, user["id"], ata_hab))
         channel_id = ccur.lastrowid
 
         # Owner + members
@@ -2732,6 +2737,12 @@ async def voice_leave(channel_id: int, request: Request):
         cur.execute("DELETE FROM chat_voice_sessions WHERE channel_id=%s AND user_id=%s",
                     (channel_id, user["id"]))
         conn.commit()
+        # Canal esvaziou? Se sim, auto-encerra ata em gravacao.
+        cur.execute(
+            "SELECT COUNT(*) FROM chat_voice_sessions WHERE channel_id=%s",
+            (channel_id,),
+        )
+        restantes = cur.fetchone()[0]
     finally:
         cur.close(); conn.close()
     membros = _listar_membros_canal(channel_id)
@@ -2740,6 +2751,9 @@ async def voice_leave(channel_id: int, request: Request):
         "channel_id": channel_id,
         "user_id": user["id"],
     })
+    if restantes == 0 and channel_id in VOICE_ATAS_EM_GRAVACAO:
+        logger.info(f"[VOICE-ATA] canal {channel_id} esvaziou -> auto-encerrar ata")
+        await _encerrar_ata_voz(channel_id)
     return {"success": True}
 
 
@@ -2765,6 +2779,268 @@ def voice_peers(channel_id: int, request: Request):
         u = users_map.get(p["user_id"], {})
         p["name"] = u.get("name") or f"Usuario #{p['user_id']}"
     return {"success": True, "peers": peers}
+
+
+# =====================================================================
+# ATA DO CANAL DE VOZ — transcript via Web Speech (client) + Gemini
+# Modelo: 1 ata por SESSAO (canal esvazia -> auto-encerra). Quem cria
+# o canal define ata_habilitada; primeiro user que entra escolhe se
+# realmente vai iniciar. So quem iniciou pode parar manualmente.
+# =====================================================================
+
+VOICE_ATAS_EM_GRAVACAO: dict = {}   # channel_id -> {ata_id, iniciada_por_user_id, falas}
+
+
+def _gemini_gerar_ata_voz(transcript_text: str) -> Optional[str]:
+    """Chama Gemini Free Tier. Retorna markdown OU None se nao configurado / falhar."""
+    api_key = (os.getenv("GEMINI_API_KEY") or "").strip()
+    if not api_key or not transcript_text.strip():
+        return None
+    prompt = (
+        "Voce eh um secretario de reunioes. Dado o transcript abaixo de uma "
+        "conversa em canal de voz corporativo, gere uma ATA em markdown estruturada "
+        "em portugues brasileiro com:\n\n"
+        "1. Resumo executivo (2-3 frases)\n"
+        "2. Topicos discutidos (lista com bullets)\n"
+        "3. Decisoes tomadas (se houver)\n"
+        "4. Acoes pendentes (com responsavel/prazo quando mencionado)\n"
+        "5. Proximos passos (se houver)\n\n"
+        "Seja conciso. Nao invente nada fora do transcript. Omita secoes vazias.\n\n"
+        "---TRANSCRIPT---\n"
+        f"{transcript_text}\n"
+        "---FIM---"
+    )
+    try:
+        import requests as _r
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            "gemini-flash-latest:generateContent?key=" + api_key
+        )
+        r = _r.post(url, json={
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 2048},
+        }, timeout=60)
+        if r.status_code != 200:
+            logger.warning(f"[VOICE-ATA-LLM] HTTP {r.status_code}: {r.text[:300]}")
+            return None
+        cands = r.json().get("candidates") or []
+        if not cands: return None
+        parts = cands[0].get("content", {}).get("parts") or []
+        return (parts[0].get("text") or "").strip() or None if parts else None
+    except Exception as e:
+        logger.warning(f"[VOICE-ATA-LLM] erro: {e}")
+        return None
+
+
+def _processar_ata_voz_background(ata_id: int):
+    """Roda em thread. Le transcript, chama Gemini, atualiza status."""
+    conn = None; cur = None
+    try:
+        conn = get_chat_db_or_404()
+        cur = conn.cursor(dictionary=True)
+        cur.execute("SELECT transcript_bruto FROM chat_voice_atas WHERE id=%s", (ata_id,))
+        row = cur.fetchone()
+        if not row: return
+        try:
+            falas = json.loads(row.get("transcript_bruto") or "[]")
+        except Exception:
+            falas = []
+        linhas = []
+        for f in falas:
+            autor = f.get("autor") or "Desconhecido"
+            at    = (f.get("at") or "")[11:16]
+            txt   = (f.get("texto") or "").strip()
+            if not txt: continue
+            linhas.append(f"{autor} ({at}): {txt}")
+        transcript_text = "\n".join(linhas)
+        ata_md = _gemini_gerar_ata_voz(transcript_text)
+        if ata_md:
+            cur.execute(
+                "UPDATE chat_voice_atas SET ata_gerada=%s, status='pronta', "
+                "modelo_llm='gemini-flash-latest' WHERE id=%s",
+                (ata_md, ata_id),
+            )
+        else:
+            fallback = "# Transcript bruto (resumo automatico indisponivel)\n\n" + (
+                transcript_text or "_(sem falas registradas)_")
+            cur.execute(
+                "UPDATE chat_voice_atas SET ata_gerada=%s, status='pronta', "
+                "modelo_llm='fallback-bruto' WHERE id=%s",
+                (fallback, ata_id),
+            )
+        conn.commit()
+        logger.info(f"[VOICE-ATA] ata_id={ata_id} processada")
+    except Exception as e:
+        logger.error(f"[VOICE-ATA] erro processando ata_id={ata_id}: {e}")
+        try:
+            if cur:
+                cur.execute("UPDATE chat_voice_atas SET status='erro', erro_msg=%s WHERE id=%s",
+                            (str(e)[:500], ata_id))
+                conn.commit()
+        except Exception: pass
+    finally:
+        if cur:  cur.close()
+        if conn: conn.close()
+
+
+async def _encerrar_ata_voz(channel_id: int) -> Optional[int]:
+    """Encerra ata em gravacao no canal (usado em /stop, leave e cleanup).
+    Retorna ata_id se encerrou, None se nao havia."""
+    grav = VOICE_ATAS_EM_GRAVACAO.pop(channel_id, None)
+    if not grav: return None
+    ata_id = grav["ata_id"]
+    falas  = grav.get("falas", [])
+    try:
+        conn = get_chat_db_or_404()
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE chat_voice_atas SET status='gerando', finalizada_em=NOW(), "
+            "transcript_bruto=%s WHERE id=%s",
+            (json.dumps(falas, default=str), ata_id),
+        )
+        conn.commit()
+        cur.close(); conn.close()
+    except Exception as e:
+        logger.error(f"[VOICE-ATA] falha persistindo ata_id={ata_id}: {e}")
+        return None
+    # Avisa todos os membros do canal
+    try:
+        membros = _listar_membros_canal(channel_id)
+        await manager.send_to_users(membros, {
+            "type": "voice_ata_stopped",
+            "channel_id": channel_id,
+            "ata_id": ata_id,
+        })
+    except Exception: pass
+    # Dispara LLM em thread
+    import threading
+    threading.Thread(target=_processar_ata_voz_background, args=(ata_id,), daemon=True).start()
+    logger.info(f"[VOICE-ATA] ata_id={ata_id} canal={channel_id} encerrada (-> 'gerando')")
+    return ata_id
+
+
+class VoiceAtaStartBody(BaseModel):
+    pass   # nao precisa nada — auto pega o canal+user da sessao
+
+
+@router.post("/channels/{channel_id}/voice/ata/start")
+async def voice_ata_start(channel_id: int, request: Request):
+    """Inicia gravacao da sessao atual. Permitido somente se:
+    - Canal tem ata_habilitada=1
+    - Nao ha ata em gravacao pra esse canal
+    - User esta dentro do canal (chat_voice_sessions)
+    """
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro deste canal")
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # 1) Canal tem ata habilitada?
+        cur.execute("SELECT id, nome, ata_habilitada FROM chat_channels WHERE id=%s", (channel_id,))
+        canal = cur.fetchone()
+        if not canal:
+            raise HTTPException(status_code=404, detail="Canal nao encontrado")
+        if not canal.get("ata_habilitada"):
+            raise HTTPException(status_code=403, detail="Este canal nao tem ata habilitada")
+        # 2) Ja em gravacao?
+        if channel_id in VOICE_ATAS_EM_GRAVACAO:
+            raise HTTPException(status_code=409, detail="Ata ja esta sendo gravada nesta sessao")
+        # 3) User esta dentro?
+        cur.execute(
+            "SELECT 1 FROM chat_voice_sessions WHERE channel_id=%s AND user_id=%s",
+            (channel_id, user["id"]),
+        )
+        if not cur.fetchone():
+            raise HTTPException(status_code=400, detail="Voce precisa estar no canal pra iniciar")
+        # 4) Cria ata
+        cur.execute(
+            """INSERT INTO chat_voice_atas
+               (canal_id, canal_nome, iniciada_por_user_id, status)
+               VALUES (%s, %s, %s, 'gravando')""",
+            (channel_id, canal.get("nome") or "", user["id"]),
+        )
+        conn.commit()
+        ata_id = cur.lastrowid
+    finally:
+        cur.close(); conn.close()
+
+    VOICE_ATAS_EM_GRAVACAO[channel_id] = {
+        "ata_id": ata_id,
+        "iniciada_por_user_id": user["id"],
+        "falas": [],
+    }
+    # Broadcast pros membros do canal (pra mostrar banner)
+    membros = _listar_membros_canal(channel_id)
+    await manager.send_to_users(membros, {
+        "type": "voice_ata_started",
+        "channel_id": channel_id,
+        "ata_id": ata_id,
+        "iniciada_por_user_id": user["id"],
+        "iniciada_por_nome": user.get("name") or "",
+    })
+    logger.info(f"[VOICE-ATA] start ata_id={ata_id} canal={channel_id} por user={user['id']}")
+    return {"success": True, "ata_id": ata_id}
+
+
+@router.post("/channels/{channel_id}/voice/ata/stop")
+async def voice_ata_stop(channel_id: int, request: Request):
+    """Para a gravacao. So quem iniciou pode."""
+    user = _user_from_request(request)
+    grav = VOICE_ATAS_EM_GRAVACAO.get(channel_id)
+    if not grav:
+        raise HTTPException(status_code=409, detail="Nao ha ata sendo gravada neste canal")
+    if grav.get("iniciada_por_user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="So quem iniciou a ata pode pararla")
+    ata_id = await _encerrar_ata_voz(channel_id)
+    return {"success": True, "ata_id": ata_id, "status": "gerando"}
+
+
+@router.get("/channels/{channel_id}/voice/atas")
+def voice_atas_do_canal(channel_id: int, request: Request):
+    """Lista atas do canal. Usuario precisa ser membro do canal."""
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro deste canal")
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT a.id, a.canal_nome, a.iniciada_por_user_id, a.status,
+                   a.modelo_llm, a.iniciada_em, a.finalizada_em, a.erro_msg,
+                   u.name AS iniciada_por_nome
+            FROM chat_voice_atas a
+            LEFT JOIN cpe_plus.users u ON u.id = a.iniciada_por_user_id
+            WHERE a.canal_id = %s
+            ORDER BY a.iniciada_em DESC LIMIT 100
+        """, (channel_id,))
+        rows = cur.fetchall()
+    finally:
+        cur.close(); conn.close()
+    return {"atas": rows}
+
+
+@router.get("/voice-atas/{ata_id}")
+def voice_ata_get(ata_id: int, request: Request):
+    """Detalhe da ata. Acesso = membro do canal."""
+    user = _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT * FROM chat_voice_atas WHERE id=%s", (ata_id,))
+        row = cur.fetchone()
+    finally:
+        cur.close(); conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Ata nao encontrada")
+    if not _usuario_pertence_ao_canal(user["id"], row["canal_id"]):
+        raise HTTPException(status_code=403, detail="Sem permissao (nao e membro do canal)")
+    try:
+        row["transcript_bruto"] = json.loads(row.get("transcript_bruto") or "[]")
+    except Exception:
+        row["transcript_bruto"] = []
+    return row
 
 
 # =====================================================================
@@ -3515,6 +3791,36 @@ async def chat_ws(websocket: WebSocket):
                     **data,
                     "from_user_id": user_id,
                 })
+            elif msg_type == "voice_caption":
+                # Texto transcrito do mic local. Broadcast pra todos os
+                # membros do canal + acumula em memoria se ata em gravacao.
+                ch_id = data.get("channel_id")
+                texto = (data.get("text") or "").strip()[:500]
+                if not ch_id or not texto:
+                    continue
+                if not _usuario_pertence_ao_canal(user_id, ch_id):
+                    continue
+                from_name   = (data.get("from_name") or "")[:80]
+                source_lang = (data.get("source_lang") or "pt-BR")[:10]
+                membros = _listar_membros_canal(ch_id)
+                await manager.send_to_users(membros, {
+                    "type":        "voice_caption",
+                    "channel_id":  ch_id,
+                    "user_id":     user_id,
+                    "text":        texto,
+                    "from_name":   from_name,
+                    "source_lang": source_lang,
+                })
+                grav = VOICE_ATAS_EM_GRAVACAO.get(ch_id)
+                if grav:
+                    from datetime import datetime as _dt
+                    grav["falas"].append({
+                        "at":    _dt.utcnow().isoformat(timespec="seconds"),
+                        "autor": from_name or "Participante",
+                        "texto": texto,
+                        "lang":  source_lang,
+                        "user_id": user_id,
+                    })
             elif msg_type == "voice_state":
                 # Toggle mic/cam/share — propaga pra todos os membros do canal
                 ch_id = data.get("channel_id")

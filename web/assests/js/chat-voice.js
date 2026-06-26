@@ -49,6 +49,190 @@
   // Expose para o caller poder pre-aquecer o cache antes de entrar
   window.preloadVoiceIceServers = _getIceServers;
 
+  /* =================================================================
+     ATA por canal de voz: SpeechRecognition local + WS voice_caption
+     ================================================================= */
+  const _vAta = {
+    ataAtivaParaCanal: null,   // {channel_id, ata_id, iniciada_por_user_id, iniciada_por_nome}
+    recognition: null,
+  };
+
+  function _meuUserId() {
+    try { return JSON.parse(localStorage.getItem('cpe_user') || 'null')?.id || null; }
+    catch { return null; }
+  }
+  function _meuNome() {
+    try { return JSON.parse(localStorage.getItem('cpe_user') || 'null')?.name || ''; }
+    catch { return ''; }
+  }
+
+  function _vAtaBanner(show, texto, podeParar) {
+    let el = document.getElementById('voiceAtaBanner');
+    if (show) {
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'voiceAtaBanner';
+        el.style.cssText = [
+          'position:fixed','top:0','left:0','right:0','z-index:99999',
+          'background:#dc2626','color:#fff','padding:8px 16px',
+          'text-align:center','font-weight:700','font-size:13px',
+          'box-shadow:0 2px 10px rgba(0,0,0,.4)',
+          'font-family:Segoe UI,Roboto,Arial,sans-serif',
+          'border-bottom:2px solid #991b1b',
+          'display:flex','align-items:center','justify-content:center','gap:14px',
+        ].join(';');
+        document.body.appendChild(el);
+      }
+      const btn = podeParar
+        ? `<button onclick="window._voiceEncerrarAtaManual()"
+             style="background:#fff;color:#dc2626;border:none;padding:4px 12px;
+                    border-radius:4px;font-weight:700;font-size:12px;cursor:pointer">
+             <i class="bi bi-stop-circle-fill"></i> Encerrar ata
+           </button>`
+        : '';
+      el.innerHTML = '<span>🔴 ' + (texto || 'ATA SENDO GRAVADA — Suas falas estão sendo transcritas.') + '</span>' + btn;
+    } else if (el) {
+      el.remove();
+    }
+  }
+
+  function _iniciarReconhecimentoVoz() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      console.warn('[VOICE-ATA] navegador sem SpeechRecognition (use Chrome/Edge)');
+      return;
+    }
+    if (_vAta.recognition) return;
+    const rec = new SR();
+    rec.lang = 'pt-BR';
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = (ev) => {
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const r = ev.results[i];
+        if (!r.isFinal) continue;
+        const texto = (r[0]?.transcript || '').trim();
+        if (!texto) continue;
+        const ata = _vAta.ataAtivaParaCanal;
+        if (!ata) return;
+        _wsSend({
+          type:        'voice_caption',
+          channel_id:  ata.channel_id,
+          text:        texto,
+          source_lang: 'pt-BR',
+          from_name:   _meuNome(),
+        });
+      }
+    };
+    rec.onerror = (e) => {
+      console.warn('[VOICE-ATA] erro recognition:', e.error);
+      if (e.error === 'no-speech' || e.error === 'aborted') {
+        try { rec.start(); } catch {}
+      }
+    };
+    rec.onend = () => {
+      if (_vAta.ataAtivaParaCanal) {
+        try { rec.start(); } catch {}
+      }
+    };
+    try {
+      rec.start();
+      _vAta.recognition = rec;
+      console.log('[VOICE-ATA] reconhecimento iniciado');
+    } catch (e) {
+      console.warn('[VOICE-ATA] start fail:', e);
+    }
+  }
+  function _pararReconhecimentoVoz() {
+    if (_vAta.recognition) {
+      try { _vAta.recognition.stop(); } catch {}
+      _vAta.recognition = null;
+    }
+  }
+
+  // Chamado em voiceEntrar: se sou o primeiro no canal E canal tem ata habilitada,
+  // pergunta se quero iniciar.
+  window._voicePerguntarSeIniciarAta = async function (channelId, ataHabilitada, ehPrimeiro) {
+    if (!ataHabilitada || !ehPrimeiro) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      console.log('[VOICE-ATA] navegador sem SpeechRecognition — nao pergunta');
+      return;
+    }
+    const ok = confirm(
+      'Este canal tem ATA AUTOMÁTICA habilitada.\n\n' +
+      'Você é o primeiro a entrar. Quer iniciar a gravação da ata desta sessão?\n\n' +
+      '⚠️ Todos os participantes que entrarem serão avisados que a sessão está sendo transcrita.\n' +
+      'A gravação encerra automaticamente quando todos saírem do canal.'
+    );
+    if (!ok) return;
+    try {
+      await window._chatApiCall('POST', `/channels/${channelId}/voice/ata/start`);
+      // O start dispara broadcast WS voice_ata_started — o handler abaixo
+      // vai ligar o banner + recognition pra mim também.
+    } catch (e) {
+      alert('Não consegui iniciar a ata: ' + (e.message || e));
+    }
+  };
+
+  window._voiceEncerrarAtaManual = async function () {
+    const ata = _vAta.ataAtivaParaCanal;
+    if (!ata) return alert('Não há ata em gravação neste canal.');
+    if (ata.iniciada_por_user_id !== _meuUserId()) {
+      return alert('Somente quem iniciou a ata pode parar manualmente.');
+    }
+    if (!confirm('Encerrar a gravação da ata?\n\nO resumo será gerado pelo Gemini (~20s).')) return;
+    try {
+      await window._chatApiCall('POST', `/channels/${ata.channel_id}/voice/ata/stop`);
+    } catch (e) {
+      alert('Erro ao encerrar: ' + (e.message || e));
+    }
+  };
+
+  // Handler de WS (chamado por onVoiceSignal abaixo)
+  function _handleAtaWs(data) {
+    if (data.type === 'voice_ata_started') {
+      _vAta.ataAtivaParaCanal = {
+        channel_id: data.channel_id,
+        ata_id: data.ata_id,
+        iniciada_por_user_id: data.iniciada_por_user_id,
+        iniciada_por_nome: data.iniciada_por_nome,
+      };
+      // Mostra banner pra TODOS os membros do canal. Bota botao "Encerrar"
+      // pra quem iniciou (validado tambem no backend).
+      const souEuIniciei = data.iniciada_por_user_id === _meuUserId();
+      _vAtaBanner(
+        true,
+        `ATA SENDO GRAVADA por <strong>${data.iniciada_por_nome || 'host'}</strong> — Suas falas estão sendo transcritas.`,
+        souEuIniciei
+      );
+      // Inicia recognition local SE estou na sala desse canal
+      const st = window._voiceState;
+      if (st.canalId === data.channel_id) {
+        _iniciarReconhecimentoVoz();
+      }
+      return;
+    }
+    if (data.type === 'voice_ata_stopped') {
+      _vAta.ataAtivaParaCanal = null;
+      _vAtaBanner(false);
+      _pararReconhecimentoVoz();
+      // Avisa quem estava na sala
+      const st = window._voiceState;
+      if (st.canalId === data.channel_id) {
+        console.log('[VOICE-ATA] ata encerrada (id=' + data.ata_id + ') — sendo gerada em background.');
+      }
+      return;
+    }
+    if (data.type === 'voice_caption') {
+      // Por enquanto so loga. Pode no futuro mostrar overlay.
+      console.log(`[VOICE-CAPTION] ${data.from_name}: ${data.text}`);
+      return;
+    }
+  }
+  window._voiceHandleAtaWs = _handleAtaWs;
+
   // Estado global do modulo
   window._voiceState = {
     canalId: null,
@@ -142,11 +326,34 @@
 
     _renderVoiceRoom();
     _setHeaderLeaveBtn(true);
+
+    // 4) ATA: se sou primeiro a entrar (sem outros peers ja na sala) E
+    //    o canal tem ata habilitada, pergunta se quero iniciar a gravacao.
+    const ehPrimeiro = existingPeers.length === 0;
+    if (ehPrimeiro) {
+      // Pega ata_habilitada do canal cache (ou via GET se necessario)
+      let ataHab = false;
+      try {
+        const canal = (window._canais || []).find(c => c.id === channelId);
+        ataHab = !!canal?.ata_habilitada;
+      } catch {}
+      if (ataHab) {
+        // Pequeno delay pra UI estabilizar antes do confirm
+        setTimeout(() => window._voicePerguntarSeIniciarAta(channelId, true, true), 600);
+      }
+    }
+    // Se ja havia ata em gravacao no canal antes de eu entrar, _vAta sera
+    // populado pelo WS voice_ata_started que recebo ao conectar — handler
+    // vai ligar o banner + recognition automaticamente.
   };
 
   window.voiceSair = async function () {
     const st = window._voiceState;
     if (!st.canalId) return;
+    // Para reconhecimento local (backend auto-encerra ata se canal esvaziar)
+    _pararReconhecimentoVoz();
+    _vAtaBanner(false);
+    _vAta.ataAtivaParaCanal = null;
     try {
       await window._chatApiCall('POST', `/channels/${st.canalId}/voice/leave`);
     } catch {}
@@ -295,6 +502,13 @@
   window.onVoiceSignal = function (data) {
     const st = window._voiceState;
     console.log('[VOICE] WS event:', data.type, data);
+    // Eventos de ATA são processados mesmo sem estar na sala
+    // (banner global aparece pra todos os membros do canal).
+    if (data.type === 'voice_ata_started' || data.type === 'voice_ata_stopped'
+        || data.type === 'voice_caption') {
+      _handleAtaWs(data);
+      return;
+    }
     if (!st.canalId) {
       console.warn('[VOICE] ignorando — nao estou em sala');
       return;

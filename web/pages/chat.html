@@ -1543,16 +1543,18 @@
 
       <!-- COLUNA 1: Canais -->
       <div class="chat-sidebar">
-        <div class="chat-sidebar-header" id="chatSidebarHeader">
-          <a href="/SistemaCPE/index.html">
-            <i class="bi bi-arrow-left"></i> Voltar ao sistema
-          </a>
-          <button onclick="abrirModalAtas()" title="Atas de reuniões anteriores"
-                  style="background:transparent;color:var(--chat-accent);border:1px solid var(--chat-accent);
-                         border-radius:6px;padding:4px 8px;cursor:pointer;font-size:0.78rem;font-weight:600;
-                         display:flex;align-items:center;gap:5px;margin-right:6px">
-            <i class="bi bi-file-text"></i> Atas
-          </button>
+        <!-- Voltar ao sistema: barra verde de destaque em cima, separada -->
+        <a href="/SistemaCPE/index.html"
+           style="display:flex;align-items:center;justify-content:center;gap:8px;
+                  background:#10b981;color:#fff;text-decoration:none;font-weight:700;
+                  padding:10px 14px;font-size:0.85rem;letter-spacing:.02em;
+                  border-bottom:2px solid #059669;transition:background .15s"
+           onmouseover="this.style.background='#059669'"
+           onmouseout="this.style.background='#10b981'"
+           title="Voltar ao sistema CPE Control">
+          <i class="bi bi-arrow-left-circle-fill"></i> Voltar ao sistema
+        </a>
+        <div class="chat-sidebar-header" id="chatSidebarHeader" style="justify-content:flex-end">
           <button onclick="abrirModalNovaReuniao()" title="Criar reunião com link externo"
                   style="background:var(--chat-accent);color:#1A1A1A;border:none;border-radius:6px;
                          padding:5px 10px;cursor:pointer;font-size:0.78rem;font-weight:600;
@@ -1748,21 +1750,19 @@
   </div>
 </div>
 
-<!-- Modal: Atas de reunião -->
+<!-- Modal: Atas do canal de voz -->
 <div class="chat-modal-overlay" id="modalAtas" onclick="if(event.target===this) fecharModalAtas()">
   <div class="chat-modal" style="max-width:780px;width:90%">
     <div class="chat-modal-header">
-      <h3><i class="bi bi-file-text"></i> Atas de reunião</h3>
+      <h3><i class="bi bi-file-text"></i> <span id="atasModalTitulo">Atas do canal</span></h3>
       <button class="chat-modal-close" onclick="fecharModalAtas()">&times;</button>
     </div>
     <div class="chat-modal-body" style="max-height:70vh;overflow-y:auto">
-      <!-- Lista de atas (visível por padrão) -->
       <div id="atasLista">
         <div style="text-align:center;color:var(--chat-muted);padding:20px">
           <i class="bi bi-hourglass-split"></i> Carregando...
         </div>
       </div>
-      <!-- Visualização de 1 ata (escondida por padrão) -->
       <div id="atasDetalhe" style="display:none">
         <button onclick="atasVoltarLista()" class="chat-btn chat-btn-secondary"
                 style="margin-bottom:12px">
@@ -2095,8 +2095,9 @@
         <div style="display:flex;gap:8px">
           <label style="flex:1;cursor:pointer;padding:10px 12px;border:1px solid var(--chat-border);
                         border-radius:6px;background:var(--chat-bg-3);display:flex;align-items:center;gap:8px"
-                 onclick="document.getElementById('canalTipoTexto').checked=true">
+                 onclick="document.getElementById('canalTipoTexto').checked=true; _atualizarVisAtaToggle()">
             <input type="radio" name="canalTipo" id="canalTipoTexto" value="canal" checked
+                   onchange="_atualizarVisAtaToggle()"
                    style="accent-color:var(--chat-accent)">
             <i class="bi bi-hash" style="font-size:1.1rem"></i>
             <div>
@@ -2106,8 +2107,9 @@
           </label>
           <label style="flex:1;cursor:pointer;padding:10px 12px;border:1px solid var(--chat-border);
                         border-radius:6px;background:var(--chat-bg-3);display:flex;align-items:center;gap:8px"
-                 onclick="document.getElementById('canalTipoVoz').checked=true">
+                 onclick="document.getElementById('canalTipoVoz').checked=true; _atualizarVisAtaToggle()">
             <input type="radio" name="canalTipo" id="canalTipoVoz" value="voz"
+                   onchange="_atualizarVisAtaToggle()"
                    style="accent-color:var(--chat-accent)">
             <i class="bi bi-volume-up-fill" style="font-size:1.1rem"></i>
             <div>
@@ -2116,6 +2118,25 @@
             </div>
           </label>
         </div>
+      </div>
+      <!-- Toggle de ATA — só aparece se tipo='voz' -->
+      <div class="field" id="canalAtaWrap" style="display:none;
+           padding:12px;background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.3);
+           border-radius:6px">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:0">
+          <input type="checkbox" id="canalAtaHab" style="width:18px;height:18px;cursor:pointer;
+                 accent-color:#10b981">
+          <div style="flex:1">
+            <div style="font-size:0.88rem;font-weight:600;color:var(--chat-text)">
+              📝 Habilitar gravação de ata automática
+            </div>
+            <div style="font-size:0.74rem;color:var(--chat-muted);margin-top:2px">
+              O primeiro usuário que entrar no canal será perguntado se quer
+              iniciar a gravação. Cada sessão gera uma ata separada com resumo
+              automático em tópicos.
+            </div>
+          </div>
+        </label>
       </div>
       <div class="field" id="canalServerCtx" style="display:none;
            padding:8px 10px;background:var(--chat-bg-3);border:1px solid var(--chat-border);
@@ -2691,10 +2712,16 @@ function _renderItemCanalServer(c) {
   const dbl = c.tipo === 'voz' && c.sou_membro
     ? `ondblclick="event.preventDefault(); window.voiceEntrar && window.voiceEntrar(${c.id})"`
     : '';
+  const ataIcon = (c.tipo === 'voz' && c.ata_habilitada && c.sou_membro)
+    ? `<i class="bi bi-file-text" title="Ver atas deste canal"
+         style="font-size:0.85rem;color:#10b981;cursor:pointer;margin-left:auto"
+         onclick="event.stopPropagation(); abrirModalAtasDoCanal(${c.id}, '${_esc(c.nome || '').replace(/'/g, '&#39;')}')"></i>`
+    : '';
   return `<div class="chat-channel-item ${ativo} ${locked}" onclick="${handler}" ${dbl}
        oncontextmenu="event.preventDefault(); mostrarContextMenuCanal(event, ${c.id})">
     ${icon}
     <span class="chan-name">${_esc(c.nome || '#' + c.id)}</span>
+    ${ataIcon}
   </div>`;
 }
 
@@ -3598,10 +3625,14 @@ function fecharModalNovaReuniao() {
   document.getElementById('modalNovaReuniao').classList.remove('open');
 }
 
-/* ============ ATAS DE REUNIAO ============ */
-const _atasState = { ataAtual: null };
+/* ============ ATAS DO CANAL DE VOZ ============ */
+const _atasState = { ataAtual: null, channelId: null, channelNome: '' };
 
-function abrirModalAtas() {
+function abrirModalAtasDoCanal(channelId, channelNome) {
+  _atasState.channelId = channelId;
+  _atasState.channelNome = channelNome || '';
+  document.getElementById('atasModalTitulo').textContent =
+    `Atas — ${channelNome || 'canal de voz'}`;
   document.getElementById('modalAtas').classList.add('open');
   atasVoltarLista();
   _carregarListaAtas();
@@ -3612,16 +3643,22 @@ function fecharModalAtas() {
 
 async function _carregarListaAtas() {
   const lista = document.getElementById('atasLista');
+  const channelId = _atasState.channelId;
+  if (!channelId) {
+    lista.innerHTML = '<div style="color:var(--chat-muted);padding:20px;text-align:center">Canal não definido.</div>';
+    return;
+  }
   try {
-    const r = await fetch(`${API_BASE_URL}/api/meetings/atas/me`, { credentials: 'include' });
+    const r = await fetch(`${API_BASE_URL}/api/chat/channels/${channelId}/voice/atas`, { credentials: 'include' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
     const atas = data.atas || [];
     if (!atas.length) {
       lista.innerHTML = `<div style="text-align:center;color:var(--chat-muted);padding:30px">
         <i class="bi bi-file-text" style="font-size:2rem;display:block;margin-bottom:8px"></i>
-        Você ainda não criou nenhuma ata.<br>
-        <small>Em uma reunião, clique em "Gravar Ata" pra começar.</small>
+        Nenhuma ata gravada ainda neste canal.<br>
+        <small>Quando o canal tiver ata habilitada, a primeira pessoa que entrar
+        pode iniciar a gravação.</small>
       </div>`;
       return;
     }
@@ -3651,12 +3688,12 @@ async function _carregarListaAtas() {
            onmouseout="this.style.background='var(--chat-bg-2)'">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
           <strong style="color:var(--chat-text);font-size:0.95rem">
-            ${_chatEscape(a.meeting_nome || a.meeting_code || 'Reunião sem nome')}
+            Sessão ${fmtData(a.iniciada_em)}
           </strong>
           ${statusBadge(a.status)}
         </div>
         <div style="font-size:0.78rem;color:var(--chat-muted);margin-top:4px">
-          <i class="bi bi-calendar3"></i> ${fmtData(a.iniciada_em)}
+          <i class="bi bi-person"></i> Iniciada por ${_chatEscape(a.iniciada_por_nome || '?')}
           ${a.modelo_llm ? ' · <span style="opacity:.8">'+_chatEscape(a.modelo_llm)+'</span>' : ''}
         </div>
         ${a.erro_msg ? '<div style="color:#dc2626;font-size:0.78rem;margin-top:4px">'+_chatEscape(a.erro_msg)+'</div>' : ''}
@@ -3681,12 +3718,12 @@ async function abrirAtaDetalhe(ataId) {
   corpo.innerHTML = '';
   trans.innerHTML = '';
   try {
-    const r = await fetch(`${API_BASE_URL}/api/meetings/atas/${ataId}`, { credentials: 'include' });
+    const r = await fetch(`${API_BASE_URL}/api/chat/voice-atas/${ataId}`, { credentials: 'include' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const a = await r.json();
     _atasState.ataAtual = a;
     header.innerHTML = `
-      <h4 style="margin:0 0 4px 0">${_chatEscape(a.meeting_nome || a.meeting_code || 'Reunião')}</h4>
+      <h4 style="margin:0 0 4px 0">Sessão do canal — ${_chatEscape(_atasState.channelNome)}</h4>
       <div style="font-size:0.8rem;color:var(--chat-muted)">
         Status: <strong>${_chatEscape(a.status)}</strong>
         · Modelo: ${_chatEscape(a.modelo_llm || '—')}
@@ -3695,7 +3732,7 @@ async function abrirAtaDetalhe(ataId) {
     if (a.status === 'gerando' || a.status === 'gravando') {
       corpo.innerHTML = `<div style="text-align:center;padding:20px;color:var(--chat-muted)">
         <i class="bi bi-arrow-clockwise"></i> ${a.status === 'gravando'
-          ? 'Esta ata ainda está sendo gravada (reunião em andamento).'
+          ? 'Esta ata ainda está sendo gravada (canal ativo).'
           : 'Resumo sendo gerado pelo Gemini. Recarregue em ~30s.'}
       </div>`;
     } else {
@@ -3742,7 +3779,8 @@ function atasDownload() {
   const url = URL.createObjectURL(blob);
   const aLink = document.createElement('a');
   aLink.href = url;
-  aLink.download = `ata-${a.meeting_code || a.id}.md`;
+  const safe = (_atasState.channelNome || 'canal').replace(/[^a-zA-Z0-9_-]+/g, '_').toLowerCase();
+  aLink.download = `ata-${safe}-${a.id}.md`;
   aLink.click();
   setTimeout(() => URL.revokeObjectURL(url), 100);
 }
@@ -3996,15 +4034,21 @@ function _renderItem(c, iconHtml) {
 function _renderItemVoz(c) {
   const ativo = _canalAtivo && _canalAtivo.id === c.id ? 'active' : '';
   const peers = _voicePeersPorCanal[c.id] || [];
+  // Icone "Ver atas" so se canal tem ata habilitada
+  const ataIcon = c.ata_habilitada
+    ? `<i class="bi bi-file-text" title="Ver atas deste canal"
+         style="font-size:0.85rem;color:#10b981;cursor:pointer;margin-left:4px"
+         onclick="event.stopPropagation(); abrirModalAtasDoCanal(${c.id}, '${_esc(c.nome || '').replace(/'/g, '&#39;')}')"></i>`
+    : '';
   // Double-click entra direto na sala de voz (atalho Discord-style).
-  // Single-click abre o canal normalmente (mostra sala vazia / lista de peers).
   let html = `<div class="chat-channel-item ${ativo}"
        onclick="abrirCanal(${c.id})"
        ondblclick="event.preventDefault(); window.voiceEntrar && window.voiceEntrar(${c.id})"
        oncontextmenu="event.preventDefault(); mostrarContextMenuCanal(event, ${c.id})"
-       title="Click duplo: entrar na chamada">
+       title="Click duplo: entrar na chamada${c.ata_habilitada ? ' · 📄 Ata habilitada' : ''}">
     <i class="bi bi-volume-up-fill chan-icon"></i>
     <span class="chan-name">${_esc(c.nome || '#' + c.id)}</span>
+    ${ataIcon}
     ${peers.length ? `<span style="font-size:0.7rem;color:var(--chat-accent);font-weight:600">${peers.length}</span>` : ''}
   </div>`;
   // Lista mini de quem ta na sala
@@ -5279,14 +5323,27 @@ async function abrirModalCriarCanal() {
   document.getElementById('canalNomeInput').value = '';
   document.getElementById('canalDescInput').value = '';
   document.getElementById('canalMembrosBusca').value = '';
+  // Reseta tipo pra texto + ata desmarcada
+  const rtTexto = document.getElementById('canalTipoTexto');
+  if (rtTexto) rtTexto.checked = true;
+  const ataChk = document.getElementById('canalAtaHab');
+  if (ataChk) ataChk.checked = false;
   // Reset contexto de servidor — sera reativado por _configurarModalCanalParaServer se chamado
   document.getElementById('canalServerCtx').style.display = 'none';
   document.getElementById('canalCategoriaWrap').style.display = 'none';
   const cw = document.getElementById('canalCargosWrap');
   if (cw) cw.style.display = 'none';
+  _atualizarVisAtaToggle();
   document.getElementById('modalCriarCanal').classList.add('open');
   await _carregarUsuariosDisponiveis();
   _renderUserSelector('canalMembrosList', 'criar');
+}
+
+// Mostra/oculta o toggle de ata conforme tipo selecionado
+function _atualizarVisAtaToggle() {
+  const ehVoz = document.getElementById('canalTipoVoz')?.checked;
+  const wrap = document.getElementById('canalAtaWrap');
+  if (wrap) wrap.style.display = ehVoz ? '' : 'none';
 }
 
 function fecharModalCriarCanal() {
@@ -5313,6 +5370,9 @@ async function confirmarCriarCanal() {
   const btn = document.getElementById('canalCriarBtn');
   btn.disabled = true;
   try {
+    const ataHab = tipo === 'voz'
+      ? !!document.getElementById('canalAtaHab')?.checked
+      : false;
     const r = await api('POST', '/channels', {
       nome,
       descricao: desc || null,
@@ -5320,6 +5380,7 @@ async function confirmarCriarCanal() {
       tipo,
       server_id: serverId,
       categoria_id: catId,
+      ata_habilitada: ataHab,
     });
     // Aplica whitelist se houver cargos marcados
     if (r.channel_id && cargosWhitelist.length) {
