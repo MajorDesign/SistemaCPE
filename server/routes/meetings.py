@@ -256,7 +256,7 @@ def _gemini_gerar_ata(transcript_text: str) -> Optional[str]:
         import requests as _requests
         url = (
             "https://generativelanguage.googleapis.com/v1beta/models/"
-            "gemini-2.0-flash:generateContent?key=" + api_key
+            "gemini-flash-latest:generateContent?key=" + api_key
         )
         body = {
             "contents": [{"parts": [{"text": prompt}]}],
@@ -318,7 +318,7 @@ def _gerar_ata_background(ata_id: int):
         if ata_md:
             cur.execute(
                 "UPDATE chat_meeting_atas SET ata_gerada=%s, status='pronta', "
-                "modelo_llm='gemini-2.0-flash' WHERE id=%s",
+                "modelo_llm='gemini-flash-latest' WHERE id=%s",
                 (ata_md, ata_id),
             )
         else:
