@@ -541,10 +541,26 @@
     <i class="bi bi-camera-video-fill" style="color:var(--accent);font-size:1.3rem"></i>
     <div class="meet-title" id="headerTitle">—</div>
     <div class="meet-status" id="connStatus"><span class="dot"></span> Conectando...</div>
+    <!-- Botoes de Ata (so host ve via JS aplicarPermissoesHost) -->
+    <button class="meet-copy-btn" id="btnAtaStart" onclick="ataIniciar()"
+            title="Gravar ata da reuniao" style="display:none;background:#10b981;color:#fff">
+      <i class="bi bi-mic-mute-fill"></i> Gravar Ata
+    </button>
+    <button class="meet-copy-btn" id="btnAtaStop" onclick="ataEncerrar()"
+            title="Encerrar gravacao" style="display:none;background:#dc2626;color:#fff">
+      <i class="bi bi-stop-circle-fill"></i> Encerrar Ata
+    </button>
     <button class="meet-copy-btn" onclick="copiarLink()" title="Copiar link da sala">
       <i class="bi bi-clipboard"></i> Copiar link
     </button>
   </header>
+  <!-- Banner global: aparece pra TODOS quando ata esta sendo gravada (LGPD) -->
+  <div id="ataAvisoBanner" style="display:none;background:#dc2626;color:#fff;
+       padding:8px 16px;text-align:center;font-weight:600;font-size:13px;
+       border-bottom:2px solid #991b1b;box-shadow:0 2px 8px rgba(0,0,0,0.3)">
+    🔴 <strong>ATA SENDO GRAVADA</strong> — Esta reunião está sendo transcrita
+    para gerar uma ata automática. Suas falas serão registradas.
+  </div>
   <div class="meet-body" id="body">
     <div class="meet-stage">
       <div class="peers-grid" id="grid"></div>
@@ -1044,6 +1060,8 @@ async function _entrarNaSala() {
   if (window._gatePrefs && window._gatePrefs.legendasOn) {
     _iniciarLegendas(window._gatePrefs.legendasFrom, window._gatePrefs.legendasTo);
   }
+  // Mostra/oculta botoes de ata conforme role (host) — estado inicial sem ata
+  _aplicarUiAta();
 }
 
 /* ============ Legendas + traducao (browser-only) ============ */
@@ -1115,6 +1133,68 @@ function _pararLegendas() {
   }
   const ov = document.getElementById('captionOverlay');
   if (ov) ov.remove();
+}
+
+/* ============ ATA: gravar / encerrar (so host) ============ */
+const _ata = { ativa: false, ataId: null };
+
+async function ataIniciar() {
+  if (!_state.souHost) {
+    alert('Apenas o host pode gravar a ata.');
+    return;
+  }
+  if (!confirm(
+    'Iniciar gravação da ata?\n\n' +
+    'Todas as falas serão transcritas (legendas serão ativadas automaticamente). ' +
+    'No fim, uma ata em tópicos será gerada automaticamente.\n\n' +
+    '⚠️ Todos os participantes serão avisados que a reunião está sendo transcrita.'
+  )) return;
+  try {
+    const r = await _apiRest('POST', `/${_code}/ata/start`);
+    _ata.ativa = true;
+    _ata.ataId = r.ata_id;
+    _aplicarUiAta();
+    // Auto-ativa legendas pra todos (so quem ja nao tem)
+    if (!_legendas.on) {
+      const from = localStorage.getItem('cpe_meet_legendas_from') || 'pt-BR';
+      const to   = localStorage.getItem('cpe_meet_legendas_to')   || 'pt-BR';
+      _iniciarLegendas(from, to);
+    }
+  } catch (e) {
+    alert('Erro ao iniciar ata: ' + e.message);
+  }
+}
+
+async function ataEncerrar() {
+  if (!_state.souHost) return;
+  if (!confirm(
+    'Encerrar a gravação da ata?\n\n' +
+    'O resumo automático em tópicos será gerado em background ' +
+    '(pode levar até 30s). Você verá a ata pronta em "Atas" no chat.'
+  )) return;
+  try {
+    const r = await _apiRest('POST', `/${_code}/ata/stop`);
+    _ata.ativa = false;
+    _ata.ataId = null;
+    _aplicarUiAta();
+    alert(
+      '✅ Ata encerrada. ' +
+      `${r.falas_total} fala(s) registradas.\n\n` +
+      'A ata final estará disponível em chat → Atas em alguns segundos.'
+    );
+  } catch (e) {
+    alert('Erro ao encerrar ata: ' + e.message);
+  }
+}
+
+function _aplicarUiAta() {
+  const banner = document.getElementById('ataAvisoBanner');
+  const btnStart = document.getElementById('btnAtaStart');
+  const btnStop  = document.getElementById('btnAtaStop');
+  if (banner) banner.style.display = _ata.ativa ? '' : 'none';
+  // Botoes so pra host
+  if (btnStart) btnStart.style.display = (_state.souHost && !_ata.ativa) ? '' : 'none';
+  if (btnStop)  btnStop.style.display  = (_state.souHost &&  _ata.ativa) ? '' : 'none';
 }
 
 function _criarOverlayLegendas() {
@@ -1350,6 +1430,26 @@ async function _onWsEvent(data) {
       if (_legendas.on) {
         _mostrarLegenda(data.from_name || 'Participante', data.text || '', data.source_lang || 'pt-BR');
       }
+      break;
+    case 'meeting_ata_started':
+      _ata.ativa = true;
+      _ata.ataId = data.ata_id;
+      _aplicarUiAta();
+      // Auto-ativa legendas pra TODOS (precisa transcrever fala de cada um)
+      if (!_legendas.on) {
+        const from = localStorage.getItem('cpe_meet_legendas_from') || 'pt-BR';
+        const to   = localStorage.getItem('cpe_meet_legendas_to')   || 'pt-BR';
+        _iniciarLegendas(from, to);
+      }
+      // Pra quem NAO eh host: avisa via toast
+      if (!_state.souHost) {
+        console.log(`[ATA] iniciada por ${data.by_user_name || '#'+data.by_user_id}`);
+      }
+      break;
+    case 'meeting_ata_stopped':
+      _ata.ativa = false;
+      _ata.ataId = null;
+      _aplicarUiAta();
       break;
   }
 }
