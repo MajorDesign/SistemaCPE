@@ -759,6 +759,78 @@ async def listar_emails():
         if conn: conn.close()
 
 
+class EmailAutorizadoManualIn(BaseModel):
+    email: EmailStr
+    nome_sugerido: Optional[str] = Field(None, max_length=120)
+    importado_por: Optional[int] = None
+
+
+@router.post("/emails", status_code=status.HTTP_201_CREATED)
+async def adicionar_email_manual(payload: EmailAutorizadoManualIn):
+    """
+    Adiciona 1 e-mail à lista de autorizados manualmente (sem passar por CSV).
+    Regras:
+      - E-mail é normalizado (lowercase, trim).
+      - 409 se já existe usuário com esse e-mail.
+      - 409 se já está na lista (com detail informativo do status).
+      - Insert simples caso contrário.
+    """
+    email_norm = payload.email.strip().lower()
+    nome = (payload.nome_sugerido or "").strip() or None
+
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT id FROM users WHERE email = %s", (email_norm,))
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=409,
+                detail="Este e-mail já pertence a um usuário cadastrado no sistema.",
+            )
+
+        cursor.execute(
+            "SELECT id, status FROM pre_cadastro_emails WHERE email = %s",
+            (email_norm,),
+        )
+        row = cursor.fetchone()
+        if row:
+            if row["status"] == "usado":
+                raise HTTPException(
+                    status_code=409,
+                    detail="Este e-mail já foi utilizado em um cadastro.",
+                )
+            raise HTTPException(
+                status_code=409,
+                detail="Este e-mail já está na lista de autorizados (aguardando 1º acesso).",
+            )
+
+        cursor.execute(
+            "INSERT INTO pre_cadastro_emails (email, nome_sugerido, importado_por) "
+            "VALUES (%s, %s, %s)",
+            (email_norm, nome, payload.importado_por),
+        )
+        conn.commit()
+        new_id = cursor.lastrowid
+        logger.info(f"[PRECAD/MANUAL] ✅ id={new_id} email={email_norm} nome='{nome or ''}'")
+        return {
+            "ok": True,
+            "id": new_id,
+            "email": email_norm,
+            "nome_sugerido": nome,
+            "status": "disponivel",
+        }
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[PRECAD/MANUAL] ❌ {err}")
+        raise HTTPException(status_code=500, detail=f"Erro ao adicionar e-mail: {err}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
 @router.delete("/emails/{email_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remover_email(email_id: int):
     """Remove um e-mail da lista de autorizados (só se não foi usado)."""
