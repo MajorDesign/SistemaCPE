@@ -933,6 +933,12 @@
         <!-- [INICIO] Page Header — só botões de ação (título vem do top-bar) -->
         <div class="page-header" style="justify-content:flex-end;">
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn-add-user" id="btnAddPcEmail"
+              data-bs-toggle="modal" data-bs-target="#pcEmailAddModal"
+              title="Autoriza 1 e-mail a fazer o primeiro acesso (sem CSV)"
+              style="background:#fff;color:#1E40AF;border:1px solid #BFDBFE;">
+              <i class="bi bi-envelope-plus"></i> Adicionar E-mail (1º Acesso)
+            </button>
             <button class="btn-add-user" id="btnImportCsv"
               data-bs-toggle="modal" data-bs-target="#csvImportModal"
               style="background:#FFC107;color:#1A1A1A;">
@@ -1309,6 +1315,58 @@
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
           <button type="button" class="btn btn-danger" id="recusaConfirm">
             <i class="bi bi-x-lg"></i> Confirmar Recusa
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================== -->
+  <!-- MODAL: Adicionar E-mail Autorizado manualmente       -->
+  <!-- ================================================== -->
+  <div class="modal fade" id="pcEmailAddModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-envelope-plus"></i> Adicionar E-mail Autorizado
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Autorize um único e-mail a fazer <strong>o primeiro acesso</strong> ao sistema.
+            Após adicionado, o usuário poderá se auto-cadastrar (Primeiro Acesso na tela de login)
+            e escolher senha, grupo e unidade. A aprovação final do cadastro fica com o admin.
+          </p>
+
+          <div id="pcEmailAddError" class="alert alert-danger d-none mb-3" role="alert"></div>
+
+          <div class="row g-3">
+            <div class="col-md-7">
+              <label for="pcEmailAddInput" class="form-label">
+                <i class="bi bi-envelope"></i> E-mail <span class="required">*</span>
+              </label>
+              <input type="email" id="pcEmailAddInput" class="form-control"
+                     placeholder="usuario@empresa.com" autocomplete="off" required>
+              <div class="help-text">Único. Se já existir na lista ou entre os usuários, será bloqueado.</div>
+            </div>
+            <div class="col-md-5">
+              <label for="pcEmailAddNome" class="form-label">
+                <i class="bi bi-person"></i> Nome sugerido
+              </label>
+              <input type="text" id="pcEmailAddNome" class="form-control"
+                     placeholder="Ex: João Silva" maxlength="120" autocomplete="off">
+              <div class="help-text">Opcional. Aparece na lista pra facilitar identificação.</div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            <i class="bi bi-x-lg"></i> Cancelar
+          </button>
+          <button type="button" class="btn btn-primary" id="pcEmailAddSubmit">
+            <i class="bi bi-check-lg"></i> Adicionar à lista
           </button>
         </div>
       </div>
@@ -2538,6 +2596,94 @@ function renderUsers(list = users) {
         showError('Erro de conexão: ' + err.message);
       }
     };
+
+    // ------ ADICIONAR E-MAIL AUTORIZADO MANUALMENTE ------
+    const _pcAddModalEl = document.getElementById('pcEmailAddModal');
+    const _pcAddInput   = document.getElementById('pcEmailAddInput');
+    const _pcAddNome    = document.getElementById('pcEmailAddNome');
+    const _pcAddErr     = document.getElementById('pcEmailAddError');
+    const _pcAddSubmit  = document.getElementById('pcEmailAddSubmit');
+
+    function _pcAddResetForm() {
+      _pcAddInput.value = '';
+      _pcAddNome.value  = '';
+      _pcAddErr.classList.add('d-none');
+      _pcAddErr.textContent = '';
+      _pcAddSubmit.disabled = false;
+      _pcAddSubmit.innerHTML = '<i class="bi bi-check-lg"></i> Adicionar à lista';
+    }
+    function _pcAddShowError(msg) {
+      _pcAddErr.textContent = msg;
+      _pcAddErr.classList.remove('d-none');
+    }
+    // Limpa ao abrir e foca no input
+    _pcAddModalEl.addEventListener('shown.bs.modal', () => {
+      _pcAddResetForm();
+      _pcAddInput.focus();
+    });
+
+    async function _pcAdicionarEmail() {
+      const email = (_pcAddInput.value || '').trim().toLowerCase();
+      const nome  = (_pcAddNome.value  || '').trim();
+      _pcAddErr.classList.add('d-none');
+
+      if (!email) {
+        _pcAddShowError('Informe o e-mail.');
+        _pcAddInput.focus();
+        return;
+      }
+      // Regex simples de validação (o backend faz validação estrita via EmailStr)
+      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+      if (!emailRe.test(email)) {
+        _pcAddShowError('E-mail inválido.');
+        _pcAddInput.focus();
+        return;
+      }
+
+      _pcAddSubmit.disabled = true;
+      _pcAddSubmit.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Adicionando...';
+
+      try {
+        const currentUserId = (typeof userProfile !== 'undefined' && userProfile?.id) || null;
+        const r = await fetch(PRECAD + '/emails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: email,
+            nome_sugerido: nome || null,
+            importado_por: currentUserId,
+          }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          _pcAddShowError(data.detail || `Erro (${r.status}) ao adicionar e-mail.`);
+          _pcAddSubmit.disabled = false;
+          _pcAddSubmit.innerHTML = '<i class="bi bi-check-lg"></i> Adicionar à lista';
+          return;
+        }
+        bootstrap.Modal.getInstance(_pcAddModalEl).hide();
+        showSuccess('E-mail adicionado. O usuário pode fazer o 1º acesso agora.');
+        await loadEmailsAutorizados();
+        // Se a lista estava fechada, abre pra o admin ver o item recém-adicionado
+        const wrap = document.getElementById('pcEmailsListWrap');
+        if (wrap && wrap.style.display === 'none') {
+          window.togglePcEmails();
+        }
+      } catch (err) {
+        _pcAddShowError('Erro de conexão: ' + err.message);
+        _pcAddSubmit.disabled = false;
+        _pcAddSubmit.innerHTML = '<i class="bi bi-check-lg"></i> Adicionar à lista';
+      }
+    }
+
+    _pcAddSubmit.addEventListener('click', _pcAdicionarEmail);
+    // Enter no input dispara submit
+    _pcAddInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); _pcAdicionarEmail(); }
+    });
+    _pcAddNome.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); _pcAdicionarEmail(); }
+    });
 
     document.getElementById('pcEmailsSearch')
       .addEventListener('input', renderEmailsAutorizados);
