@@ -1022,3 +1022,129 @@ def email_reset_senha(
     """
     html = _BASE_TEMPLATE.format(title="Redefinir senha", tag="Segurança", body=body)
     return subject, html
+
+
+# =====================================================================
+# FROTAS — lembretes de devolução de veículo (scheduler)
+# =====================================================================
+
+def email_lembrete_devolver_veiculo_1h(
+    *, condutor_nome: str, veiculo_modelo: str, veiculo_placa: str,
+    horario_fim: str, data_fim: str, checklist_id: int,
+) -> tuple[str, str]:
+    """1h antes do fim da reserva. Amigável, só um lembrete."""
+    subject = f"Lembrete: falta 1h pra devolver o veículo {veiculo_placa}"
+    body = f"""
+        <p>Olá <strong>{_escape(condutor_nome)}</strong>,</p>
+        <p>Sua reserva do veículo <strong>{_escape(veiculo_modelo)}</strong>
+        ({_escape(veiculo_placa)}) termina em <strong>1 hora</strong>
+        ({_escape(data_fim)} às {_escape(horario_fim)}).</p>
+
+        <div style="margin:14px 0;padding:14px 16px;background:#fffbeb;
+                    border-left:4px solid #f59e0b;border-radius:6px;font-size:13px;">
+          <strong>📋 Não esqueça:</strong> ao chegar, procure o
+          <strong>responsável de Frotas</strong> pra fazer a
+          <strong>vistoria de retorno</strong>. Sem essa vistoria o veículo
+          fica bloqueado pra próxima reserva.
+        </div>
+
+        <p style="font-size:12px;color:#6B7280;">
+          Checklist da viagem: <code>#{checklist_id}</code>
+        </p>
+    """
+    html = _BASE_TEMPLATE.format(title="Reserva termina em 1 hora", tag="Lembrete", body=body)
+    return subject, html
+
+
+def email_devolver_veiculo_vencido(
+    *, condutor_nome: str, veiculo_modelo: str, veiculo_placa: str,
+    horario_fim: str, data_fim: str, checklist_id: int,
+    horas_atraso: int,
+) -> tuple[str, str]:
+    """No horário do fim (0h atraso) OU reforço a cada 3h. Tom mais firme."""
+    if horas_atraso == 0:
+        subject = f"⏰ Devolução vencida: veículo {veiculo_placa}"
+        titulo_email = "Sua reserva venceu agora"
+        alerta_texto = (
+            "Sua reserva acabou de vencer. Por favor, devolva o veículo "
+            "e procure o responsável de Frotas pra vistoria de retorno."
+        )
+    else:
+        subject = f"⚠️ Atraso de {horas_atraso}h — devolver {veiculo_placa}"
+        titulo_email = f"Devolução atrasada há {horas_atraso}h"
+        alerta_texto = (
+            f"Sua reserva venceu há <strong>{horas_atraso} hora(s)</strong> "
+            "e o veículo ainda não foi devolvido. Enquanto isso, você não "
+            "consegue reservar outro veículo, e o carro fica bloqueado "
+            "pra outras pessoas."
+        )
+    body = f"""
+        <p>Olá <strong>{_escape(condutor_nome)}</strong>,</p>
+        <p>{alerta_texto}</p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+          <tbody>
+            {_info_box("Veículo", f"{veiculo_modelo} ({veiculo_placa})")}
+            {_info_box("Reserva venceu em", f"{data_fim} às {horario_fim}")}
+            {_info_box("Checklist", f"#{checklist_id}")}
+          </tbody>
+        </table>
+
+        <div style="margin:14px 0;padding:14px 16px;background:#fef2f2;
+                    border-left:4px solid #dc2626;border-radius:6px;font-size:13px;">
+          <strong>⚠️ Ação obrigatória:</strong> devolva o veículo e chame
+          o responsável de Frotas pra fazer a <strong>vistoria de retorno</strong>.
+          Sem isso, o carro fica bloqueado pra qualquer nova reserva.
+        </div>
+    """
+    tag = "Devolução vencida" if horas_atraso == 0 else "Atrasado"
+    html = _BASE_TEMPLATE.format(title=titulo_email, tag=tag, body=body)
+    return subject, html
+
+
+def email_escalada_atraso_veiculo(
+    *, destinatario_nome: str, condutor_nome: str,
+    veiculo_modelo: str, veiculo_placa: str,
+    data_fim: str, horario_fim: str,
+    checklist_id: int, horas_atraso: int,
+) -> tuple[str, str]:
+    """Escalada pro RESPONSAVEL_GRUPO de Frotas após 6h de atraso.
+    Objetivo: dar visibilidade pro dono do processo."""
+    subject = f"🚨 Frotas: veículo {veiculo_placa} atrasado há {horas_atraso}h"
+    body = f"""
+        <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
+        <p>Este é um alerta automático da equipe de Frotas.</p>
+        <p>O condutor <strong>{_escape(condutor_nome)}</strong> não devolveu o
+        veículo <strong>{_escape(veiculo_modelo)}</strong> ({_escape(veiculo_placa)}),
+        cuja reserva venceu há <strong>{horas_atraso} hora(s)</strong>.
+        Já enviamos lembretes automáticos pro condutor, mas o veículo
+        continua sem devolução/vistoria.</p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+          <tbody>
+            {_info_box("Veículo", f"{veiculo_modelo} ({veiculo_placa})")}
+            {_info_box("Condutor", condutor_nome)}
+            {_info_box("Vencimento", f"{data_fim} às {horario_fim}")}
+            {_info_box("Horas de atraso", str(horas_atraso))}
+            {_info_box("Checklist", f"#{checklist_id}")}
+          </tbody>
+        </table>
+
+        <div style="margin:14px 0;padding:14px 16px;background:#fef2f2;
+                    border-left:4px solid #dc2626;border-radius:6px;font-size:13px;">
+          <strong>📞 Sugestões:</strong>
+          <ul style="margin:6px 0 0;padding-left:18px;color:#7f1d1d;">
+            <li>Ligar/mensagem pro condutor</li>
+            <li>Se necessário, forçar vistoria pelo sistema (Frotas → botão "Forçar vistoria")</li>
+            <li>Registrar o incidente pra próximas reservas</li>
+          </ul>
+        </div>
+    """
+    html = _BASE_TEMPLATE.format(
+        title=f"Veículo atrasado há {horas_atraso}h",
+        tag="Escalada Frotas",
+        body=body,
+    )
+    return subject, html
