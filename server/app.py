@@ -1856,6 +1856,20 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ INICIA SCHEDULER DE FROTAS (jobs de lembrete/escalada/cleanup)
+# Desabilitado quando TESTING=1 (evita side effects em pytest).
+if os.getenv("TESTING") != "1":
+    try:
+        from services.fleet_scheduler import iniciar_scheduler
+        iniciar_scheduler()
+        logger.info("✅ Fleet scheduler iniciado (3 jobs)")
+    except Exception as sched_err:
+        logger.error(f"⚠️  Fleet scheduler falhou ao iniciar: {sched_err}")
+        import traceback
+        logger.error(traceback.format_exc())
+else:
+    logger.info("⚙️  TESTING=1 — fleet scheduler NÃO iniciado")
+
 # ✅ SERVIR UPLOADS ESTÁTICOS (fotos de veículos)
 try:
     _uploads_dir = os.path.normpath(

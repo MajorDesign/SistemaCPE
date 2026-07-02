@@ -152,13 +152,42 @@ def list_vehicles(request: Request, include_inativos: int = 0):
                    ON p.vehicle_id = v.id AND p.is_current = 1 AND p.angulo = 'frente'
             LEFT JOIN users u ON u.id = v.created_by
             {where_status}
-            ORDER BY FIELD(v.status,'ativo','em_viagem','manutencao','revisao','inativo'), v.modelo
+            ORDER BY FIELD(v.status,'ativo','em_viagem','aguardando_vistoria','manutencao','revisao','inativo'), v.modelo
         """, (user_id,))
         vehicles = cursor.fetchall()
         # Aluguel mensal é confidencial — só Frotas/ADMIN/TI vê.
         if not is_fleet_mgr:
             for v in vehicles:
                 v.pop("valor_aluguel_mensal", None)
+
+        # NOVO (2026-07-02): flags derivadas pra UI
+        # disponivel_reserva=True significa que o veiculo pode receber NOVA reserva
+        # (nao esta em uso, aguardando vistoria, manutencao ou revisao)
+        for v in vehicles:
+            st = v.get("status")
+            ck_st = v.get("checklist_pendente_status")
+            if st == "aguardando_vistoria":
+                v["disponivel_reserva"] = False
+                v["motivo_bloqueio"] = "Aguardando vistoria de retorno"
+            elif st == "em_viagem":
+                v["disponivel_reserva"] = False
+                v["motivo_bloqueio"] = "Em uso — condutor ainda nao devolveu"
+            elif st in ("manutencao", "revisao"):
+                v["disponivel_reserva"] = False
+                v["motivo_bloqueio"] = f"Em {st}"
+            elif st == "inativo":
+                v["disponivel_reserva"] = False
+                v["motivo_bloqueio"] = "Inativo"
+            elif ck_st in ("em_viagem", "devolvido"):
+                # Safety net: status do veiculo dessincronizou com checklist
+                v["disponivel_reserva"] = False
+                v["motivo_bloqueio"] = (
+                    "Checklist pendente (devolucao ou vistoria em aberto)"
+                )
+            else:
+                v["disponivel_reserva"] = True
+                v["motivo_bloqueio"] = None
+
         return {"success": True, "vehicles": vehicles}
     finally:
         cursor.close()
@@ -915,6 +944,15 @@ def devolver_veiculo(checklist_id: int, request: Request, data: dict):
             checklist_id,
         ))
 
+        # Veiculo sai de 'em_viagem' -> 'aguardando_vistoria'.
+        # Fecha o bug historico: enquanto vistoriador nao aprovar retorno,
+        # veiculo permanece bloqueado pra nova reserva.
+        cursor.execute(
+            "UPDATE fleet_vehicles SET status='aguardando_vistoria' "
+            "WHERE id=%s AND status='em_viagem'",
+            (row["vehicle_id"],)
+        )
+
         # Atualizar KM atual do veículo
         km_retorno = data.get("km_retorno")
         if km_retorno:
@@ -1066,6 +1104,95 @@ def vistoriar_retorno(checklist_id: int, request: Request, data: dict):
         conn.commit()
         msg = "Retorno registrado com avaria — veiculo em manutencao!" if tem_avaria else "Retorno confirmado com sucesso!"
         return {"success": True, "message": msg, "tem_avaria": tem_avaria}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/vehicles/{vehicle_id}/forcar-vistoria")
+def forcar_vistoria_admin(vehicle_id: int, request: Request, data: dict = None):
+    """ADMIN/TI/MANAGER podem forcar a finalizacao de vistoria em casos
+    excepcionais (condutor sumiu, sistema travado, etc). Registra no
+    historico com quem forcou e motivo. Nao pula problemas de retorno —
+    veiculo vai pra 'ativo' se motivo simples, 'manutencao' se admin
+    marcar 'com avaria'.
+
+    Fecha o caso onde reserva vencida sem devolucao/vistoria trava o
+    veiculo em 'aguardando_vistoria' indefinidamente.
+    """
+    user = _get_user_role(request)
+    if not _can_manage_fleet(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas Administrador, T.I. ou Responsavel do grupo Frotas podem forcar vistoria."
+        )
+    data = data or {}
+    motivo = (data.get("motivo") or "").strip()
+    com_avaria = bool(data.get("com_avaria"))
+    if len(motivo) < 5:
+        raise HTTPException(status_code=400, detail="Informe o motivo (min 5 caracteres) da vistoria forcada.")
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("SELECT id, status FROM fleet_vehicles WHERE id=%s", (vehicle_id,))
+        veh = cursor.fetchone()
+        if not veh:
+            raise HTTPException(status_code=404, detail="Veiculo nao encontrado")
+        if veh["status"] not in ("em_viagem", "aguardando_vistoria"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Veiculo nao esta em uso nem aguardando vistoria (status={veh['status']}). Nada a forcar."
+            )
+
+        # Fecha checklist ativo (se houver)
+        cursor.execute(
+            """SELECT id, status FROM fleet_checklists
+                WHERE vehicle_id=%s AND status IN ('em_viagem','devolvido')
+                ORDER BY id DESC LIMIT 1""",
+            (vehicle_id,)
+        )
+        ck = cursor.fetchone()
+        novo_status_ck = "retornado_com_avaria" if com_avaria else "retornado"
+        if ck:
+            cursor.execute(
+                "UPDATE fleet_checklists SET status=%s, recebedor_id=%s, "
+                "retorno_obs=CONCAT(COALESCE(retorno_obs,''), '\\n[FORCADO] ', %s) "
+                "WHERE id=%s",
+                (novo_status_ck, user["id"], motivo, ck["id"])
+            )
+
+        # Libera veiculo (ou manda pra manutencao)
+        novo_status_veh = "manutencao" if com_avaria else "ativo"
+        cursor.execute(
+            "UPDATE fleet_vehicles SET status=%s WHERE id=%s",
+            (novo_status_veh, vehicle_id)
+        )
+
+        # Historico
+        cursor.execute(
+            """INSERT INTO fleet_vehicle_history
+                 (vehicle_id, evento, descricao, status_anterior, status_novo, user_id)
+               VALUES (%s, 'vistoria_forcada', %s, %s, %s, %s)""",
+            (
+                vehicle_id,
+                f"Vistoria forcada por admin. Motivo: {motivo}. Com avaria: {com_avaria}",
+                veh["status"],
+                novo_status_veh,
+                user["id"],
+            )
+        )
+        conn.commit()
+        return {
+            "success": True,
+            "vehicle_status": novo_status_veh,
+            "checklist_id": ck["id"] if ck else None,
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -2449,6 +2576,55 @@ def create_reservation(request: Request, data: dict):
         veh = cursor.fetchone()
         if veh and veh["status"] in ("manutencao", "revisao"):
             raise HTTPException(status_code=400, detail="Veiculo esta em manutencao/revisao e nao pode ser agendado")
+
+        # NOVO (2026-07-02): veiculo em uso ou aguardando vistoria de retorno
+        # bloqueia nova reserva. Corrige bug historico onde reserva vencida
+        # sem devolucao fazia o veiculo parecer disponivel dia seguinte.
+        if veh and veh["status"] in ("em_viagem", "aguardando_vistoria"):
+            cursor.execute(
+                """SELECT id, condutor_id, status
+                     FROM fleet_checklists
+                    WHERE vehicle_id=%s AND status IN ('em_viagem','devolvido')
+                    ORDER BY id DESC LIMIT 1""",
+                (vehicle_id,)
+            )
+            ck = cursor.fetchone()
+            motivo = (
+                f"Veiculo em uso ou aguardando vistoria de retorno "
+                f"(checklist #{ck['id']} status={ck['status']}). "
+                "So podera ser reservado apos vistoria de retorno."
+                if ck else
+                "Veiculo em uso ou aguardando vistoria."
+            )
+            raise HTTPException(status_code=409, detail=motivo)
+
+        # NOVO (2026-07-02): mesmo solicitante nao pode reservar OUTRO veiculo
+        # enquanto tem checklist pendente (em_viagem ou devolvido) em qualquer
+        # veiculo. Vale pra ADMIN/RH tambem (regra uniforme, sem override).
+        cursor.execute(
+            """SELECT c.id, c.vehicle_id, c.status,
+                      v.placa, v.modelo
+                 FROM fleet_checklists c
+                 JOIN fleet_vehicles  v ON v.id = c.vehicle_id
+                WHERE c.condutor_id = %s
+                  AND c.status IN ('em_viagem','devolvido')
+                ORDER BY c.id DESC LIMIT 1""",
+            (user_id,)
+        )
+        pend = cursor.fetchone()
+        if pend:
+            frase_status = (
+                "devolucao pendente" if pend["status"] == "em_viagem"
+                else "vistoria de retorno pendente"
+            )
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Voce tem {frase_status} do veiculo {pend['modelo']} "
+                    f"({pend['placa']}, checklist #{pend['id']}). "
+                    "Finalize antes de reservar outro veiculo."
+                )
+            )
 
         # Manutencao agendada que intersecta [data_reserva, data_fim_eff]?
         # manut [me, mc] intersecta nova [dr, df_eff] se me <= df_eff E (mc IS NULL OR mc >= dr)

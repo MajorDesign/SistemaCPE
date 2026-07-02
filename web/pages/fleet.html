@@ -1772,6 +1772,15 @@ function renderVehicles(vehicles) {
                </span>`
             : badgeStatus(v.status)
         )}
+        ${(v.disponivel_reserva === false && v.motivo_bloqueio && v.status !== 'ativo' && v.status !== 'manutencao' && v.status !== 'revisao') ? `
+          <div style="margin-top:6px;padding:6px 10px;background:#FEF9C3;border-left:3px solid #F59E0B;border-radius:4px;font-size:11px;color:#92400E">
+            <i class="bi bi-lock-fill"></i> ${v.motivo_bloqueio}
+          </div>` : ''}
+        ${(canManageFleet() && v.status === 'aguardando_vistoria') ? `
+          <button class="btn-fleet btn-fleet-sm" style="margin-top:6px;width:100%;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;font-size:11px"
+                  onclick="event.stopPropagation();forcarVistoriaVeiculo(${v.id}, '${(v.placa || '').replace(/'/g, '&#39;')}')">
+            <i class="bi bi-shield-exclamation"></i> Forçar vistoria (admin)
+          </button>` : ''}
         ${v.manutencao_proxima ? '<div style="font-size:10px;color:#D97706;margin-top:4px"><i class="bi bi-tools"></i> '+v.manutencao_proxima+'</div>' : ''}
         ${v.status === 'manutencao' && canManageFleet() && v.avaria_descricao && !v.avaria_corrigida_em ? `
           <div style="display:flex;gap:4px;margin-top:8px">
@@ -1867,6 +1876,42 @@ async function deleteVehicle(vehicleId, placa) {
 /* ============================================================
    REATIVAR VEÍCULO — desfaz o soft-delete (volta status pra 'ativo')
    ============================================================ */
+async function forcarVistoriaVeiculo(vehicleId, placa) {
+  if (!canManageFleet()) {
+    showToast('Você não tem permissão para forçar vistoria.', 'error');
+    return;
+  }
+  const motivo = prompt(
+    `Forçar vistoria do veículo "${placa}"?\n\n` +
+    'Use APENAS em emergências (condutor sumiu, sistema travado).\n' +
+    'Informe o motivo (mín 5 caracteres):'
+  );
+  if (motivo === null) return;
+  if ((motivo || '').trim().length < 5) {
+    showToast('Motivo obrigatório (mín 5 caracteres).', 'error');
+    return;
+  }
+  const comAvaria = confirm(
+    'O veículo apresenta avaria/dano?\n\n' +
+    'OK = SIM (vai pra manutenção)\n' +
+    'Cancelar = NÃO (volta pra ativo)'
+  );
+  try {
+    const res = await apiFetch(`/vehicles/${vehicleId}/forcar-vistoria`, {
+      method: 'POST',
+      body: JSON.stringify({ motivo: motivo.trim(), com_avaria: comAvaria }),
+    });
+    if (!res?.success) {
+      showToast(res?.detail || 'Erro ao forçar vistoria', 'error');
+      return;
+    }
+    showToast(`Vistoria forçada. Veículo agora: ${res.vehicle_status}`, 'success');
+    await loadVehicles();
+  } catch (err) {
+    showToast('Erro de conexão: ' + err.message, 'error');
+  }
+}
+
 async function reativarVeiculo(vehicleId, placa) {
   if (!canManageFleet()) {
     showToast('Você não tem permissão para reativar veículos.', 'error');
