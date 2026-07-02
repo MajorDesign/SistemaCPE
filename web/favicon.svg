@@ -1,30 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <defs>
-    <radialGradient id="gb" cx="38%" cy="30%" r="70%">
-      <stop offset="0%"   stop-color="#FFE082"/>
-      <stop offset="45%"  stop-color="#FFC107"/>
-      <stop offset="90%"  stop-color="#B8870B"/>
-      <stop offset="100%" stop-color="#8B6508"/>
-    </radialGradient>
-  </defs>
+  <!-- Fundo preto arredondado -->
+  <rect width="64" height="64" rx="14" fill="#1A1A1A"/>
 
-  <!-- Esfera principal -->
-  <circle cx="32" cy="32" r="28" fill="url(#gb)"/>
+  <!-- Faixa amarela accent no rodape (evoca headers dos emails CPE) -->
+  <rect x="0" y="54" width="64" height="10" fill="#FFC107"/>
 
-  <!-- Grade sutil -->
-  <g fill="none" stroke="#5A3F0A" stroke-width="0.9" opacity="0.5">
-    <line x1="4" y1="32" x2="60" y2="32"/>
-    <line x1="32" y1="4" x2="32" y2="60"/>
-    <ellipse cx="32" cy="32" rx="28" ry="10"/>
-    <ellipse cx="32" cy="32" rx="28" ry="20"/>
-    <ellipse cx="32" cy="32" rx="10" ry="28"/>
-    <ellipse cx="32" cy="32" rx="20" ry="28"/>
-  </g>
-
-  <circle cx="32" cy="32" r="28" fill="none" stroke="#3A2707" stroke-width="1.2"/>
-
-  <!-- CENTRAL "control point" — dot preto no centro pro toque CPE Control -->
-  <circle cx="32" cy="32" r="4" fill="#1A1A1A"/>
-  <circle cx="32" cy="32" r="2" fill="#FFE082"/>
+  <!-- "CPE" bold amarelo, letra bem apertada, funciona em 16px -->
+  <text x="32" y="40" text-anchor="middle"
+        font-family="'Segoe UI', 'Arial Black', Impact, sans-serif"
+        font-weight="900" font-size="24" fill="#FFC107"
+        letter-spacing="-2">CPE</text>
 </svg>
