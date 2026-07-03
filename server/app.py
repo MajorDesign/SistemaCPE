@@ -274,6 +274,35 @@ app.add_middleware(
 logger.info("✅ CORS CONFIGURADO COM SUCESSO!\n")
 
 # =========================================
+# 8.0.1 MIDDLEWARE: Private Network Access (PNA) — Chrome 130+
+# =========================================
+# Chrome >=130 exige `Access-Control-Allow-Private-Network: true` no
+# preflight quando uma pagina publica (ex.: http://localhost) bate em
+# rede privada (ex.: http://localhost:8001). Sem ele, Chrome bloqueia
+# e reporta "No Access-Control-Allow-Origin header" (mensagem
+# enganosa — o header ate esta la, mas a checagem PNA falhou antes).
+#
+# CORSMiddleware do Starlette nao suporta PNA nativamente. Este
+# middleware roda depois do CORSMiddleware na response e adiciona o
+# header quando: (a) e OPTIONS, (b) request pediu PNA, (c) CORS ja
+# aceitou o origin (allow-origin presente na response).
+#
+# Ref: https://developer.chrome.com/blog/private-network-access-preflight
+
+@app.middleware("http")
+async def pna_preflight_middleware(request: Request, call_next):
+    response = await call_next(request)
+    if (
+        request.method == "OPTIONS"
+        and request.headers.get("access-control-request-private-network", "").lower() == "true"
+        and response.headers.get("access-control-allow-origin")
+    ):
+        response.headers["access-control-allow-private-network"] = "true"
+    return response
+
+logger.info("✅ PNA (Private Network Access) middleware ativo")
+
+# =========================================
 # 8.1 MIDDLEWARE: Defesas contra abuso/DDoS de aplicação
 # =========================================
 # Estratégia em 3 camadas:
