@@ -2042,6 +2042,130 @@
     }
 
     /* ── Meta theme-color pra PWA em papel ── */
+
+    /* ============================================================
+       Botão "Voltar ao sistema" — discreto retrátil (2026-07-03)
+       Estado padrão: círculo pequeno com ícone, cor papel,
+       sombra leve. No hover: expande revelando o texto, com
+       sombra de profundidade. Sem verde — segue paleta CPE.
+       ============================================================ */
+    .chat-back-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      height: 32px;
+      margin: 10px 0 6px 12px;
+      padding: 0 8px;
+      background: #FBFAF4;
+      border: 1px solid #D8D5C8;
+      border-radius: 4px;
+      color: #5C6370;
+      text-decoration: none;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: .02em;
+      white-space: nowrap;
+      overflow: hidden;
+      max-width: 34px;                        /* estado retraído (só ícone) */
+      box-shadow: 0 1px 2px rgba(15,20,25,.06);
+      transition:
+        max-width .28s cubic-bezier(.2,.8,.2,1),
+        padding .28s ease,
+        background .18s ease,
+        color .15s ease,
+        border-color .15s ease,
+        box-shadow .2s ease,
+        transform .18s ease;
+      cursor: pointer;
+      align-self: flex-start;                 /* não estica no flex column */
+    }
+    .chat-back-btn i {
+      font-size: 1.15rem;
+      line-height: 1;
+      color: inherit;
+      flex-shrink: 0;
+      transition: transform .25s ease;
+    }
+    .chat-back-btn-label {
+      opacity: 0;
+      transition: opacity .18s ease .08s;
+    }
+    .chat-back-btn:hover,
+    .chat-back-btn:focus-visible {
+      max-width: 220px;                       /* expande revelando texto */
+      padding: 0 14px 0 10px;
+      background: #FFFFFF;
+      color: #0F1419;
+      border-color: #1A1A1A;
+      box-shadow:
+        0 8px 20px rgba(15,20,25,.14),
+        0 2px 6px rgba(15,20,25,.08);
+      transform: translateY(-1px);
+      outline: none;
+    }
+    .chat-back-btn:hover i,
+    .chat-back-btn:focus-visible i {
+      transform: translateX(-2px);
+      color: #B8870B;
+    }
+    .chat-back-btn:hover .chat-back-btn-label,
+    .chat-back-btn:focus-visible .chat-back-btn-label {
+      opacity: 1;
+    }
+    .chat-back-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 6px rgba(15,20,25,.10);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .chat-back-btn { transition: max-width .01s, box-shadow .01s; }
+      .chat-back-btn i { transition: none; }
+    }
+
+    /* ============================================================
+       Botao Reuniao movido para o server bar (2026-07-03)
+       Fica ancorado no rodape da barra vertical, destaca como
+       AÇÃO (nao é server) usando fundo amarelo CPE.
+       ============================================================ */
+    .chat-servers-sep-bottom {
+      margin-top: auto;    /* empurra o botao pro rodape do flex column */
+    }
+    .chat-server-meet {
+      background: #FFC107 !important;          /* amarelo CPE — destaca contra o preto */
+      color: #1A1A1A !important;
+      border-radius: 50% !important;
+      position: relative;
+      overflow: visible !important;            /* svg pode extrapolar levemente */
+      box-shadow: 0 2px 6px rgba(255,193,7,.35);
+    }
+    .chat-server-meet svg {
+      display: block;
+      transition: transform .2s ease;
+    }
+    .chat-server-meet::before {
+      /* Barra indicadora do lado esquerdo desativada — herda mas
+         reset pra nao piscar em animacao */
+      display: none !important;
+    }
+    .chat-server-meet:hover {
+      background: #FFD54A !important;          /* clareia no hover */
+      color: #1A1A1A !important;
+      border-radius: 18px !important;          /* leve morph (menos que os servers) */
+      transform: translateY(-1px);
+      box-shadow:
+        0 8px 20px rgba(255,193,7,.45),
+        0 2px 6px rgba(15,20,25,.20);
+    }
+    .chat-server-meet:hover svg { transform: scale(1.08); }
+    .chat-server-meet:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 6px rgba(255,193,7,.30);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .chat-server-meet,
+      .chat-server-meet svg { transition: none; }
+    }
   </style>
 
   <!-- PWA -->
@@ -2079,6 +2203,22 @@
                 title="Criar novo servidor" style="display:none">
           <i class="bi bi-plus-lg"></i>
         </button>
+
+        <!-- Reuniao ancorada no rodape da barra (margin-top:auto no sep empurra pra baixo) -->
+        <div class="chat-servers-sep chat-servers-sep-bottom"></div>
+        <button class="chat-server-pill chat-server-meet" onclick="abrirModalNovaReuniao()"
+                title="Nova reuniao com link externo" aria-label="Nova reuniao">
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+            <!-- Cabeca -->
+            <circle cx="12" cy="6" r="3" fill="currentColor"/>
+            <!-- Tronco + ombros (silhueta) -->
+            <path fill="currentColor"
+                  d="M6 21 v-3 C6 14.69 8.69 12 12 12 C15.31 12 18 14.69 18 18 v3 Z"/>
+            <!-- Gravata amarela (recorte em V) -->
+            <path fill="#FFC107" stroke="#1A1A1A" stroke-width="0.4"
+                  d="M11 12 L13 12 L12.6 14.5 L13.5 20 L10.5 20 L11.4 14.5 Z"/>
+          </svg>
+        </button>
       </div>
 
       <!-- Context menu (right-click) — populado dinamicamente -->
@@ -2098,25 +2238,13 @@
 
       <!-- COLUNA 1: Canais -->
       <div class="chat-sidebar">
-        <!-- Voltar ao sistema: barra verde de destaque em cima, separada -->
-        <a href="/SistemaCPE/index.html"
-           style="display:flex;align-items:center;justify-content:center;gap:8px;
-                  background:#10b981;color:#fff;text-decoration:none;font-weight:700;
-                  padding:10px 14px;font-size:0.85rem;letter-spacing:.02em;
-                  border-bottom:2px solid #059669;transition:background .15s"
-           onmouseover="this.style.background='#059669'"
-           onmouseout="this.style.background='#10b981'"
-           title="Voltar ao sistema CPE Control">
-          <i class="bi bi-arrow-left-circle-fill"></i> Voltar ao sistema
+        <!-- Voltar ao sistema: discreto retrátil (icone -> hover expande) -->
+        <a href="/SistemaCPE/index.html" class="chat-back-btn"
+           title="Voltar ao sistema CPE Control" aria-label="Voltar ao sistema">
+          <i class="bi bi-arrow-left-short" aria-hidden="true"></i>
+          <span class="chat-back-btn-label">Voltar ao sistema</span>
         </a>
-        <div class="chat-sidebar-header" id="chatSidebarHeader" style="justify-content:flex-end">
-          <button onclick="abrirModalNovaReuniao()" title="Criar reunião com link externo"
-                  style="background:var(--chat-accent);color:#1A1A1A;border:none;border-radius:6px;
-                         padding:5px 10px;cursor:pointer;font-size:0.78rem;font-weight:600;
-                         display:flex;align-items:center;gap:5px">
-            <i class="bi bi-camera-video-fill"></i> Reunião
-          </button>
-        </div>
+        <!-- Botao Reuniao foi movido para a barra de servidores (coluna 0) -->
         <div class="chat-channels-list" id="chatChannelsList">
           <div class="chat-section-title">Carregando...</div>
         </div>
@@ -3039,12 +3167,32 @@ async function api(method, path, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' }, credentials: 'include' };
   if (_token) opts.headers['X-Auth-Token'] = _token;
   if (body)   opts.body = JSON.stringify(body);
-  const res = await fetch(`${API_BASE}/api/chat${path}`, opts);
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+
+  const url = `${API_BASE}/api/chat${path}`;
+
+  // Retry SO em erro de REDE (fetch rejeitou). 4xx/5xx NAO retenta:
+  // sao erros semanticos e retry so mascararia bug real.
+  // Backoff: 300ms, 900ms. Total: ate 3 tentativas (0 + 2 retries).
+  const MAX_RETRIES = 2;
+  for (let i = 0; i <= MAX_RETRIES; i++) {
+    let res;
+    try {
+      res = await fetch(url, opts);
+    } catch (netErr) {
+      // Falha de rede — CORS-blocked, ERR_FAILED, timeout, backend offline.
+      if (i < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, 300 * Math.pow(3, i)));
+        continue;
+      }
+      const host = (API_BASE || '').replace(/^https?:\/\//, '') || 'backend';
+      throw new Error(`Sem conexao com ${host}. Verifique se a API esta no ar.`);
+    }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
   }
-  return res.json();
 }
 
 /* ============ Init ============ */
@@ -3101,6 +3249,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 /* ============ Canais ============ */
 async function carregarCanais() {
+  const box = document.getElementById('chatChannelsList');
+  // Estado de loading (evita piscar "Carregando..." + "Erro" em ms)
+  box.innerHTML = '<div class="chat-section-title" style="opacity:.6">Carregando canais...</div>';
   try {
     const r = await api('GET', '/channels');
     _canais = r.channels || [];
@@ -3115,8 +3266,19 @@ async function carregarCanais() {
     // sidebar quando termina (re-renderiza com os peers populados).
     _carregarPeersDosCanaisVoz();
   } catch (e) {
-    document.getElementById('chatChannelsList').innerHTML =
-      `<div style="padding:14px;color:#EF4444;font-size:0.82rem">Erro: ${_esc(e.message)}</div>`;
+    // Erro de UX: estado claro + botao pra retentar sem F5 na pagina.
+    box.innerHTML =
+      `<div style="padding:24px 16px;text-align:center;line-height:1.5">
+         <i class="bi bi-wifi-off" style="font-size:1.8rem;color:#EF4444;opacity:.7;display:block;margin-bottom:10px"></i>
+         <div style="color:#EF4444;font-weight:600;font-size:0.86rem;margin-bottom:4px">Nao carregou os canais</div>
+         <div style="color:var(--chat-muted);font-size:0.75rem;margin-bottom:14px">${_esc(e.message)}</div>
+         <button type="button" onclick="carregarCanais()"
+                 style="background:var(--chat-accent-dim);color:#1A1A1A;border:none;border-radius:4px;
+                        padding:7px 16px;font-weight:600;cursor:pointer;font-size:0.8rem;
+                        display:inline-flex;align-items:center;gap:6px">
+           <i class="bi bi-arrow-clockwise"></i> Tentar de novo
+         </button>
+       </div>`;
   }
 }
 
