@@ -235,6 +235,29 @@
       border-radius: 4px !important;
       border: 1px solid #D8D5C8 !important;
       box-shadow: none !important;
+      /* Garante scrollbar visível — o global.css pintava o thumb em
+         azul-indigo 50% transparente, quase invisível em fundo branco. */
+      overflow-y: auto !important;
+      max-height: calc(100vh - 140px) !important;
+      scrollbar-width: thin;                    /* Firefox */
+      scrollbar-color: #B8870B #F5F4ED;         /* Firefox: thumb ambar + track papel */
+      scrollbar-gutter: stable;                 /* não muda a largura do conteúdo */
+    }
+    /* Chrome/Edge/Safari: scrollbar dedicada CPE (papel + âmbar) */
+    .contratos-body .contr-sidebar::-webkit-scrollbar {
+      width: 10px;
+    }
+    .contratos-body .contr-sidebar::-webkit-scrollbar-track {
+      background: #F5F4ED;
+      border-radius: 0;
+    }
+    .contratos-body .contr-sidebar::-webkit-scrollbar-thumb {
+      background: #D8D5C8;
+      border-radius: 2px;
+      border: 2px solid #F5F4ED;                /* padding visual do thumb */
+    }
+    .contratos-body .contr-sidebar::-webkit-scrollbar-thumb:hover {
+      background: #B8870B;
     }
     .contratos-body .contr-sidebar-header {
       font-family: 'DM Sans', system-ui, sans-serif !important;
@@ -285,6 +308,28 @@
       border-radius: 4px !important;
       border: 1px solid #D8D5C8 !important;
       box-shadow: none !important;
+      /* Sem isso, os arquivos alem do viewport ficam invisiveis porque o
+         layout.css do sistema define .main-content { overflow: hidden }.
+         Ate 2026-07-03, so a sidebar rolava; agora o main tambem. */
+      overflow-y: auto !important;
+      max-height: calc(100vh - 140px) !important;
+      scrollbar-width: thin;                  /* Firefox */
+      scrollbar-color: #B8870B #F5F4ED;
+      scrollbar-gutter: stable;
+    }
+    .contratos-body .contr-main::-webkit-scrollbar {
+      width: 10px;
+    }
+    .contratos-body .contr-main::-webkit-scrollbar-track {
+      background: #F5F4ED;
+    }
+    .contratos-body .contr-main::-webkit-scrollbar-thumb {
+      background: #D8D5C8;
+      border-radius: 2px;
+      border: 2px solid #F5F4ED;
+    }
+    .contratos-body .contr-main::-webkit-scrollbar-thumb:hover {
+      background: #B8870B;
     }
     .contratos-body .contr-header {
       border-bottom: 2px solid #1A1A1A !important;
