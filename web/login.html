@@ -1042,13 +1042,11 @@
           </div>
 
           <div class="fa-field">
-            <label><i class="bi bi-folder"></i> Selecione seu Grupo *</label>
-            <div class="fa-grupo-list" id="faGrupoList">
-              <div style="text-align:center;padding:20px;color:#9CA3AF;">
-                <i class="bi bi-hourglass"></i> Carregando grupos...
-              </div>
-            </div>
-            <div class="hint">Caso escolha o grupo errado, o administrador irá recusar e justificar.</div>
+            <label for="faGrupo"><i class="bi bi-folder"></i> Selecione seu Grupo *</label>
+            <select id="faGrupo">
+              <option value="">Carregando grupos...</option>
+            </select>
+            <div class="hint">Agrupado por departamento. Caso escolha errado, o administrador irá recusar e justificar.</div>
           </div>
 
           <div class="fa-actions">
@@ -1177,7 +1175,6 @@
     let emailValido = '';
     let nomeSugerido = null;
     let gruposCache  = [];
-    let grupoSelecionado = null;
     let unidadesCache = [];
     let usernameDisponivel = null;   // null=desconhecido | true | false
     let usernameCheckTimer = null;
@@ -1217,9 +1214,9 @@
       document.getElementById('faPassword').value = '';
       document.getElementById('faPasswordConf').value = '';
       document.getElementById('faUnidade').innerHTML = '<option value="">Carregando unidades...</option>';
+      document.getElementById('faGrupo').innerHTML   = '<option value="">Carregando grupos...</option>';
       clearAlert('faStep1Alert');
       clearAlert('faStep2Alert');
-      grupoSelecionado = null;
       usernameDisponivel = null;
       showStep(1);
       overlay.classList.add('show');
@@ -1287,40 +1284,51 @@
     }
 
     // ---- step 2: carregar grupos -----------------------------------------
+    // Renderiza <optgroup> por departamento pra desambiguar grupos com mesmo
+    // nome em setores distintos (ex: "Faturamento" em Administrativo vs
+    // Financeiro). Se dois grupos com mesmo nome estao no MESMO department,
+    // sufixo o nome do grupo com o id pra diferenciar (edge case raro).
     async function carregarGrupos() {
-      const list = document.getElementById('faGrupoList');
-      list.innerHTML = '<div style="text-align:center;padding:20px;color:#9CA3AF;"><i class="bi bi-hourglass"></i> Carregando grupos...</div>';
+      const sel = document.getElementById('faGrupo');
+      sel.innerHTML = '<option value="">Carregando grupos...</option>';
       try {
         const r = await fetch(`${PRECAD}/grupos-publicos`);
         if (!r.ok) throw new Error('HTTP ' + r.status);
         gruposCache = await r.json();
 
         if (!gruposCache.length) {
-          list.innerHTML = '<div style="text-align:center;padding:20px;color:#DC2626;"><i class="bi bi-exclamation-triangle"></i> Nenhum grupo disponível.</div>';
+          sel.innerHTML = '<option value="">Nenhum grupo disponível</option>';
           return;
         }
 
-        list.innerHTML = gruposCache.map(g => `
-          <label class="fa-grupo-card" data-id="${g.id}">
-            <input type="radio" name="faGrupo" value="${g.id}">
-            <div style="flex:1;">
-              <div class="nome">${escapeHtml(g.name)}</div>
-              ${g.department_name ? `<div class="dept"><i class="bi bi-building"></i> ${escapeHtml(g.department_name)}</div>` : ''}
-              ${g.description ? `<div class="desc">${escapeHtml(g.description)}</div>` : ''}
-            </div>
-          </label>
-        `).join('');
-
-        list.querySelectorAll('.fa-grupo-card').forEach(card => {
-          card.addEventListener('click', () => {
-            list.querySelectorAll('.fa-grupo-card').forEach(c => c.classList.remove('selected'));
-            card.classList.add('selected');
-            card.querySelector('input').checked = true;
-            grupoSelecionado = parseInt(card.dataset.id);
-          });
+        // Agrupa por department. "Outros" no fim pra grupos sem department.
+        const porDept = {};
+        for (const g of gruposCache) {
+          const key = g.department_name || 'Outros';
+          (porDept[key] = porDept[key] || []).push(g);
+        }
+        const deptNames = Object.keys(porDept).sort((a, b) => {
+          if (a === 'Outros') return 1;
+          if (b === 'Outros') return -1;
+          return a.localeCompare(b, 'pt-BR');
         });
+
+        const parts = ['<option value="">— Selecione seu grupo —</option>'];
+        for (const deptName of deptNames) {
+          parts.push(`<optgroup label="${escapeHtml(deptName)}">`);
+          // Detecta homonimos DENTRO do mesmo dept e sufixa com id (edge case)
+          const nomesNoDept = porDept[deptName].map(g => g.name.trim().toLowerCase());
+          for (const g of porDept[deptName]) {
+            const homonimo = nomesNoDept.filter(n => n === g.name.trim().toLowerCase()).length > 1;
+            const label = homonimo ? `${g.name} (#${g.id})` : g.name;
+            const title = g.description ? ` title="${escapeHtml(g.description)}"` : '';
+            parts.push(`<option value="${g.id}"${title}>${escapeHtml(label)}</option>`);
+          }
+          parts.push('</optgroup>');
+        }
+        sel.innerHTML = parts.join('');
       } catch (err) {
-        list.innerHTML = '<div style="text-align:center;padding:20px;color:#DC2626;">Erro ao carregar grupos: ' + escapeHtml(err.message) + '</div>';
+        sel.innerHTML = `<option value="">Erro ao carregar: ${escapeHtml(err.message)}</option>`;
       }
     }
 
@@ -1462,8 +1470,10 @@
         document.getElementById('faUnidade').focus();
         return;
       }
-      if (!grupoSelecionado) {
+      const grupoId = document.getElementById('faGrupo').value;
+      if (!grupoId) {
         alert('faStep2Alert', 'danger', 'Selecione um grupo.');
+        document.getElementById('faGrupo').focus();
         return;
       }
 
@@ -1481,7 +1491,7 @@
             cpf: cpf,
             username: username,
             password: pwd,
-            group_id: grupoSelecionado,
+            group_id: parseInt(grupoId),
             unit_id: unitId,
           }),
         });
