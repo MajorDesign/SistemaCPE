@@ -3333,18 +3333,24 @@ let _retKmSaida = 0;
 
 function buildRetProblemsGrid() {
   const grid = document.getElementById('retProblemsGrid');
+  // Mesmo motivo do buildProblemsGrid: onchange no input evita o bug do
+  // stopPropagation() bloquear o toggle quando o user clica direto no
+  // checkbox. Ver comentario em buildProblemsGrid().
   grid.innerHTML = CHECKLIST_ITEMS.map(item => `
-    <label class="checklist-problem-item" data-item="${item}" onclick="toggleRetProblem(this)">
-      <input type="checkbox" onclick="event.stopPropagation()">
+    <label class="checklist-problem-item" data-item="${item}">
+      <input type="checkbox" onchange="toggleRetProblem(this)">
       ${item}
     </label>
   `).join('');
 }
 
-function toggleRetProblem(el) {
-  el.classList.toggle('selected');
+// Aceita input (via onchange) ou label (por compat).
+function toggleRetProblem(elOrInput) {
+  const el = elOrInput.tagName === 'LABEL'
+    ? elOrInput
+    : elOrInput.closest('.checklist-problem-item');
   const cb = el.querySelector('input[type=checkbox]');
-  cb.checked = el.classList.contains('selected');
+  el.classList.toggle('selected', cb.checked);
   const hasOutros = !!document.querySelector('#retProblemsGrid .checklist-problem-item[data-item="Outros"].selected');
   document.getElementById('retProblemOutrosWrap').style.display = hasOutros ? 'block' : 'none';
   // Blueprint de arranhão retorno
@@ -3600,11 +3606,12 @@ async function openVistoriaRetorno(id) {
     document.getElementById('vrAvariaWarning').style.display = 'none';
   }
 
-  // Problemas grid do vistoriador
+  // Problemas grid do vistoriador — mesmo fix do buildProblemsGrid
+  // (onchange no checkbox pra o stopPropagation nao bloquear).
   const vrGrid = document.getElementById('vrProblemsGrid');
   vrGrid.innerHTML = CHECKLIST_ITEMS.map(item => `
-    <label class="checklist-problem-item" data-item="${item}" onclick="toggleVrProblem(this)">
-      <input type="checkbox" onclick="event.stopPropagation()">
+    <label class="checklist-problem-item" data-item="${item}">
+      <input type="checkbox" onchange="toggleVrProblem(this)">
       ${item}
     </label>
   `).join('');
@@ -3626,9 +3633,12 @@ function toggleVrPhotos() {
   document.getElementById('vrPhotosChevron').className = show ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
 }
 
-function toggleVrProblem(el) {
-  el.classList.toggle('selected');
-  el.querySelector('input[type=checkbox]').checked = el.classList.contains('selected');
+function toggleVrProblem(elOrInput) {
+  const el = elOrInput.tagName === 'LABEL'
+    ? elOrInput
+    : elOrInput.closest('.checklist-problem-item');
+  const cb = el.querySelector('input[type=checkbox]');
+  el.classList.toggle('selected', cb.checked);
   const hasOutros = !!document.querySelector('#vrProblemsGrid .checklist-problem-item[data-item="Outros"].selected');
   document.getElementById('vrProblemOutrosWrap').style.display = hasOutros ? 'block' : 'none';
   const anySelected = !!document.querySelector('#vrProblemsGrid .checklist-problem-item.selected');
@@ -5048,18 +5058,28 @@ const CHECKLIST_ITEMS = [
 
 function buildProblemsGrid() {
   const grid = document.getElementById('problemsGrid');
+  // Trigger no ONCHANGE do checkbox (nao no onclick do label). Motivo:
+  // ate 2026-07-09 o label tinha onclick=toggleProblem E o input tinha
+  // event.stopPropagation() — quando o user clicava DIRETO no checkbox
+  // (interacao mais comum), o stopPropagation impedia o handler do label,
+  // .selected nunca era adicionado e #problemPhotoWrap ficava oculto.
+  // Usando onchange, click no texto OU no checkbox dispara uma unica vez.
   grid.innerHTML = CHECKLIST_ITEMS.map(item => `
-    <label class="checklist-problem-item" data-item="${item}" onclick="toggleProblem(this)">
-      <input type="checkbox" onclick="event.stopPropagation()">
+    <label class="checklist-problem-item" data-item="${item}">
+      <input type="checkbox" onchange="toggleProblem(this)">
       ${item}
     </label>
   `).join('');
 }
 
-function toggleProblem(el) {
-  el.classList.toggle('selected');
+// Aceita input (via onchange do checkbox) ou label (por compat).
+function toggleProblem(elOrInput) {
+  const el = elOrInput.tagName === 'LABEL'
+    ? elOrInput
+    : elOrInput.closest('.checklist-problem-item');
   const cb = el.querySelector('input[type=checkbox]');
-  cb.checked = el.classList.contains('selected');
+  // Sincroniza classe .selected com o estado real do checkbox
+  el.classList.toggle('selected', cb.checked);
   // Mostrar campo "Outros"
   const hasOutros = !!document.querySelector('.checklist-problem-item[data-item="Outros"].selected');
   document.getElementById('problemOutrosWrap').style.display = hasOutros ? 'block' : 'none';
