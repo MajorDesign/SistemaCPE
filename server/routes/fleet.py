@@ -1077,6 +1077,29 @@ def vistoriar_retorno(checklist_id: int, request: Request, data: dict):
             checklist_id,
         ))
 
+        # Fecha a(s) reserva(s) desse condutor/veiculo cujo intervalo cobre
+        # a data_saida do checklist. Sem isso, o gerador de alertas em
+        # /notifications (linha ~3076) continua achando que a reserva do
+        # dia esta pendente (status='aprovado') e re-dispara "Faca o
+        # checklist de saida" DEPOIS da devolucao — provoca o bug reportado
+        # em 2026-07-09 na SYD4H96 (checklists 13→14 duplicados no mesmo
+        # dia). Suporta reservas multi-dia via (data_reserva <= data_saida
+        # <= COALESCE(data_fim, data_reserva)).
+        cursor.execute(
+            "SELECT data_saida FROM fleet_checklists WHERE id=%s",
+            (checklist_id,)
+        )
+        ck_data = cursor.fetchone()["data_saida"]
+        if ck_data is not None:
+            cursor.execute("""
+                UPDATE fleet_reservations
+                SET status='concluido'
+                WHERE vehicle_id=%s AND solicitante_id=%s
+                  AND status='aprovado'
+                  AND data_reserva <= %s
+                  AND COALESCE(data_fim, data_reserva) >= %s
+            """, (row["vehicle_id"], row["condutor_id"], ck_data, ck_data))
+
         if tem_avaria:
             # Salvar descrição da avaria no veículo
             cursor.execute("""
