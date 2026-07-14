@@ -1489,6 +1489,17 @@ function canDeleteVehicle() {
   return currentUser.role === 'RESPONSAVEL_GRUPO' && currentUser.group_id === FLEET_GROUP_ID;
 }
 
+// Iniciar viagem: condutor do checklist OU gestor de frota (ADMIN/TI/Resp Frotas).
+// Backend valida o mesmo criterio em /api/fleet/checklists/{id}/iniciar-viagem.
+// Adicionado em 2026-07-14 pra permitir que o responsavel do Frotas destrave
+// checklist quando o condutor esquecer de dar play.
+function canStartTrip(checklist) {
+  if (!currentUser || !checklist) return false;
+  if (currentUser.id === checklist.condutor_id) return true;
+  if (currentUser.role === 'ADMIN' || currentUser.role === 'TI') return true;
+  return currentUser.role === 'RESPONSAVEL_GRUPO' && currentUser.group_id === FLEET_GROUP_ID;
+}
+
 /* Aplica visibilidade de menus/seções/botões com base no papel.
    Usuário comum NÃO vê: Dashboard, Manutenção, sub-tab "Centro de Custo",
    campo "Valor aluguel mensal" no modal de veículo, botão "Novo Registro"
@@ -2436,7 +2447,7 @@ async function loadChecklists() {
           <button class="btn-fleet btn-fleet-sm" style="background:#FEF9C3;color:#92400E;border:1px solid #F59E0B" onclick="openVistoriaSaida(${c.id})" title="Vistoriar saída">
             <i class="bi bi-shield-check"></i>
           </button>` : ''}
-        ${(c.status === 'aprovado' && (currentUser?.id === c.condutor_id || ['ADMIN','TI'].includes(currentUser?.role))) ? `
+        ${(c.status === 'aprovado' && canStartTrip(c)) ? `
           <button class="btn-fleet btn-fleet-sm" style="background:#DCFCE7;color:#16A34A;border:1px solid #BBF7D0" onclick="iniciarViagem(${c.id})" title="Iniciar viagem">
             <i class="bi bi-play-fill"></i>
           </button>` : ''}
@@ -3100,7 +3111,7 @@ async function viewChecklist(id) {
   if (c.status === 'aguardando_vistoria' && canInspectFleet() && currentUser?.id !== c.condutor_id) {
     footer.innerHTML += `<button class="btn-fleet btn-fleet-primary" style="background:#F59E0B;border-color:#F59E0B" onclick="closeModal('modalChecklistDetail');openVistoriaSaida(${c.id})"><i class="bi bi-shield-check"></i> Vistoriar Saída</button>`;
   }
-  if (c.status === 'aprovado' && (currentUser?.id === c.condutor_id || ['ADMIN','TI'].includes(currentUser?.role))) {
+  if (c.status === 'aprovado' && canStartTrip(c)) {
     footer.innerHTML += `<button class="btn-fleet btn-fleet-primary" onclick="iniciarViagem(${c.id})"><i class="bi bi-arrow-right"></i> Iniciar Viagem</button>`;
   }
   if (c.status === 'em_viagem' && (currentUser?.id === c.condutor_id || ['ADMIN','TI'].includes(currentUser?.role))) {

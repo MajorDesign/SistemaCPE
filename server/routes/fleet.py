@@ -1994,17 +1994,26 @@ def aprovar_checklist(checklist_id: int, request: Request):
 
 @router.post("/checklists/{checklist_id}/iniciar-viagem")
 def iniciar_viagem(checklist_id: int, request: Request):
-    _get_user_id(request)
+    """
+    Marca checklist aprovado como 'em_viagem' + veiculo como 'em_viagem'.
+    Permissao: condutor do checklist OU ADMIN/TI OU Responsavel do grupo
+    Frotas (adicionado em 2026-07-14 a pedido do gestor — cobre o caso do
+    condutor esquecer de dar play e o responsavel precisar destravar).
+    """
+    user = _get_user_role(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT vehicle_id FROM fleet_checklists WHERE id=%s AND status='aprovado'",
+            "SELECT vehicle_id, condutor_id FROM fleet_checklists WHERE id=%s AND status='aprovado'",
             (checklist_id,)
         )
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=400, detail="Checklist não está aprovado")
+        # Autorizacao: condutor OU gestor de frota (ADMIN/TI/Resp Frotas)
+        if user["id"] != row["condutor_id"] and not _can_manage_fleet(user):
+            raise HTTPException(status_code=403, detail="Sem permissão para iniciar esta viagem")
         cursor.execute("UPDATE fleet_checklists SET status='em_viagem' WHERE id=%s", (checklist_id,))
         cursor.execute("UPDATE fleet_vehicles SET status='em_viagem' WHERE id=%s", (row["vehicle_id"],))
         conn.commit()
