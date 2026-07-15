@@ -674,7 +674,15 @@ async def upload_checklist_photo(
 ):
     _get_user_id(request)
 
-    if (
+    # "retorno_<angulo>" (2026-07-15): fotos que o condutor tira na
+    # DEVOLUCAO. Aceita retorno_<key> onde key esta em ALLOWED_ANGULOS
+    # ou eh angulo adicional cadastrado no veiculo.
+    is_retorno = angulo.startswith("retorno_")
+    if is_retorno:
+        base = angulo[len("retorno_"):]
+        if base not in ALLOWED_ANGULOS and not base.startswith("adicional"):
+            angulo = "retorno_frente"
+    elif (
         angulo not in ALLOWED_ANGULOS
         and not angulo.startswith("arranhado_")
         and not angulo.startswith("adicional")
