@@ -992,6 +992,17 @@
         </label>
       </div>
 
+      <!-- INSPEÇÃO VISUAL — devolução (adicionado 2026-07-15) -->
+      <div class="checklist-section-title"><i class="bi bi-eye-fill"></i> Inspeção Visual do Veículo (Devolução)</div>
+      <p style="font-size:12px;color:#6B7280;margin:-8px 0 14px">
+        Fotografe cada ângulo do veículo <strong>como você está entregando</strong>. Isso comprova o estado do veículo no momento da devolução (protege você e o próximo condutor).
+      </p>
+      <div class="cl-photo-grid" id="retPhotoGrid">
+        <div style="grid-column:1/-1;text-align:center;padding:24px;color:#9CA3AF;font-size:13px">
+          <i class="bi bi-hourglass-split"></i> Carregando fotos...
+        </div>
+      </div>
+
       <!-- Problemas encontrados pelo condutor -->
       <div class="checklist-section-title"><i class="bi bi-exclamation-triangle-fill"></i> O veículo apresentou algum problema durante a viagem?</div>
       <p style="font-size:12px;color:#6B7280;margin:-8px 0 12px">Se sim, marque os itens com problema abaixo.</p>
@@ -1105,13 +1116,24 @@
       </div>
 
       <!-- Fotos da saída -->
-      <div style="margin-bottom:16px">
+      <div style="margin-bottom:12px">
         <div style="font-size:13px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;display:flex;align-items:center;gap:8px;cursor:pointer" onclick="toggleVrPhotos()">
           <i class="bi bi-camera-fill" style="color:#FFC107"></i> Fotos registradas na saída
           <i class="bi bi-chevron-down" id="vrPhotosChevron" style="margin-left:auto;font-size:12px"></i>
         </div>
         <div id="vrDeparturePhotos" style="display:none;background:#F9FAFB;border-radius:8px;padding:12px">
           <div id="vrPhotosGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
+        </div>
+      </div>
+
+      <!-- Fotos da devolução (adicionado 2026-07-15) -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:13px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;display:flex;align-items:center;gap:8px;cursor:pointer" onclick="toggleVrReturnPhotos()">
+          <i class="bi bi-camera-fill" style="color:#3B82F6"></i> Fotos registradas na devolução
+          <i class="bi bi-chevron-down" id="vrReturnPhotosChevron" style="margin-left:auto;font-size:12px"></i>
+        </div>
+        <div id="vrReturnPhotos" style="display:none;background:#EFF6FF;border-radius:8px;padding:12px">
+          <div id="vrReturnPhotosGrid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
         </div>
       </div>
 
@@ -2688,6 +2710,124 @@ function onClPhotoSelected(angulo, input) {
 }
 
 /* ============================================================
+   DEVOLUÇÃO — grid de fotos do condutor (adicionado 2026-07-15)
+   Paralelo ao clPhotoGrid da saida, mas o condutor tira novas fotos
+   pra comprovar como esta devolvendo o carro. Fotos vao pro backend
+   com angulo="retorno_<key>" pra nao sobrescrever as da saida.
+   Comparativo: coluna 1 mostra a foto que ELE tirou na saida
+   (referencia real, nao a foto oficial do veiculo) — se nao tiver,
+   cai pra foto de referencia oficial.
+   ============================================================ */
+const RET_INSPECTION_FILES = {};
+let RET_ADICIONAIS = [];
+
+async function buildRetornoPhotoGrid(vehicleId, existingChecklistPhotos = []) {
+  const grid = document.getElementById('retPhotoGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:16px;color:#9CA3AF"><i class="bi bi-hourglass-split"></i> Carregando fotos...</div>';
+
+  // Separar fotos ja existentes do checklist (por prefixo do angulo)
+  const saidaByAng   = {};  // fotos da SAIDA (que o condutor tirou quando pegou o carro)
+  const retornoByAng = {};  // fotos da DEVOLUCAO (caso o checklist tenha sido recusado e o condutor esta reenviando)
+  for (const p of existingChecklistPhotos || []) {
+    const ang = p.angulo || '';
+    if (ang.startsWith('retorno_')) {
+      retornoByAng[ang.replace(/^retorno_/, '')] = p;
+    } else if (!['problema','avaria_retorno'].includes(ang) && !ang.startsWith('arranhado_')) {
+      saidaByAng[ang] = p;
+    }
+  }
+
+  // Fotos de referencia do veiculo (fallback quando nao tem foto da saida)
+  let refByAngulo = {};
+  RET_ADICIONAIS = [];
+  if (vehicleId) {
+    try {
+      const ph = await apiFetch(`/vehicles/${vehicleId}/photos`);
+      if (ph?.photos) {
+        for (const p of ph.photos) {
+          const ang = p.angulo || 'frente';
+          if (p.is_current == 1) {
+            refByAngulo[ang] = p;
+            if (ang.startsWith('adicional')) RET_ADICIONAIS.push(p);
+          }
+        }
+      }
+    } catch (e) { /* ok — nao bloqueia */ }
+  }
+
+  const padrao = PHOTO_ANGLES.map(ang => {
+    const saidaPh = saidaByAng[ang.key];
+    const refPh   = refByAngulo[ang.key];
+    // Prefere foto da SAIDA (o que ele viu quando pegou). Fallback: referencia oficial.
+    const compareSrc = saidaPh?.foto_path || refPh?.foto_path;
+    const compareLabel = saidaPh ? 'Você tirou na saída' : 'Referência';
+    return _retPhotoItem({
+      key: ang.key, label: ang.label, icon: ang.icon,
+      compareSrc, compareLabel,
+      retornoSrc: retornoByAng[ang.key]?.foto_path,  // se ja tinha (recusa)
+    });
+  }).join('');
+
+  const adic = RET_ADICIONAIS.map(p => {
+    const saidaPh = saidaByAng[p.angulo];
+    return _retPhotoItem({
+      key: p.angulo, label: p.legenda || 'Adicional', icon: 'bi-card-image',
+      compareSrc: saidaPh?.foto_path || p.foto_path,
+      compareLabel: saidaPh ? 'Você tirou na saída' : 'Referência',
+      retornoSrc: retornoByAng[p.angulo]?.foto_path,
+      extra: true,
+    });
+  }).join('');
+
+  grid.innerHTML = padrao + adic;
+}
+
+function _retPhotoItem({ key, label, icon, compareSrc, compareLabel, retornoSrc, extra }) {
+  const safeLabel = String(label || '').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+  const uploadContent = retornoSrc
+    ? `<img src="${retornoSrc}" style="width:100%;height:100%;object-fit:cover;border-radius:4px" alt="${safeLabel}">`
+    : `<i class="bi bi-camera"></i><span>Fotografar</span>`;
+  return `
+    <div class="cl-photo-item${extra ? ' cl-photo-item--extra' : ''}">
+      <div class="cl-photo-label"><i class="bi ${icon}"></i> ${safeLabel}${extra ? ' <small style="color:#9CA3AF;font-weight:400">(adicional)</small>' : ''}</div>
+      <div class="cl-photo-row">
+        <div class="cl-photo-col">
+          <div class="cl-photo-sub-label">${compareLabel}</div>
+          <div class="cl-photo-box cl-photo-ref">
+            ${compareSrc
+              ? `<img src="${compareSrc}" alt="${safeLabel}"
+                      onerror="this.parentElement.innerHTML='<i class=\\'bi bi-image-fill\\'></i>'">`
+              : '<i class="bi bi-image-fill"></i>'}
+          </div>
+        </div>
+        <div class="cl-photo-col">
+          <div class="cl-photo-sub-label">Foto da devolução</div>
+          <div class="cl-photo-box cl-photo-upload" id="retZone_${key}"
+               onclick="document.getElementById('retFile_${key}').click()"
+               title="Clique para adicionar foto da devolução">
+            ${uploadContent}
+          </div>
+          <input type="file" id="retFile_${key}" accept="image/*" capture="environment"
+                 style="display:none" onchange="onRetInspPhotoSelected('${key}', this)">
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function onRetInspPhotoSelected(angulo, input) {
+  if (!input.files?.[0]) return;
+  RET_INSPECTION_FILES[angulo] = input.files[0];
+  const reader = new FileReader();
+  reader.onload = e => {
+    const zone = document.getElementById(`retZone_${angulo}`);
+    if (zone) zone.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">`;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+/* ============================================================
    VISTORIA DE SAÍDA (modal separado para o vistoriador)
    ============================================================ */
 async function openVistoriaSaida(id) {
@@ -3122,27 +3262,48 @@ async function viewChecklist(id) {
   }
   footer.innerHTML += `<button class="btn-fleet btn-fleet-secondary" onclick="closeModal('modalChecklistDetail')">Fechar</button>`;
 
-  // Fotos de inspeção (padrão + adicionais)
+  // Fotos de inspeção (padrão + adicionais) — separadas em 2 blocos:
+  // SAIDA (angulos sem prefixo) vs DEVOLUCAO (angulos com prefixo retorno_).
+  // Adicionado em 2026-07-15.
   const photos = c.inspection_photos || [];
   if (photos.length) {
-    const byAngulo = {};
-    photos.forEach(p => { byAngulo[p.angulo] = p.foto_path; });
-    const photosHtml = _allAnglesFromData({}, byAngulo, [], photos).map(a => {
-      const src = byAngulo[a.key];
+    const isSpecial = (a) => a === 'problema' || a === 'avaria_retorno' || a.startsWith('arranhado_');
+
+    // SAIDA: sem prefixo retorno_ e nao-especial
+    const photosSaida = photos.filter(p => !p.angulo.startsWith('retorno_') && !isSpecial(p.angulo));
+    const bySaida = {};
+    photosSaida.forEach(p => { bySaida[p.angulo] = p.foto_path; });
+    const saidaHtml = _allAnglesFromData({}, bySaida, [], photosSaida).map(a => {
+      const src = bySaida[a.key];
       if (!src) return '';
       const tag = a.isExtra ? ' <small style="color:#9CA3AF;font-weight:400">(adicional)</small>' : '';
-      return `
-        <div style="text-align:center">
-          <div style="font-size:11px;font-weight:600;color:#6B7280;margin-bottom:6px;text-transform:uppercase">${a.label}${tag}</div>
-          <img src="${src}" alt="${a.label}"
-               style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;border:1px solid #E5E7EB;cursor:zoom-in"
-               onclick="window.open('${src}','_blank')">
-        </div>`;
+      return `<div style="text-align:center">
+        <div style="font-size:11px;font-weight:600;color:#6B7280;margin-bottom:6px;text-transform:uppercase">${a.label}${tag}</div>
+        <img src="${src}" alt="${a.label}"
+             style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;border:1px solid #E5E7EB;cursor:zoom-in"
+             onclick="window.open('${src}','_blank')">
+      </div>`;
+    }).filter(Boolean).join('');
+
+    // DEVOLUCAO: prefixo retorno_
+    const photosRetorno = photos.filter(p => p.angulo.startsWith('retorno_'));
+    const byRetorno = {};
+    photosRetorno.forEach(p => { byRetorno[p.angulo.replace(/^retorno_/, '')] = p.foto_path; });
+    const retornoHtml = _allAnglesFromData({}, byRetorno, [], photosRetorno).map(a => {
+      const src = byRetorno[a.key];
+      if (!src) return '';
+      const tag = a.isExtra ? ' <small style="color:#9CA3AF;font-weight:400">(adicional)</small>' : '';
+      return `<div style="text-align:center">
+        <div style="font-size:11px;font-weight:600;color:#1E40AF;margin-bottom:6px;text-transform:uppercase">${a.label}${tag}</div>
+        <img src="${src}" alt="${a.label}"
+             style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;border:1px solid #BFDBFE;cursor:zoom-in"
+             onclick="window.open('${src}','_blank')">
+      </div>`;
     }).filter(Boolean).join('');
 
     // Fotos de avaria (problema na saída e avaria no retorno)
-    const problemaPhoto = byAngulo['problema'];
-    const avariaRetornoPhoto = byAngulo['avaria_retorno'];
+    const problemaPhoto      = photos.find(p => p.angulo === 'problema')?.foto_path;
+    const avariaRetornoPhoto = photos.find(p => p.angulo === 'avaria_retorno')?.foto_path;
     let avariasHtml = '';
     if (problemaPhoto) {
       avariasHtml += `<div style="text-align:center">
@@ -3157,14 +3318,24 @@ async function viewChecklist(id) {
       </div>`;
     }
 
-    if (photosHtml || avariasHtml) {
+    if (saidaHtml || retornoHtml || avariasHtml) {
       document.getElementById('checklistDetailBody').innerHTML += `
         <hr style="margin:16px 0;border-color:#F3F4F6">
-        <div style="font-size:12px;font-weight:700;color:#6B7280;margin-bottom:12px">
-          <i class="bi bi-camera-fill"></i> FOTOS DA INSPEÇÃO
-        </div>
-        ${photosHtml ? `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">${photosHtml}</div>` : ''}
-        ${avariasHtml ? `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${avariasHtml}</div>` : ''}`;
+        ${saidaHtml ? `
+          <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:12px">
+            <i class="bi bi-camera-fill"></i> FOTOS DA SAÍDA
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">${saidaHtml}</div>` : ''}
+        ${retornoHtml ? `
+          <div style="font-size:12px;font-weight:700;color:#1E40AF;margin-bottom:12px">
+            <i class="bi bi-camera-fill"></i> FOTOS DA DEVOLUÇÃO
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">${retornoHtml}</div>` : ''}
+        ${avariasHtml ? `
+          <div style="font-size:12px;font-weight:700;color:#DC2626;margin-bottom:12px">
+            <i class="bi bi-exclamation-triangle-fill"></i> FOTOS DE AVARIA
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">${avariasHtml}</div>` : ''}`;
     }
   }
 
@@ -3316,6 +3487,10 @@ async function openRetorno(checklistId) {
   _retProblemPhotoFile = null;
   const retBox = document.getElementById('retProblemPhotoBox');
   retBox.innerHTML = '<i class="bi bi-camera" style="font-size:28px;color:#FCA5A5"></i><span style="font-size:12px;color:#FCA5A5;margin-top:6px">Clique para anexar foto</span>';
+
+  // Resetar grid de fotos da devolucao e carregar comparativo (fotos da saida do proprio checklist)
+  Object.keys(RET_INSPECTION_FILES).forEach(k => delete RET_INSPECTION_FILES[k]);
+  buildRetornoPhotoGrid(c.vehicle_id, c.inspection_photos || []);
 
   // Reset custos da viagem
   ['retHasAbastec','retHasLavagem','retHasPedagio','retHasEstac'].forEach(id => {
@@ -3474,6 +3649,24 @@ async function saveDevolver() {
   const res = await apiFetch(`/checklists/${id}/devolver`, { method:'PUT', body: JSON.stringify(body) });
   if (!res?.success) { showToast(res?.detail || 'Erro ao registrar devolucao', 'error'); return; }
 
+  // Upload fotos da inspecao de DEVOLUCAO (adicionado 2026-07-15)
+  // Prefixa angulo com "retorno_" pra nao sobrescrever as fotos da saida.
+  const retUploadToken = _getAuthToken();
+  for (const angKey of Object.keys(RET_INSPECTION_FILES)) {
+    const file = RET_INSPECTION_FILES[angKey];
+    if (!file) continue;
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('angulo', 'retorno_' + angKey);
+    try {
+      await fetch(`${API}/checklists/${id}/photos`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'X-Auth-Token': retUploadToken }, body: fd,
+      });
+    } catch (e) { console.error('[FLEET RET UPLOAD]', e); }
+  }
+  Object.keys(RET_INSPECTION_FILES).forEach(k => delete RET_INSPECTION_FILES[k]);
+
   // Upload foto do problema
   if (_retProblemPhotoFile) {
     const token = _getAuthToken();
@@ -3585,11 +3778,15 @@ async function openVistoriaRetorno(id) {
     document.getElementById('vrCondSigBox').style.display = 'none';
   }
 
-  // Fotos da saída (padrão + adicionais)
-  const photos = (c.inspection_photos || []).filter(p => p.angulo !== 'problema' && p.angulo !== 'avaria_retorno');
+  // Fotos da saída (padrão + adicionais) — filtra fora as de retorno_/problema/avaria/arranhado
+  const allPh = c.inspection_photos || [];
+  const saidaPhotos = allPh.filter(p => {
+    const a = p.angulo || '';
+    return !a.startsWith('retorno_') && a !== 'problema' && a !== 'avaria_retorno' && !a.startsWith('arranhado_');
+  });
   const byAngulo = {};
-  photos.forEach(p => { byAngulo[p.angulo] = p.foto_path; });
-  document.getElementById('vrPhotosGrid').innerHTML = _allAnglesFromData({}, byAngulo, [], photos).map(a => {
+  saidaPhotos.forEach(p => { byAngulo[p.angulo] = p.foto_path; });
+  document.getElementById('vrPhotosGrid').innerHTML = _allAnglesFromData({}, byAngulo, [], saidaPhotos).map(a => {
     const src = byAngulo[a.key];
     if (!src) return '';
     const tag = a.isExtra ? ' <small style="color:#9CA3AF;font-weight:400">(adicional)</small>' : '';
@@ -3600,6 +3797,25 @@ async function openVistoriaRetorno(id) {
     </div>`;
   }).filter(Boolean).join('') || '<p style="font-size:12px;color:#9CA3AF">Nenhuma foto.</p>';
   document.getElementById('vrDeparturePhotos').style.display = 'none';
+
+  // Fotos da DEVOLUCAO (adicionado 2026-07-15) — sao os "retorno_<angulo>"
+  const returnPhotos = allPh.filter(p => (p.angulo || '').startsWith('retorno_'));
+  const byAnguloRet = {};
+  returnPhotos.forEach(p => {
+    const key = (p.angulo || '').replace(/^retorno_/, '');
+    byAnguloRet[key] = p.foto_path;
+  });
+  document.getElementById('vrReturnPhotosGrid').innerHTML = _allAnglesFromData({}, byAnguloRet, [], returnPhotos).map(a => {
+    const src = byAnguloRet[a.key];
+    if (!src) return '';
+    const tag = a.isExtra ? ' <small style="color:#9CA3AF;font-weight:400">(adicional)</small>' : '';
+    return `<div style="text-align:center">
+      <div style="font-size:10px;color:#9CA3AF;margin-bottom:4px;text-transform:uppercase">${a.label}${tag}</div>
+      <img src="${src}" style="width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;cursor:zoom-in"
+           onclick="window.open('${src}','_blank')">
+    </div>`;
+  }).filter(Boolean).join('') || '<p style="font-size:12px;color:#9CA3AF">Nenhuma foto de devolucao registrada pelo condutor.</p>';
+  document.getElementById('vrReturnPhotos').style.display = 'none';
 
   // Problemas reportados pelo condutor
   if (retProblems.length) {
@@ -3642,6 +3858,13 @@ function toggleVrPhotos() {
   const show = el.style.display === 'none';
   el.style.display = show ? 'block' : 'none';
   document.getElementById('vrPhotosChevron').className = show ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
+}
+
+function toggleVrReturnPhotos() {
+  const el = document.getElementById('vrReturnPhotos');
+  const show = el.style.display === 'none';
+  el.style.display = show ? 'block' : 'none';
+  document.getElementById('vrReturnPhotosChevron').className = show ? 'bi bi-chevron-up' : 'bi bi-chevron-down';
 }
 
 function toggleVrProblem(elOrInput) {
