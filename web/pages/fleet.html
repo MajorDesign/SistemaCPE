@@ -4824,7 +4824,12 @@ async function dismissAlert(idx) {
   try {
     if (a.type === 'km_alert' && a.alert_id) {
       await apiFetch(`/km-alerts/${a.alert_id}/dismiss`, { method:'POST' });
-    } else if ((a.type === 'reservation_approved' || a.type === 'reservation_rejected') && a.reservation_id) {
+    } else if (
+      (a.type === 'reservation_approved' || a.type === 'reservation_rejected'
+       || a.type === 'reservation_expired_no_approval'
+       || a.type === 'reservation_expired_no_approval_resp')
+      && a.reservation_id
+    ) {
       await apiFetch(`/reservations/${a.reservation_id}/dismiss-notif`, { method:'POST' });
     }
   } catch(e) { /* silencioso — já dispensou localmente */ }

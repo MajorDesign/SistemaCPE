@@ -381,6 +381,155 @@ def job_cleanup_fantasmas():
 
 
 # =====================================================================
+# JOB 4: cancela reservas pendentes que expiraram sem aprovacao (2026-07-16)
+# =====================================================================
+# Regra de negocio (definida com o usuario em 2026-07-16):
+#   - Reserva 'pendente' que atingiu o horario de INICIO sem aprovacao
+#     deve ser cancelada automaticamente.
+#   - Excecao: reservas criadas com menos de 15 min de antecedencia
+#     ganham uma janela de 15 min pra aprovacao (evita cancelar
+#     imediato uma reserva de ultima hora que acabou de ser criada).
+#
+# Motivo do cancelamento fica gravado em fleet_reservations.motivo_rejeicao
+# com prefixo "EXPIRED_NO_APPROVAL::<nome do resp>" — o endpoint
+# /notifications no fleet.py detecta esse prefixo pra mostrar mensagem
+# especifica no frontend, sem depender de coluna nova.
+#
+# Notifica via email tanto o condutor quanto TODOS os Resp Frotas.
+# Notif in-app: seta notif_lida=0 pro condutor ver ao abrir /notifications.
+
+# Nome da constante deve bater com FLEET_GROUP_ID em server/routes/fleet.py
+# e no frontend (fleet.html). Se mudar, mudar nos 3 lugares.
+_FLEET_GROUP_ID = 13
+
+def job_cancelar_reservas_sem_aprovacao():
+    """A cada 5 min: cancela pendentes cujo prazo (max(inicio, created+15min))
+    ja passou. Notifica condutor + responsavel(is) Frotas por email."""
+    logger.info("[FLEET-SCHED] job_cancelar_reservas_sem_aprovacao rodando")
+    try:
+        from services.email_service import (
+            enviar_email,
+            email_reserva_expirada_condutor,
+            email_reserva_expirada_responsavel,
+        )
+    except Exception as e:
+        logger.error(f"[FLEET-SCHED] falha import email_service: {e}")
+        return
+
+    conn = None; cur = None
+    try:
+        conn = _connect()
+        cur = conn.cursor(dictionary=True)
+
+        # Busca resp(s) Frotas ativos — email/name usados nos avisos e no
+        # motivo gravado. Se houver mais de 1, o primeiro (menor id) vira
+        # o "nome oficial" no motivo; todos recebem email.
+        cur.execute("""
+            SELECT id, name, email
+              FROM users
+             WHERE role='RESPONSAVEL_GRUPO' AND group_id=%s AND is_active=1
+             ORDER BY id
+        """, (_FLEET_GROUP_ID,))
+        resp_frotas = cur.fetchall() or []
+        if not resp_frotas:
+            logger.warning("[FLEET-SCHED] nenhum Resp Frotas ativo — mensagem generica")
+            resp_nome_oficial = "Responsável do grupo Frotas"
+        else:
+            resp_nome_oficial = resp_frotas[0]["name"] or "Responsável Frotas"
+
+        # Busca reservas elegiveis
+        cur.execute("""
+            SELECT r.id, r.solicitante_id, r.vehicle_id, r.destino,
+                   r.data_reserva, r.horario_inicio, r.created_at,
+                   v.placa, v.modelo,
+                   u.name AS condutor_nome, u.email AS condutor_email,
+                   TIMESTAMPDIFF(MINUTE, TIMESTAMP(r.data_reserva, r.horario_inicio), NOW()) AS min_atraso
+              FROM fleet_reservations r
+              JOIN fleet_vehicles v ON v.id = r.vehicle_id
+              JOIN users u          ON u.id = r.solicitante_id
+             WHERE r.status='pendente'
+               AND NOW() >= TIMESTAMP(r.data_reserva, r.horario_inicio)
+               AND NOW() >= (r.created_at + INTERVAL 15 MINUTE)
+        """)
+        elegiveis = cur.fetchall() or []
+        if not elegiveis:
+            logger.info("[FLEET-SCHED] nenhuma reserva pendente expirada")
+            return
+
+        # Grava motivo com prefixo detectavel pelo frontend
+        motivo_prefixo = f"EXPIRED_NO_APPROVAL::{resp_nome_oficial}"
+
+        canceladas = 0
+        for r in elegiveis:
+            # Cancela + reseta notif_lida pro condutor ver ao abrir o sistema
+            cur.execute("""
+                UPDATE fleet_reservations
+                   SET status='cancelado',
+                       motivo_rejeicao=%s,
+                       notif_lida=0
+                 WHERE id=%s AND status='pendente'
+            """, (motivo_prefixo, r["id"]))
+            if cur.rowcount == 0:
+                # Alguem cancelou/aprovou entre a query e o UPDATE — skip
+                continue
+
+            data_str = str(r["data_reserva"])
+            hora_str = _hf_to_str(r["horario_inicio"]) or "—"
+            minutos_atraso = max(0, int(r.get("min_atraso") or 0))
+
+            # Email pro condutor
+            try:
+                assunto, html = email_reserva_expirada_condutor(
+                    condutor_nome=r["condutor_nome"] or "Condutor",
+                    veiculo_modelo=r["modelo"] or "",
+                    veiculo_placa=r["placa"] or "",
+                    destino=r["destino"] or "",
+                    data_reserva=data_str,
+                    horario_inicio=hora_str,
+                    resp_frotas_nome=resp_nome_oficial,
+                )
+                if r["condutor_email"]:
+                    enviar_email(para=r["condutor_email"], assunto=assunto, html=html)
+                    logger.info(f"[FLEET-SCHED/EXPIRE] email condutor -> {r['condutor_email']} (res={r['id']})")
+            except Exception as e:
+                logger.error(f"[FLEET-SCHED/EXPIRE] email condutor falhou: {e}")
+
+            # Email pra cada Resp Frotas
+            for resp in resp_frotas:
+                if not resp.get("email"):
+                    continue
+                try:
+                    assunto, html = email_reserva_expirada_responsavel(
+                        resp_frotas_nome=resp["name"] or "Responsável",
+                        condutor_nome=r["condutor_nome"] or "Condutor",
+                        veiculo_modelo=r["modelo"] or "",
+                        veiculo_placa=r["placa"] or "",
+                        destino=r["destino"] or "",
+                        data_reserva=data_str,
+                        horario_inicio=hora_str,
+                        minutos_atraso=minutos_atraso,
+                    )
+                    enviar_email(para=resp["email"], assunto=assunto, html=html)
+                    logger.info(f"[FLEET-SCHED/EXPIRE] email resp -> {resp['email']} (res={r['id']})")
+                except Exception as e:
+                    logger.error(f"[FLEET-SCHED/EXPIRE] email resp {resp['email']} falhou: {e}")
+
+            canceladas += 1
+
+        conn.commit()
+        logger.info(f"[FLEET-SCHED/EXPIRE] {canceladas} reserva(s) canceladas por prazo")
+    except Exception as e:
+        logger.exception(f"[FLEET-SCHED] job_cancelar_reservas_sem_aprovacao erro: {e}")
+        try:
+            if conn: conn.rollback()
+        except Exception:
+            pass
+    finally:
+        if cur:  cur.close()
+        if conn: conn.close()
+
+
+# =====================================================================
 # BOOTSTRAP: registra jobs no APScheduler
 # =====================================================================
 
@@ -411,8 +560,12 @@ def iniciar_scheduler():
         job_cleanup_fantasmas, IntervalTrigger(minutes=30),
         id="fleet_cleanup", replace_existing=True, coalesce=True,
     )
+    _scheduler.add_job(
+        job_cancelar_reservas_sem_aprovacao, IntervalTrigger(minutes=5),
+        id="fleet_cancel_pending", replace_existing=True, coalesce=True,
+    )
     _scheduler.start()
-    logger.info("[FLEET-SCHED] scheduler iniciado (3 jobs: lembretes/escalada/cleanup)")
+    logger.info("[FLEET-SCHED] scheduler iniciado (4 jobs: lembretes/escalada/cleanup/cancel_pending)")
     return _scheduler
 
 
