@@ -11,6 +11,73 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/fleet.css?v=2026-06-16cpe4">
+  <style>
+    /* Mobile checklists — cards em vez de tabela (adicionado 2026-07-16
+       apos gestor relatar que no celular o botao "devolver" era muito
+       pequeno e o condutor passava direto sem devolver). */
+    .fleet-cl-cards { display: none; }
+    @media (max-width: 720px) {
+      .fleet-cl-desktop { display: none !important; }
+      .fleet-cl-cards { display: flex; flex-direction: column; gap: 12px; padding: 8px 0; }
+    }
+    .cl-card {
+      background: #fff; border: 1px solid #E5E7EB; border-radius: 10px;
+      padding: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.05);
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .cl-card--em-viagem-mine {
+      border-color: #22C55E; border-width: 2px;
+      background: linear-gradient(180deg, #F0FDF4 0%, #fff 40%);
+      box-shadow: 0 2px 8px rgba(34,197,94,.15);
+    }
+    .cl-card--recusado {
+      border-color: #DC2626; border-width: 2px;
+      background: linear-gradient(180deg, #FEF2F2 0%, #fff 40%);
+    }
+    .cl-card-head {
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+    }
+    .cl-card-veiculo { font-weight: 700; font-size: 16px; color: #111827; line-height: 1.2; }
+    .cl-card-veiculo small { display: block; font-weight: 400; color: #6B7280; font-size: 13px; margin-top: 2px; }
+    .cl-card-badge {
+      flex-shrink: 0;
+    }
+    .cl-card-info {
+      display: grid; grid-template-columns: auto 1fr; gap: 4px 10px;
+      font-size: 13px; color: #4B5563; line-height: 1.4;
+    }
+    .cl-card-info dt { color: #9CA3AF; font-weight: 600; }
+    .cl-card-info dd { margin: 0; }
+    .cl-card-actions {
+      display: flex; flex-direction: column; gap: 8px; margin-top: 4px;
+    }
+    /* CTA principal (Devolver) — botao grande, verde brilhante */
+    .cl-card-cta {
+      background: #16A34A; color: #fff; border: none;
+      padding: 14px 16px; border-radius: 10px;
+      font-size: 16px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      cursor: pointer;
+      box-shadow: 0 3px 8px rgba(22,163,74,.35);
+      transition: transform .1s, box-shadow .15s;
+    }
+    .cl-card-cta:active { transform: scale(.98); }
+    .cl-card-cta i { font-size: 22px; }
+    .cl-card-cta.cta-warning { background: #F59E0B; box-shadow: 0 3px 8px rgba(245,158,11,.35); }
+    .cl-card-cta.cta-danger  { background: #DC2626; box-shadow: 0 3px 8px rgba(220,38,38,.35); }
+    .cl-card-cta.cta-blue    { background: #2563EB; box-shadow: 0 3px 8px rgba(37,99,235,.35); }
+    /* Botao secundario (Ver detalhes) */
+    .cl-card-secondary {
+      background: transparent; color: #4B5563; border: 1px solid #E5E7EB;
+      padding: 10px 12px; border-radius: 8px; font-size: 13px; font-weight: 500;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      cursor: pointer;
+    }
+    .cl-card-empty {
+      text-align: center; padding: 40px 20px; color: #9CA3AF;
+    }
+    .cl-card-empty i { font-size: 42px; opacity: .4; display: block; margin-bottom: 10px; }
+  </style>
   <!-- Config global (define API_BASE_URL = http://127.0.0.1:8000) -->
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-06-15"></script>
@@ -211,7 +278,7 @@
         </select>
       </div>
 
-      <div class="fleet-table-wrapper">
+      <div class="fleet-table-wrapper fleet-cl-desktop">
         <table class="fleet-table">
           <thead>
             <tr>
@@ -222,6 +289,8 @@
           <tbody id="checklistsTable"></tbody>
         </table>
       </div>
+      <!-- Layout mobile em cards — CSS decide (max-width:720px) -->
+      <div id="checklistsCards" class="fleet-cl-cards"></div>
     </section>
 
     <!-- ==================== VIAGENS / CUSTOS ==================== -->
@@ -2423,6 +2492,80 @@ function populateVehicleSelects() {
 /* ============================================================
    CHECKLISTS
    ============================================================ */
+
+/* Renderiza checklists em cards (layout mobile — CSS decide se aparece).
+   Cada card destaca a ACAO PRINCIPAL como CTA grande (ex: "Devolver
+   veiculo" verde) pra evitar o problema de UX reportado: no celular, o
+   condutor nao via o icone pequeno de devolver na tabela e passava
+   despercebido. */
+function renderChecklistsCardsMobile(list) {
+  const box = document.getElementById('checklistsCards');
+  if (!box) return;
+  if (!list.length) {
+    box.innerHTML = '<div class="cl-card-empty"><i class="bi bi-clipboard-x"></i>Nenhum checklist encontrado</div>';
+    return;
+  }
+  const meuId = currentUser?.id;
+  const podeVistoriar = typeof canInspectFleet === 'function' && canInspectFleet();
+
+  box.innerHTML = list.map(c => {
+    const isDono = meuId === c.condutor_id;
+    const houveRecusa = !!(c.recusa_justificativa && c.status === 'em_viagem');
+
+    // Escolha do CTA principal por status/perfil — 1 unico botao grande
+    // pra evitar user perdido entre varios icones pequenos.
+    let cta = '';
+    let cardClass = '';
+    if (c.status === 'em_viagem' && (isDono || ['ADMIN','TI'].includes(currentUser?.role))) {
+      cardClass = houveRecusa ? 'cl-card--recusado' : 'cl-card--em-viagem-mine';
+      const label = houveRecusa ? 'Corrigir e Reenviar Devolução' : 'Devolver Veículo';
+      const cls   = houveRecusa ? 'cta-danger' : '';
+      cta = `<button class="cl-card-cta ${cls}" onclick="openRetorno(${c.id})">
+               <i class="bi bi-box-arrow-in-left"></i> ${label}
+             </button>`;
+    } else if (c.status === 'aprovado' && (typeof canStartTrip === 'function' && canStartTrip(c))) {
+      cta = `<button class="cl-card-cta" onclick="iniciarViagem(${c.id})">
+               <i class="bi bi-play-fill"></i> Iniciar Viagem
+             </button>`;
+    } else if (c.status === 'aguardando_vistoria' && podeVistoriar && !isDono) {
+      cta = `<button class="cl-card-cta cta-warning" onclick="openVistoriaSaida(${c.id})">
+               <i class="bi bi-shield-check"></i> Vistoriar Saída
+             </button>`;
+    } else if (c.status === 'devolvido' && !isDono) {
+      cta = `<button class="cl-card-cta cta-blue" onclick="openVistoriaRetorno(${c.id})">
+               <i class="bi bi-shield-check"></i> Vistoriar Retorno
+             </button>`;
+    }
+
+    return `
+      <div class="cl-card ${cardClass}" data-id="${c.id}">
+        <div class="cl-card-head">
+          <div class="cl-card-veiculo">
+            ${c.placa} <small>${c.modelo || ''} · #${c.id}</small>
+          </div>
+          <div class="cl-card-badge">${badgeStatus(c.status)}</div>
+        </div>
+        <dl class="cl-card-info">
+          <dt><i class="bi bi-geo-alt"></i></dt><dd>${c.destino || '—'}</dd>
+          <dt><i class="bi bi-calendar3"></i></dt><dd>${fmtDate(c.data_saida)} ${c.horario_saida || ''}</dd>
+          <dt><i class="bi bi-speedometer2"></i></dt><dd>KM saída: <strong>${c.km_saida?.toLocaleString('pt-BR') || '—'}</strong></dd>
+        </dl>
+        ${houveRecusa ? `
+          <div style="background:#FEF2F2;border-left:3px solid #DC2626;padding:8px 10px;border-radius:6px;font-size:12px;color:#991B1B">
+            <strong>⚠ Devolução recusada:</strong> ${c.recusa_justificativa}
+          </div>
+        ` : ''}
+        <div class="cl-card-actions">
+          ${cta}
+          <button class="cl-card-secondary" onclick="viewChecklist(${c.id})">
+            <i class="bi bi-eye"></i> Ver detalhes
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 async function checkPendingChecklist() {
   const banner = document.getElementById('pendingChecklistBanner');
   if (!banner) return;
@@ -2446,6 +2589,18 @@ async function loadChecklists() {
   const filter = document.getElementById('clStatusFilter').value;
   let list = data?.checklists || [];
   if (filter) list = list.filter(c => c.status === filter);
+
+  // Defesa em profundidade: mesmo se backend errar, condutor comum
+  // so ve os proprios checklists. Backend ja filtra em /checklists desde
+  // 2026-07-16, mas mantemos aqui pra evitar vazamento em caso de bug.
+  const isGestor = canManageFleet() || canInspectFleet();
+  if (!isGestor && currentUser?.id) {
+    list = list.filter(c => c.condutor_id === currentUser.id);
+  }
+
+  // Renderiza layout MOBILE (cards) e DESKTOP (tabela) em paralelo — CSS
+  // decide qual mostrar por breakpoint.
+  renderChecklistsCardsMobile(list);
 
   const tbody = document.getElementById('checklistsTable');
   tbody.innerHTML = list.map(c => `
