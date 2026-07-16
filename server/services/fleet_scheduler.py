@@ -82,6 +82,14 @@ def _get_db_config():
         "host": MYSQL_HOST, "port": int(MYSQL_PORT),
         "user": MYSQL_USER, "password": MYSQL_PASSWORD,
         "database": MYSQL_DB,
+        # CRITICO: sem use_pure=True o mysql-connector 9.x C extension
+        # segfalta (ACCESS_VIOLATION 0xC0000005) — derruba o processo
+        # inteiro do uvicorn, NSSM restart e os jobs de 10min/30min/1h
+        # nunca completam intervalo. Bug identificado em 2026-07-16 (14
+        # crashes/2h). Ver database.py:34 pra config canonica.
+        "use_pure": True,
+        "charset":  "utf8mb4",
+        "collation": "utf8mb4_unicode_ci",
     }
 
 
