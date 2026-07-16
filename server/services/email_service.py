@@ -1148,3 +1148,85 @@ def email_escalada_atraso_veiculo(
         body=body,
     )
     return subject, html
+
+
+# ============================================================
+# Reserva cancelada por falta de aprovacao (2026-07-16)
+# ============================================================
+
+def email_reserva_expirada_condutor(
+    *, condutor_nome: str, veiculo_modelo: str, veiculo_placa: str,
+    destino: str, data_reserva: str, horario_inicio: str,
+    resp_frotas_nome: str,
+) -> tuple[str, str]:
+    """Email pro CONDUTOR quando reserva foi cancelada por falta de aprovacao."""
+    subject = f"Reserva não confirmada — {veiculo_placa}"
+    body = f"""
+        <p>Olá <strong>{_escape(condutor_nome)}</strong>,</p>
+        <p>Sua reserva foi <strong>cancelada automaticamente</strong> porque
+        não recebeu confirmação a tempo do responsável de Frotas
+        (<strong>{_escape(resp_frotas_nome)}</strong>).</p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+          <tbody>
+            {_info_box("Veículo", f"{veiculo_modelo} ({veiculo_placa})")}
+            {_info_box("Destino", destino or "—")}
+            {_info_box("Hora prevista de saída", f"{data_reserva} às {horario_inicio}")}
+            {_info_box("Responsável que deveria aprovar", resp_frotas_nome)}
+          </tbody>
+        </table>
+
+        <div style="margin:14px 0;padding:14px 16px;background:#eff6ff;
+                    border-left:4px solid #3b82f6;border-radius:6px;font-size:13px;">
+          <strong>O que fazer:</strong> se ainda precisa do veículo, faça uma
+          <strong>nova reserva</strong> no sistema. Se possível, avise o
+          responsável de Frotas antes pra ele acompanhar a aprovação.
+        </div>
+    """
+    html = _BASE_TEMPLATE.format(
+        title="Reserva não confirmada",
+        tag="Reserva cancelada",
+        body=body,
+    )
+    return subject, html
+
+
+def email_reserva_expirada_responsavel(
+    *, resp_frotas_nome: str, condutor_nome: str,
+    veiculo_modelo: str, veiculo_placa: str,
+    destino: str, data_reserva: str, horario_inicio: str,
+    minutos_atraso: int,
+) -> tuple[str, str]:
+    """Email pro RESPONSAVEL FROTAS avisando que a reserva foi cancelada por falta de aprovacao dele."""
+    subject = f"Você não aprovou a tempo — reserva de {veiculo_placa}"
+    body = f"""
+        <p>Olá <strong>{_escape(resp_frotas_nome)}</strong>,</p>
+        <p>Uma reserva do condutor <strong>{_escape(condutor_nome)}</strong>
+        foi <strong>cancelada automaticamente</strong> porque não recebeu
+        aprovação até o horário de saída
+        (atraso: <strong>{minutos_atraso} min</strong>).</p>
+
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+          <tbody>
+            {_info_box("Condutor", condutor_nome)}
+            {_info_box("Veículo", f"{veiculo_modelo} ({veiculo_placa})")}
+            {_info_box("Destino", destino or "—")}
+            {_info_box("Hora prevista de saída", f"{data_reserva} às {horario_inicio}")}
+          </tbody>
+        </table>
+
+        <div style="margin:14px 0;padding:14px 16px;background:#fef9c3;
+                    border-left:4px solid #f59e0b;border-radius:6px;font-size:13px;">
+          <strong>💡 Dica:</strong> notificações de reservas pendentes ficam
+          no topo do sistema. Se o condutor precisar do veículo, ele pode
+          fazer uma nova reserva — mas agora depende de você aprovar a tempo.
+        </div>
+    """
+    html = _BASE_TEMPLATE.format(
+        title="Reserva expirou sem sua aprovação",
+        tag="Ação perdida",
+        body=body,
+    )
+    return subject, html

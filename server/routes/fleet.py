@@ -3089,26 +3089,64 @@ def get_notifications(request: Request):
                 "reservation_id": r["id"],
             })
 
-        # 5) Reservas aprovadas/rejeitadas não lidas (para o solicitante)
+        # 5) Reservas aprovadas/rejeitadas/canceladas não lidas (para o solicitante)
+        # 2026-07-16: incluido 'cancelado' + tratamento especial pra reservas
+        # que expiraram sem aprovacao (prefixo EXPIRED_NO_APPROVAL:: gravado
+        # pelo job_cancelar_reservas_sem_aprovacao no fleet_scheduler).
         cursor.execute("""
             SELECT r.id, r.status, r.data_reserva, r.horario_inicio, r.horario_fim,
                    r.motivo_rejeicao, v.placa, v.modelo, v.id AS vid
             FROM fleet_reservations r
             JOIN fleet_vehicles v ON v.id = r.vehicle_id
             WHERE r.solicitante_id = %s AND r.notif_lida = 0
-              AND r.status IN ('aprovado','rejeitado')
+              AND r.status IN ('aprovado','rejeitado','cancelado')
         """, (uid,))
         for r in cursor.fetchall():
+            motivo = r["motivo_rejeicao"] or ""
             if r["status"] == "aprovado":
                 alerts.append({
                     "type": "reservation_approved", "icon": "bi-calendar-check-fill", "color": "#16A34A",
                     "title": f"Reserva aprovada — {r['placa']}", "message": f"Dia {r['data_reserva']}",
                     "reservation_id": r["id"],
                 })
-            else:
+            elif r["status"] == "cancelado" and motivo.startswith("EXPIRED_NO_APPROVAL::"):
+                # Cancelamento automatico por falta de aprovacao do Resp Frotas
+                resp_nome = motivo.split("::", 1)[1] or "Responsável do grupo Frotas"
+                alerts.append({
+                    "type": "reservation_expired_no_approval",
+                    "icon": "bi-clock-history", "color": "#D97706",
+                    "title": f"Veículo não reservado — {r['placa']}",
+                    "message": f"Falta de confirmação de {resp_nome}",
+                    "reservation_id": r["id"],
+                })
+            elif r["status"] == "rejeitado":
                 alerts.append({
                     "type": "reservation_rejected", "icon": "bi-calendar-x-fill", "color": "#DC2626",
-                    "title": f"Reserva recusada — {r['placa']}", "message": r["motivo_rejeicao"] or "Sem motivo",
+                    "title": f"Reserva recusada — {r['placa']}", "message": motivo or "Sem motivo",
+                    "reservation_id": r["id"],
+                })
+            # (status='cancelado' sem prefixo especial NAO gera alerta — normalmente
+            #  eh cancelamento manual pelo proprio user, que ja viu o efeito.)
+
+        # 5b) Aviso pro Resp Frotas: reservas que expiraram por falta
+        # da APROVACAO DELE (2026-07-16). Ele ja recebeu email — isto
+        # e reforco in-app pra ele notar no proximo login.
+        if user.get("role") == "RESPONSAVEL_GRUPO" and user.get("group_id") == FLEET_GROUP_ID:
+            cursor.execute("""
+                SELECT r.id, r.data_reserva, r.horario_inicio, r.motivo_rejeicao,
+                       v.placa, u.name AS condutor_nome
+                  FROM fleet_reservations r
+                  JOIN fleet_vehicles v ON v.id = r.vehicle_id
+                  JOIN users u          ON u.id = r.solicitante_id
+                 WHERE r.status='cancelado' AND r.notif_lida = 0
+                   AND r.motivo_rejeicao LIKE 'EXPIRED_NO_APPROVAL::%%'
+            """)
+            for r in cursor.fetchall():
+                alerts.append({
+                    "type": "reservation_expired_no_approval_resp",
+                    "icon": "bi-hourglass-bottom", "color": "#D97706",
+                    "title": f"Você perdeu prazo — {r['placa']}",
+                    "message": f"{r['condutor_nome']}: reserva de {r['data_reserva']} {r['horario_inicio']} foi cancelada por falta de aprovação",
                     "reservation_id": r["id"],
                 })
 
