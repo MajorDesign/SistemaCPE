@@ -577,11 +577,19 @@ def get_vehicle_photos(vehicle_id: int, request: Request):
 
 @router.get("/checklists")
 def list_checklists(request: Request):
-    _get_user_id(request)
+    """Lista checklists. Gestor de frota (ADMIN/TI/Resp Frotas) ve TUDO;
+    condutor comum ve so os proprios (adicionado 2026-07-16 pra reduzir
+    poluicao visual no historico mobile — reportado pelo gestor)."""
+    user = _get_user_role(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("""
+        where = ""
+        params: tuple = ()
+        if not _can_manage_fleet(user):
+            where = "WHERE c.condutor_id = %s"
+            params = (user["id"],)
+        cursor.execute(f"""
             SELECT c.id, c.status, c.destino,
                    c.data_saida, c.horario_saida, c.km_saida,
                    c.data_retorno, c.km_retorno,
@@ -597,9 +605,10 @@ def list_checklists(request: Request):
             JOIN  users cond ON cond.id = c.condutor_id
             LEFT JOIN users lib ON lib.id = c.liberador_id
             LEFT JOIN users rec ON rec.id = c.recebedor_id
+            {where}
             ORDER BY c.created_at DESC
             LIMIT 200
-        """)
+        """, params)
         rows = cursor.fetchall()
         rows = convert_datetime_list(rows)
         return {"success": True, "checklists": rows}
