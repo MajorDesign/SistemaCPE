@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/SistemaCPE/web/favicon.svg?v=2026-07-02b">
+  <title>Comercial — CPE</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <script src="/SistemaCPE/web/assests/js/config.js?v=2026-07-28"></script>
+  <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-06-15"></script>
+  <script>pageGuard('COMERCIAL');</script>
+
+  <style>
+    :root {
+      --com-bg:      #F5F4ED;
+      --com-panel:   #ffffff;
+      --com-border:  #D8D5C8;
+      --com-text:    #0F1419;
+      --com-muted:   #5C6370;
+      --com-accent:  #B8870B;
+      --com-yellow:  #FFC107;
+      --com-black:   #1A1A1A;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--com-bg);
+      color: var(--com-text);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Layout: sidebar 220px + main */
+    .com-wrapper {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      min-height: 100vh;
+    }
+    .com-sidebar {
+      background: var(--com-black);
+      color: #f5f4ed;
+      padding: 24px 0;
+      position: sticky; top: 0; height: 100vh;
+      overflow-y: auto;
+    }
+    .com-sidebar-logo {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid #333;
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 700; font-size: 18px;
+    }
+    .com-sidebar-logo i { color: var(--com-yellow); font-size: 22px; }
+    .com-sidebar-logo small {
+      display: block; font-weight: 400; font-size: 11px;
+      color: #999; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .com-back-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 20px; color: #999; text-decoration: none;
+      font-size: 13px; transition: background .15s, color .15s;
+      margin: 10px 0;
+    }
+    .com-back-link:hover { background: rgba(255,255,255,.05); color: var(--com-yellow); }
+    .com-nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 20px; cursor: pointer;
+      color: #ccc; font-size: 14px; font-weight: 500;
+      border-left: 3px solid transparent;
+      transition: background .15s, color .15s;
+    }
+    .com-nav-item:hover { background: rgba(255,255,255,.05); color: #fff; }
+    .com-nav-item.active {
+      background: rgba(255,193,7,.1); color: var(--com-yellow);
+      border-left-color: var(--com-yellow);
+    }
+    .com-nav-item i { width: 20px; text-align: center; font-size: 16px; }
+
+    .com-main {
+      padding: 28px 32px;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .com-header {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 16px; margin-bottom: 24px;
+      padding-bottom: 16px; border-bottom: 2px solid var(--com-border);
+    }
+    .com-header h1 {
+      margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.015em;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .com-header h1 i { color: var(--com-accent); }
+
+    /* Cards / panels */
+    .com-panel {
+      background: var(--com-panel);
+      border: 1px solid var(--com-border);
+      border-radius: 6px;
+      padding: 20px 22px;
+      margin-bottom: 16px;
+    }
+    .com-panel h2 {
+      font-size: 16px; font-weight: 600; margin: 0 0 14px;
+      color: var(--com-text); letter-spacing: -.005em;
+      padding-bottom: 10px; border-bottom: 1px solid var(--com-border);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .com-panel h2 i { color: var(--com-accent); font-size: 18px; }
+
+    /* Botões */
+    .com-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 9px 16px; border-radius: 4px; font-size: 14px;
+      font-weight: 600; cursor: pointer; border: 1px solid transparent;
+      transition: transform .15s, box-shadow .15s, background .15s;
+      text-decoration: none;
+    }
+    .com-btn:hover { transform: translateY(-1px); }
+    .com-btn-primary {
+      background: var(--com-black); color: var(--com-yellow); border-color: var(--com-black);
+    }
+    .com-btn-primary:hover { background: #000; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+    .com-btn-secondary {
+      background: #fff; color: var(--com-muted); border-color: var(--com-border);
+    }
+    .com-btn-secondary:hover { color: var(--com-text); border-color: var(--com-black); }
+    .com-btn-danger {
+      background: transparent; color: #C0392B; border-color: #C0392B;
+    }
+    .com-btn-danger:hover { background: #C0392B; color: #fff; }
+
+    /* Tabela */
+    .com-table {
+      width: 100%; border-collapse: collapse; font-size: 14px;
+    }
+    .com-table th {
+      text-align: left; font-size: 12px; text-transform: uppercase;
+      letter-spacing: .1em; color: var(--com-muted); font-weight: 600;
+      padding: 10px 12px; border-bottom: 2px solid var(--com-black);
+    }
+    .com-table td {
+      padding: 12px; border-bottom: 1px solid var(--com-border);
+    }
+    .com-table tbody tr:hover { background: #FAF8F2; }
+
+    /* Formulários */
+    .com-field { margin-bottom: 14px; }
+    .com-field label {
+      display: block; font-size: 12px; font-weight: 600;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--com-muted); margin-bottom: 6px;
+    }
+    .com-input, .com-select, .com-textarea {
+      width: 100%; padding: 10px 12px;
+      border: 1px solid var(--com-border); border-radius: 4px;
+      font-family: inherit; font-size: 14px; color: var(--com-text);
+      background: #fff;
+    }
+    .com-input:focus, .com-select:focus, .com-textarea:focus {
+      outline: none; border-color: var(--com-black);
+      box-shadow: 0 0 0 3px rgba(255,193,7,.22);
+    }
+    .com-textarea { min-height: 80px; resize: vertical; }
+    .com-help { font-size: 12px; color: var(--com-muted); margin-top: 4px; }
+
+    /* Badges */
+    .com-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 3px;
+      font-size: 11px; font-weight: 600; letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .com-badge-agendada { background: #DBEAFE; color: #1D4ED8; }
+    .com-badge-realizada { background: #DCFCE7; color: #166534; }
+    .com-badge-cancelada { background: #FEE2E2; color: #991B1B; }
+    .com-badge-nao_compareceu { background: #FEF9C3; color: #92400E; }
+    .com-badge-quente { background: #FEE2E2; color: #DC2626; }
+    .com-badge-morno { background: #FEF3C7; color: #92400E; }
+    .com-badge-frio  { background: #DBEAFE; color: #1E40AF; }
+
+    /* Empty state */
+    .com-empty {
+      text-align: center; padding: 40px 20px; color: var(--com-muted);
+    }
+    .com-empty i { font-size: 42px; opacity: .3; display: block; margin-bottom: 10px; }
+
+    /* Sections toggle */
+    .com-section { display: none; }
+    .com-section.active { display: block; }
+
+    /* Toast */
+    #comToast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      display: none; padding: 14px 18px;
+      background: var(--com-black); color: #fff;
+      border-radius: 6px; font-size: 14px; font-weight: 500;
+      box-shadow: 0 8px 24px rgba(0,0,0,.25);
+      max-width: 400px;
+    }
+    #comToast.error { background: #C0392B; }
+    #comToast.success { background: #1B7F4E; }
+
+    /* Modal */
+    .com-modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 5000;
+      background: rgba(0,0,0,.55);
+      align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .com-modal-overlay.open { display: flex; }
+    .com-modal {
+      background: #fff; border-radius: 8px; border: 1px solid var(--com-border);
+      width: min(700px, 100%); max-height: 90vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 24px 80px rgba(15,20,25,.25);
+    }
+    .com-modal-header {
+      padding: 16px 22px; background: var(--com-black); color: #fff;
+      border-radius: 8px 8px 0 0; border-bottom: 3px solid var(--com-yellow);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .com-modal-header h3 {
+      margin: 0; font-size: 16px; font-weight: 700;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .com-modal-header i { color: var(--com-yellow); }
+    .com-modal-close {
+      background: transparent; border: none; color: #ccc;
+      font-size: 24px; cursor: pointer; padding: 0 8px;
+    }
+    .com-modal-close:hover { color: #fff; }
+    .com-modal-body {
+      padding: 22px; overflow-y: auto; flex: 1;
+    }
+    .com-modal-footer {
+      padding: 14px 22px; background: #FAF8F2;
+      border-top: 1px solid var(--com-border); border-radius: 0 0 8px 8px;
+      display: flex; justify-content: flex-end; gap: 8px;
+    }
+    .com-alert-error {
+      background: #FEF2F2; border-left: 3px solid #C0392B;
+      padding: 10px 14px; border-radius: 4px; margin-bottom: 14px;
+      font-size: 13px; color: #7F1D1D;
+    }
+    /* Slot pill (livre / ocupado) */
+    .cn-slot {
+      padding: 12px 8px; border: 2px solid var(--com-border);
+      border-radius: 6px; text-align: center;
+      cursor: pointer; font-weight: 700; font-size: 15px;
+      background: #fff; transition: all .15s;
+    }
+    .cn-slot:hover { border-color: var(--com-black); }
+    .cn-slot.selected { border-color: #1B7F4E; background: #DCFCE7; color: #166534; }
+    .cn-slot.ocupado {
+      background: #FEE2E2; border-color: #FCA5A5; color: #991B1B;
+      cursor: not-allowed;
+    }
+    .cn-slot small {
+      display: block; font-size: 10px; font-weight: 500;
+      margin-top: 2px; opacity: .7; letter-spacing: .05em;
+    }
+    /* Material de apoio */
+    .material-dropzone {
+      display: block; padding: 30px 20px; border-radius: 8px;
+      border: 2px dashed var(--com-border); background: #FAF8F2;
+      text-align: center; cursor: pointer; transition: all .15s;
+    }
+    .material-dropzone:hover { border-color: var(--com-accent); background: #FFF8E5; }
+    .material-dropzone.has-file { border-color: #1B7F4E; background: #F0FDF4; }
+    .material-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+    }
+    .material-card {
+      background: #fff; border: 1px solid var(--com-border);
+      border-radius: 8px; padding: 14px; display: flex; flex-direction: column;
+      transition: border-color .15s, box-shadow .15s;
+    }
+    .material-card:hover { border-color: var(--com-black); box-shadow: 0 4px 12px rgba(0,0,0,.05); }
+    .material-card-icon {
+      font-size: 32px; color: var(--com-accent); margin-bottom: 6px;
+    }
+    .material-card-titulo {
+      font-weight: 700; font-size: 14px; color: var(--com-text);
+      margin-bottom: 4px; line-height: 1.3;
+    }
+    .material-card-meta {
+      font-size: 11px; color: var(--com-muted);
+      display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .material-card-desc {
+      font-size: 12px; color: var(--com-muted); margin-bottom: 10px;
+      flex: 1; line-height: 1.4;
+    }
+    .material-card-actions {
+      display: flex; gap: 6px;
+    }
+    .material-card-actions a, .material-card-actions button {
+      flex: 1; padding: 7px 8px; font-size: 12px;
+      border-radius: 4px; border: 1px solid var(--com-border);
+      background: #fff; color: var(--com-text); cursor: pointer;
+      text-decoration: none; text-align: center;
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+    }
+    .material-card-actions a:hover, .material-card-actions button:hover {
+      border-color: var(--com-black); background: #FAF8F2;
+    }
+    .material-card-actions .btn-delete {
+      color: #C0392B; border-color: rgba(192,57,43,.3);
+    }
+    .material-card-actions .btn-delete:hover {
+      background: #C0392B; color: #fff; border-color: #C0392B;
+    }
+
+    /* Classificação: botões de temperatura */
+    .cl-temp {
+      background: #fff; border: 2px solid var(--com-border);
+      border-radius: 6px; padding: 14px 8px; text-align: center;
+      cursor: pointer; transition: all .15s; color: var(--com-text);
+      font-family: inherit;
+    }
+    .cl-temp i { font-size: 26px; display: block; margin-bottom: 6px; }
+    .cl-temp div { font-weight: 700; font-size: 14px; }
+    .cl-temp small { display: block; font-size: 10px; color: var(--com-muted); margin-top: 3px; }
+    .cl-temp:hover { border-color: var(--com-black); transform: translateY(-1px); }
+    .cl-temp[data-t="frio"].selected  { border-color: #1E40AF; background: #DBEAFE; color: #1E40AF; }
+    .cl-temp[data-t="morno"].selected { border-color: #92400E; background: #FEF3C7; color: #92400E; }
+    .cl-temp[data-t="quente"].selected { border-color: #991B1B; background: #FEE2E2; color: #991B1B; }
+    .cl-temp[data-t="frio"]  i { color: #3B82F6; }
+    .cl-temp[data-t="morno"] i { color: #F59E0B; }
+    .cl-temp[data-t="quente"] i { color: #DC2626; }
+
+    /* Agenda grid */
+    .agenda-grid {
+      display: grid;
+      grid-template-columns: 160px repeat(7, 1fr);
+      gap: 1px;
+      background: var(--com-border);
+      border: 1px solid var(--com-border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .agenda-grid > div { background: #fff; padding: 6px 8px; font-size: 12px; min-height: 32px; }
+    .agenda-head { background: var(--com-black) !important; color: var(--com-yellow) !important;
+                   font-weight: 700; text-align: center; text-transform: uppercase; letter-spacing: .05em;
+                   font-size: 11px; padding: 8px 4px !important; }
+    .agenda-vendedor { background: #FAF8F2 !important; font-weight: 600; color: var(--com-text); }
+    .agenda-vendedor small { display: block; font-weight: 400; color: var(--com-muted); font-size: 10px; }
+    .agenda-cell { display: flex; flex-direction: column; gap: 3px; padding: 6px !important; }
+    .agenda-slot {
+      font-size: 11px; padding: 3px 6px; border-radius: 3px;
+      background: #F0FDF4; color: #166534; border: 1px solid #BBF7D0;
+    }
+    .agenda-slot.ocupado { background: #FEE2E2; color: #991B1B; border-color: #FCA5A5; cursor: pointer; }
+    .agenda-slot small { display: block; font-size: 9px; opacity: .7; }
+    .agenda-vendedor-sem-slot { color: var(--com-muted); font-style: italic; font-size: 11px; }
+
+    /* Mobile */
+    @media (max-width: 760px) {
+      .com-wrapper { grid-template-columns: 60px 1fr; }
+      .com-sidebar-logo, .com-nav-item span, .com-back-link span { display: none; }
+      .com-main { padding: 18px 14px; }
+      .com-header h1 { font-size: 18px; }
+      .com-modal { width: 100%; max-height: 95vh; }
+      .agenda-grid { grid-template-columns: 100px repeat(7, minmax(80px, 1fr)); font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="comToast"></div>
+
+  <!-- ============ MODAL: NOVA REUNIÃO ============ -->
+  <div id="modalNovaReuniao" class="com-modal-overlay">
+    <div class="com-modal">
+      <div class="com-modal-header">
+        <h3><i class="bi bi-calendar-plus"></i> Nova reunião</h3>
+        <button class="com-modal-close" onclick="fecharModalNovaReuniao()">&times;</button>
+      </div>
+      <div class="com-modal-body">
+        <div id="nrErro" class="com-alert-error" style="display:none"></div>
+
+        <!-- 1. Vendedor + data -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-7">
+            <div class="com-field mb-0">
+              <label>Vendedor *</label>
+              <select id="nrVendedor" class="com-select" onchange="nrAtualizarSlots()">
+                <option value="">Carregando...</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-md-5">
+            <div class="com-field mb-0">
+              <label>Data *</label>
+              <input type="date" id="nrData" class="com-input" onchange="nrAtualizarSlots()">
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Slots do vendedor no dia -->
+        <div class="com-field">
+          <label>Horário *</label>
+          <div id="nrSlotsWrap" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+            <div style="grid-column:1/-1;color:var(--com-muted);font-size:13px;text-align:center;padding:10px">
+              Escolha vendedor e data
+            </div>
+          </div>
+        </div>
+
+        <hr>
+
+        <!-- 3. Cliente: buscar por email OU criar novo -->
+        <div class="com-field">
+          <label>Cliente — buscar por email (se já existe, reusa)</label>
+          <div style="display:flex;gap:8px">
+            <input type="email" id="nrClienteEmail" class="com-input" placeholder="cliente@empresa.com"
+                   oninput="nrBuscarClienteDebounce()" style="flex:1">
+            <button class="com-btn com-btn-secondary" onclick="nrLimparCliente()" type="button">Limpar</button>
+          </div>
+          <div id="nrClienteStatus" class="com-help" style="margin-top:6px"></div>
+        </div>
+
+        <!-- Campos do cliente (visível quando NÃO reusa) -->
+        <div id="nrClienteCampos">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="com-field mb-2">
+                <label>Nome completo *</label>
+                <input type="text" id="nrClienteNome" class="com-input" maxlength="200">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="com-field mb-2">
+                <label>Empresa</label>
+                <input type="text" id="nrClienteEmpresa" class="com-input" maxlength="200">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="com-field mb-2">
+                <label>Telefone</label>
+                <input type="text" id="nrClienteTelefone" class="com-input" maxlength="30" placeholder="31 99999-0000">
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="com-field mb-2">
+                <label>Produto de interesse</label>
+                <input type="text" id="nrClienteInteresse" class="com-input" placeholder="Câmeras IP, PABX, etc">
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="com-modal-footer">
+        <button class="com-btn com-btn-secondary" onclick="fecharModalNovaReuniao()">Cancelar</button>
+        <button class="com-btn com-btn-primary" onclick="nrSalvar()" id="nrBtnSalvar">
+          <i class="bi bi-check-lg"></i> Agendar reunião
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: NOVO CLIENTE (isolado) ============ -->
+  <div id="modalNovoCliente" class="com-modal-overlay">
+    <div class="com-modal" style="max-width:600px">
+      <div class="com-modal-header">
+        <h3><i class="bi bi-person-plus"></i> Novo cliente</h3>
+        <button class="com-modal-close" onclick="fecharModalNovoCliente()">&times;</button>
+      </div>
+      <div class="com-modal-body">
+        <div id="ncErro" class="com-alert-error" style="display:none"></div>
+        <div id="ncReuso" class="com-alert-error" style="display:none;background:#DBEAFE;border-left-color:#1D4ED8;color:#1E3A5F"></div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <div class="com-field mb-2">
+              <label>Nome completo *</label>
+              <input type="text" id="ncNome" class="com-input" maxlength="200">
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="com-field mb-2">
+              <label>Empresa</label>
+              <input type="text" id="ncEmpresa" class="com-input" maxlength="200">
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="com-field mb-2">
+              <label>E-mail</label>
+              <input type="email" id="ncEmail" class="com-input" maxlength="190"
+                     placeholder="cliente@empresa.com">
+              <div class="com-help">Se já existir cliente com este e-mail, ele será reusado</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="com-field mb-2">
+              <label>Telefone</label>
+              <input type="text" id="ncTelefone" class="com-input" maxlength="30"
+                     placeholder="31 99999-0000">
+            </div>
+          </div>
+          <div class="col-12">
+            <div class="com-field mb-2">
+              <label>Produto de interesse</label>
+              <textarea id="ncInteresse" class="com-textarea"
+                        placeholder="Câmeras IP, PABX, monitoramento... campo livre"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="com-modal-footer">
+        <button class="com-btn com-btn-secondary" onclick="fecharModalNovoCliente()">Cancelar</button>
+        <button class="com-btn com-btn-primary" onclick="ncSalvar()" id="ncBtnSalvar">
+          <i class="bi bi-check-lg"></i> Salvar cliente
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: DETALHES CLIENTE + HISTÓRICO ============ -->
+  <div id="modalDetalhesCliente" class="com-modal-overlay">
+    <div class="com-modal" style="max-width:760px">
+      <div class="com-modal-header">
+        <h3><i class="bi bi-person-vcard"></i> <span id="dcTitulo">Cliente</span></h3>
+        <button class="com-modal-close" onclick="fecharModalDetalhesCliente()">&times;</button>
+      </div>
+      <div class="com-modal-body">
+        <div id="dcBody">
+          <div style="text-align:center;padding:30px;color:var(--com-muted)">
+            <i class="bi bi-hourglass-split"></i> Carregando...
+          </div>
+        </div>
+      </div>
+      <div class="com-modal-footer">
+        <button class="com-btn com-btn-secondary" onclick="fecharModalDetalhesCliente()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: CLASSIFICAR REUNIÃO ============ -->
+  <div id="modalClassificar" class="com-modal-overlay">
+    <div class="com-modal" style="max-width:560px">
+      <div class="com-modal-header">
+        <h3><i class="bi bi-thermometer-half"></i> Classificar reunião</h3>
+        <button class="com-modal-close" onclick="fecharModalClassificar()">&times;</button>
+      </div>
+      <div class="com-modal-body">
+        <div id="clErro" class="com-alert-error" style="display:none"></div>
+        <p id="clResumo" style="margin:0 0 16px;color:var(--com-muted);font-size:13px"></p>
+
+        <div class="com-field">
+          <label>Temperatura do lead *</label>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+            <button type="button" class="cl-temp" data-t="frio" onclick="clSelectTemp('frio', this)">
+              <i class="bi bi-snow"></i>
+              <div>Frio</div>
+              <small>Sem interesse imediato</small>
+            </button>
+            <button type="button" class="cl-temp" data-t="morno" onclick="clSelectTemp('morno', this)">
+              <i class="bi bi-thermometer-half"></i>
+              <div>Morno</div>
+              <small>Interesse, sem urgência</small>
+            </button>
+            <button type="button" class="cl-temp" data-t="quente" onclick="clSelectTemp('quente', this)">
+              <i class="bi bi-fire"></i>
+              <div>Quente</div>
+              <small>Pronto pra fechar</small>
+            </button>
+          </div>
+        </div>
+
+        <div class="com-field">
+          <label>Comentário (opcional)</label>
+          <textarea id="clComentario" class="com-textarea"
+                    placeholder="O que rolou na reunião? Próximos passos, objeções, etc"></textarea>
+        </div>
+      </div>
+      <div class="com-modal-footer">
+        <button class="com-btn com-btn-secondary" onclick="fecharModalClassificar()">Cancelar</button>
+        <button class="com-btn com-btn-primary" onclick="clSalvar()" id="clBtnSalvar">
+          <i class="bi bi-check-lg"></i> Registrar classificação
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: NOVO MATERIAL (upload) ============ -->
+  <div id="modalNovoMaterial" class="com-modal-overlay">
+    <div class="com-modal" style="max-width:600px">
+      <div class="com-modal-header">
+        <h3><i class="bi bi-cloud-arrow-up"></i> Enviar material</h3>
+        <button class="com-modal-close" onclick="fecharModalNovoMaterial()">&times;</button>
+      </div>
+      <div class="com-modal-body">
+        <div id="nmErro" class="com-alert-error" style="display:none"></div>
+
+        <div class="com-field">
+          <label>Arquivo *</label>
+          <label class="material-dropzone" for="nmFile" id="nmDropZone">
+            <input type="file" id="nmFile" style="display:none" onchange="nmArquivoSelecionado()"
+                   accept=".pdf,.ppt,.pptx,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp,.mp4,.webm">
+            <i class="bi bi-cloud-arrow-up" style="font-size:36px;color:var(--com-accent)"></i>
+            <div id="nmDropText" style="margin-top:8px;font-weight:600">Clique ou arraste o arquivo aqui</div>
+            <div id="nmDropInfo" style="font-size:12px;color:var(--com-muted);margin-top:4px">
+              PDF, PPT, DOC, imagem, vídeo — até 100 MB
+            </div>
+          </label>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-md-8">
+            <div class="com-field mb-2">
+              <label>Título *</label>
+              <input type="text" id="nmTitulo" class="com-input" maxlength="200"
+                     placeholder="Ex: Apresentação Câmeras IP 2026">
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="com-field mb-2">
+              <label>Categoria</label>
+              <select id="nmCategoria" class="com-select">
+                <option value="">— Nenhuma —</option>
+                <option value="apresentacao">Apresentação</option>
+                <option value="tabela">Tabela / Preço</option>
+                <option value="video">Vídeo</option>
+                <option value="documento">Documento</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="com-field">
+          <label>Descrição</label>
+          <textarea id="nmDescricao" class="com-textarea"
+                    placeholder="Pra que serve? Quando usar?"></textarea>
+        </div>
+      </div>
+      <div class="com-modal-footer">
+        <button class="com-btn com-btn-secondary" onclick="fecharModalNovoMaterial()">Cancelar</button>
+        <button class="com-btn com-btn-primary" onclick="nmSalvar()" id="nmBtnSalvar" disabled>
+          <i class="bi bi-check-lg"></i> Enviar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: LINK GERADO ============ -->
+  <div id="modalLinkGerado" class="com-modal-overlay">
+    <div class="com-modal" style="max-width:520px">
+      <div class="com-modal-header">
+        <h3><i class="bi bi-check-circle-fill" style="color:#1B7F4E"></i> Reunião agendada!</h3>
+        <button class="com-modal-close" onclick="fecharModalLink()">&times;</button>
+      </div>
+      <div class="com-modal-body">
+        <p style="margin:0 0 12px">Link público da reunião — envie ao cliente:</p>
+        <div style="display:flex;gap:8px;align-items:stretch">
+          <input type="text" id="lgLink" readonly class="com-input"
+                 style="flex:1;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;background:#F5F4ED">
+          <button class="com-btn com-btn-primary" onclick="copiarLink()" id="btnCopiarLink">
+            <i class="bi bi-clipboard"></i> Copiar
+          </button>
+        </div>
+        <p style="font-size:12px;color:var(--com-muted);margin-top:12px">
+          O cliente vai ficar em sala de espera até o vendedor aprovar a entrada.
+        </p>
+      </div>
+      <div class="com-modal-footer">
+        <button class="com-btn com-btn-primary" onclick="fecharModalLink()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: CONFIGURAR HORÁRIOS DO VENDEDOR (admin/resp grupo) ============ -->
+  <div id="modalConfigSlots" class="com-modal-overlay">
+    <div class="com-modal" style="max-width:560px">
+      <div class="com-modal-header">
+        <h3><i class="bi bi-clock-history"></i> Configurar horários</h3>
+        <button class="com-modal-close" onclick="fecharModalConfigSlots()">&times;</button>
+      </div>
+      <div class="com-modal-body">
+        <div style="background:#F5F4ED;padding:10px 12px;border-radius:6px;margin-bottom:14px;font-size:13px">
+          Editando horários de <strong id="cfgSlotsNome">—</strong>
+          <input type="hidden" id="cfgSlotsVendedorId">
+        </div>
+        <p style="color:var(--com-muted);font-size:12px;margin:0 0 12px">
+          Cada vendedor tem até 3 horários fixos por dia. Deixe em branco pra remover o slot.
+        </p>
+        <div id="cfgSlotsWrap"></div>
+      </div>
+      <div class="com-modal-footer">
+        <button class="com-btn com-btn-secondary" onclick="fecharModalConfigSlots()">Cancelar</button>
+        <button class="com-btn com-btn-primary" onclick="salvarConfigSlots()">
+          <i class="bi bi-check-lg"></i> Salvar horários
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="com-wrapper">
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="com-sidebar">
+      <div class="com-sidebar-logo">
+        <i class="bi bi-briefcase-fill"></i>
+        <div>Comercial<small>Módulo interno</small></div>
+      </div>
+      <a href="/SistemaCPE/index.html" class="com-back-link">
+        <i class="bi bi-arrow-left-circle"></i><span>Voltar ao Sistema</span>
+      </a>
+      <nav>
+        <div class="com-nav-item active" data-section="agenda" onclick="showSection('agenda')">
+          <i class="bi bi-calendar3"></i><span>Agenda</span>
+        </div>
+        <div class="com-nav-item" data-section="reunioes" onclick="showSection('reunioes')">
+          <i class="bi bi-camera-video"></i><span>Reuniões</span>
+        </div>
+        <div class="com-nav-item" data-section="clientes" onclick="showSection('clientes')">
+          <i class="bi bi-people"></i><span>Clientes</span>
+        </div>
+        <div class="com-nav-item" data-section="vendedores" onclick="showSection('vendedores')">
+          <i class="bi bi-person-badge"></i><span>Vendedores</span>
+        </div>
+        <div class="com-nav-item" data-section="meus-slots" onclick="showSection('meus-slots')">
+          <i class="bi bi-clock"></i><span>Meus Horários</span>
+        </div>
+        <div class="com-nav-item" data-section="material" onclick="showSection('material')">
+          <i class="bi bi-file-earmark-play"></i><span>Material Apoio</span>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- ============ MAIN ============ -->
+    <main class="com-main">
+
+      <div class="com-header">
+        <h1><i class="bi bi-briefcase-fill"></i> <span id="comSectionTitle">Agenda</span></h1>
+        <div id="comHeaderActions"></div>
+      </div>
+
+      <!-- SECTION: AGENDA -->
+      <section class="com-section active" id="section-agenda">
+        <div class="com-panel">
+          <h2>
+            <i class="bi bi-calendar-week"></i>
+            Agenda semanal — todos os vendedores
+            <button class="com-btn com-btn-primary" style="margin-left:auto" onclick="abrirModalNovaReuniao()">
+              <i class="bi bi-plus-lg"></i> Nova reunião
+            </button>
+          </h2>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+            <button class="com-btn com-btn-secondary" onclick="agendaNav(-7)">
+              <i class="bi bi-chevron-left"></i> Semana anterior
+            </button>
+            <div id="agendaLabel" style="flex:1;text-align:center;font-weight:700;color:var(--com-text)"></div>
+            <button class="com-btn com-btn-secondary" onclick="agendaNav(7)">
+              Próxima semana <i class="bi bi-chevron-right"></i>
+            </button>
+          </div>
+          <div style="overflow-x:auto">
+            <div id="agendaGrid" class="agenda-grid"></div>
+          </div>
+          <p style="font-size:12px;color:var(--com-muted);margin-top:12px">
+            <span class="agenda-slot" style="display:inline-block;padding:2px 6px">horário livre</span>
+            <span class="agenda-slot ocupado" style="display:inline-block;padding:2px 6px;margin-left:6px">horário ocupado (clique pra ver)</span>
+          </p>
+        </div>
+      </section>
+
+      <!-- SECTION: REUNIÕES -->
+      <section class="com-section" id="section-reunioes">
+        <div class="com-panel">
+          <h2>
+            <i class="bi bi-camera-video"></i>
+            Reuniões
+            <button class="com-btn com-btn-primary" style="margin-left:auto" onclick="abrirModalNovaReuniao()">
+              <i class="bi bi-plus-lg"></i> Nova reunião
+            </button>
+          </h2>
+          <table class="com-table" id="tbReunioes">
+            <thead>
+              <tr>
+                <th>Data</th><th>Hora</th><th>Vendedor</th><th>Cliente</th>
+                <th>Status</th><th>Classificação</th><th>Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div id="reunioesEmpty" class="com-empty" style="display:none">
+            <i class="bi bi-camera-video-off"></i>
+            <p>Nenhuma reunião encontrada.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: CLIENTES -->
+      <section class="com-section" id="section-clientes">
+        <div class="com-panel">
+          <h2>
+            <i class="bi bi-people"></i>
+            Clientes
+            <button class="com-btn com-btn-primary" style="margin-left:auto" onclick="abrirModalNovoCliente()">
+              <i class="bi bi-plus-lg"></i> Novo cliente
+            </button>
+          </h2>
+          <div class="com-field" style="margin-bottom:16px">
+            <input type="text" class="com-input" id="clientesBusca"
+                   placeholder="Buscar por nome, empresa ou email..."
+                   oninput="filterClientes()">
+          </div>
+          <table class="com-table" id="tbClientes">
+            <thead>
+              <tr>
+                <th>Nome</th><th>Empresa</th><th>Email</th><th>Telefone</th><th>Interesse</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div id="clientesEmpty" class="com-empty" style="display:none">
+            <i class="bi bi-person-x"></i>
+            <p>Nenhum cliente cadastrado.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: VENDEDORES -->
+      <section class="com-section" id="section-vendedores">
+        <div class="com-panel">
+          <h2><i class="bi bi-person-badge"></i> Vendedores do grupo Comercial</h2>
+          <table class="com-table" id="tbVendedores">
+            <thead>
+              <tr>
+                <th>Nome</th><th>Email</th><th>Role</th><th>Slots configurados</th><th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+          <div id="vendedoresEmpty" class="com-empty" style="display:none">
+            <i class="bi bi-person-x"></i>
+            <p>Nenhum vendedor no grupo Comercial.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: MEUS SLOTS -->
+      <section class="com-section" id="section-meus-slots">
+        <div class="com-panel">
+          <h2><i class="bi bi-clock"></i> Meus horários (3 slots por dia)</h2>
+          <p style="color:var(--com-muted);font-size:13px;margin:-6px 0 16px">
+            Configure em quais 3 horários você atende clientes. Aplicam-se a todos os dias úteis.
+            Os horários vazios podem ser agendados por qualquer pessoa do grupo Comercial.
+          </p>
+          <div id="meusSlotsWrap"></div>
+          <div style="margin-top:16px;text-align:right">
+            <button class="com-btn com-btn-primary" onclick="salvarMeusSlots()">
+              <i class="bi bi-check-lg"></i> Salvar horários
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: MATERIAL DE APOIO -->
+      <section class="com-section" id="section-material">
+        <div class="com-panel">
+          <h2>
+            <i class="bi bi-file-earmark-play"></i>
+            Material de apoio (durante reunião)
+            <button class="com-btn com-btn-primary" style="margin-left:auto" onclick="abrirModalNovoMaterial()">
+              <i class="bi bi-cloud-arrow-up"></i> Enviar material
+            </button>
+          </h2>
+          <p style="color:var(--com-muted);font-size:13px;margin:-6px 0 16px">
+            Arquivos visíveis pra todo o grupo Comercial. Use durante reuniões pra apresentar produtos.
+          </p>
+          <div id="materialGrid" class="material-grid"></div>
+          <div id="materialEmpty" class="com-empty" style="display:none">
+            <i class="bi bi-folder-x"></i>
+            <p>Nenhum material enviado ainda. Clique em <strong>Enviar material</strong> pra começar.</p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+  // ==============================================
+  // CONFIG E HELPERS BASE
+  // ==============================================
+  const API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : 'http://127.0.0.1:8000') + '/api/comercial';
+  const TOKEN = () => localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token') || '';
+
+  async function api(method, path, body) {
+    const opts = {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    };
+    const t = TOKEN();
+    if (t) opts.headers['X-Auth-Token'] = t;
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(API + path, opts);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  function toast(msg, type = '') {
+    const el = document.getElementById('comToast');
+    el.textContent = msg;
+    el.className = type;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 3500);
+  }
+
+  function esc(s) {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // Reescreve o meeting_url pro host ATUAL, extraindo só o ?code=.
+  // Motivo: reunioes antigas foram gravadas com PUBLIC_BASE_URL hardcoded
+  // (que apontava pra prod). Sempre reconstruimos com location.origin pra
+  // o link cair no MESMO ambiente que o usuario esta usando agora.
+  //
+  // Em localhost, adiciona &env=<dev|staging> — quando o convidado abre o
+  // link em aba anonima (localStorage vazio), o config.js le esse param e
+  // aponta pra API certa (senao cliente cai em dev/8000 e host em staging/
+  // 8001, cada uvicorn com seu WS manager, e a aprovacao nunca chega).
+  function meetingUrl(u) {
+    if (!u) return '';
+    try {
+      const parsed = new URL(u, location.origin);
+      const code = parsed.searchParams.get('code');
+      if (!code) return u;
+      let url = `${location.origin}/SistemaCPE/web/pages/meet.html?code=${encodeURIComponent(code)}`;
+      const host = location.hostname;
+      const isLocal = host === 'localhost' || host === '127.0.0.1';
+      const env = (typeof API_ENV !== 'undefined') ? API_ENV : null;
+      if (isLocal && env && env !== 'dev') url += `&env=${encodeURIComponent(env)}`;
+      return url;
+    } catch (_) { return u; }
+  }
+
+  // ==============================================
+  // NAVEGAÇÃO
+  // ==============================================
+  const SECTION_TITLES = {
+    'agenda': 'Agenda',
+    'reunioes': 'Reuniões',
+    'clientes': 'Clientes',
+    'vendedores': 'Vendedores',
+    'meus-slots': 'Meus horários',
+    'material': 'Material de apoio',
+  };
+
+  function showSection(name) {
+    document.querySelectorAll('.com-nav-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.section === name);
+    });
+    document.querySelectorAll('.com-section').forEach(el => {
+      el.classList.toggle('active', el.id === 'section-' + name);
+    });
+    document.getElementById('comSectionTitle').textContent = SECTION_TITLES[name] || 'Comercial';
+    // Trigger loaders por seção
+    if (name === 'agenda')     loadAgenda();
+    if (name === 'vendedores') loadVendedores();
+    if (name === 'clientes')   loadClientes();
+    if (name === 'reunioes')   loadReunioes();
+    if (name === 'meus-slots') loadMeusSlots();
+    if (name === 'material')   loadMaterial();
+  }
+
+  // ==============================================
+  // VENDEDORES
+  // ==============================================
+  let _vendCanManage = false;
+  let _vendMeId      = null;
+  async function loadVendedores() {
+    try {
+      const r = await api('GET', '/vendedores');
+      const list = r.vendedores || [];
+      _vendCanManage = !!r.can_manage;
+      _vendMeId      = r.me_id || null;
+      const tbody = document.querySelector('#tbVendedores tbody');
+      document.getElementById('vendedoresEmpty').style.display = list.length ? 'none' : 'block';
+      document.getElementById('tbVendedores').style.display    = list.length ? '' : 'none';
+      tbody.innerHTML = list.map(v => {
+        const podeEditar = _vendCanManage || v.id === _vendMeId;
+        const btn = podeEditar
+          ? `<button class="com-btn com-btn-secondary" style="padding:6px 10px;font-size:12px"
+                     onclick="abrirConfigSlots(${v.id}, '${esc(v.name).replace(/'/g, "\\'")}')">
+               <i class="bi bi-clock-history"></i> Configurar horários
+             </button>`
+          : '';
+        return `
+          <tr>
+            <td><strong>${esc(v.name)}</strong></td>
+            <td>${esc(v.email)}</td>
+            <td><span class="com-badge com-badge-agendada">${esc(v.role)}</span></td>
+            <td>${v.slots_count || 0} / 3</td>
+            <td style="text-align:right">${btn}</td>
+          </tr>
+        `;
+      }).join('');
+    } catch (e) { toast('Erro ao carregar vendedores: ' + e.message, 'error'); }
+  }
+
+  // ==============================================
+  // MODAL: CONFIGURAR HORÁRIOS DE VENDEDOR (admin/resp)
+  // ==============================================
+  async function abrirConfigSlots(vendedorId, vendedorNome) {
+    document.getElementById('cfgSlotsVendedorId').value = vendedorId;
+    document.getElementById('cfgSlotsNome').textContent = vendedorNome;
+    const wrap = document.getElementById('cfgSlotsWrap');
+    wrap.innerHTML = '<div style="text-align:center;color:var(--com-muted);padding:20px">Carregando…</div>';
+    document.getElementById('modalConfigSlots').classList.add('open');
+    try {
+      const r = await api('GET', `/slots/${vendedorId}`);
+      const slots = r.slots || [];
+      wrap.innerHTML = [1, 2, 3].map(ord => {
+        const s = slots.find(x => x.ordem === ord) || { hora: '', ativo: 1 };
+        return `
+          <div class="com-field" style="display:grid;grid-template-columns:60px 1fr 100px;gap:10px;align-items:end;margin-bottom:10px">
+            <div>
+              <label>Slot</label>
+              <div style="padding:10px 12px;background:#F5F4ED;border-radius:4px;text-align:center;font-weight:700">${ord}</div>
+            </div>
+            <div>
+              <label>Horário (HH:MM)</label>
+              <input type="time" class="com-input" data-cfg-hora="${ord}" value="${esc(s.hora || '')}">
+            </div>
+            <div>
+              <label>Ativo</label>
+              <select class="com-select" data-cfg-ativo="${ord}">
+                <option value="1" ${s.ativo ? 'selected' : ''}>Sim</option>
+                <option value="0" ${!s.ativo ? 'selected' : ''}>Não</option>
+              </select>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      wrap.innerHTML = `<div style="color:#DC2626;font-size:13px;padding:12px">Erro: ${esc(e.message)}</div>`;
+    }
+  }
+  function fecharModalConfigSlots() {
+    document.getElementById('modalConfigSlots').classList.remove('open');
+  }
+  async function salvarConfigSlots() {
+    const vid = document.getElementById('cfgSlotsVendedorId').value;
+    if (!vid) { toast('Vendedor não selecionado', 'error'); return; }
+    const slots = [];
+    for (const ord of [1, 2, 3]) {
+      const hora  = document.querySelector(`[data-cfg-hora="${ord}"]`).value;
+      const ativo = document.querySelector(`[data-cfg-ativo="${ord}"]`).value === '1';
+      if (hora) slots.push({ hora, ordem: ord, ativo });
+    }
+    try {
+      await api('PUT', `/slots/${vid}`, { slots });
+      toast('Horários salvos com sucesso!', 'success');
+      fecharModalConfigSlots();
+      loadVendedores();
+    } catch (e) { toast('Erro ao salvar: ' + e.message, 'error'); }
+  }
+
+  // ==============================================
+  // CLIENTES
+  // ==============================================
+  let _clientesCache = [];
+  async function loadClientes() {
+    try {
+      const r = await api('GET', '/clientes');
+      _clientesCache = r.clientes || [];
+      renderClientes(_clientesCache);
+    } catch (e) { toast('Erro ao carregar clientes: ' + e.message, 'error'); }
+  }
+  function renderClientes(list) {
+    const tbody = document.querySelector('#tbClientes tbody');
+    document.getElementById('clientesEmpty').style.display = list.length ? 'none' : 'block';
+    document.getElementById('tbClientes').style.display    = list.length ? '' : 'none';
+    tbody.innerHTML = list.map(c => `
+      <tr style="cursor:pointer" onclick="abrirDetalhesCliente(${c.id})" title="Ver histórico">
+        <td><strong>${esc(c.nome)}</strong></td>
+        <td>${esc(c.empresa) || '—'}</td>
+        <td>${esc(c.email) || '—'}</td>
+        <td>${esc(c.telefone) || '—'}</td>
+        <td>${esc(c.produto_interesse) || '—'}</td>
+      </tr>
+    `).join('');
+  }
+  function filterClientes() {
+    const q = (document.getElementById('clientesBusca').value || '').toLowerCase();
+    if (!q) { renderClientes(_clientesCache); return; }
+    renderClientes(_clientesCache.filter(c =>
+      (c.nome    || '').toLowerCase().includes(q) ||
+      (c.empresa || '').toLowerCase().includes(q) ||
+      (c.email   || '').toLowerCase().includes(q)
+    ));
+  }
+
+  // ==============================================
+  // REUNIÕES
+  // ==============================================
+  async function loadReunioes() {
+    try {
+      const r = await api('GET', '/reunioes');
+      const list = r.reunioes || [];
+      const tbody = document.querySelector('#tbReunioes tbody');
+      document.getElementById('reunioesEmpty').style.display = list.length ? 'none' : 'block';
+      document.getElementById('tbReunioes').style.display    = list.length ? '' : 'none';
+      tbody.innerHTML = list.map(re => {
+        const podeClassificar = re.status !== 'cancelada';
+        return `
+        <tr>
+          <td>${esc(re.data)}</td>
+          <td>${esc(re.hora)}</td>
+          <td>${esc(re.vendedor_nome)}</td>
+          <td style="cursor:pointer" onclick="abrirDetalhesCliente(${re.cliente_id})" title="Ver cliente">
+            ${esc(re.cliente_nome)}${re.cliente_empresa ? ` <small style="color:var(--com-muted)">(${esc(re.cliente_empresa)})</small>` : ''}
+          </td>
+          <td><span class="com-badge com-badge-${esc(re.status)}">${esc(re.status)}</span></td>
+          <td>${re.classificacao ? `<span class="com-badge com-badge-${esc(re.classificacao)}">${esc(re.classificacao)}</span>` : '—'}</td>
+          <td style="white-space:nowrap">
+            ${re.meeting_url ? `<a href="${esc(meetingUrl(re.meeting_url))}" target="_blank" class="com-btn com-btn-secondary" style="padding:4px 10px;font-size:12px" title="Abrir sala"><i class="bi bi-camera-video"></i></a>` : ''}
+            ${podeClassificar ? `<button class="com-btn com-btn-secondary" style="padding:4px 10px;font-size:12px" onclick="abrirModalClassificar(${re.id}, '${esc(re.cliente_nome)}', '${esc(re.data)}')" title="Classificar"><i class="bi bi-thermometer-half"></i></button>` : ''}
+          </td>
+        </tr>
+        `;
+      }).join('');
+    } catch (e) { toast('Erro ao carregar reuniões: ' + e.message, 'error'); }
+  }
+
+  // ==============================================
+  // MEUS SLOTS (config dos 3 horários)
+  // ==============================================
+  async function loadMeusSlots() {
+    try {
+      const r = await api('GET', '/slots');
+      const wrap = document.getElementById('meusSlotsWrap');
+      const slots = r.slots || [];
+      // 3 linhas de config, uma pra cada ordem 1/2/3
+      const html = [1, 2, 3].map(ord => {
+        const s = slots.find(x => x.ordem === ord) || { hora: '', ativo: 1 };
+        return `
+          <div class="com-field" style="display:grid;grid-template-columns:60px 200px 100px;gap:10px;align-items:end">
+            <div>
+              <label>Slot</label>
+              <div style="padding:10px 12px;background:#F5F4ED;border-radius:4px;text-align:center;font-weight:700">${ord}</div>
+            </div>
+            <div>
+              <label>Horário (HH:MM)</label>
+              <input type="time" class="com-input" data-slot-hora="${ord}" value="${esc(s.hora || '')}">
+            </div>
+            <div>
+              <label>Ativo</label>
+              <select class="com-select" data-slot-ativo="${ord}">
+                <option value="1" ${s.ativo ? 'selected' : ''}>Sim</option>
+                <option value="0" ${!s.ativo ? 'selected' : ''}>Não</option>
+              </select>
+            </div>
+          </div>
+        `;
+      }).join('');
+      wrap.innerHTML = html;
+    } catch (e) { toast('Erro ao carregar seus slots: ' + e.message, 'error'); }
+  }
+  async function salvarMeusSlots() {
+    const slots = [];
+    for (const ord of [1, 2, 3]) {
+      const hora  = document.querySelector(`[data-slot-hora="${ord}"]`).value;
+      const ativo = document.querySelector(`[data-slot-ativo="${ord}"]`).value === '1';
+      if (hora) slots.push({ hora, ordem: ord, ativo });
+    }
+    try {
+      // Descobre id do vendedor via /slots (retorna vendedor_id do proprio user)
+      const meus = await api('GET', '/slots');
+      const vid = meus.vendedor_id;
+      await api('PUT', `/slots/${vid}`, { slots });
+      toast('Horários salvos com sucesso!', 'success');
+      loadMeusSlots();
+    } catch (e) { toast('Erro ao salvar: ' + e.message, 'error'); }
+  }
+
+  // ==============================================
+  // MODAL: NOVA REUNIÃO
+  // ==============================================
+  let _nrVendedores = [];
+  let _nrSlotSelecionado = null;   // { hora, ordem }
+  let _nrClienteReusado = null;    // { id, ... } se veio de busca por email
+  let _nrBuscaTimer = null;
+
+  async function abrirModalNovaReuniao() {
+    // Reset
+    _nrSlotSelecionado = null;
+    _nrClienteReusado = null;
+    document.getElementById('nrErro').style.display = 'none';
+    document.getElementById('nrClienteEmail').value = '';
+    document.getElementById('nrClienteStatus').textContent = '';
+    document.getElementById('nrClienteNome').value = '';
+    document.getElementById('nrClienteEmpresa').value = '';
+    document.getElementById('nrClienteTelefone').value = '';
+    document.getElementById('nrClienteInteresse').value = '';
+    document.getElementById('nrClienteCampos').style.display = 'block';
+    // Data default: hoje
+    document.getElementById('nrData').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('nrSlotsWrap').innerHTML =
+      '<div style="grid-column:1/-1;color:var(--com-muted);font-size:13px;text-align:center;padding:10px">Escolha vendedor e data</div>';
+
+    // Carrega vendedores
+    try {
+      const r = await api('GET', '/vendedores');
+      _nrVendedores = r.vendedores || [];
+      const sel = document.getElementById('nrVendedor');
+      sel.innerHTML = '<option value="">— Selecione um vendedor —</option>' +
+        _nrVendedores.map(v => `<option value="${v.id}">${esc(v.name)} (${v.slots_count||0} horários)</option>`).join('');
+    } catch (e) {
+      document.getElementById('nrVendedor').innerHTML = '<option value="">Erro: '+esc(e.message)+'</option>';
+    }
+    document.getElementById('modalNovaReuniao').classList.add('open');
+  }
+
+  function fecharModalNovaReuniao() {
+    document.getElementById('modalNovaReuniao').classList.remove('open');
+  }
+
+  async function nrAtualizarSlots() {
+    const vid = parseInt(document.getElementById('nrVendedor').value);
+    const data = document.getElementById('nrData').value;
+    const wrap = document.getElementById('nrSlotsWrap');
+    if (!vid || !data) {
+      wrap.innerHTML = '<div style="grid-column:1/-1;color:var(--com-muted);font-size:13px;text-align:center;padding:10px">Escolha vendedor e data</div>';
+      return;
+    }
+    _nrSlotSelecionado = null;
+    wrap.innerHTML = '<div style="grid-column:1/-1;color:var(--com-muted);font-size:13px;text-align:center;padding:10px">Carregando...</div>';
+
+    try {
+      const [slotsRes, reunRes] = await Promise.all([
+        api('GET', `/slots/${vid}`),
+        api('GET', `/reunioes?vendedor_id=${vid}&data_inicio=${data}&data_fim=${data}&status=agendada`),
+      ]);
+      const slots = (slotsRes.slots || []).filter(s => s.ativo);
+      const ocupados = new Set((reunRes.reunioes || []).map(r => (r.hora || '').slice(0, 5)));
+
+      if (!slots.length) {
+        wrap.innerHTML = '<div style="grid-column:1/-1;color:#DC2626;font-size:13px;text-align:center;padding:14px">Este vendedor ainda não configurou horários. Peça pra ele configurar em "Meus Horários".</div>';
+        return;
+      }
+
+      wrap.innerHTML = slots.sort((a,b) => a.ordem - b.ordem).map(s => {
+        const horaCompacta = (s.hora || '').slice(0, 5);
+        const isOcupado = ocupados.has(horaCompacta);
+        return `
+          <div class="cn-slot ${isOcupado ? 'ocupado' : ''}" data-hora="${horaCompacta}"
+               ${isOcupado ? '' : `onclick="nrSelecionarSlot('${horaCompacta}', ${s.ordem}, this)"`}>
+            ${horaCompacta}
+            <small>${isOcupado ? 'ocupado' : 'slot ' + s.ordem}</small>
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      wrap.innerHTML = `<div style="grid-column:1/-1;color:#DC2626;font-size:13px;text-align:center;padding:10px">Erro: ${esc(e.message)}</div>`;
+    }
+  }
+
+  function nrSelecionarSlot(hora, ordem, el) {
+    _nrSlotSelecionado = { hora, ordem };
+    document.querySelectorAll('.cn-slot').forEach(x => x.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+
+  function nrBuscarClienteDebounce() {
+    clearTimeout(_nrBuscaTimer);
+    _nrBuscaTimer = setTimeout(nrBuscarCliente, 500);
+  }
+
+  async function nrBuscarCliente() {
+    const email = document.getElementById('nrClienteEmail').value.trim();
+    const status = document.getElementById('nrClienteStatus');
+    if (!email || !email.includes('@')) {
+      status.textContent = '';
+      _nrClienteReusado = null;
+      document.getElementById('nrClienteCampos').style.display = 'block';
+      return;
+    }
+    try {
+      const r = await api('GET', `/clientes/buscar?email=${encodeURIComponent(email)}`);
+      if (r.cliente) {
+        _nrClienteReusado = r.cliente;
+        status.innerHTML = `<span style="color:#166534"><i class="bi bi-check-circle-fill"></i> Cliente já cadastrado: <strong>${esc(r.cliente.nome)}</strong>${r.cliente.empresa ? ' — ' + esc(r.cliente.empresa) : ''}. Vamos reusar.</span>`;
+        // Esconde campos (será reusado)
+        document.getElementById('nrClienteCampos').style.display = 'none';
+      } else {
+        _nrClienteReusado = null;
+        status.innerHTML = `<span style="color:var(--com-accent)">Cliente novo — preencha os dados abaixo</span>`;
+        document.getElementById('nrClienteCampos').style.display = 'block';
+      }
+    } catch (e) {
+      status.textContent = 'Erro na busca: ' + e.message;
+    }
+  }
+
+  function nrLimparCliente() {
+    document.getElementById('nrClienteEmail').value = '';
+    _nrClienteReusado = null;
+    document.getElementById('nrClienteStatus').textContent = '';
+    document.getElementById('nrClienteNome').value = '';
+    document.getElementById('nrClienteEmpresa').value = '';
+    document.getElementById('nrClienteTelefone').value = '';
+    document.getElementById('nrClienteInteresse').value = '';
+    document.getElementById('nrClienteCampos').style.display = 'block';
+  }
+
+  function nrMostrarErro(msg) {
+    const el = document.getElementById('nrErro');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  async function nrSalvar() {
+    const btn = document.getElementById('nrBtnSalvar');
+    document.getElementById('nrErro').style.display = 'none';
+
+    const vendedor_id = parseInt(document.getElementById('nrVendedor').value);
+    const data = document.getElementById('nrData').value;
+
+    if (!vendedor_id) { nrMostrarErro('Selecione o vendedor'); return; }
+    if (!data)        { nrMostrarErro('Selecione a data'); return; }
+    if (!_nrSlotSelecionado) { nrMostrarErro('Escolha um horário livre'); return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+
+    try {
+      // 1. Cliente: se não reusou, cria
+      let cliente_id;
+      if (_nrClienteReusado) {
+        cliente_id = _nrClienteReusado.id;
+      } else {
+        const email = document.getElementById('nrClienteEmail').value.trim();
+        const nome  = document.getElementById('nrClienteNome').value.trim();
+        if (!nome) { nrMostrarErro('Nome do cliente é obrigatório'); btn.disabled=false; btn.innerHTML='<i class="bi bi-check-lg"></i> Agendar reunião'; return; }
+        const body = {
+          nome,
+          empresa:           document.getElementById('nrClienteEmpresa').value.trim() || null,
+          email:             email || null,
+          telefone:          document.getElementById('nrClienteTelefone').value.trim() || null,
+          produto_interesse: document.getElementById('nrClienteInteresse').value.trim() || null,
+        };
+        const rc = await api('POST', '/clientes', body);
+        cliente_id = rc.cliente.id;
+      }
+
+      // 2. Cria reunião (backend gera meeting_url automático)
+      const reunResp = await api('POST', '/reunioes', {
+        vendedor_id, cliente_id,
+        data,
+        hora: _nrSlotSelecionado.hora + ':00',
+      });
+
+      fecharModalNovaReuniao();
+      toast('Reunião agendada!', 'success');
+
+      // 3. Mostra link gerado (reescreve pro host atual — defensivo)
+      if (reunResp.meeting_url) {
+        document.getElementById('lgLink').value = meetingUrl(reunResp.meeting_url);
+        document.getElementById('modalLinkGerado').classList.add('open');
+      }
+
+      // Recarrega listagens
+      loadReunioes();
+      if (document.querySelector('#section-agenda.active')) loadAgenda();
+
+    } catch (e) {
+      nrMostrarErro(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check-lg"></i> Agendar reunião';
+    }
+  }
+
+  function fecharModalLink() {
+    document.getElementById('modalLinkGerado').classList.remove('open');
+  }
+
+  function copiarLink() {
+    const inp = document.getElementById('lgLink');
+    inp.select(); inp.setSelectionRange(0, 99999);
+    try {
+      navigator.clipboard.writeText(inp.value).then(() => {
+        const btn = document.getElementById('btnCopiarLink');
+        const old = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check-lg"></i> Copiado!';
+        setTimeout(() => btn.innerHTML = old, 1500);
+      });
+    } catch { document.execCommand('copy'); toast('Link copiado', 'success'); }
+  }
+
+  // ==============================================
+  // MODAL: NOVO CLIENTE (isolado)
+  // ==============================================
+  function abrirModalNovoCliente() {
+    document.getElementById('ncErro').style.display = 'none';
+    document.getElementById('ncReuso').style.display = 'none';
+    ['ncNome','ncEmpresa','ncEmail','ncTelefone','ncInteresse'].forEach(id => {
+      document.getElementById(id).value = '';
+    });
+    document.getElementById('modalNovoCliente').classList.add('open');
+    setTimeout(() => document.getElementById('ncNome').focus(), 100);
+  }
+  function fecharModalNovoCliente() {
+    document.getElementById('modalNovoCliente').classList.remove('open');
+  }
+  async function ncSalvar() {
+    document.getElementById('ncErro').style.display = 'none';
+    document.getElementById('ncReuso').style.display = 'none';
+
+    const nome = document.getElementById('ncNome').value.trim();
+    if (!nome) {
+      document.getElementById('ncErro').textContent = 'Nome é obrigatório';
+      document.getElementById('ncErro').style.display = 'block';
+      return;
+    }
+
+    const btn = document.getElementById('ncBtnSalvar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+
+    try {
+      const r = await api('POST', '/clientes', {
+        nome,
+        empresa:           document.getElementById('ncEmpresa').value.trim() || null,
+        email:             document.getElementById('ncEmail').value.trim() || null,
+        telefone:          document.getElementById('ncTelefone').value.trim() || null,
+        produto_interesse: document.getElementById('ncInteresse').value.trim() || null,
+      });
+      if (r.reused) {
+        // Cliente já existia — mostra aviso e fecha depois
+        const el = document.getElementById('ncReuso');
+        el.innerHTML = `<i class="bi bi-info-circle-fill"></i> Este e-mail já estava cadastrado como <strong>${esc(r.cliente.nome)}</strong>. Reusamos o cadastro existente.`;
+        el.style.display = 'block';
+        setTimeout(() => {
+          fecharModalNovoCliente();
+          loadClientes();
+          abrirDetalhesCliente(r.cliente.id);
+        }, 1800);
+      } else {
+        toast('Cliente cadastrado!', 'success');
+        fecharModalNovoCliente();
+        loadClientes();
+      }
+    } catch (e) {
+      document.getElementById('ncErro').textContent = 'Erro: ' + e.message;
+      document.getElementById('ncErro').style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check-lg"></i> Salvar cliente';
+    }
+  }
+
+  // ==============================================
+  // MODAL: DETALHES CLIENTE + HISTÓRICO
+  // ==============================================
+  async function abrirDetalhesCliente(id) {
+    const modal = document.getElementById('modalDetalhesCliente');
+    document.getElementById('dcTitulo').textContent = 'Cliente';
+    document.getElementById('dcBody').innerHTML =
+      '<div style="text-align:center;padding:30px;color:var(--com-muted)"><i class="bi bi-hourglass-split"></i> Carregando...</div>';
+    modal.classList.add('open');
+
+    try {
+      const [detR, histR] = await Promise.all([
+        api('GET', `/clientes/${id}`),
+        api('GET', `/clientes/${id}/reunioes`),
+      ]);
+      const c = detR.cliente;
+      const historico = histR.reunioes || [];
+
+      document.getElementById('dcTitulo').textContent = c.nome;
+      document.getElementById('dcBody').innerHTML = `
+        <!-- Bloco: dados do cliente -->
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <div style="font-size:11px;color:var(--com-muted);text-transform:uppercase;letter-spacing:.1em;font-weight:600">Empresa</div>
+            <div style="font-size:14px">${esc(c.empresa) || '—'}</div>
+          </div>
+          <div class="col-md-6">
+            <div style="font-size:11px;color:var(--com-muted);text-transform:uppercase;letter-spacing:.1em;font-weight:600">Email</div>
+            <div style="font-size:14px">${esc(c.email) || '—'}</div>
+          </div>
+          <div class="col-md-6">
+            <div style="font-size:11px;color:var(--com-muted);text-transform:uppercase;letter-spacing:.1em;font-weight:600">Telefone</div>
+            <div style="font-size:14px">${esc(c.telefone) || '—'}</div>
+          </div>
+          <div class="col-md-6">
+            <div style="font-size:11px;color:var(--com-muted);text-transform:uppercase;letter-spacing:.1em;font-weight:600">Cadastrado em</div>
+            <div style="font-size:14px">${esc(c.created_at) || '—'}</div>
+          </div>
+          <div class="col-12">
+            <div style="font-size:11px;color:var(--com-muted);text-transform:uppercase;letter-spacing:.1em;font-weight:600">Produto de interesse</div>
+            <div style="font-size:14px;padding:8px 12px;background:#FAF8F2;border-radius:4px;margin-top:4px">${esc(c.produto_interesse) || '—'}</div>
+          </div>
+        </div>
+
+        <!-- Histórico de reuniões -->
+        <hr>
+        <div style="font-weight:700;font-size:14px;margin-bottom:10px;display:flex;align-items:center;gap:8px">
+          <i class="bi bi-clock-history" style="color:var(--com-accent)"></i>
+          Histórico de reuniões (${historico.length})
+        </div>
+
+        ${historico.length === 0 ? `
+          <div style="text-align:center;padding:20px;color:var(--com-muted);font-size:13px">
+            Nenhuma reunião ainda com este cliente.
+          </div>
+        ` : `
+          <div style="display:flex;flex-direction:column;gap:8px">
+            ${historico.map(r => `
+              <div style="border:1px solid var(--com-border);border-radius:6px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;background:#fff">
+                <div style="font-weight:700;font-size:14px">${esc(r.data)} · ${esc(r.hora)}</div>
+                <div style="color:var(--com-muted);font-size:13px">com ${esc(r.vendedor_nome)}</div>
+                <div style="margin-left:auto;display:flex;gap:6px">
+                  <span class="com-badge com-badge-${esc(r.status)}">${esc(r.status)}</span>
+                  ${r.classificacao ? `<span class="com-badge com-badge-${esc(r.classificacao)}">${esc(r.classificacao)}</span>` : ''}
+                </div>
+                ${r.comentario ? `
+                  <div style="width:100%;font-size:13px;color:var(--com-text);padding:8px 10px;background:#FAF8F2;border-radius:4px;margin-top:4px">
+                    <i class="bi bi-chat-left-quote"></i> ${esc(r.comentario)}
+                  </div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        `}
+      `;
+    } catch (e) {
+      document.getElementById('dcBody').innerHTML = `<div style="color:#DC2626;padding:20px">Erro: ${esc(e.message)}</div>`;
+    }
+  }
+  function fecharModalDetalhesCliente() {
+    document.getElementById('modalDetalhesCliente').classList.remove('open');
+  }
+
+  // ==============================================
+  // MODAL: CLASSIFICAR REUNIÃO
+  // ==============================================
+  let _clReuniaoId = null;
+  let _clTempSelecionada = null;
+
+  function abrirModalClassificar(reuniaoId, clienteNome, dataStr) {
+    _clReuniaoId = reuniaoId;
+    _clTempSelecionada = null;
+    document.getElementById('clErro').style.display = 'none';
+    document.getElementById('clComentario').value = '';
+    document.querySelectorAll('.cl-temp').forEach(x => x.classList.remove('selected'));
+    document.getElementById('clResumo').textContent =
+      `Classificação da reunião com ${clienteNome} em ${dataStr}`;
+    document.getElementById('modalClassificar').classList.add('open');
+  }
+  function fecharModalClassificar() {
+    document.getElementById('modalClassificar').classList.remove('open');
+  }
+  function clSelectTemp(temp, btn) {
+    _clTempSelecionada = temp;
+    document.querySelectorAll('.cl-temp').forEach(x => x.classList.remove('selected'));
+    btn.classList.add('selected');
+  }
+  async function clSalvar() {
+    if (!_clTempSelecionada) {
+      const el = document.getElementById('clErro');
+      el.textContent = 'Escolha a temperatura: frio, morno ou quente';
+      el.style.display = 'block';
+      return;
+    }
+    const btn = document.getElementById('clBtnSalvar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Salvando...';
+    try {
+      await api('POST', `/reunioes/${_clReuniaoId}/classificar`, {
+        classificacao: _clTempSelecionada,
+        comentario:    document.getElementById('clComentario').value.trim() || null,
+      });
+      toast('Classificação registrada!', 'success');
+      fecharModalClassificar();
+      loadReunioes();
+    } catch (e) {
+      const el = document.getElementById('clErro');
+      el.textContent = 'Erro: ' + e.message;
+      el.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check-lg"></i> Registrar classificação';
+    }
+  }
+
+  // ==============================================
+  // MATERIAL DE APOIO (upload + list)
+  // ==============================================
+  const _MATERIAL_EXT_ICON = {
+    'pdf':  'bi-file-earmark-pdf',
+    'ppt':  'bi-file-earmark-slides', 'pptx': 'bi-file-earmark-slides',
+    'doc':  'bi-file-earmark-word',   'docx': 'bi-file-earmark-word',
+    'xls':  'bi-file-earmark-excel',  'xlsx': 'bi-file-earmark-excel',
+    'jpg':  'bi-file-earmark-image',  'jpeg': 'bi-file-earmark-image',
+    'png':  'bi-file-earmark-image',  'webp': 'bi-file-earmark-image',
+    'gif':  'bi-file-earmark-image',
+    'mp4':  'bi-file-earmark-play',   'webm': 'bi-file-earmark-play',
+    'mov':  'bi-file-earmark-play',
+    'txt':  'bi-file-earmark-text',   'csv': 'bi-file-earmark-text',
+  };
+  function _iconePorArquivo(nome) {
+    const m = (nome || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+    return m ? (_MATERIAL_EXT_ICON[m[1]] || 'bi-file-earmark') : 'bi-file-earmark';
+  }
+  function _fmtBytes(n) {
+    if (!n && n !== 0) return '—';
+    if (n < 1024) return n + ' B';
+    if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+    return (n/1024/1024).toFixed(1) + ' MB';
+  }
+
+  async function loadMaterial() {
+    try {
+      const r = await api('GET', '/material-apoio');
+      const list = r.materiais || [];
+      const grid = document.getElementById('materialGrid');
+      document.getElementById('materialEmpty').style.display = list.length ? 'none' : 'block';
+      grid.style.display = list.length ? '' : 'none';
+      grid.innerHTML = list.map(m => `
+        <div class="material-card">
+          <div class="material-card-icon"><i class="bi ${_iconePorArquivo(m.arquivo_nome_original || m.arquivo_path)}"></i></div>
+          <div class="material-card-titulo">${esc(m.titulo)}</div>
+          <div class="material-card-meta">
+            ${m.categoria ? `<span>${esc(m.categoria)}</span>` : ''}
+            <span>${_fmtBytes(m.tamanho_bytes)}</span>
+            ${m.uploaded_por_nome ? `<span>por ${esc(m.uploaded_por_nome)}</span>` : ''}
+          </div>
+          ${m.descricao ? `<div class="material-card-desc">${esc(m.descricao)}</div>` : '<div class="material-card-desc"></div>'}
+          <div class="material-card-actions">
+            <a href="${esc(m.arquivo_path)}" target="_blank" title="Abrir">
+              <i class="bi bi-box-arrow-up-right"></i> Abrir
+            </a>
+            <a href="${esc(m.arquivo_path)}" download="${esc(m.arquivo_nome_original || m.titulo)}" title="Baixar">
+              <i class="bi bi-download"></i> Baixar
+            </a>
+            <button class="btn-delete" onclick="deletarMaterial(${m.id}, '${esc(m.titulo).replace(/'/g, "&#39;")}')" title="Excluir">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+    } catch (e) { toast('Erro ao carregar material: ' + e.message, 'error'); }
+  }
+
+  async function deletarMaterial(id, titulo) {
+    if (!confirm(`Excluir "${titulo}"? Esta ação não pode ser desfeita.`)) return;
+    try {
+      const t = TOKEN();
+      const res = await fetch(API + '/material-apoio/' + id, {
+        method: 'DELETE', credentials: 'include',
+        headers: t ? { 'X-Auth-Token': t } : {},
+      });
+      if (res.status !== 204 && !res.ok) throw new Error('HTTP ' + res.status);
+      toast('Material excluído', 'success');
+      loadMaterial();
+    } catch (e) { toast('Erro: ' + e.message, 'error'); }
+  }
+
+  // Modal de upload
+  let _nmFile = null;
+
+  function abrirModalNovoMaterial() {
+    _nmFile = null;
+    document.getElementById('nmFile').value = '';
+    document.getElementById('nmTitulo').value = '';
+    document.getElementById('nmDescricao').value = '';
+    document.getElementById('nmCategoria').value = '';
+    document.getElementById('nmDropZone').classList.remove('has-file');
+    document.getElementById('nmDropText').textContent = 'Clique ou arraste o arquivo aqui';
+    document.getElementById('nmDropInfo').textContent = 'PDF, PPT, DOC, imagem, vídeo — até 100 MB';
+    document.getElementById('nmErro').style.display = 'none';
+    document.getElementById('nmBtnSalvar').disabled = true;
+    document.getElementById('modalNovoMaterial').classList.add('open');
+  }
+  function fecharModalNovoMaterial() {
+    document.getElementById('modalNovoMaterial').classList.remove('open');
+  }
+  function nmArquivoSelecionado() {
+    const inp = document.getElementById('nmFile');
+    if (!inp.files || !inp.files[0]) return;
+    _nmFile = inp.files[0];
+    document.getElementById('nmDropZone').classList.add('has-file');
+    document.getElementById('nmDropText').textContent = _nmFile.name;
+    document.getElementById('nmDropInfo').textContent = _fmtBytes(_nmFile.size);
+    // Auto-preenche titulo se estiver vazio
+    const tit = document.getElementById('nmTitulo');
+    if (!tit.value) tit.value = _nmFile.name.replace(/\.[a-z0-9]+$/i, '');
+    document.getElementById('nmBtnSalvar').disabled = false;
+  }
+
+  async function nmSalvar() {
+    const errEl = document.getElementById('nmErro');
+    errEl.style.display = 'none';
+
+    const titulo = document.getElementById('nmTitulo').value.trim();
+    if (!_nmFile) { errEl.textContent = 'Selecione um arquivo'; errEl.style.display = 'block'; return; }
+    if (!titulo)  { errEl.textContent = 'Título é obrigatório'; errEl.style.display = 'block'; return; }
+
+    const btn = document.getElementById('nmBtnSalvar');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando...';
+
+    try {
+      const fd = new FormData();
+      fd.append('file', _nmFile);
+      fd.append('titulo', titulo);
+      const desc = document.getElementById('nmDescricao').value.trim();
+      if (desc) fd.append('descricao', desc);
+      const cat = document.getElementById('nmCategoria').value;
+      if (cat) fd.append('categoria', cat);
+
+      const t = TOKEN();
+      const res = await fetch(API + '/material-apoio', {
+        method: 'POST', credentials: 'include',
+        headers: t ? { 'X-Auth-Token': t } : {},
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'HTTP ' + res.status }));
+        throw new Error(err.detail || 'Erro no upload');
+      }
+      toast('Material enviado!', 'success');
+      fecharModalNovoMaterial();
+      loadMaterial();
+    } catch (e) {
+      errEl.textContent = 'Erro: ' + e.message;
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check-lg"></i> Enviar';
+    }
+  }
+
+  // ==============================================
+  // AGENDA SEMANAL (grid de vendedores × 7 dias)
+  // ==============================================
+  let _agendaWeekStart = null;  // Date do domingo da semana atual
+
+  function _startOfWeek(d) {
+    const dt = new Date(d);
+    dt.setHours(0,0,0,0);
+    dt.setDate(dt.getDate() - dt.getDay()); // domingo
+    return dt;
+  }
+  function _fmtISO(d) { return d.toISOString().slice(0, 10); }
+  function _fmtBR(d) {
+    return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  }
+  function _diaSemanaLabel(d) {
+    return ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()];
+  }
+
+  function agendaNav(dias) {
+    if (!_agendaWeekStart) _agendaWeekStart = _startOfWeek(new Date());
+    _agendaWeekStart = new Date(_agendaWeekStart.getTime() + dias * 86400000);
+    loadAgenda();
+  }
+
+  async function loadAgenda() {
+    if (!_agendaWeekStart) _agendaWeekStart = _startOfWeek(new Date());
+    const start = _agendaWeekStart;
+    const end   = new Date(start.getTime() + 6 * 86400000);
+    document.getElementById('agendaLabel').textContent =
+      `${_fmtBR(start)} a ${_fmtBR(end)} · ${start.getFullYear()}`;
+
+    try {
+      const [vendRes, reunRes] = await Promise.all([
+        api('GET', '/vendedores'),
+        api('GET', `/reunioes?data_inicio=${_fmtISO(start)}&data_fim=${_fmtISO(end)}&status=agendada`),
+      ]);
+      const vendedores = vendRes.vendedores || [];
+      const reunioes = reunRes.reunioes || [];
+
+      // Para cada vendedor com slots, busca os horários (em paralelo)
+      const slotsPorVend = {};
+      await Promise.all(vendedores.filter(v => v.slots_count > 0).map(async v => {
+        const r = await api('GET', `/slots/${v.id}`);
+        slotsPorVend[v.id] = (r.slots || []).filter(s => s.ativo).map(s => (s.hora || '').slice(0, 5));
+      }));
+
+      // Reuniões agrupadas por (vendedor, data, hora)
+      const reunMap = {};
+      for (const r of reunioes) {
+        const key = `${r.vendedor_id}|${r.data}|${(r.hora || '').slice(0, 5)}`;
+        reunMap[key] = r;
+      }
+
+      // Monta grid
+      const grid = document.getElementById('agendaGrid');
+      grid.style.gridTemplateColumns = '160px repeat(7, 1fr)';
+      let html = '<div class="agenda-head">Vendedor</div>';
+      const dias = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start.getTime() + i * 86400000);
+        dias.push(d);
+        html += `<div class="agenda-head">${_diaSemanaLabel(d)}<br>${_fmtBR(d)}</div>`;
+      }
+
+      for (const v of vendedores) {
+        html += `<div class="agenda-vendedor">${esc(v.name)}<small>${esc(v.email || '')}</small></div>`;
+        const slots = slotsPorVend[v.id] || [];
+        for (const d of dias) {
+          const iso = _fmtISO(d);
+          if (!slots.length) {
+            html += `<div class="agenda-cell"><span class="agenda-vendedor-sem-slot">—</span></div>`;
+            continue;
+          }
+          let cell = '<div class="agenda-cell">';
+          for (const hora of slots.sort()) {
+            const key = `${v.id}|${iso}|${hora}`;
+            const reun = reunMap[key];
+            if (reun) {
+              cell += `<div class="agenda-slot ocupado" title="Cliente: ${esc(reun.cliente_nome)}${reun.cliente_empresa ? ' ('+esc(reun.cliente_empresa)+')' : ''}" onclick="alert('Reunião: ${esc(reun.cliente_nome)}\\nAgendada por ${esc(reun.agendado_por_nome || '')}')">${hora}<small>${esc(reun.cliente_nome).slice(0, 20)}</small></div>`;
+            } else {
+              cell += `<div class="agenda-slot">${hora}</div>`;
+            }
+          }
+          cell += '</div>';
+          html += cell;
+        }
+      }
+
+      if (!vendedores.length) {
+        html += `<div style="grid-column:1/-1;padding:30px;text-align:center;color:var(--com-muted)"><i class="bi bi-person-x" style="font-size:32px;opacity:.3;display:block;margin-bottom:8px"></i>Nenhum vendedor no grupo Comercial ainda.</div>`;
+      }
+
+      grid.innerHTML = html;
+    } catch (e) {
+      document.getElementById('agendaGrid').innerHTML =
+        `<div style="grid-column:1/-1;padding:20px;color:#DC2626">Erro ao carregar agenda: ${esc(e.message)}</div>`;
+    }
+  }
+
+  // Init: agenda default
+  document.addEventListener('DOMContentLoaded', () => {
+    loadAgenda();
+  });
+  </script>
+</body>
+</html>

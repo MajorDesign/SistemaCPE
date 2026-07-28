@@ -1378,7 +1378,7 @@
   <!-- ================================================== -->
   
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-06-17"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-07-28"></script>
 
   <!-- ================================================== -->
   <!-- DADOS GLOBAIS -->
@@ -2729,6 +2729,18 @@ function renderUsers(list = users) {
             <input type="hidden" id="resetSenhaUserId">
           </div>
 
+          <div class="mb-3" id="resetSenhaAtualWrap" style="display:none">
+            <label class="form-label" for="resetSenhaAtual">
+              Senha atual <span class="text-danger">*</span>
+            </label>
+            <input type="password" class="form-control" id="resetSenhaAtual"
+                   placeholder="Sua senha atual" autocomplete="current-password">
+            <div class="form-text">
+              Você está trocando a <strong>sua própria</strong> senha — precisa
+              confirmar a atual pra proteger contra sessão sequestrada.
+            </div>
+          </div>
+
           <div class="mb-3">
             <label class="form-label" for="resetNovaSenha">
               Nova senha <span class="text-danger">*</span>
@@ -2755,7 +2767,7 @@ function renderUsers(list = users) {
                    placeholder="Repita a senha">
           </div>
 
-          <div class="form-check" style="background:#FEF3C7;padding:10px 12px;border-radius:6px">
+          <div class="form-check" id="resetForcarTrocaWrap" style="background:#FEF3C7;padding:10px 12px;border-radius:6px">
             <input class="form-check-input" type="checkbox" id="resetForcarTroca" checked>
             <label class="form-check-label" for="resetForcarTroca">
               <strong>Forçar troca de senha no próximo login</strong>
@@ -2781,12 +2793,21 @@ function renderUsers(list = users) {
   <script>
     // Captura o nome e abre o modal de reset
     function abrirResetSenha(userId, userName) {
+      const meId = JSON.parse(localStorage.getItem('user') || '{}').id;
+      const isSelf = Number(meId) === Number(userId);
+
       document.getElementById('resetSenhaUserId').value = userId;
       document.getElementById('resetSenhaNome').textContent = userName || '—';
+      document.getElementById('resetSenhaAtual').value = '';
       document.getElementById('resetNovaSenha').value = '';
       document.getElementById('resetConfirmarSenha').value = '';
-      document.getElementById('resetForcarTroca').checked = true;
+      document.getElementById('resetForcarTroca').checked = !isSelf;
       document.getElementById('resetSenhaErro').style.display = 'none';
+
+      // Self-reset: mostra campo senha atual, esconde "forçar troca" (não faz sentido)
+      document.getElementById('resetSenhaAtualWrap').style.display = isSelf ? '' : 'none';
+      document.getElementById('resetForcarTrocaWrap').style.display = isSelf ? 'none' : '';
+
       const modal = new bootstrap.Modal(document.getElementById('resetSenhaModal'));
       modal.show();
     }
@@ -2807,6 +2828,14 @@ function renderUsers(list = users) {
       const conf  = document.getElementById('resetConfirmarSenha').value;
       const forcar = document.getElementById('resetForcarTroca').checked;
 
+      const meId = JSON.parse(localStorage.getItem('user') || '{}').id;
+      const isSelf = Number(meId) === Number(userId);
+      const senhaAtual = document.getElementById('resetSenhaAtual').value;
+
+      if (isSelf && !senhaAtual) {
+        errEl.textContent = 'Informe sua senha atual pra confirmar a troca.';
+        errEl.style.display = 'block'; return;
+      }
       if (!senha || senha.length < 8) {
         errEl.textContent = 'A senha precisa ter no mínimo 8 caracteres.';
         errEl.style.display = 'block'; return;
@@ -2816,6 +2845,9 @@ function renderUsers(list = users) {
         errEl.style.display = 'block'; return;
       }
 
+      const payload = { senha_nova: senha, forcar_troca: forcar };
+      if (isSelf) payload.senha_atual = senhaAtual;
+
       try {
         const API = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : `http://${location.hostname}:8000`;
         const r = await fetch(`${API}/api/users/${userId}/senha`, {
@@ -2823,7 +2855,7 @@ function renderUsers(list = users) {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json',
                      'X-Auth-Token': localStorage.getItem('cpe_token') || '' },
-          body: JSON.stringify({ senha_nova: senha, forcar_troca: forcar }),
+          body: JSON.stringify(payload),
         });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) {
@@ -2831,7 +2863,11 @@ function renderUsers(list = users) {
           errEl.style.display = 'block'; return;
         }
         bootstrap.Modal.getInstance(document.getElementById('resetSenhaModal')).hide();
-        alert(`Senha resetada com sucesso!${forcar ? '\n\nO usuário será obrigado a trocar a senha no próximo login.' : ''}`);
+        if (isSelf) {
+          alert('Senha alterada com sucesso!');
+        } else {
+          alert(`Senha resetada com sucesso!${forcar ? '\n\nO usuário será obrigado a trocar a senha no próximo login.' : ''}`);
+        }
       } catch (err) {
         errEl.textContent = 'Erro de conexão: ' + err.message;
         errEl.style.display = 'block';

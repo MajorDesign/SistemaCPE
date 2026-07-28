@@ -1758,6 +1758,16 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ REGISTRAR ROUTER DE COMERCIAL (agenda de vendedores + reunioes)
+try:
+    from routes.comercial import router as comercial_router
+    app.include_router(comercial_router)
+    logger.info("✅ Router de Comercial registrado: /api/comercial")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Comercial: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ REGISTRAR ROUTER DE PREFERENCIAS DE EMAIL (por usuario)
 try:
     from routes.email_preferencias import router as email_prefs_router

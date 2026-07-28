@@ -32,9 +32,28 @@ var COOKIE_NAME;
   const isPublicDomain = !isIp && !isLocalhost && /[a-z]/i.test(curHost) && curHost.includes('.');
 
   // Seletor Dev/Staging só vale em localhost. Fora disso, sempre dev (porta 8000).
+  // Prioridade em localhost:
+  //   1. ?env=staging|dev na URL (necessário pra links compartilhados entre
+  //      abas anônimas que não herdam localStorage)
+  //   2. localStorage.cpe_env (escolha manual do usuário no login)
+  //   3. 'dev' (default)
+  let urlEnv = null;
+  if (isLocalhost && typeof window !== 'undefined' && window.location && window.location.search) {
+    try {
+      const p = new URLSearchParams(window.location.search).get('env');
+      if (p && (p in API_ENVS)) urlEnv = p;
+    } catch (_) { /* ignora URL malformada */ }
+  }
   const savedEnv = isLocalhost
-    ? ((typeof localStorage !== 'undefined' && localStorage.getItem('cpe_env')) || 'dev')
+    ? (urlEnv
+       || (typeof localStorage !== 'undefined' && localStorage.getItem('cpe_env'))
+       || 'dev')
     : 'dev';
+  // Se veio via URL, persiste pro localStorage — assim recarregar/navegar
+  // pra outras páginas do sistema mantém o ambiente.
+  if (urlEnv && typeof localStorage !== 'undefined') {
+    try { localStorage.setItem('cpe_env', urlEnv); } catch (_) {}
+  }
 
   const apiEnv  = (savedEnv in API_ENVS) ? savedEnv : 'dev';
   const apiPort = API_ENVS[apiEnv].port;

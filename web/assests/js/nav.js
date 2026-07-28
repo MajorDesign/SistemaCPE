@@ -74,6 +74,19 @@ const globalMenu = [
     external: true
   },
   // ==================================================
+  // ✨ MENU: Módulo Comercial (agenda vendedores + reuniões + material apoio)
+  // Data: 2026-07-23
+  // Filtro real vem do backend (grupo Comercial + ADMIN/TI/MANAGER).
+  // requiredRoles aqui é só fallback se a API /me/menu cair.
+  // ==================================================
+  {
+    path: "/SistemaCPE/web/pages/comercial.html",
+    label: "Comercial",
+    icon: "bi-briefcase-fill",
+    requiredRoles: ["ADMIN", "TI", "MANAGER"],
+    external: true
+  },
+  // ==================================================
   // ✨ MENU: Módulo de Recepção
   // Data: 30/04/2026
   // Aberto a todos os perfis — qualquer usuário pode agendar sala

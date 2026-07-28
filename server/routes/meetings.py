@@ -129,24 +129,41 @@ class MeetingConnManager:
         print(f"[MEET-WS] +peer {peer_id[:8]} meeting={meeting_id} "
               f"total_na_sala={len(self._rooms[meeting_id])}", flush=True)
 
-    def disconnect(self, meeting_id: int, peer_id: str):
+    def disconnect(self, meeting_id: int, peer_id: str, only_if_ws: Optional[WebSocket] = None):
+        """Remove peer do mapa. Se `only_if_ws` for passado, so remove se a WS
+        registrada for exatamente essa — evita a race em que WS1 caiu, WS2 (nova
+        do reconnect) ja assumiu o slot, e o finally de WS1 iria dropar WS2."""
         room = self._rooms.get(meeting_id)
-        if room and peer_id in room:
-            del room[peer_id]
-            if not room:
-                del self._rooms[meeting_id]
+        if not room or peer_id not in room:
+            print(f"[MEET-WS] -peer {peer_id[:8]} noop (nao estava no mapa)", flush=True)
+            return
+        if only_if_ws is not None and room[peer_id] is not only_if_ws:
+            # WS ja foi substituida pela nova conexao do reconnect — nao mexer.
+            print(f"[MEET-WS] -peer {peer_id[:8]} SKIP (ws antiga; ha reconnect ativo)",
+                  flush=True)
+            return
+        del room[peer_id]
+        if not room:
+            del self._rooms[meeting_id]
         print(f"[MEET-WS] -peer {peer_id[:8]} meeting={meeting_id}", flush=True)
 
     async def send_to_peer(self, meeting_id: int, peer_id: str, payload: dict):
         room = self._rooms.get(meeting_id) or {}
         ws = room.get(peer_id)
         if not ws:
+            # Log detalhado pra diagnostico (era silent fail antes)
+            other_peers = list(room.keys())
+            print(f"[MEET-WS] send_to_peer FAIL peer={peer_id[:8]} type={payload.get('type')} "
+                  f"— peer nao esta no room. peers_no_room={len(other_peers)} "
+                  f"{[p[:8] for p in other_peers]}", flush=True)
             return
         try:
             await ws.send_text(json.dumps(payload, default=str))
+            print(f"[MEET-WS] send_to_peer OK peer={peer_id[:8]} type={payload.get('type')}",
+                  flush=True)
         except Exception as e:
             logger.warning(f"[MEET-WS] send fail {peer_id[:8]}: {e}")
-            self.disconnect(meeting_id, peer_id)
+            self.disconnect(meeting_id, peer_id, only_if_ws=ws)
 
     async def broadcast(self, meeting_id: int, payload: dict, except_peer: Optional[str] = None):
         room = self._rooms.get(meeting_id) or {}
@@ -659,6 +676,8 @@ async def approve_guest(code: str, peer_id: str, request: Request):
     if not affected:
         raise HTTPException(status_code=404, detail="Participante nao esta aguardando")
     # Notifica o guest (esta com WS aberta no lobby)
+    print(f"[MEET-WS] APROVACAO peer={peer_id[:12]} sala={m['id']} — chamando send_to_peer",
+          flush=True)
     await manager.send_to_peer(m["id"], peer_id, {
         "type": "meeting_join_approved",
     })
@@ -1072,6 +1091,18 @@ async def meeting_ws(websocket: WebSocket):
                         "lang":  source_lang,
                         "peer_id": peer_id,
                     })
+            elif t == "meeting_recording":
+                # Sinaliza que o HOST comecou/parou de gravar a sala
+                # localmente. Nao persistimos — e volatil por sessao.
+                # Apenas o host da sala pode emitir (o proprio front barra
+                # pra outros, mas conferimos aqui tambem por seguranca).
+                if peer_id and part.get("user_id") and part["user_id"] == m["criado_por"]:
+                    await manager.broadcast(m["id"], {
+                        "type":      "meeting_recording",
+                        "peer_id":   peer_id,
+                        "recording": bool(data.get("recording")),
+                        "by_name":   (data.get("by_name") or "")[:80],
+                    }, except_peer=peer_id)
             elif t == "ping":
                 await websocket.send_text(json.dumps({"type": "pong"}))
             # outros types sao ignorados silenciosamente
@@ -1081,7 +1112,9 @@ async def meeting_ws(websocket: WebSocket):
         import traceback
         print(f"[MEET-WS] ERRO peer={peer_id[:8]}: {e}\n{traceback.format_exc()}", flush=True)
     finally:
-        manager.disconnect(m["id"], peer_id)
+        # Passa a WS especifica pra evitar dropar peer que ja reconectou
+        # com uma NOVA WS (race: WS1 cai enquanto WS2 do reconnect ja assumiu).
+        manager.disconnect(m["id"], peer_id, only_if_ws=websocket)
         # Cleanup APENAS pra peer que ja estava 'dentro'. Pending ('aguardando')
         # nao deleta — permite ao guest reabrir aba sem perder o pedido + nao
         # remove do "pending" do host. Pra abandonar de fato, frontend chama
