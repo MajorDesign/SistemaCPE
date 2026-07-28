@@ -1218,8 +1218,17 @@
       const r = await api('GET', '/vendedores');
       _nrVendedores = r.vendedores || [];
       const sel = document.getElementById('nrVendedor');
-      sel.innerHTML = '<option value="">— Selecione um vendedor —</option>' +
-        _nrVendedores.map(v => `<option value="${v.id}">${esc(v.name)} (${v.slots_count||0} horários)</option>`).join('');
+      // Se só tem 1 vendedor (caso do vendedor USER que só se vê), pré-seleciona.
+      // Se tem vários, mostra placeholder pra escolher.
+      if (_nrVendedores.length === 1) {
+        const v = _nrVendedores[0];
+        sel.innerHTML = `<option value="${v.id}" selected>${esc(v.name)} (${v.slots_count||0} horários)</option>`;
+        // Dispara o refresh de slots imediato pra pré-carregar horários
+        setTimeout(() => nrAtualizarSlots(), 0);
+      } else {
+        sel.innerHTML = '<option value="">— Selecione um vendedor —</option>' +
+          _nrVendedores.map(v => `<option value="${v.id}">${esc(v.name)} (${v.slots_count||0} horários)</option>`).join('');
+      }
     } catch (e) {
       document.getElementById('nrVendedor').innerHTML = '<option value="">Erro: '+esc(e.message)+'</option>';
     }

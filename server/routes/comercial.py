@@ -194,28 +194,41 @@ class ClassificacaoIn(BaseModel):
 
 @router.get("/vendedores")
 def listar_vendedores(request: Request):
-    """Lista users ativos do grupo Comercial (ou ADMIN/TI/MANAGER que queiram
-    aparecer). Cada item traz: id, name, email, role, slots_count.
-    Tambem retorna `can_manage`: True se o user atual pode configurar horarios
-    dos vendedores listados (ADMIN/TI/MANAGER ou RESPONSAVEL_GRUPO do Comercial)."""
+    """Lista de vendedores. Regra de visibilidade:
+      - ADMIN/TI/MANAGER e RESPONSAVEL_GRUPO Comercial: veem TODOS.
+      - Vendedor USER comum: ve so a si mesmo (nao pode espiar agenda
+        dos colegas).
+    Retorna `can_manage` pra o frontend decidir mostrar botões de
+    edicao globais."""
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
         user = _require_comercial(request, cursor)
+        can_manage = _pode_gerenciar_vendedores(user, cursor)
         grupo_id = _grupo_comercial_id(cursor)
         if grupo_id is None:
-            return {"vendedores": [], "can_manage": False, "me_id": user["id"]}
-        cursor.execute("""
-            SELECT u.id, u.name, u.email, u.role,
-                   (SELECT COUNT(*) FROM comercial_vendedor_slots s
-                     WHERE s.vendedor_id = u.id AND s.ativo = 1) AS slots_count
-              FROM users u
-             WHERE u.group_id = %s AND u.is_active = 1
-             ORDER BY u.name
-        """, (grupo_id,))
+            return {"vendedores": [], "can_manage": can_manage, "me_id": user["id"]}
+        if can_manage:
+            cursor.execute("""
+                SELECT u.id, u.name, u.email, u.role,
+                       (SELECT COUNT(*) FROM comercial_vendedor_slots s
+                         WHERE s.vendedor_id = u.id AND s.ativo = 1) AS slots_count
+                  FROM users u
+                 WHERE u.group_id = %s AND u.is_active = 1
+                 ORDER BY u.name
+            """, (grupo_id,))
+        else:
+            # USER comum ve so a si mesmo
+            cursor.execute("""
+                SELECT u.id, u.name, u.email, u.role,
+                       (SELECT COUNT(*) FROM comercial_vendedor_slots s
+                         WHERE s.vendedor_id = u.id AND s.ativo = 1) AS slots_count
+                  FROM users u
+                 WHERE u.id = %s AND u.is_active = 1
+            """, (user["id"],))
         return {
             "vendedores": cursor.fetchall(),
-            "can_manage": _pode_gerenciar_vendedores(user, cursor),
+            "can_manage": can_manage,
             "me_id":      user["id"],
         }
     finally:
@@ -458,14 +471,26 @@ def listar_reunioes(
     data_fim:    Optional[date] = None,
     status_filtro: Optional[str] = Query(None, alias="status"),
 ):
-    """Lista reunioes com filtros opcionais."""
+    """Lista reunioes com filtros opcionais.
+
+    Visibilidade:
+      - ADMIN/TI/MANAGER e RESPONSAVEL_GRUPO Comercial: veem TODAS.
+      - Vendedor USER comum: ve so as reunioes onde ele eh o vendedor
+        que vai atender OU as que ele mesmo marcou. Nao consegue
+        espiar a agenda de outros vendedores nem via query param."""
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        _require_comercial(request, cursor)
+        user = _require_comercial(request, cursor)
+        can_manage = _pode_gerenciar_vendedores(user, cursor)
         where = ["1=1"]
         params: list = []
-        if vendedor_id:
+        if not can_manage:
+            # Cerca por identidade: proprio vendedor OU proprio agendador.
+            # Ignora vendedor_id do request pra evitar bypass.
+            where.append("(r.vendedor_id = %s OR r.agendado_por = %s)")
+            params.extend([user["id"], user["id"]])
+        elif vendedor_id:
             where.append("r.vendedor_id = %s"); params.append(vendedor_id)
         if data_inicio:
             where.append("r.data >= %s"); params.append(data_inicio)
@@ -501,13 +526,25 @@ def listar_reunioes(
 @router.post("/reunioes", status_code=201)
 def criar_reuniao(body: ReuniaoIn, request: Request):
     """Cria reuniao + gera meeting publico automaticamente.
-    Valida que o slot esta disponivel."""
+    Valida que o slot esta disponivel.
+
+    Autorizacao pra vendedor_id:
+      - ADMIN/TI/MANAGER e RESPONSAVEL_GRUPO Comercial: qualquer vendedor.
+      - Vendedor USER comum: so pode marcar reuniao com ele mesmo
+        como vendedor (nao pode marcar em nome de colega)."""
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     chat_conn = None
     chat_cur = None
     try:
         user = _require_comercial(request, cursor)
+
+        # Bloqueio: USER comum so marca pra si mesmo
+        if not _pode_gerenciar_vendedores(user, cursor) and body.vendedor_id != user["id"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Voce so pode marcar reunioes com voce mesmo como vendedor",
+            )
 
         # Confere cliente + vendedor existentes
         cursor.execute("""
