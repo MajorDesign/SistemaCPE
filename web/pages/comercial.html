@@ -808,22 +808,41 @@
               <i class="bi bi-plus-lg"></i> Novo cliente
             </button>
           </h2>
-          <div class="com-field" style="margin-bottom:16px">
-            <input type="text" class="com-input" id="clientesBusca"
-                   placeholder="Buscar por nome, empresa ou email..."
-                   oninput="filterClientes()">
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin-bottom:12px">
+            <div class="com-field">
+              <input type="text" class="com-input" id="clientesBusca"
+                     placeholder="🔎 Buscar em nome, empresa, email, telefone ou interesse..."
+                     oninput="_debouncedLoadClientes()">
+            </div>
+            <div class="com-field">
+              <select class="com-select" id="clientesFiltroClass" onchange="loadClientes()">
+                <option value="">Toda classificação</option>
+                <option value="quente">🔥 Quente</option>
+                <option value="morno">☕ Morno</option>
+                <option value="frio">❄️ Frio</option>
+              </select>
+            </div>
+            <div class="com-field">
+              <select class="com-select" id="clientesOrdem" onchange="loadClientes()">
+                <option value="recentes">Mais recentes</option>
+                <option value="nome">Nome (A-Z)</option>
+                <option value="reunioes">+ reuniões</option>
+              </select>
+            </div>
           </div>
+          <div id="clientesContador" style="font-size:12px;color:var(--com-muted);margin-bottom:8px"></div>
           <table class="com-table" id="tbClientes">
             <thead>
               <tr>
                 <th>Nome</th><th>Empresa</th><th>Email</th><th>Telefone</th><th>Interesse</th>
+                <th style="text-align:center">Reuniões</th><th style="text-align:center">Classif.</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
           <div id="clientesEmpty" class="com-empty" style="display:none">
             <i class="bi bi-person-x"></i>
-            <p>Nenhum cliente cadastrado.</p>
+            <p id="clientesEmptyMsg">Nenhum cliente cadastrado.</p>
           </div>
         </div>
       </section>
@@ -1073,18 +1092,53 @@
   // ==============================================
   // CLIENTES
   // ==============================================
-  let _clientesCache = [];
+  // Busca client-side foi trocada por server-side pra escalar quando
+  // a base crescer. O backend faz o filtro em LIKE em 5 colunas +
+  // filtro por classificacao + ordenacao, e devolve total pra o
+  // contador saber se tem mais alem do limit.
   async function loadClientes() {
+    const contadorEl = document.getElementById('clientesContador');
     try {
-      const r = await api('GET', '/clientes');
-      _clientesCache = r.clientes || [];
-      renderClientes(_clientesCache);
-    } catch (e) { toast('Erro ao carregar clientes: ' + e.message, 'error'); }
+      const params = new URLSearchParams();
+      const q = (document.getElementById('clientesBusca').value || '').trim();
+      const cl = document.getElementById('clientesFiltroClass').value;
+      const ord = document.getElementById('clientesOrdem').value || 'recentes';
+      if (q)  params.set('q', q);
+      if (cl) params.set('classificacao', cl);
+      params.set('sort', ord);
+      contadorEl.textContent = 'Carregando...';
+      const r = await api('GET', '/clientes?' + params.toString());
+      renderClientes(r.clientes || [], { total: r.total, exibidos: r.exibidos, limit: r.limit, filtroAtivo: !!(q || cl) });
+    } catch (e) {
+      contadorEl.textContent = '';
+      toast('Erro ao carregar clientes: ' + e.message, 'error');
+    }
   }
-  function renderClientes(list) {
+  function renderClientes(list, meta = {}) {
     const tbody = document.querySelector('#tbClientes tbody');
-    document.getElementById('clientesEmpty').style.display = list.length ? 'none' : 'block';
-    document.getElementById('tbClientes').style.display    = list.length ? '' : 'none';
+    const empty = document.getElementById('clientesEmpty');
+    const msg   = document.getElementById('clientesEmptyMsg');
+    const contadorEl = document.getElementById('clientesContador');
+    empty.style.display = list.length ? 'none' : 'block';
+    document.getElementById('tbClientes').style.display = list.length ? '' : 'none';
+    // Empty message adapta ao contexto (filtro vs base vazia)
+    msg.textContent = meta.filtroAtivo
+      ? 'Nenhum cliente bate com os filtros aplicados.'
+      : 'Nenhum cliente cadastrado.';
+    // Contador
+    if (typeof meta.total === 'number') {
+      const truncado = meta.total > meta.exibidos;
+      contadorEl.textContent = truncado
+        ? `Mostrando ${meta.exibidos} de ${meta.total} clientes — refine a busca pra ver os demais`
+        : `${meta.total} cliente${meta.total === 1 ? '' : 's'}`;
+    } else {
+      contadorEl.textContent = '';
+    }
+    // Badges de classificação
+    const classBadge = (c) => {
+      if (!c) return '—';
+      return `<span class="com-badge com-badge-${esc(c)}">${esc(c)}</span>`;
+    };
     tbody.innerHTML = list.map(c => `
       <tr style="cursor:pointer" onclick="abrirDetalhesCliente(${c.id})" title="Ver histórico">
         <td><strong>${esc(c.nome)}</strong></td>
@@ -1092,17 +1146,21 @@
         <td>${esc(c.email) || '—'}</td>
         <td>${esc(c.telefone) || '—'}</td>
         <td>${esc(c.produto_interesse) || '—'}</td>
+        <td style="text-align:center">${c.n_reunioes || 0}</td>
+        <td style="text-align:center">${classBadge(c.ultima_classificacao)}</td>
       </tr>
     `).join('');
   }
+  // Debounce de 300ms — evita disparar N requests enquanto o user digita
+  let _clientesBuscaTimer = null;
+  function _debouncedLoadClientes() {
+    clearTimeout(_clientesBuscaTimer);
+    _clientesBuscaTimer = setTimeout(loadClientes, 300);
+  }
+  // Kept as no-op pra retro-compat (era chamado por handlers antigos)
   function filterClientes() {
-    const q = (document.getElementById('clientesBusca').value || '').toLowerCase();
-    if (!q) { renderClientes(_clientesCache); return; }
-    renderClientes(_clientesCache.filter(c =>
-      (c.nome    || '').toLowerCase().includes(q) ||
-      (c.empresa || '').toLowerCase().includes(q) ||
-      (c.email   || '').toLowerCase().includes(q)
-    ));
+    _debouncedLoadClientes();
+    return;
   }
 
   // ==============================================

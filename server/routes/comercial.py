@@ -324,29 +324,80 @@ def salvar_slots(vendedor_id: int, body: SlotsIn, request: Request):
 # ============================================================
 
 @router.get("/clientes")
-def listar_clientes(request: Request, q: Optional[str] = Query(None, description="Busca em nome/empresa/email")):
-    """Lista clientes (com filtro opcional por texto)."""
+def listar_clientes(
+    request: Request,
+    q: Optional[str] = Query(None, description="Busca em nome/empresa/email/telefone/interesse"),
+    classificacao: Optional[str] = Query(None, description="Filtra pela classificacao da ULTIMA reuniao: quente/morno/frio"),
+    sort: str = Query("recentes", description="recentes | nome | reunioes"),
+    limit: int = Query(200, ge=1, le=500),
+):
+    """Lista clientes com busca ampliada + filtros.
+
+    - `q`: substring busca em nome/empresa/email/telefone/produto_interesse.
+    - `classificacao`: filtra por classificacao da ULTIMA reuniao (quente/morno/frio).
+    - `sort`: 'recentes' (created_at DESC, default), 'nome' (A-Z),
+              'reunioes' (mais reunioes primeiro).
+    - `limit`: teto de resultados (default 200, max 500). Frontend exibe
+              contador `total_filtrado` pra sinalizar quando ha mais.
+    """
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
         _require_comercial(request, cursor)
+
+        where = ["1=1"]
+        params: list = []
         if q:
             like = f"%{q}%"
-            cursor.execute("""
-                SELECT id, nome, empresa, email, telefone, produto_interesse, created_at
-                  FROM comercial_clientes
-                 WHERE nome LIKE %s OR empresa LIKE %s OR email LIKE %s
-                 ORDER BY created_at DESC
-                 LIMIT 100
-            """, (like, like, like))
-        else:
-            cursor.execute("""
-                SELECT id, nome, empresa, email, telefone, produto_interesse, created_at
-                  FROM comercial_clientes
-                 ORDER BY created_at DESC
-                 LIMIT 200
-            """)
-        return {"clientes": convert_datetime_list(cursor.fetchall())}
+            where.append("(c.nome LIKE %s OR c.empresa LIKE %s OR c.email LIKE %s "
+                         "OR c.telefone LIKE %s OR c.produto_interesse LIKE %s)")
+            params.extend([like, like, like, like, like])
+
+        # Subquery: ultima classificacao do cliente
+        ultima_class_expr = """(
+            SELECT r.classificacao
+              FROM comercial_reunioes r
+             WHERE r.cliente_id = c.id AND r.classificacao IS NOT NULL
+             ORDER BY r.data DESC, r.hora DESC LIMIT 1
+        )"""
+
+        if classificacao in ("quente", "morno", "frio"):
+            where.append(f"{ultima_class_expr} = %s")
+            params.append(classificacao)
+
+        order = {
+            "recentes":  "c.created_at DESC",
+            "nome":      "c.nome ASC",
+            "reunioes":  "n_reunioes DESC, c.created_at DESC",
+        }.get(sort, "c.created_at DESC")
+
+        sql = f"""
+            SELECT c.id, c.nome, c.empresa, c.email, c.telefone,
+                   c.produto_interesse, c.created_at,
+                   (SELECT COUNT(*) FROM comercial_reunioes r
+                     WHERE r.cliente_id = c.id) AS n_reunioes,
+                   {ultima_class_expr} AS ultima_classificacao
+              FROM comercial_clientes c
+             WHERE {' AND '.join(where)}
+             ORDER BY {order}
+             LIMIT %s
+        """
+        cursor.execute(sql, tuple(params) + (limit,))
+        rows = cursor.fetchall()
+
+        # Total sem limit (pra o frontend saber "mostrando 200 de 350")
+        cursor.execute(f"""
+            SELECT COUNT(*) AS total FROM comercial_clientes c
+             WHERE {' AND '.join(where)}
+        """, tuple(params))
+        total = cursor.fetchone()["total"]
+
+        return {
+            "clientes": convert_datetime_list(rows),
+            "total":    total,
+            "exibidos": len(rows),
+            "limit":    limit,
+        }
     finally:
         cursor.close(); conn.close()
 
