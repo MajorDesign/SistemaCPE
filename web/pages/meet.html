@@ -166,6 +166,66 @@
       padding: 8px 14px; border-radius: 20px; font-size: 0.86rem; font-weight: 600;
     }
 
+    /* Modal lista de materiais de apoio */
+    .mat-modal {
+      position: fixed; inset: 0; z-index: 1090;
+      background: rgba(0,0,0,0.7);
+      display: none; align-items: center; justify-content: center;
+    }
+    .mat-modal.open { display: flex; }
+    .mat-box {
+      background: var(--bg-2); border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px;
+      width: 720px; max-width: 92vw; max-height: 82vh; overflow: auto;
+    }
+    .mat-box h2 {
+      margin: 0 0 6px; font-size: 1.05rem;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .mat-box p.hint { color: var(--muted); font-size: 12px; margin: 0 0 14px; }
+    .mat-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .mat-card {
+      background: #262626; border: 1px solid var(--border); border-radius: 8px;
+      padding: 12px; cursor: pointer; transition: border-color .15s;
+    }
+    .mat-card:hover { border-color: var(--accent); }
+    .mat-card .mat-icon { font-size: 1.6rem; color: var(--accent); }
+    .mat-card .mat-title { font-size: 0.86rem; font-weight: 600; margin-top: 6px; line-height: 1.3; }
+    .mat-card .mat-meta  { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+    .mat-empty { color: var(--muted); text-align: center; padding: 30px 0; font-size: 13px; }
+    .mat-close {
+      float: right; background: transparent; border: none; color: var(--muted);
+      font-size: 1.4rem; cursor: pointer; line-height: 1;
+    }
+    .mat-close:hover { color: #fff; }
+
+    /* Overlay do material aberto (fullscreen dentro da sala) */
+    .mat-viewer {
+      position: fixed; inset: 0; z-index: 1200;
+      background: #000; display: none; flex-direction: column;
+    }
+    .mat-viewer.open { display: flex; }
+    .mat-viewer-header {
+      background: #1A1A1A; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; color: #fff; font-weight: 600; font-size: 14px;
+    }
+    .mat-viewer-header .mv-hint {
+      font-weight: 400; font-size: 12px; color: var(--muted);
+      background: rgba(255,255,255,0.06); padding: 4px 10px; border-radius: 20px;
+    }
+    .mat-viewer-header button {
+      margin-left: auto; background: var(--red); color: #fff;
+      border: none; border-radius: 6px; padding: 6px 14px; font-weight: 600; cursor: pointer;
+    }
+    .mat-viewer-body { flex: 1; display: flex; align-items: stretch; justify-content: center; overflow: hidden; }
+    .mat-viewer-body iframe,
+    .mat-viewer-body img,
+    .mat-viewer-body video { width: 100%; height: 100%; object-fit: contain; background: #000; border: 0; }
+
     /* Modal configurações na sala */
     .settings-modal {
       position: fixed; inset: 0; z-index: 1050;
@@ -265,6 +325,32 @@
     .meet-controls button:hover { background: #3A3A3A; }
     .meet-controls button.off { background: var(--red); color: #fff; }
     .meet-controls button.active { background: var(--accent); color: #1A1A1A; }
+    .meet-controls .rec-btn.on {
+      background: var(--red); color: #fff;
+      animation: rec-pulse 1.2s ease-in-out infinite;
+    }
+    .meet-controls .rec-btn .rec-timer {
+      font-size: 0.72rem; font-variant-numeric: tabular-nums;
+      margin-left: 4px; font-weight: 600;
+    }
+    @keyframes rec-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+      50%     { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+    }
+    .rec-banner {
+      position: fixed; top: 0; left: 50%; transform: translateX(-50%);
+      background: var(--red); color: #fff;
+      padding: 6px 16px; border-radius: 0 0 8px 8px;
+      font-size: 13px; font-weight: 600;
+      z-index: 999; display: none; align-items: center; gap: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.4);
+    }
+    .rec-banner.show { display: inline-flex; }
+    .rec-banner .rec-dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #fff; animation: rec-blink 1s infinite;
+    }
+    @keyframes rec-blink { 50% { opacity: 0.3; } }
     .meet-controls .leave {
       width: auto; padding: 0 22px; background: var(--red); color: #fff;
       font-weight: 700; gap: 8px;
@@ -537,6 +623,10 @@
 </div>
 
 <!-- Layout principal -->
+<div id="recBanner" class="rec-banner">
+  <span class="rec-dot"></span>
+  <span id="recBannerText">Gravando…</span>
+</div>
 <div class="meet-layout" id="layout" style="display:none">
   <header class="meet-header">
     <i class="bi bi-camera-video-fill" style="color:var(--accent);font-size:1.3rem"></i>
@@ -559,6 +649,12 @@
     <button id="btnMic" onclick="toggleMic()" title="Microfone"><i class="bi bi-mic-fill"></i></button>
     <button id="btnCam" onclick="toggleCam()" title="Câmera"><i class="bi bi-camera-video-off-fill"></i></button>
     <button id="btnShare" onclick="toggleShare()" title="Compartilhar tela"><i class="bi bi-display"></i></button>
+    <button id="btnMaterial" onclick="abrirMaterialModal()" title="Material de apoio" style="display:none">
+      <i class="bi bi-file-earmark-play"></i>
+    </button>
+    <button id="btnRec" class="rec-btn" onclick="toggleRec()" title="Gravar reunião (só host)" style="display:none">
+      <i class="bi bi-record-circle"></i><span class="rec-timer" id="recTimer"></span>
+    </button>
     <button id="btnSettings" onclick="abrirSettings()" title="Configurações"><i class="bi bi-gear-fill"></i></button>
     <button class="leave" onclick="sairSala()" title="Sair">
       <i class="bi bi-telephone-x-fill"></i> Sair
@@ -572,6 +668,28 @@
     <i class="bi bi-x-lg"></i>
   </button>
   <div class="screen-modal-title" id="screenModalTitle">—</div>
+</div>
+
+<!-- Modal: lista de materiais de apoio -->
+<div class="mat-modal" id="matModal" onclick="if(event.target===this) fecharMaterialModal()">
+  <div class="mat-box">
+    <button class="mat-close" onclick="fecharMaterialModal()" title="Fechar">&times;</button>
+    <h2><i class="bi bi-file-earmark-play" style="color:var(--accent)"></i> Material de apoio</h2>
+    <p class="hint">Clique num material pra abrir sobre a sala. Depois use "Compartilhar tela" pra os outros verem.</p>
+    <div id="matGrid" class="mat-grid"></div>
+    <div id="matEmpty" class="mat-empty" style="display:none">Nenhum material cadastrado ainda.</div>
+  </div>
+</div>
+
+<!-- Overlay: material aberto (fullscreen sobre a sala) -->
+<div class="mat-viewer" id="matViewer">
+  <div class="mat-viewer-header">
+    <i class="bi bi-file-earmark-play" style="color:var(--accent)"></i>
+    <span id="matViewerTitle">—</span>
+    <span class="mv-hint"><i class="bi bi-display"></i> Clique "Compartilhar tela" na toolbar pra apresentar</span>
+    <button onclick="fecharMaterialViewer()"><i class="bi bi-x-lg"></i> Fechar material</button>
+  </div>
+  <div class="mat-viewer-body" id="matViewerBody"></div>
 </div>
 
 <!-- Modal: Configurações na sala -->
@@ -596,7 +714,7 @@
   </div>
 </div>
 
-<script src="/SistemaCPE/web/assests/js/config.js"></script>
+<script src="/SistemaCPE/web/assests/js/config.js?v=2026-07-28"></script>
 <script>
 /* =====================================================================
    Meet — sala temporaria com link externo
@@ -998,7 +1116,13 @@ async function _entrarNaSala() {
     document.getElementById('pendingPanel').style.display = '';
     _renderPending();
     _iniciarPollingHost();
+    // Só host vê o botão Gravar
+    document.getElementById('btnRec').style.display = '';
   }
+
+  // Botão "Material" aparece pra qualquer user interno que tenha acesso
+  // ao módulo Comercial (o probe faz a checagem via backend)
+  _probeMaterialAcesso().catch(() => {});
 
   const prefs = window._gatePrefs || { micOn: true, camOn: false };
   _state.localStream = new MediaStream();
@@ -1352,6 +1476,21 @@ async function _onWsEvent(data) {
         _mostrarLegenda(data.from_name || 'Participante', data.text || '', data.source_lang || 'pt-BR');
       }
       break;
+    case 'meeting_recording':
+      // Host começou/parou de gravar — só banner visual, ninguém mais grava aqui
+      _mostrarBannerGravacao(!!data.recording, data.by_name || 'O host');
+      break;
+  }
+}
+
+function _mostrarBannerGravacao(on, byName) {
+  const b = document.getElementById('recBanner');
+  if (!b) return;
+  if (on) {
+    document.getElementById('recBannerText').textContent = `${byName} está gravando esta reunião`;
+    b.classList.add('show');
+  } else {
+    b.classList.remove('show');
   }
 }
 
@@ -1957,7 +2096,13 @@ function _tocarBip() {
 }
 
 function copiarLink() {
-  const url = `${location.origin}/SistemaCPE/web/pages/meet.html?code=${_code}`;
+  // Em localhost c/ staging, injeta &env pra convidado abrir na API certa
+  // (aba anonima nao herda localStorage.cpe_env — cai em dev por default).
+  const host = location.hostname;
+  const isLocal = host === 'localhost' || host === '127.0.0.1';
+  const env = (typeof API_ENV !== 'undefined') ? API_ENV : null;
+  let url = `${location.origin}/SistemaCPE/web/pages/meet.html?code=${_code}`;
+  if (isLocal && env && env !== 'dev') url += `&env=${encodeURIComponent(env)}`;
   navigator.clipboard.writeText(url).then(() => {
     const btn = document.querySelector('.meet-copy-btn');
     const orig = btn.innerHTML;
@@ -1971,6 +2116,325 @@ window.addEventListener('beforeunload', () => {
   if (_state.peerId && _state.code) {
     navigator.sendBeacon?.(`${API_BASE}/api/meetings/${_code}/leave/${_state.peerId}`);
   }
+});
+
+/* ================================================================
+   GRAVAÇÃO DA REUNIÃO (só host) — via getDisplayMedia
+
+   Ao clicar Gravar o browser pergunta ao host qual aba/janela/tela
+   capturar. Ele escolhe a aba do próprio meet (recomendado) — assim
+   fica gravado EXATAMENTE o que ele vê: vídeos, screen share dos peers,
+   overlay de material apoio, tudo. Ao parar, baixa .webm.
+
+   Vantagens vs composição via canvas:
+     • Sem tela preta (o problema anterior — canvas dependia dos peers
+       terem cam ligada e do timing certo do RAF).
+     • Captura tudo que está visível na aba, sem código dedicado.
+     • Áudio: mixa systemAudio (áudio dos peers vindo da aba) + mic
+       próprio (voz do host).
+     • Se o host chavear pra outra aba, o navegador continua gravando
+       o conteúdo da aba original.
+   ================================================================ */
+const _rec = {
+  active: false,
+  recorder: null,
+  chunks: [],
+  startedAt: null,
+  displayStream: null,   // stream do getDisplayMedia (video + tab audio)
+  micStream: null,       // stream do mic próprio (opcional, se conseguir)
+  audioCtx: null,
+  audioDest: null,
+  timerId: null,
+};
+
+function _recPickMime() {
+  const cands = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
+  for (const c of cands) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c;
+  }
+  return '';
+}
+
+function _fmtDuracao(ms) {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const ss = String(s % 60).padStart(2, '0');
+  return `${m}:${ss}`;
+}
+
+async function toggleRec() {
+  if (!_state.souHost) { alert('Só o host pode gravar.'); return; }
+  if (_rec.active) return _recParar();
+  return _recIniciar();
+}
+
+async function _recIniciar() {
+  const mime = _recPickMime();
+  if (!mime) { alert('Seu navegador não suporta gravação (MediaRecorder).'); return; }
+
+  // 1) Pede pro host escolher o que capturar (aba do meet, janela ou tela)
+  let displayStream;
+  try {
+    displayStream = await navigator.mediaDevices.getDisplayMedia({
+      // preferBrowser sugere a lista começar em "Aba" — Chromium respeita
+      video: { displaySurface: 'browser', frameRate: 30 },
+      audio: true,           // pega áudio da aba/sistema se o user marcar
+      systemAudio: 'include',
+      selfBrowserSurface: 'include',
+      surfaceSwitching: 'include',
+    });
+  } catch (e) {
+    // usuário cancelou o picker OU browser não suporta
+    console.warn('[REC] getDisplayMedia cancelado/falhou:', e);
+    return;
+  }
+  _rec.displayStream = displayStream;
+
+  // Se o próprio user encerrar o compartilhamento pelo controle do browser,
+  // paramos a gravação limpo.
+  const vTrack = displayStream.getVideoTracks()[0];
+  if (vTrack) vTrack.onended = () => { if (_rec.active) _recParar(); };
+
+  // 2) Pega o mic próprio pra sobrepor a voz do host (independente do
+  // systemAudio da aba). Se der ruim, seguimos só com o áudio da aba.
+  let micStream = null;
+  try {
+    const savedMic = localStorage.getItem('cpe_chat_micId') || '';
+    const audioConstr = savedMic ? { deviceId: { exact: savedMic } } : true;
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstr, video: false });
+  } catch (e) {
+    console.warn('[REC] getUserMedia(mic) falhou:', e);
+  }
+  _rec.micStream = micStream;
+
+  // 3) Mixa os áudios (aba + mic) num único destino
+  const displayHasAudio = displayStream.getAudioTracks().length > 0;
+  let audioTracks = [];
+  if (displayHasAudio || micStream) {
+    _rec.audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+    _rec.audioDest = _rec.audioCtx.createMediaStreamDestination();
+    if (displayHasAudio) {
+      try {
+        _rec.audioCtx.createMediaStreamSource(
+          new MediaStream(displayStream.getAudioTracks())
+        ).connect(_rec.audioDest);
+      } catch (e) { console.warn('[REC] mix aba fail', e); }
+    }
+    if (micStream) {
+      try {
+        _rec.audioCtx.createMediaStreamSource(micStream).connect(_rec.audioDest);
+      } catch (e) { console.warn('[REC] mix mic fail', e); }
+    }
+    audioTracks = _rec.audioDest.stream.getAudioTracks();
+  }
+
+  // 4) Monta stream final (vídeo da aba + áudio mixado)
+  const combined = new MediaStream([
+    ...displayStream.getVideoTracks(),
+    ...audioTracks,
+  ]);
+
+  try {
+    _rec.recorder = new MediaRecorder(combined, {
+      mimeType: mime,
+      videoBitsPerSecond: 2_500_000,
+      audioBitsPerSecond: 128_000,
+    });
+  } catch (e) {
+    alert('Falha ao iniciar gravação: ' + e.message);
+    _recCleanupStreams();
+    return;
+  }
+
+  _rec.chunks = [];
+  _rec.recorder.ondataavailable = (ev) => {
+    if (ev.data && ev.data.size > 0) _rec.chunks.push(ev.data);
+  };
+  _rec.recorder.onstop = () => {
+    const blob = new Blob(_rec.chunks, { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const nome = (_state.meetingNome || 'reuniao').replace(/[\/\\?%*:|"<>]/g, '_').slice(0, 60);
+    const stamp = new Date().toISOString().replace(/[:T]/g, '-').slice(0, 16);
+    a.href = url;
+    a.download = `reuniao_${nome}_${stamp}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    _recCleanupStreams();
+    _rec.recorder = null; _rec.chunks = [];
+  };
+
+  _rec.active = true;
+  _rec.startedAt = Date.now();
+  _rec.recorder.start(1000); // chunk a cada 1s pra não perder tudo se der crash
+
+  // UI
+  const btn = document.getElementById('btnRec');
+  btn.classList.add('on');
+  btn.title = 'Parar gravação';
+  const timerEl = document.getElementById('recTimer');
+  _rec.timerId = setInterval(() => {
+    timerEl.textContent = _fmtDuracao(Date.now() - _rec.startedAt);
+  }, 500);
+
+  _mostrarBannerGravacao(true, 'Você');
+  _wsSend({ type: 'meeting_recording', recording: true, by_name: _state.displayName || 'O host' });
+  console.log('[REC] iniciada, mime=', mime, 'audio=', audioTracks.length);
+}
+
+function _recCleanupStreams() {
+  try { _rec.displayStream?.getTracks().forEach(t => t.stop()); } catch {}
+  try { _rec.micStream?.getTracks().forEach(t => t.stop()); } catch {}
+  try { _rec.audioCtx?.close(); } catch {}
+  _rec.displayStream = null;
+  _rec.micStream = null;
+  _rec.audioCtx = null;
+  _rec.audioDest = null;
+}
+
+function _recParar() {
+  if (!_rec.active) return;
+  _rec.active = false;
+  try { _rec.recorder?.stop(); } catch {}
+  clearInterval(_rec.timerId); _rec.timerId = null;
+
+  const btn = document.getElementById('btnRec');
+  btn.classList.remove('on');
+  btn.title = 'Gravar reunião (só host)';
+  document.getElementById('recTimer').textContent = '';
+  _mostrarBannerGravacao(false);
+
+  _wsSend({ type: 'meeting_recording', recording: false, by_name: _state.displayName || 'O host' });
+  console.log('[REC] parada — download disparado');
+}
+
+// Se host sair sem parar, ainda dispara download
+window.addEventListener('beforeunload', () => {
+  if (_rec.active) { try { _recParar(); } catch {} }
+});
+
+/* ================================================================
+   MATERIAL DE APOIO NA SALA (só quem tem acesso ao módulo Comercial)
+
+   Fluxo:
+     1. Ao entrar na sala, chamamos /api/comercial/material-apoio.
+        Se HTTP 200: mostramos o botão. Se 403 (guest ou fora do grupo):
+        escondemos.
+     2. Clicando abre modal com grid de materiais.
+     3. Clicando num material abre overlay fullscreen sobre a sala.
+        - PDF/imagem: <iframe> ou <img>
+        - Vídeo/áudio: <video>/<audio>
+        - Outros: link "abrir em nova aba"
+     4. Vendedor então clica em "Compartilhar tela" (btnShare) pra
+        transmitir esse overlay pros outros. O overlay tem prompt
+        lembrando disso no header.
+   ================================================================ */
+let _materiais = [];
+
+async function _probeMaterialAcesso() {
+  // Sem session token (guest externo) nem tenta
+  const t = TOKEN();
+  if (!t) return;
+  try {
+    const r = await fetch(`${API_BASE}/api/comercial/material-apoio`, {
+      headers: { 'X-Auth-Token': t },
+      credentials: 'include',
+    });
+    if (!r.ok) return;
+    const data = await r.json();
+    _materiais = data.materiais || [];
+    document.getElementById('btnMaterial').style.display = '';
+    console.log('[MEET/MAT] acesso OK, materiais:', _materiais.length);
+  } catch (e) {
+    console.log('[MEET/MAT] sem acesso:', e.message);
+  }
+}
+// Helper usado por _probeMaterialAcesso pra ler o token do jeito
+// que o resto do meet.html faz (cookie/localStorage/session).
+function TOKEN() {
+  return localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token') || '';
+}
+
+function abrirMaterialModal() {
+  const grid = document.getElementById('matGrid');
+  document.getElementById('matEmpty').style.display = _materiais.length ? 'none' : '';
+  grid.innerHTML = _materiais.map(m => `
+    <div class="mat-card" onclick="abrirMaterialViewer(${m.id})">
+      <div class="mat-icon"><i class="bi ${_matIcon(m.arquivo_nome_original || m.arquivo_path || '')}"></i></div>
+      <div class="mat-title">${_esc(m.titulo)}</div>
+      <div class="mat-meta">${_esc(m.categoria || '—')}${m.tamanho_bytes ? ' · ' + _fmtBytes(m.tamanho_bytes) : ''}</div>
+    </div>
+  `).join('');
+  document.getElementById('matModal').classList.add('open');
+}
+function fecharMaterialModal() {
+  document.getElementById('matModal').classList.remove('open');
+}
+
+function abrirMaterialViewer(id) {
+  const m = _materiais.find(x => x.id === id);
+  if (!m) return;
+  fecharMaterialModal();
+  document.getElementById('matViewerTitle').textContent = m.titulo;
+  const body = document.getElementById('matViewerBody');
+  const src = m.arquivo_path; // relativo, ex: /SistemaCPE/web/uploads/comercial/xxx.pdf
+  const ext = (m.arquivo_nome_original || m.arquivo_path || '').split('.').pop().toLowerCase();
+  let html;
+  if (['png','jpg','jpeg','webp','gif'].includes(ext)) {
+    html = `<img src="${_esc(src)}" alt="${_esc(m.titulo)}">`;
+  } else if (['mp4','webm','mov'].includes(ext)) {
+    html = `<video src="${_esc(src)}" controls autoplay playsinline></video>`;
+  } else if (ext === 'pdf' || ['ppt','pptx','doc','docx','xls','xlsx','txt','csv'].includes(ext)) {
+    // PDF nativo abre no iframe. Office docs abrem se o browser tiver plugin;
+    // caso contrário mostramos link abrir em nova aba abaixo.
+    html = `<iframe src="${_esc(src)}"></iframe>`;
+  } else {
+    html = `<div style="color:#fff;padding:24px;text-align:center">
+              Formato não visualizável no navegador.<br>
+              <a href="${_esc(src)}" target="_blank" style="color:var(--accent)">Abrir em nova aba</a>
+            </div>`;
+  }
+  body.innerHTML = html;
+  document.getElementById('matViewer').classList.add('open');
+}
+function fecharMaterialViewer() {
+  document.getElementById('matViewer').classList.remove('open');
+  document.getElementById('matViewerBody').innerHTML = '';
+}
+
+function _matIcon(name) {
+  const e = String(name).split('.').pop().toLowerCase();
+  if (['pdf'].includes(e)) return 'bi-file-earmark-pdf';
+  if (['ppt','pptx'].includes(e)) return 'bi-file-earmark-slides';
+  if (['doc','docx'].includes(e)) return 'bi-file-earmark-word';
+  if (['xls','xlsx','csv'].includes(e)) return 'bi-file-earmark-excel';
+  if (['png','jpg','jpeg','webp','gif'].includes(e)) return 'bi-file-earmark-image';
+  if (['mp4','webm','mov'].includes(e)) return 'bi-file-earmark-play';
+  return 'bi-file-earmark';
+}
+function _fmtBytes(n) {
+  if (!n) return '';
+  const k = 1024, u = ['B','KB','MB','GB'];
+  const i = Math.min(u.length - 1, Math.floor(Math.log(n) / Math.log(k)));
+  return (n / Math.pow(k, i)).toFixed(i ? 1 : 0) + ' ' + u[i];
+}
+function _esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ESC fecha modais/overlay de material
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const v = document.getElementById('matViewer');
+  const m = document.getElementById('matModal');
+  if (v?.classList.contains('open')) return fecharMaterialViewer();
+  if (m?.classList.contains('open')) return fecharMaterialModal();
 });
 </script>
 

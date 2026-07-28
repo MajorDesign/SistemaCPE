@@ -70,6 +70,8 @@ echo  ==========================================================
 
 call :CHECK_STATUS_DEV
 call :CHECK_STATUS_STAGING
+call :CHECK_STATUS_CADDY
+call :CHECK_STATUS_CLOUDFLARED
 
 if "!DEV_STATUS!"=="ON" (
     echo   API Dev       [ONLINE]   porta 8000  ^(PID !DEV_PID!^)
@@ -81,6 +83,20 @@ if "!STAGING_STATUS!"=="ON" (
 ) else (
     echo   API Staging   [OFFLINE]            porta 8001
 )
+if "!CADDY_STATUS!"=="ON" (
+    echo   Caddy         [RUNNING]            porta 443 ^(reverse proxy^)
+) else if "!CADDY_STATUS!"=="MISSING" (
+    echo   Caddy         [nao instalado nesta maquina]
+) else (
+    echo   Caddy         [STOPPED]            porta 443 ^(reverse proxy^)
+)
+if "!CF_STATUS!"=="ON" (
+    echo   Cloudflared   [RUNNING]            tunnel publico
+) else if "!CF_STATUS!"=="MISSING" (
+    echo   Cloudflared   [nao instalado nesta maquina]
+) else (
+    echo   Cloudflared   [STOPPED]            tunnel publico
+)
 echo  ----------------------------------------------------------
 echo.
 echo   --- DEV (porta 8000) ---             --- STAGING (porta 8001) ---
@@ -91,6 +107,10 @@ echo.
 echo   [4]  Deploy Dev  ^(git pull + migrations dev^)
 echo   [5]  Deploy + Reiniciar Dev          [9]   Sincronizar prod -^> staging
 echo                                        [10]  Aplicar migrations no Staging
+echo.
+echo   --- INFRA de PRODUCAO (Caddy + Cloudflared) ---
+echo   [11] Verificar/Iniciar/Reiniciar Caddy
+echo   [12] Verificar/Iniciar/Reiniciar Cloudflared
 echo.
 echo   [0]  Sair
 echo.
@@ -106,6 +126,8 @@ if "%OPC%"=="7"  goto STOP_STAGING
 if "%OPC%"=="8"  goto RESTART_STAGING
 if "%OPC%"=="9"  goto SYNC_STAGING
 if "%OPC%"=="10" goto MIGRATE_STAGING
+if "%OPC%"=="11" goto MANAGE_CADDY
+if "%OPC%"=="12" goto MANAGE_CLOUDFLARED
 if "%OPC%"=="0"  goto FIM
 
 echo   Opcao invalida.
@@ -353,6 +375,120 @@ pause >nul
 goto MENU
 
 :: ============================================================
+:: ============================================================
+::            INFRA DE PRODUCAO (Caddy + Cloudflared)
+:: ============================================================
+:: ============================================================
+::
+:: Estes 2 servicos so existem no servidor CPEDC22. No PC de dev
+:: os checks vao retornar MISSING e as opcoes vao avisar.
+:: net start/stop requer Administrador — o codigo checa e avisa.
+
+:MANAGE_CADDY
+echo.
+call :CHECK_STATUS_CADDY
+if "!CADDY_STATUS!"=="MISSING" (
+    echo   Servico "Caddy" nao existe nesta maquina.
+    echo   Esta acao so vale no servidor de producao CPEDC22.
+    pause >nul
+    goto MENU
+)
+if "!CADDY_STATUS!"=="ON" (
+    echo   Caddy [RUNNING] — testando resposta local em https://127.0.0.1/ ...
+    set "CADDY_HTTP=err"
+    for /f "delims=" %%H in ('curl.exe -k -sS -o NUL -w "%%{http_code}" --max-time 5 https://127.0.0.1/ 2^>nul') do set "CADDY_HTTP=%%H"
+    if "!CADDY_HTTP!"=="err" (
+        echo   [ALERTA] Caddy respondeu com FALHA de conexao — provavelmente TRAVADO.
+        echo            ^(bug conhecido: porta escuta mas nao responde^)
+    ) else (
+        echo   [OK] Caddy respondeu HTTP !CADDY_HTTP! em 127.0.0.1
+    )
+    echo.
+    set "OPC="
+    set /p "OPC=  [R] Reiniciar Caddy  ^| [Enter] voltar: "
+    if /i "!OPC!"=="R" (
+        call :REQUIRE_ADMIN || goto MENU
+        echo   Parando Caddy...
+        net stop Caddy
+        timeout /t 2 /nobreak >nul
+        echo   Iniciando Caddy...
+        net start Caddy
+        timeout /t 3 /nobreak >nul
+        call :CHECK_STATUS_CADDY
+        echo   Status pos-restart: !CADDY_STATUS!
+    )
+) else (
+    echo   Caddy [STOPPED]
+    echo.
+    set "OPC="
+    set /p "OPC=  [S] Iniciar Caddy    ^| [Enter] voltar: "
+    if /i "!OPC!"=="S" (
+        call :REQUIRE_ADMIN || goto MENU
+        echo   Iniciando Caddy...
+        net start Caddy
+        timeout /t 3 /nobreak >nul
+        call :CHECK_STATUS_CADDY
+        echo   Status pos-start: !CADDY_STATUS!
+    )
+)
+pause >nul
+goto MENU
+
+:MANAGE_CLOUDFLARED
+echo.
+call :CHECK_STATUS_CLOUDFLARED
+if "!CF_STATUS!"=="MISSING" (
+    echo   Servico "Cloudflared" nao existe nesta maquina.
+    echo   Esta acao so vale no servidor de producao CPEDC22.
+    pause >nul
+    goto MENU
+)
+if "!CF_STATUS!"=="ON" (
+    echo   Cloudflared [RUNNING] — testando dominio publico ...
+    set "CF_HTTP=err"
+    for /f "delims=" %%H in ('curl.exe -sS -o NUL -w "%%{http_code}" --max-time 10 https://cpecontrol.cpetecnologia.com.br/ 2^>nul') do set "CF_HTTP=%%H"
+    if "!CF_HTTP!"=="err" (
+        echo   [ALERTA] dominio publico nao respondeu ^(pode ser Caddy tambem^).
+    ) else if "!CF_HTTP!"=="530" (
+        echo   [ALERTA] Cloudflare retornou 530 — tunnel morto ou origin caido.
+    ) else (
+        echo   [OK] cpecontrol.cpetecnologia.com.br respondeu HTTP !CF_HTTP!
+    )
+    echo.
+    set "OPC="
+    set /p "OPC=  [R] Reiniciar Cloudflared  ^| [Enter] voltar: "
+    if /i "!OPC!"=="R" (
+        call :REQUIRE_ADMIN || goto MENU
+        echo   Parando Cloudflared...
+        net stop Cloudflared
+        timeout /t 2 /nobreak >nul
+        echo   Iniciando Cloudflared...
+        net start Cloudflared
+        echo   Aguardando tunnel reconectar ^(15s^)...
+        timeout /t 15 /nobreak >nul
+        call :CHECK_STATUS_CLOUDFLARED
+        echo   Status pos-restart: !CF_STATUS!
+    )
+) else (
+    echo   Cloudflared [STOPPED]
+    echo   ^(sistema fica INACESSIVEL externamente ate iniciar^)
+    echo.
+    set "OPC="
+    set /p "OPC=  [S] Iniciar Cloudflared    ^| [Enter] voltar: "
+    if /i "!OPC!"=="S" (
+        call :REQUIRE_ADMIN || goto MENU
+        echo   Iniciando Cloudflared...
+        net start Cloudflared
+        echo   Aguardando tunnel reconectar ^(15s^)...
+        timeout /t 15 /nobreak >nul
+        call :CHECK_STATUS_CLOUDFLARED
+        echo   Status pos-start: !CF_STATUS!
+    )
+)
+pause >nul
+goto MENU
+
+:: ============================================================
 :FIM
 endlocal
 exit /b 0
@@ -376,5 +512,35 @@ set "STAGING_PID="
 for /f "tokens=5" %%P in ('netstat -ano 2^>nul ^| findstr ":8001 " ^| findstr "LISTENING"') do (
     set "STAGING_PID=%%P"
     set "STAGING_STATUS=ON"
+)
+exit /b 0
+
+:: Servico Caddy: retorna CADDY_STATUS = ON | OFF | MISSING
+:: sc query SEMPRE retorna errorlevel=0 (mesmo se servico nao existe),
+:: entao a deteccao e via output — procura RUNNING primeiro, senao
+:: STOPPED (ou START_PENDING). Se nenhum bate, o servico nao existe.
+:CHECK_STATUS_CADDY
+set "CADDY_STATUS=MISSING"
+sc query Caddy 2>&1 | findstr /C:"RUNNING" >nul && set "CADDY_STATUS=ON"
+if "!CADDY_STATUS!"=="MISSING" sc query Caddy 2>&1 | findstr /R /C:"STOPPED" /C:"START_PENDING" /C:"PAUSED" >nul && set "CADDY_STATUS=OFF"
+exit /b 0
+
+:: Servico Cloudflared: retorna CF_STATUS = ON | OFF | MISSING
+:CHECK_STATUS_CLOUDFLARED
+set "CF_STATUS=MISSING"
+sc query Cloudflared 2>&1 | findstr /C:"RUNNING" >nul && set "CF_STATUS=ON"
+if "!CF_STATUS!"=="MISSING" sc query Cloudflared 2>&1 | findstr /R /C:"STOPPED" /C:"START_PENDING" /C:"PAUSED" >nul && set "CF_STATUS=OFF"
+exit /b 0
+
+:: Verifica se o bat esta rodando com privilegio de Administrador.
+:: Retorna 0 se ADMIN, 1 se nao (com mensagem). Chamador usa || pra abortar.
+:REQUIRE_ADMIN
+net session >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo   [ERRO] Esta acao precisa de privilegios de Administrador.
+    echo          Feche este painel e reabra com "Executar como administrador".
+    echo.
+    exit /b 1
 )
 exit /b 0
