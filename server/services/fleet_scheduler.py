@@ -12,7 +12,7 @@ Jobs:
   * job_escalada (a cada 1h):
       - Atrasado >= 6h -> notifica RESPONSAVEL_GRUPO(Frotas)
   * job_cleanup (a cada 30 min):
-      - Auto-cancela reservas aprovadas sem checklist apos 40 min
+      - Auto-cancela reservas aprovadas sem checklist apos 4 horas
         (o que hoje so roda on-demand quando alguem chama /notifications)
 
 Idempotencia via campos de tracking em fleet_checklists:
@@ -353,12 +353,12 @@ def job_escalada():
 
 
 # =====================================================================
-# JOB 3: cleanup — auto-cancela reservas fantasmas (>=40 min sem checklist)
+# JOB 3: cleanup — auto-cancela reservas fantasmas (>=4h sem checklist)
 # =====================================================================
 
 def job_cleanup_fantasmas():
     """Auto-cancela reservas 'aprovado' que ja passaram do horario de
-    inicio ha mais de 40 min sem checklist criado. Mantem consistencia
+    inicio ha mais de 4 horas sem checklist criado. Mantem consistencia
     do estado — antes so rodava on-demand quando alguem abria /notifications.
     """
     logger.info("[FLEET-SCHED] job_cleanup_fantasmas rodando")
@@ -370,7 +370,7 @@ def job_cleanup_fantasmas():
             UPDATE fleet_reservations r
                SET r.status='cancelado'
              WHERE r.status='aprovado'
-               AND TIMESTAMP(r.data_reserva, r.horario_inicio) < DATE_SUB(NOW(), INTERVAL 40 MINUTE)
+               AND TIMESTAMP(r.data_reserva, r.horario_inicio) < DATE_SUB(NOW(), INTERVAL 4 HOUR)
                AND NOT EXISTS (
                    SELECT 1 FROM fleet_checklists c
                     WHERE c.vehicle_id = r.vehicle_id
@@ -391,12 +391,13 @@ def job_cleanup_fantasmas():
 # =====================================================================
 # JOB 4: cancela reservas pendentes que expiraram sem aprovacao (2026-07-16)
 # =====================================================================
-# Regra de negocio (definida com o usuario em 2026-07-16):
+# Regra de negocio (definida com o usuario em 2026-07-16, ajustada 2026-07-28):
 #   - Reserva 'pendente' que atingiu o horario de INICIO sem aprovacao
 #     deve ser cancelada automaticamente.
-#   - Excecao: reservas criadas com menos de 15 min de antecedencia
-#     ganham uma janela de 15 min pra aprovacao (evita cancelar
-#     imediato uma reserva de ultima hora que acabou de ser criada).
+#   - Excecao: reservas criadas com menos de 4h de antecedencia ganham
+#     uma janela de 4 horas pra aprovacao (evita cancelar imediato uma
+#     reserva de ultima hora que acabou de ser criada — dando tempo
+#     razoavel pro Resp Frotas revisar).
 #
 # Motivo do cancelamento fica gravado em fleet_reservations.motivo_rejeicao
 # com prefixo "EXPIRED_NO_APPROVAL::<nome do resp>" — o endpoint
@@ -411,7 +412,7 @@ def job_cleanup_fantasmas():
 _FLEET_GROUP_ID = 13
 
 def job_cancelar_reservas_sem_aprovacao():
-    """A cada 5 min: cancela pendentes cujo prazo (max(inicio, created+15min))
+    """A cada 5 min: cancela pendentes cujo prazo (max(inicio, created+4h))
     ja passou. Notifica condutor + responsavel(is) Frotas por email."""
     logger.info("[FLEET-SCHED] job_cancelar_reservas_sem_aprovacao rodando")
     try:
@@ -457,7 +458,7 @@ def job_cancelar_reservas_sem_aprovacao():
               JOIN users u          ON u.id = r.solicitante_id
              WHERE r.status='pendente'
                AND NOW() >= TIMESTAMP(r.data_reserva, r.horario_inicio)
-               AND NOW() >= (r.created_at + INTERVAL 15 MINUTE)
+               AND NOW() >= (r.created_at + INTERVAL 4 HOUR)
         """)
         elegiveis = cur.fetchall() or []
         if not elegiveis:

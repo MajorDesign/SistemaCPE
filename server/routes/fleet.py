@@ -3278,14 +3278,14 @@ def get_notifications(request: Request):
                     "checklist_id": r["id"],
                 })
 
-        # Auto-cancelar reservas aprovadas sem checklist após 40 min do horário de início
+        # Auto-cancelar reservas aprovadas sem checklist após 4 horas do horário de início
         cursor.execute("""
             SELECT r.id, r.vehicle_id, r.solicitante_id, r.horario_inicio, v.placa
             FROM fleet_reservations r
             JOIN fleet_vehicles v ON v.id = r.vehicle_id
             WHERE r.status = 'aprovado'
               AND r.data_reserva = CURDATE()
-              AND ADDTIME(r.horario_inicio, '00:40:00') <= CURTIME()
+              AND ADDTIME(r.horario_inicio, '04:00:00') <= CURTIME()
         """)
         for r in cursor.fetchall():
             cursor.execute("""
@@ -3298,7 +3298,7 @@ def get_notifications(request: Request):
                 cursor.execute("""
                     UPDATE fleet_reservations
                     SET status='cancelado',
-                        motivo_rejeicao='Cancelada automaticamente: checklist nao realizado em 40 minutos apos o horario de inicio'
+                        motivo_rejeicao='Cancelada automaticamente: checklist nao realizado em 4 horas apos o horario de inicio'
                     WHERE id=%s
                 """, (r["id"],))
 
