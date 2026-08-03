@@ -726,9 +726,25 @@
             loadGroups();
           } else if (response.status === 404) {
             throw new Error('Grupo não encontrado');
+          } else if (response.status === 409) {
+            // Backend bloqueou por ter dependencias — detail eh objeto
+            // com { message, dependencias: [{quantidade, descricao}, ...] }
+            return response.json().then(result => {
+              const d = result.detail || {};
+              const msg = typeof d === 'string' ? d : (d.message || 'Grupo tem dependências');
+              // Mensagem visual detalhada
+              showError(msg);
+              // Log detalhado no console pra ADMIN investigar
+              if (d.dependencias) {
+                console.warn('[GROUPS/DELETE] ⚠️ Dependências bloqueando:', d.dependencias);
+              }
+              // NAO relanca — ja tratou. Retorna undefined pra pular o catch generico.
+              return null;
+            });
           } else {
             return response.json().then(result => {
-              throw new Error(result.detail || 'Erro ao deletar');
+              const d = result.detail;
+              throw new Error(typeof d === 'string' ? d : (d?.message || 'Erro ao deletar'));
             });
           }
         })

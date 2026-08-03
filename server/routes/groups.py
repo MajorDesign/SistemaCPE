@@ -281,11 +281,22 @@ async def delete_group(
     group_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Deleta um grupo (apenas ADMIN)"""
+    """Deleta um grupo (apenas ADMIN).
+
+    Comportamento:
+      - Users que estao no grupo: group_id vira NULL (nao bloqueia).
+      - permission_page_group: apagado em cascata (grants triviais).
+      - Se tem contratos/pre-cadastros/tickets/passwords/categorias
+        vinculados: RETORNA 409 com a lista das dependencias.
+        User precisa remanejar antes.
+
+    Rationale: pastas de contrato, pre-cadastros, tickets historicos
+    e senhas do cofre representam dados de negocio — deletar cegamente
+    seria destrutivo. Melhor forcar o ADMIN a decidir manualmente.
+    """
     print(f"[GROUPS/DELETE] Deletando grupo: {group_id}")
-    
+
     try:
-        # Verifica permissão
         if current_user["role"] != "ADMIN":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -293,9 +304,8 @@ async def delete_group(
             )
 
         with engine.begin() as conn:
-            # Verifica se existe
             group = conn.execute(
-                text("SELECT id FROM `cpe_grupo` WHERE id = :id LIMIT 1"),
+                text("SELECT id, name FROM `cpe_grupo` WHERE id = :id LIMIT 1"),
                 {"id": group_id}
             ).mappings().first()
 
@@ -305,15 +315,59 @@ async def delete_group(
                     detail="Grupo não encontrado"
                 )
 
-            # Remove usuários do grupo
+            # Checa dependencias que BLOQUEIAM o delete.
+            # Cada tupla: (label_amigavel_singular, plural, SQL de count)
+            # SQL usa :id (bound via dict) — NADA de string concat.
+            checks = [
+                ("pasta de contratos",     "pastas de contratos",
+                 "SELECT COUNT(*) AS n FROM contrato_pastas WHERE group_id = :id"),
+                ("pré-cadastro pendente",  "pré-cadastros pendentes",
+                 "SELECT COUNT(*) AS n FROM pre_cadastro_pendentes WHERE group_id = :id"),
+                ("ticket",                 "tickets",
+                 "SELECT COUNT(*) AS n FROM tickets WHERE group_id = :id"),
+                ("senha no cofre",         "senhas no cofre",
+                 "SELECT COUNT(*) AS n FROM passwords WHERE group_id = :id"),
+                ("categoria",              "categorias",
+                 "SELECT COUNT(*) AS n FROM categorias WHERE group_id = :id"),
+            ]
+            blocks = []
+            for singular, plural, sql in checks:
+                n = conn.execute(text(sql), {"id": group_id}).scalar() or 0
+                if n:
+                    blocks.append({
+                        "quantidade": int(n),
+                        "descricao":  singular if n == 1 else plural,
+                    })
+
+            if blocks:
+                partes = [f"{b['quantidade']} {b['descricao']}" for b in blocks]
+                msg = (f"Não é possível excluir o grupo '{group['name']}' — ainda tem "
+                       + " e ".join([", ".join(partes[:-1]), partes[-1]]) if len(partes) > 1
+                       else f"Não é possível excluir o grupo '{group['name']}' — ainda tem {partes[0]}")
+                msg += ". Remaneje antes de excluir."
+                # Log detalhado pra rastreabilidade
+                print(f"[GROUPS/DELETE] BLOQUEADO grupo={group_id}: {blocks}")
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={
+                        "message": msg,
+                        "dependencias": blocks,
+                    }
+                )
+
+            # Depedencias removiveis triviais: users desvincula, grants apaga
             conn.execute(
                 text("UPDATE users SET group_id = NULL WHERE group_id = :id"),
                 {"id": group_id}
             )
-
-            # Deleta o grupo
+            conn.execute(
+                text("DELETE FROM permission_page_group WHERE group_id = :id"),
+                {"id": group_id}
+            )
+            # Delete final (BUG anterior: :id sem bind — corrigido)
             conn.execute(
                 text("DELETE FROM `cpe_grupo` WHERE id = :id"),
+                {"id": group_id}
             )
         print(f"[GROUPS/DELETE] ✓ Grupo deletado: {group_id}")
         return {
