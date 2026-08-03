@@ -978,27 +978,77 @@ async def update_group(group_id: int, group: GroupUpdate):
         if conn:
             conn.close()
 
-@groups_router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+@groups_router.delete("/{group_id}")
 async def delete_group(group_id: int):
-    """Deleta um grupo"""
+    """Deleta um grupo.
+
+    - Users no grupo: group_id vira NULL (desvincula).
+    - permission_page_group: apaga em cascata (grants triviais).
+    - Se tem contratos/pre-cadastros/tickets/passwords/categorias
+      vinculados: RETORNA 409 CONFLICT com dependencias detalhadas.
+      ADMIN precisa remanejar manualmente antes.
+
+    Rationale: pastas de contrato, tickets historicos e senhas do
+    cofre sao dados de negocio. Deletar cegamente seria destrutivo.
+    """
     logger.info(f"\n[GROUPS] 🗑️ DELETANDO GRUPO #{group_id}...")
-    
+
     conn = get_db_or_404()
     cursor = None
-    
+
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT name FROM `cpe_grupo` WHERE id = %s", (group_id,))
         group = cursor.fetchone()
-        
+
         if not group:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grupo nao encontrado")
-        
+
+        # Checa dependencias que BLOQUEIAM o delete.
+        # (label_singular, label_plural, tabela)
+        checks = [
+            ("pasta de contratos",     "pastas de contratos",     "contrato_pastas"),
+            ("pré-cadastro pendente",  "pré-cadastros pendentes", "pre_cadastro_pendentes"),
+            ("ticket",                 "tickets",                 "tickets"),
+            ("senha no cofre",         "senhas no cofre",         "passwords"),
+            ("categoria",              "categorias",              "categorias"),
+        ]
+        blocks = []
+        for singular, plural, tabela in checks:
+            cursor.execute(
+                f"SELECT COUNT(*) AS n FROM `{tabela}` WHERE group_id = %s",
+                (group_id,)
+            )
+            n = (cursor.fetchone() or {}).get("n") or 0
+            if n:
+                blocks.append({
+                    "quantidade": int(n),
+                    "descricao":  singular if n == 1 else plural,
+                })
+
+        if blocks:
+            partes = [f"{b['quantidade']} {b['descricao']}" for b in blocks]
+            if len(partes) > 1:
+                lista = ", ".join(partes[:-1]) + " e " + partes[-1]
+            else:
+                lista = partes[0]
+            msg = (f"Não é possível excluir o grupo '{group['name']}' — "
+                   f"ainda tem {lista}. Remaneje antes de excluir.")
+            logger.warning(f"[GROUPS] BLOQUEADO grupo={group_id}: {blocks}")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"message": msg, "dependencias": blocks},
+            )
+
+        # Dependencias triviais: desvincula users, apaga grants de permissao
+        cursor.execute("UPDATE users SET group_id = NULL WHERE group_id = %s", (group_id,))
+        cursor.execute("DELETE FROM permission_page_group WHERE group_id = %s", (group_id,))
         cursor.execute("DELETE FROM `cpe_grupo` WHERE id = %s", (group_id,))
         conn.commit()
-        
+
         logger.info(f"[GROUPS] ✅ DELETADO COM SUCESSO!\n")
-        
+        return {"success": True, "message": "Grupo deletado com sucesso"}
+
     except HTTPException:
         raise
     except Exception as err:
