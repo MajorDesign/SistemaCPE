@@ -233,7 +233,7 @@
 
       <!-- Filter -->
       <div class="fleet-filters">
-        <input class="fleet-input" id="vehicleSearch" placeholder="Buscar placa ou modelo..." oninput="filterVehicles()" style="max-width:240px">
+        <input class="fleet-input" id="vehicleSearch" placeholder="Buscar placa ou modelo..." oninput="filterVehicles()" style="max-width:240px" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
         <select class="fleet-select" id="vehicleStatusFilter" onchange="filterVehicles()" style="max-width:160px">
           <option value="">Todos os status</option>
           <option value="ativo">Ativo</option>
@@ -609,7 +609,7 @@
       </div>
       <div class="fleet-form-group">
         <label class="fleet-label">Descrição do serviço</label>
-        <input class="fleet-input" id="maintDescricao" placeholder="Ex: Troca de óleo do motor 5W30 + filtro">
+        <input class="fleet-input" id="maintDescricao" placeholder="Ex: Troca de óleo do motor 5W30 + filtro" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
       </div>
       <div class="fleet-grid-3">
         <div class="fleet-form-group">

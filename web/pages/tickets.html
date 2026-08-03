@@ -105,7 +105,7 @@
           <div class="search-filters">
             <div class="input-group input-group-sm">
               <span class="input-group-text"><i class="bi bi-search"></i></span>
-              <input type="text" id="searchInput" class="form-control" placeholder="Buscar...">
+              <input type="text" id="searchInput" class="form-control" placeholder="Buscar..." autocomplete="off" data-lpignore="true" data-1p-ignore="true">
             </div>
             <button class="btn btn-outline-secondary btn-sm" onclick="toggleAdvancedFilters()">
               <i class="bi bi-funnel"></i> Filtros
@@ -162,7 +162,7 @@
                 <span class="input-group-text"><i class="bi bi-search"></i></span>
                 <input type="text" id="antigosSearch" class="form-control"
                        placeholder="Buscar por título, solicitante, e-mail, mensagem ou trackid..."
-                       onkeydown="if (event.key === 'Enter') buscarChamadosAntigos(1)">
+                       onkeydown="if (event.key === 'Enter') buscarChamadosAntigos(1)" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
                 <button class="btn btn-primary" onclick="buscarChamadosAntigos(1)">Buscar</button>
               </div>
             </div>

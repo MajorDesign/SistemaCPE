@@ -812,7 +812,7 @@
             <div class="com-field">
               <input type="text" class="com-input" id="clientesBusca"
                      placeholder="🔎 Buscar em nome, empresa, email, telefone ou interesse..."
-                     oninput="_debouncedLoadClientes()">
+                     oninput="_debouncedLoadClientes()" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
             </div>
             <div class="com-field">
               <select class="com-select" id="clientesFiltroClass" onchange="loadClientes()">

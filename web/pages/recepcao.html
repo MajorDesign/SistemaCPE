@@ -160,7 +160,7 @@
       </div>
 
       <div class="recep-filters">
-        <input class="recep-input" id="envioSearch" placeholder="Buscar destino, destinatário ou código..." oninput="renderEnvios()" style="max-width:280px">
+        <input class="recep-input" id="envioSearch" placeholder="Buscar destino, destinatário ou código..." oninput="renderEnvios()" style="max-width:280px" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
       </div>
 
       <div class="recep-card">
@@ -240,7 +240,7 @@
               <i class="bi bi-people-fill"></i> Convidar usuários
             </label>
             <input type="text" class="form-control mb-2" id="resvConvidadosBusca"
-                   placeholder="Buscar por nome, e-mail ou username..." oninput="filtrarConvidados()">
+                   placeholder="Buscar por nome, e-mail ou username..." oninput="filtrarConvidados()" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
             <select multiple class="form-select" id="resvConvidados" size="6"></select>
             <small class="form-text text-muted">
               Segure <kbd>Ctrl</kbd> (ou <kbd>Cmd</kbd> no Mac) para selecionar vários. Os convidados receberão notificação no sino para aceitar ou recusar.
