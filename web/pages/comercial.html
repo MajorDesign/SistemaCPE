@@ -1920,5 +1920,41 @@
     loadAgenda();
   });
   </script>
+<script id="cpe-autofill-guard-v1">
+/* Bloqueia autofill do Chrome/Edge em inputs de busca.
+   Chrome ignora autocomplete="off" em type=text, mas NAO preenche input
+   readonly. Truque: setamos readonly, removemos ao focar, recolocamos ao
+   desfocar se vazio. Aplica só aos inputs ja marcados com data-lpignore
+   (patch aplicado em 2026-07-31, script associado). */
+(function () {
+  function guard(el) {
+    if (el.dataset.cpeAutofillGuarded === '1') return;
+    el.dataset.cpeAutofillGuarded = '1';
+    if (!el.value) el.setAttribute('readonly', 'readonly');
+    el.addEventListener('focus', function () {
+      el.removeAttribute('readonly');
+    }, true);
+    el.addEventListener('blur', function () {
+      if (!el.value) el.setAttribute('readonly', 'readonly');
+    }, true);
+  }
+  function scan() {
+    document.querySelectorAll('input[data-lpignore="true"]').forEach(guard);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', scan);
+  } else {
+    scan();
+  }
+  // Cobre inputs adicionados via JS depois do carregamento (modais, listas
+  // renderizadas dinamicamente etc)
+  if (window.MutationObserver) {
+    new MutationObserver(function () { scan(); }).observe(
+      document.body || document.documentElement,
+      { childList: true, subtree: true }
+    );
+  }
+})();
+</script>
 </body>
 </html>
