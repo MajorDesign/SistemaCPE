@@ -1185,7 +1185,7 @@
 
       <!-- Toolbar -->
       <div class="tk-toolbar">
-        <input class="tk-search" id="tkSearch" placeholder="Pesquisar quadro..." oninput="applyFilters()">
+        <input class="tk-search" id="tkSearch" placeholder="Pesquisar quadro..." oninput="applyFilters()" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
         <select class="tk-filter-btn" id="tkFiltPrio" onchange="applyFilters()" style="min-width:110px;">
           <option value="">Filtro <i class="bi bi-chevron-down"></i></option>
           <option value="urgente">Urgente</option>
@@ -1260,7 +1260,7 @@
           <div class="lv-left">
             <div class="lv-search" style="position:relative;">
               <i class="bi bi-search"></i>
-              <input type="text" id="lvSearch" placeholder="Pesquisar tarefa..." oninput="lvFiltrar(this.value)">
+              <input type="text" id="lvSearch" placeholder="Pesquisar tarefa..." oninput="lvFiltrar(this.value)" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
             </div>
             <div class="lv-rows" id="lvRows"></div>
           </div>
@@ -1440,7 +1440,7 @@
           </div>
         </div>
         <div class="dp-popup" id="dpRespDD">
-          <input class="dp-popup-search" id="dpRespSearch" placeholder="Buscar..." oninput="dpFiltrarResp(this.value)">
+          <input class="dp-popup-search" id="dpRespSearch" placeholder="Buscar..." oninput="dpFiltrarResp(this.value)" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
           <div id="dpRespList"></div>
         </div>
 
@@ -1477,7 +1477,7 @@
           </div>
         </div>
         <div class="dp-popup" id="dpCatsDD" style="min-width:220px;">
-          <input class="dp-popup-search" id="dpCatSearch" placeholder="Buscar ou criar..." oninput="dpFiltrarCats(this.value)">
+          <input class="dp-popup-search" id="dpCatSearch" placeholder="Buscar ou criar..." oninput="dpFiltrarCats(this.value)" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
           <div id="dpCatList"></div>
           <div id="dpCatCreateHint" style="font-size:.74rem;color:#8993a4;padding:6px 8px;display:none;">
             <div style="display:flex;align-items:center;gap:6px;">

@@ -154,7 +154,7 @@
             <span class="sup-card-title" style="margin:0"><i class="bi bi-list-task"></i> Minhas agendas de atendimento</span>
             <span class="sup-spacer"></span>
             <input type="text" class="sup-input" id="buscaAgenda" placeholder="Buscar agenda..."
-                   style="max-width:220px" oninput="renderAgendasTabela()">
+                   style="max-width:220px" oninput="renderAgendasTabela()" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
             <button class="btn-sup btn-sup-primary" onclick="abrirModalAgenda()" data-need-admin>
               <i class="bi bi-plus-lg"></i> Nova agenda
             </button>
@@ -421,7 +421,7 @@
           <span class="sup-spacer"></span>
           <input type="text" class="sup-input" id="buscaCliente"
                  placeholder="Buscar nome, e-mail, empresa..."
-                 style="max-width:280px" oninput="renderClientes()">
+                 style="max-width:280px" oninput="renderClientes()" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
           <button class="btn-sup btn-sup-ghost" onclick="exportarClientesCSV()"
                   title="Baixar lista filtrada como CSV (Excel)">
             <i class="bi bi-file-earmark-spreadsheet"></i> Exportar CSV

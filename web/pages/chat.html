@@ -2570,7 +2570,7 @@
         <label>Adicionar membros iniciais (você vira owner)</label>
         <div class="chat-user-search">
           <input type="text" id="serverMembrosBusca" placeholder="Buscar por nome ou email..."
-                 oninput="_filtrarUsuariosDisponiveis(this.value, 'criarServer')">
+                 oninput="_filtrarUsuariosDisponiveis(this.value, 'criarServer')" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
         </div>
         <div class="chat-user-list" id="serverMembrosList">
           <div style="padding:14px;text-align:center;color:var(--chat-muted)">Carregando usuários...</div>
@@ -2634,7 +2634,7 @@
         <label>Adicionar mais membros</label>
         <div class="chat-user-search">
           <input type="text" id="srvAddBusca" placeholder="Buscar por nome ou email..."
-                 oninput="_filtrarUsuariosDisponiveis(this.value, 'srvAdd')">
+                 oninput="_filtrarUsuariosDisponiveis(this.value, 'srvAdd')" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
         </div>
         <div class="chat-user-list" id="srvAddList">
           <div style="padding:14px;text-align:center;color:var(--chat-muted)">Buscando...</div>
@@ -2724,7 +2724,7 @@
             <input type="text" id="cargoAddBusca" placeholder="Adicionar membro ao cargo: buscar..."
                    oninput="_filtrarMembrosPraCargo(this.value)"
                    style="width:100%;padding:8px 10px;background:var(--chat-bg-3);
-                          color:var(--chat-text);border:1px solid var(--chat-border);border-radius:6px">
+                          color:var(--chat-text);border:1px solid var(--chat-border);border-radius:6px" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
             <div id="cargoAddList"
                  style="border:1px solid var(--chat-border);border-radius:6px;background:var(--chat-bg-3);
                         max-height:180px;overflow-y:auto;margin-top:6px;display:none"></div>
@@ -2856,7 +2856,7 @@
         <label>Adicionar membros (você é automaticamente o dono)</label>
         <div class="chat-user-search">
           <input type="text" id="canalMembrosBusca" placeholder="Buscar por nome ou email..."
-                 oninput="_filtrarUsuariosDisponiveis(this.value, 'criar')">
+                 oninput="_filtrarUsuariosDisponiveis(this.value, 'criar')" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
         </div>
         <div class="chat-user-list" id="canalMembrosList">
           <div style="padding:14px;text-align:center;color:var(--chat-muted)">Carregando usuários...</div>
@@ -2907,7 +2907,7 @@
         <label>Adicionar mais membros</label>
         <div class="chat-user-search">
           <input type="text" id="configAddBusca" placeholder="Buscar..."
-                 oninput="_filtrarUsuariosDisponiveis(this.value, 'config')">
+                 oninput="_filtrarUsuariosDisponiveis(this.value, 'config')" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
         </div>
         <div class="chat-user-list" id="configCanalAddList">
           <div style="padding:14px;text-align:center;color:var(--chat-muted)">Buscando...</div>
@@ -3074,7 +3074,7 @@
     <div class="chat-modal-body">
       <input type="text" class="chat-search-input" id="modalSearchInput"
              placeholder="Buscar nas mensagens deste canal..." style="display:none"
-             oninput="_buscarDebounced(this.value)">
+             oninput="_buscarDebounced(this.value)" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
       <div class="chat-search-results" id="modalListaMsgsConteudo">
         <div class="chat-empty-search">Carregando...</div>
       </div>
