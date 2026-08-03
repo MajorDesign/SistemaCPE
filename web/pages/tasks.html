@@ -1904,12 +1904,43 @@ const _API_HOST = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://
 const API  = _API_HOST + '/api/tasks';
 const UAPI = _API_HOST + '/api/users';
 
-const _raw = localStorage.getItem('cpe_user');
-const ME   = _raw ? JSON.parse(_raw) : null;
-const UID  = ME?.id;
-const ROLE = ME?.role || '';
-const GID  = ME?.group_id;
-const ELEVATED = ['RESPONSAVEL_GRUPO','ADMIN','TI','MANAGER'].includes(ROLE);
+// `let` (não const) porque syncMeFromServer() pode atualizar em runtime
+// quando o role/grupo do user mudou no backend após o ultimo login.
+// Se mantivessemos const, mudar role no admin exigiria o user deslogar
+// pra ver o novo cpe_user do localStorage (bug de UI stale).
+let _raw = localStorage.getItem('cpe_user');
+let ME   = _raw ? JSON.parse(_raw) : null;
+let UID  = ME?.id;
+let ROLE = ME?.role || '';
+let GID  = ME?.group_id;
+let ELEVATED = ['RESPONSAVEL_GRUPO','ADMIN','TI','MANAGER'].includes(ROLE);
+
+// Puxa dados frescos do /me e atualiza cpe_user + variaveis globais.
+// Retorna true se algo relevante mudou (role ou group_id), pra caller
+// saber se precisa re-renderizar UI dependente de permissoes.
+async function syncMeFromServer() {
+  try {
+    const res = await fetch(`${_API_HOST}/api/auth/me`, { credentials: 'include' });
+    if (!res.ok) return false;
+    const data = await res.json();
+    const fresh = data && data.user;
+    if (!fresh) return false;
+    const changed = !ME || fresh.role !== ROLE || fresh.group_id !== GID;
+    // Preserva campos que /me nao devolve (ex: name, avatar_url) — merge
+    ME = { ...(ME || {}), ...fresh };
+    UID = ME.id;
+    ROLE = ME.role || '';
+    GID  = ME.group_id;
+    ELEVATED = ['RESPONSAVEL_GRUPO','ADMIN','TI','MANAGER'].includes(ROLE);
+    localStorage.setItem('cpe_user', JSON.stringify(ME));
+    if (changed) console.log('[TASKS] role/grupo mudou apos login — cpe_user resincronizado');
+    return changed;
+  } catch (e) {
+    // Falha de rede/API — segue com o que tem no localStorage
+    console.warn('[TASKS] syncMeFromServer falhou:', e.message);
+    return false;
+  }
+}
 
 const PRIO_LABEL = {urgente:'Urgente',alta:'Alta',media:'Média',baixa:'Baixa'};
 const PRIO_CLS   = {urgente:'prio-urgente',alta:'prio-alta',media:'prio-media',baixa:'prio-baixa'};
@@ -1944,6 +1975,9 @@ let allGrupos = [];
 // ── Init ───────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   if (!ME) { window.location.href = '/SistemaCPE/index.html'; return; }
+  // Puxa /me antes de renderizar — pega role/grupo atualizados sem
+  // exigir logout apos admin trocar (senao ELEVATED fica stale).
+  await syncMeFromServer();
   await inicializar();
 });
 
