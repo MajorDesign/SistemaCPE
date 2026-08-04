@@ -4,6 +4,24 @@ Regras que vão te salvar de bug se seguir, ou custar horas se ignorar.
 
 ---
 
+## Antes de MELHORAR / ATUALIZAR função existente: consulte a doc
+
+**Regra global (2026-08-04):** toda vez que for melhorar ou atualizar uma função que já existe, **antes de escrever qualquer código**:
+
+1. Ler `docs/MODULOS.md` — onde vive o módulo/função
+2. Ler `docs/REGRAS_NEGOCIO.md` — regras aplicáveis (permissões, prazos, workflow)
+3. Ler `docs/GOTCHAS.md` — bugs históricos naquela área
+4. Ler este arquivo (`docs/CONVENCOES.md`) — se envolve JS global, MySQL, cache-buster, etc.
+5. Consultar `docs/ENDPOINTS.md` — rotas vizinhas pra não duplicar/conflitar
+
+Se descobrir contexto novo durante a mudança (regra que não estava documentada, gotcha novo, decisão), **atualize o `.md` correspondente no MESMO commit**.
+
+Detalhamento do workflow em `AGENTS.md#se-você-for-uma-ia`.
+
+**Por que existe:** manutenção sem consulta prévia já causou retrabalho múltiplas vezes — ver `docs/GOTCHAS.md` (routes/groups.py órfão, race WS, autofill "resolvido" 3x, etc.).
+
+---
+
 ## MySQL: `use_pure=True` obrigatório
 
 O `mysql-connector-python` 9.x tem uma C-extension com bug crônico — segfalta o processo Python quando usada. Toda `mysql.connector.connect()` **precisa** de `use_pure=True`.
