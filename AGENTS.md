@@ -67,6 +67,7 @@ apply_migrations.sh   ← aplica NNN_*.sql pendentes conforme _migrations_log
 6. **Testar antes de dizer que funciona** — nunca dizer "pronto/deve funcionar" sem executar teste real no ambiente-alvo (browser real, curl com headers reais, DB).
 7. **Modais sempre com grid Bootstrap** (`row + col-md-6`) — campos lado a lado, nunca empilhados.
 8. **Email de teste vai SÓ pro Jonathan** (`jonathan.lopes@cpetecnologia.com.br`) — mesmo que o `userEmail` do harness aponte pra outro.
+9. **Antes de MELHORAR OU ATUALIZAR função que já existe: CONSULTAR ESTA DOCUMENTAÇÃO PRIMEIRO.** Leia `docs/MODULOS.md` (onde a função vive), `docs/REGRAS_NEGOCIO.md` (regras de negócio ligadas a ela) e `docs/GOTCHAS.md` (bugs históricos naquela área). Não fazer isso já causou retrabalho — ex: `routes/groups.py` órfão, race no WS reconnect. **Se a função não estiver documentada, adiciona depois — mas leia antes de mexer.**
 
 ## Ambientes
 
@@ -101,10 +102,31 @@ apply_migrations.sh   ← aplica NNN_*.sql pendentes conforme _migrations_log
 
 ## Se você for uma IA
 
+### Workflow obrigatório antes de MELHORAR / ATUALIZAR função existente
+
+Este é o passo-a-passo que a regra de ouro #9 exige. Não pular.
+
+1. **Localize onde a função vive** — grep pelo nome dela; se não achar, consultar `docs/MODULOS.md` pra achar o módulo.
+2. **Leia o módulo em `docs/MODULOS.md`** — entenda propósito, tabelas envolvidas, quem tem acesso.
+3. **Leia as regras aplicáveis em `docs/REGRAS_NEGOCIO.md`** — se a função toca em permissões, prazos, workflow de aprovação, etc, tem regras que só existem lá.
+4. **Cheque `docs/GOTCHAS.md`** — procure pela função/módulo/tabela. Se aparece, LEIA — provavelmente já quebrou de um jeito parecido antes.
+5. **Consulte convenções técnicas em `docs/CONVENCOES.md`** — se a mudança envolve JS global (nav.js/config.js), MySQL, cache-buster, etc.
+6. **Confira o arquivo do endpoint em `docs/ENDPOINTS.md`** — pra saber quais outras rotas vizinhas existem (evita duplicar ou conflitar).
+7. **Só depois disso, planeje a mudança** — e se descobrir contexto novo (regra que não estava, gotcha novo, decisão), **atualize o `.md` correspondente no MESMO commit**.
+
+**Por que essa regra existe:** já quebrou coisas exatamente por pular esses passos:
+- Fix em `routes/groups.py` que estava ÓRFÃO — endpoint ativo era outro em `app.py`
+- Race no WS reconnect que só apareceu depois de N mudanças isoladas na área de meetings
+- Mudança em prazo de frota sem dry-run que quase cancelou reservas ativas
+- Chrome autofill em campos de busca "resolvido" 3 vezes com fix que não funcionava
+
+### Regras gerais pra IA
+
 - **Antes de mudar código de sistema global** (`config.js`, `nav.js`, `page-guard.js`, `app.py`): **leia o arquivo inteiro primeiro**. Já quebrou por não fazer isso.
 - **Nunca faça "correção defensiva" em código que você não entende** — pergunta ao usuário. O sistema tem várias camadas com history, e uma mudança "óbvia" pode ter razão de ser.
 - **Antes de mexer em banco de prod** (UPDATE/DELETE): **rode SELECT dry-run primeiro** e mostra ao usuário o que vai mudar. Ver `docs/DEPLOY.md#dados-em-prod`.
 - **Se descobrir um gotcha novo**: adiciona em `docs/GOTCHAS.md` no mesmo PR.
+- **Se adicionar/mudar módulo, regra ou convenção**: atualize o `.md` correspondente **no mesmo commit** — evita drift entre código e doc.
 - **Windows shell**: use PowerShell pra operações no CPEDC22 (WinRM). Bash pra scripts locais.
 - **Emojis nos commits/docs**: OK e usado (padrão do repo).
 
