@@ -2066,7 +2066,13 @@ const PHOTO_ANGLES = [
   { key: 'parachoque_traseiro',  label: 'Para-choque traseiro',    icon: 'bi-shield' },
   { key: 'quatro_portas',        label: 'Quatro portas',           icon: 'bi-grid-2x2-fill' },
   { key: 'paralama_traseiro',    label: 'Para-lama traseiro',      icon: 'bi-chevron-double-right' },
+  { key: 'painel',               label: 'Painel (KM)',             icon: 'bi-speedometer2' },
 ];
+
+// Ângulos obrigatórios (frente, lateral, para-choques, quatro portas,
+// para-lama, painel). Mesma lista do backend — precisa bater.
+// Anti-burla (2026-08-05): backend rejeita fotos duplicadas por SHA-256.
+const REQUIRED_ANGLES = PHOTO_ANGLES.map(a => a.key);
 
 /* Combina os 6 ângulos padrão com os adicionais detectados nos dados.
    - refMap / inspMap : { angulo → path } (usados pra saber quais adicionais existem)
@@ -2859,7 +2865,11 @@ function onClPhotoSelected(angulo, input) {
   const reader = new FileReader();
   reader.onload = e => {
     const zone = document.getElementById(`clZone_${angulo}`);
-    if (zone) zone.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">`;
+    if (zone) {
+      zone.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">`;
+      zone.style.border = '';
+      zone.style.background = '';
+    }
   };
   reader.readAsDataURL(input.files[0]);
 }
@@ -2977,7 +2987,11 @@ function onRetInspPhotoSelected(angulo, input) {
   const reader = new FileReader();
   reader.onload = e => {
     const zone = document.getElementById(`retZone_${angulo}`);
-    if (zone) zone.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">`;
+    if (zone) {
+      zone.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">`;
+      zone.style.border = '';
+      zone.style.background = '';
+    }
   };
   reader.readAsDataURL(input.files[0]);
 }
@@ -3136,6 +3150,28 @@ async function saveChecklist() {
   if (!vehicle_id || !condutor_id || !destino || !data_saida || !km_saida) {
     showToast('Preencha os campos obrigatórios', 'error'); return;
   }
+
+  // Fotos obrigatórias (7 ângulos, incluindo painel com KM).
+  // Backend também valida — isto aqui é UX pra não deixar submeter incompleto.
+  const missingAngles = REQUIRED_ANGLES.filter(k => !CL_INSPECTION_FILES[k]);
+  if (missingAngles.length) {
+    const labels = missingAngles
+      .map(k => PHOTO_ANGLES.find(a => a.key === k)?.label || k)
+      .join(', ');
+    showToast('Faltam fotos: ' + labels, 'error');
+    // Destaca as zonas que faltam
+    missingAngles.forEach(k => {
+      const zone = document.getElementById(`clZone_${k}`);
+      if (zone) {
+        zone.style.border = '2px solid #EF4444';
+        zone.style.background = '#FEF2F2';
+      }
+    });
+    const firstMiss = document.getElementById(`clZone_${missingAngles[0]}`);
+    if (firstMiss) firstMiss.scrollIntoView({ behavior:'smooth', block:'center' });
+    return;
+  }
+
   // Problema: foto obrigatória se há avarias marcadas
   const problemItems = document.querySelectorAll('.checklist-problem-item.selected');
   if (problemItems.length > 0 && !_clProblemPhotoFile) {
@@ -3184,19 +3220,38 @@ async function saveChecklist() {
   const checklistId = res.id;
   const token = _getAuthToken();
 
-  // Upload fotos de inspeção (padrão + adicionais)
+  // Upload fotos de inspeção (padrão + adicionais).
+  // Backend rejeita foto duplicada (mesma imagem em outro ângulo) via hash SHA-256.
+  // Erros de upload são reportados pro condutor pra ele saber o que refazer.
+  const uploadErrors = [];
   for (const angKey of Object.keys(CL_INSPECTION_FILES)) {
     const file = CL_INSPECTION_FILES[angKey];
     if (!file) continue;
     const fd = new FormData();
     fd.append('file', file);
     fd.append('angulo', angKey);
-    await fetch(`${API}/checklists/${checklistId}/photos`, {
-      method: 'POST', credentials: 'include',
-      headers: { 'X-Auth-Token': token }, body: fd,
-    }).catch(e => console.error('[FLEET UPLOAD]', e));
+    try {
+      const upRes = await fetch(`${API}/checklists/${checklistId}/photos`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'X-Auth-Token': token }, body: fd,
+      });
+      if (!upRes.ok) {
+        const err = await upRes.json().catch(() => ({}));
+        const label = PHOTO_ANGLES.find(a => a.key === angKey)?.label || angKey;
+        uploadErrors.push(`${label}: ${err.detail || upRes.status}`);
+      }
+    } catch (e) {
+      console.error('[FLEET UPLOAD]', e);
+      uploadErrors.push(`${angKey}: falha de rede`);
+    }
   }
   Object.keys(CL_INSPECTION_FILES).forEach(k => delete CL_INSPECTION_FILES[k]);
+
+  if (uploadErrors.length) {
+    showToast('Algumas fotos falharam: ' + uploadErrors.join(' | '), 'error');
+    // Não bloqueia o fluxo — checklist já foi salvo. Vistoriador vai bloquear
+    // aprovação se faltar foto obrigatória (validação server-side).
+  }
 
   // Upload foto do problema
   if (_clProblemPhotoFile) {
@@ -3744,6 +3799,27 @@ async function saveDevolver() {
   const sig = getSigData('sigCondutorRetorno');
   if (!sig) { showToast('O condutor precisa assinar a devolucao', 'error'); return; }
 
+  // Fotos obrigatórias na devolução — mesma lista da saída (frente, lateral,
+  // para-choques, quatro portas, para-lama, painel com KM). Backend também
+  // valida e retorna erro se faltar. UX aqui evita o request em vão.
+  const retMissing = REQUIRED_ANGLES.filter(k => !RET_INSPECTION_FILES[k]);
+  if (retMissing.length) {
+    const labels = retMissing
+      .map(k => PHOTO_ANGLES.find(a => a.key === k)?.label || k)
+      .join(', ');
+    showToast('Faltam fotos da devolução: ' + labels, 'error');
+    retMissing.forEach(k => {
+      const zone = document.getElementById(`retZone_${k}`);
+      if (zone) {
+        zone.style.border = '2px solid #EF4444';
+        zone.style.background = '#FEF2F2';
+      }
+    });
+    const firstMiss = document.getElementById(`retZone_${retMissing[0]}`);
+    if (firstMiss) firstMiss.scrollIntoView({ behavior:'smooth', block:'center' });
+    return;
+  }
+
   // Problemas encontrados
   const retProblemItems = document.querySelectorAll('#retProblemsGrid .checklist-problem-item.selected');
   if (retProblemItems.length > 0 && !_retProblemPhotoFile) {
@@ -3801,12 +3877,12 @@ async function saveDevolver() {
     custos,
   };
 
-  const res = await apiFetch(`/checklists/${id}/devolver`, { method:'PUT', body: JSON.stringify(body) });
-  if (!res?.success) { showToast(res?.detail || 'Erro ao registrar devolucao', 'error'); return; }
-
-  // Upload fotos da inspecao de DEVOLUCAO (adicionado 2026-07-15)
-  // Prefixa angulo com "retorno_" pra nao sobrescrever as fotos da saida.
+  // Upload das fotos da devolução ANTES do PUT devolver — o backend valida
+  // que as 7 fotos existem antes de aceitar a devolução (2026-08-05).
+  // Prefixa ângulo com "retorno_" pra não sobrescrever fotos da saída.
+  // Reuso de imagem já usada neste checklist é rejeitado (hash SHA-256).
   const retUploadToken = _getAuthToken();
+  const retUploadErrors = [];
   for (const angKey of Object.keys(RET_INSPECTION_FILES)) {
     const file = RET_INSPECTION_FILES[angKey];
     if (!file) continue;
@@ -3814,13 +3890,38 @@ async function saveDevolver() {
     fd.append('file', file);
     fd.append('angulo', 'retorno_' + angKey);
     try {
-      await fetch(`${API}/checklists/${id}/photos`, {
+      const upRes = await fetch(`${API}/checklists/${id}/photos`, {
         method: 'POST', credentials: 'include',
         headers: { 'X-Auth-Token': retUploadToken }, body: fd,
       });
-    } catch (e) { console.error('[FLEET RET UPLOAD]', e); }
+      if (!upRes.ok) {
+        const err = await upRes.json().catch(() => ({}));
+        const label = PHOTO_ANGLES.find(a => a.key === angKey)?.label || angKey;
+        retUploadErrors.push(`${label}: ${err.detail || upRes.status}`);
+      }
+    } catch (e) {
+      console.error('[FLEET RET UPLOAD]', e);
+      retUploadErrors.push(`${angKey}: falha de rede`);
+    }
+  }
+
+  if (retUploadErrors.length) {
+    // Falha de upload = não segue pro PUT devolver. Fotos válidas já foram
+    // enviadas; o condutor pode corrigir as que falharam (ex: refazer foto
+    // duplicada) e clicar em Finalizar de novo — só as pendentes reenviam.
+    showToast('Falhou upload: ' + retUploadErrors.join(' | '), 'error');
+    // Remove do buffer apenas as que subiram OK pra não repetir
+    Object.keys(RET_INSPECTION_FILES).forEach(k => {
+      const label = PHOTO_ANGLES.find(a => a.key === k)?.label || k;
+      const stillFailed = retUploadErrors.some(msg => msg.startsWith(label + ':') || msg.startsWith(k + ':'));
+      if (!stillFailed) delete RET_INSPECTION_FILES[k];
+    });
+    return;
   }
   Object.keys(RET_INSPECTION_FILES).forEach(k => delete RET_INSPECTION_FILES[k]);
+
+  const res = await apiFetch(`/checklists/${id}/devolver`, { method:'PUT', body: JSON.stringify(body) });
+  if (!res?.success) { showToast(res?.detail || 'Erro ao registrar devolucao', 'error'); return; }
 
   // Upload foto do problema
   if (_retProblemPhotoFile) {

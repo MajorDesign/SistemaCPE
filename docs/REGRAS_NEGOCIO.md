@@ -38,7 +38,17 @@ Decisões que **não existem no código como constante óbvia** — vieram de co
 - Rodam a cada 5min (JOB 4) e 30min (JOB 3). Ver `server/services/fleet_scheduler.py`
 
 ### Regras extras
-- Condutor tira fotos **na saída E na devolução** (obrigatório)
+- Condutor tira **7 fotos obrigatórias na saída E na devolução** (a partir de 2026-08-05):
+  frente, lateral, para-choque dianteiro, para-choque traseiro, quatro portas,
+  para-lama traseiro e **painel (mostrando KM)**. Backend rejeita `vistoriar-saida`
+  e `devolver` se algum ângulo obrigatório estiver faltando. Checklists criados
+  antes de 2026-08-05 aceitam 6 fotos (sem painel) — compat retroativa.
+- **Anti-reuso de foto** (2026-08-05): cada upload calcula SHA-256; a mesma
+  imagem não pode ser usada duas vezes no mesmo checklist (índice único
+  `uq_checklist_hash` em `fleet_checklist_photos`). Evita a burla de mandar
+  a mesma foto de saída como se fosse do retorno.
+- **Foto do painel confere KM** (2026-08-05): o KM digitado precisa bater com
+  a foto do painel. Vistoriador vê os dois lado a lado e recusa se não confere.
 - Resp Frotas pode iniciar viagem em nome do condutor (útil se o condutor está no volante e não vai abrir o sistema)
 - Mobile: layout responsivo em cards + botão "devolver" gigante
 - Histórico de checklist mostra APENAS as viagens do próprio condutor (USER não vê de outros)

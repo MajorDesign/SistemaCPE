@@ -8,8 +8,15 @@ from database import get_db_or_404, convert_datetime_to_string, convert_datetime
 import os
 import uuid
 import shutil
+import hashlib
 import logging
-from datetime import datetime
+from datetime import datetime, date
+
+# Data de corte da regra de painel obrigatório (Migration 083).
+# Checklists criados a partir desta data precisam ter as 7 fotos (incluindo
+# 'painel') tanto na saída quanto na devolução. Anteriores mantêm o comportamento
+# antigo (6 fotos) — não retroativo, conforme decidido em 2026-08-05.
+FLEET_PAINEL_ENFORCED_SINCE = date(2026, 8, 5)
 
 logger = logging.getLogger(__name__)
 
@@ -425,8 +432,48 @@ def delete_vehicle(vehicle_id: int, request: Request):
 ALLOWED_ANGULOS = {
     'frente', 'lateral', 'parachoque_dianteiro',
     'parachoque_traseiro', 'quatro_portas', 'paralama_traseiro',
+    'painel',
     'problema', 'avaria_retorno',
 }
+
+# Ângulos obrigatórios pra fechar a saída e a devolução
+# (novos checklists — a partir de FLEET_PAINEL_ENFORCED_SINCE).
+REQUIRED_CHECKLIST_ANGLES = (
+    'frente', 'lateral', 'parachoque_dianteiro',
+    'parachoque_traseiro', 'quatro_portas', 'paralama_traseiro',
+    'painel',
+)
+
+
+def _checklist_needs_painel(created_at) -> bool:
+    """Regra de compat: só checklists criados depois de FLEET_PAINEL_ENFORCED_SINCE
+    são obrigados a ter a foto do painel. Antes disso, aceita 6 fotos (legado)."""
+    if not created_at:
+        return True
+    if hasattr(created_at, "date"):
+        created_at = created_at.date()
+    try:
+        return created_at >= FLEET_PAINEL_ENFORCED_SINCE
+    except Exception:
+        return True
+
+
+def _missing_checklist_angles(cursor, checklist_id: int, fase: str, needs_painel: bool):
+    """Retorna a lista de ângulos obrigatórios que ainda NÃO têm foto.
+    fase: 'saida' → ângulos crus; 'retorno' → prefixo 'retorno_'.
+    """
+    required = list(REQUIRED_CHECKLIST_ANGLES)
+    if not needs_painel:
+        required = [a for a in required if a != "painel"]
+    prefix = "" if fase == "saida" else "retorno_"
+    expected = {prefix + a for a in required}
+
+    cursor.execute(
+        "SELECT angulo FROM fleet_checklist_photos WHERE checklist_id=%s",
+        (checklist_id,),
+    )
+    have = {r["angulo"] for r in cursor.fetchall() if r.get("angulo")}
+    return sorted(expected - have)
 
 @router.post("/vehicles/{vehicle_id}/photo")
 async def upload_vehicle_photo(
@@ -702,24 +749,60 @@ async def upload_checklist_photo(
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Formato inválido. Use JPG, PNG ou WEBP.")
 
-    filename = f"cl{checklist_id}_{angulo}_{uuid.uuid4().hex[:8]}{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
-    with open(filepath, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    photo_url = f"/SistemaCPE/web/uploads/fleet/{filename}"
+    # Ler os bytes uma vez para calcular hash e gravar (fotos de checklist são
+    # pequenas, seguro carregar em memória). Anti-reuso: SHA-256 dos bytes —
+    # se o mesmo arquivo já existe neste checklist, rejeita antes de gravar.
+    raw = await file.read()
+    file_hash = hashlib.sha256(raw).hexdigest()
 
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute(
-            "INSERT INTO fleet_checklist_photos (checklist_id, angulo, foto_path) VALUES (%s, %s, %s)",
-            (checklist_id, angulo, photo_url),
+            "SELECT id, angulo FROM fleet_checklist_photos "
+            "WHERE checklist_id=%s AND file_hash=%s LIMIT 1",
+            (checklist_id, file_hash),
+        )
+        dup = cursor.fetchone()
+        if dup:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Esta foto já foi usada neste checklist "
+                    f"(ângulo '{dup['angulo']}'). Tire uma nova foto — "
+                    "não pode reaproveitar a mesma imagem."
+                ),
+            )
+
+        filename = f"cl{checklist_id}_{angulo}_{uuid.uuid4().hex[:8]}{ext}"
+        filepath = os.path.join(UPLOAD_DIR, filename)
+        with open(filepath, "wb") as f:
+            f.write(raw)
+
+        photo_url = f"/SistemaCPE/web/uploads/fleet/{filename}"
+
+        cursor.execute(
+            "INSERT INTO fleet_checklist_photos "
+            "(checklist_id, angulo, foto_path, file_hash) VALUES (%s, %s, %s, %s)",
+            (checklist_id, angulo, photo_url, file_hash),
         )
         conn.commit()
-        return {"success": True, "foto_path": photo_url, "angulo": angulo}
+        return {
+            "success": True,
+            "foto_path": photo_url,
+            "angulo": angulo,
+            "file_hash": file_hash,
+        }
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
+        # Se o índice único disparar por race condition
+        if "uq_checklist_hash" in str(e) or "Duplicate entry" in str(e):
+            raise HTTPException(
+                status_code=400,
+                detail="Esta foto já foi enviada neste checklist. Tire uma nova.",
+            )
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
@@ -877,7 +960,8 @@ def vistoriar_saida(checklist_id: int, request: Request, data: dict):
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT condutor_id, vehicle_id, status FROM fleet_checklists WHERE id=%s",
+            "SELECT condutor_id, vehicle_id, status, created_at "
+            "FROM fleet_checklists WHERE id=%s",
             (checklist_id,)
         )
         row = cursor.fetchone()
@@ -887,6 +971,22 @@ def vistoriar_saida(checklist_id: int, request: Request, data: dict):
             raise HTTPException(status_code=400, detail="Checklist não está aguardando vistoria")
         if user["id"] == row["condutor_id"]:
             raise HTTPException(status_code=403, detail="O condutor não pode vistoriar sua própria saída")
+
+        # Anti-burla: checklist só pode ser vistoriado se TODAS as fotos
+        # obrigatórias da saída estiverem presentes (frente, lateral,
+        # para-choques, quatro portas, para-lama e — a partir de 2026-08-05
+        # — painel com KM). O vistoriador não deve aprovar sem prova visual.
+        needs_painel = _checklist_needs_painel(row.get("created_at"))
+        missing = _missing_checklist_angles(cursor, checklist_id, "saida", needs_painel)
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Faltam fotos obrigatórias da SAÍDA antes de aprovar: "
+                    + ", ".join(missing)
+                    + ". Peça pro condutor tirar as fotos que faltam."
+                ),
+            )
 
         # Ignora liberador_id do body — sempre o próprio user autenticado
         liberador_id = user["id"]
@@ -922,7 +1022,8 @@ def devolver_veiculo(checklist_id: int, request: Request, data: dict):
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute(
-            "SELECT vehicle_id, status, km_saida FROM fleet_checklists WHERE id=%s",
+            "SELECT vehicle_id, status, km_saida, created_at "
+            "FROM fleet_checklists WHERE id=%s",
             (checklist_id,)
         )
         row = cursor.fetchone()
@@ -938,6 +1039,24 @@ def devolver_veiculo(checklist_id: int, request: Request, data: dict):
             raise HTTPException(
                 status_code=400,
                 detail=f"KM de retorno ({km_retorno}) nao pode ser menor que KM de saida ({km_saida})"
+            )
+
+        # Anti-burla: só aceita devolução se TODAS as fotos obrigatórias do
+        # retorno já foram enviadas (fluxo do frontend é upload → devolver,
+        # então aqui elas devem existir). Bloquear aqui impede o condutor de
+        # fechar viagem sem prova visual do estado atual do veículo.
+        needs_painel = _checklist_needs_painel(row.get("created_at"))
+        missing = _missing_checklist_angles(cursor, checklist_id, "retorno", needs_painel)
+        if missing:
+            # Devolve os ângulos sem o prefixo pra mensagem ficar amigável
+            friendly = [m.replace("retorno_", "") for m in missing]
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Faltam fotos da devolução: "
+                    + ", ".join(friendly)
+                    + ". Tire as fotos que faltam antes de devolver o veículo."
+                ),
             )
 
         cursor.execute("""
