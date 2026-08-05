@@ -992,16 +992,147 @@ def vistoriar_saida(checklist_id: int, request: Request, data: dict):
         liberador_id = user["id"]
         assinatura   = data.get("assinatura_liberador")
 
+        # Ao aprovar, limpa qualquer recusa anterior — checklist entra em uso normal
         cursor.execute("""
             UPDATE fleet_checklists
             SET liberador_id=%s, assinatura_liberador=%s,
-                status='aprovado', aprovado_por=%s, aprovado_em=NOW()
+                status='aprovado', aprovado_por=%s, aprovado_em=NOW(),
+                recusa_justificativa=NULL, recusa_por=NULL, recusa_em=NULL
             WHERE id=%s
         """, (liberador_id, assinatura, user["id"], checklist_id))
 
         conn.commit()
         logger.info(f"[FLEET] Checklist {checklist_id} vistoriado por user {user['id']}")
         return {"success": True, "message": "Saída autorizada pelo vistoriador!"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/checklists/{checklist_id}/reenviar-saida")
+def reenviar_saida(checklist_id: int, request: Request):
+    """Condutor sinaliza que corrigiu o checklist recusado.
+
+    Fluxo:
+      1. Vistoriador recusou (`/recusar-saida`), gravou justificativa,
+         condutor recebeu notificação
+      2. Condutor sobe as fotos que faltavam (`POST /checklists/{id}/photos`)
+      3. Condutor chama este endpoint → limpa a recusa, checklist volta pra
+         fila de vistoria normal. Vistoriador vai tentar aprovar de novo
+         (`/vistoriar-saida`) e agora as fotos já estarão presentes.
+    """
+    user = _get_user_role(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id, condutor_id, status FROM fleet_checklists WHERE id=%s",
+            (checklist_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Checklist não encontrado")
+        if row["status"] != "aguardando_vistoria":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Só é possível reenviar checklist aguardando vistoria (atual: {row['status']})."
+            )
+        # Só o condutor dono ou admin/frotas pode reenviar
+        if user["id"] != row["condutor_id"] and not _can_manage_fleet(user):
+            raise HTTPException(
+                status_code=403,
+                detail="Só o próprio condutor (ou Admin/TI/Responsável Frotas) pode reenviar.",
+            )
+
+        cursor.execute("""
+            UPDATE fleet_checklists SET
+                recusa_justificativa=NULL, recusa_por=NULL, recusa_em=NULL
+            WHERE id=%s
+        """, (checklist_id,))
+        conn.commit()
+        logger.info(f"[FLEET] Checklist {checklist_id} reenviado pra vistoria pelo user {user['id']}")
+        return {"success": True, "message": "Checklist reenviado pra vistoria."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/checklists/{checklist_id}/recusar-saida")
+def recusar_saida(checklist_id: int, request: Request, data: dict):
+    """Vistoriador recusa a saída — checklist permanece em 'aguardando_vistoria'
+    mas ganha justificativa. Condutor recebe notificação e pode reabrir o
+    formulário pra corrigir (adicionar foto que faltou, refazer, etc).
+
+    Contexto (2026-08-05): a validação de 7 fotos obrigatórias bloqueava o
+    vistoriador quando faltava alguma. Sem essa recusa formal, o checklist
+    ficava preso — nem o condutor tinha caminho pra completar. Ver GOTCHAS.
+    """
+    user = _get_user_role(request)
+    if not _can_manage_fleet(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Somente o responsável do grupo Frotas (ou ADMIN/TI) pode recusar a saída."
+        )
+    justificativa = (data.get("justificativa") or "").strip()
+    if not justificativa:
+        raise HTTPException(status_code=400, detail="Justificativa é obrigatória")
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id, condutor_id, status FROM fleet_checklists WHERE id=%s",
+            (checklist_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Checklist não encontrado")
+        if row["status"] != "aguardando_vistoria":
+            raise HTTPException(
+                status_code=400,
+                detail=f"Só é possível recusar saída de checklist aguardando vistoria (atual: {row['status']})."
+            )
+        if user["id"] == row["condutor_id"]:
+            raise HTTPException(status_code=403, detail="O condutor não pode recusar a própria saída")
+
+        cursor.execute("""
+            UPDATE fleet_checklists SET
+                recusa_justificativa=%s,
+                recusa_por=%s,
+                recusa_em=NOW()
+            WHERE id=%s
+        """, (justificativa, user["id"], checklist_id))
+
+        # Notificação in-app pro condutor
+        try:
+            msg = (f"Vistoria de saída recusada — checklist #{checklist_id}. "
+                   f"Motivo: {justificativa[:180]}. Abra o checklist pra corrigir.")
+            cursor.execute(
+                "INSERT INTO notificacoes (usuario_id, mensagem, tipo, lido) "
+                "VALUES (%s, %s, 'fleet_saida_recusada', 0)",
+                (row["condutor_id"], msg),
+            )
+        except Exception as ne:
+            logger.warning(f"[FLEET] Falha ao notificar condutor da recusa: {ne}")
+
+        conn.commit()
+        logger.info(
+            f"[FLEET] Checklist {checklist_id} saída recusada por user {user['id']}: {justificativa}"
+        )
+        return {
+            "success": True,
+            "message": "Recusa registrada. O condutor foi notificado pra corrigir.",
+        }
     except HTTPException:
         raise
     except Exception as e:

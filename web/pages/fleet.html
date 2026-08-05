@@ -1326,8 +1326,80 @@
     </div>
     <div class="fleet-modal-footer">
       <button class="btn-fleet btn-fleet-secondary" onclick="closeModal('modalVistoriaSaida')">Cancelar</button>
+      <button class="btn-fleet btn-fleet-danger" onclick="abrirRecusaSaida()" style="margin-right:auto">
+        <i class="bi bi-x-circle"></i> Recusar (pedir correção)
+      </button>
       <button class="btn-fleet btn-fleet-primary" onclick="saveVistoriaSaida()">
         <i class="bi bi-shield-check"></i> Autorizar Saída
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: CORRIGIR FOTOS (condutor completa fotos faltantes)
+     Aberto quando o checklist está aguardando_vistoria e o condutor
+     precisa adicionar/refazer fotos (após recusa ou por conta própria).
+     ============================================================ -->
+<div class="fleet-modal-overlay" id="modalCorrigirFotos">
+  <div class="fleet-modal wide">
+    <div class="fleet-modal-header" style="background:#EFF6FF;border-bottom:1px solid #BFDBFE">
+      <span class="fleet-modal-title" style="color:#1E40AF">
+        <i class="bi bi-camera-fill"></i> Corrigir / adicionar fotos do checklist
+      </span>
+      <button class="fleet-modal-close" onclick="closeModal('modalCorrigirFotos')">&times;</button>
+    </div>
+    <div class="fleet-modal-body">
+      <input type="hidden" id="corrigirChecklistId">
+      <div id="corrigirRecusaBox" style="display:none;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#7F1D1D">
+        <div style="font-weight:700;margin-bottom:4px"><i class="bi bi-exclamation-triangle-fill"></i> Vistoriador pediu correção</div>
+        <div id="corrigirRecusaMotivo"></div>
+      </div>
+      <div style="background:#EFF6FF;border-left:4px solid #3B82F6;border-radius:6px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#1E40AF">
+        <i class="bi bi-info-circle-fill"></i>
+        Toque nas caixas em vermelho pra tirar as fotos que faltam.
+        Quando todas estiverem verdes, clique em <strong>Reenviar pra vistoria</strong>.
+      </div>
+      <div id="corrigirGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px"></div>
+    </div>
+    <div class="fleet-modal-footer">
+      <button class="btn-fleet btn-fleet-secondary" onclick="closeModal('modalCorrigirFotos')">Fechar</button>
+      <button class="btn-fleet btn-fleet-primary" id="btnReenviarSaidaCorr" onclick="reenviarAposCorrigir()" disabled>
+        <i class="bi bi-send-check"></i> Reenviar pra vistoria
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: RECUSAR VISTORIA DE SAÍDA
+     ============================================================ -->
+<div class="fleet-modal-overlay" id="modalRecusarSaida">
+  <div class="fleet-modal" style="max-width:520px">
+    <div class="fleet-modal-header" style="background:#FEF2F2;border-bottom:1px solid #FECACA">
+      <span class="fleet-modal-title" style="color:#991B1B">
+        <i class="bi bi-exclamation-triangle-fill"></i> Recusar vistoria de saída
+      </span>
+      <button class="fleet-modal-close" onclick="closeModal('modalRecusarSaida')">&times;</button>
+    </div>
+    <div class="fleet-modal-body">
+      <input type="hidden" id="recSaidaChecklistId">
+      <div style="background:#FEF9C3;border:1px solid #F59E0B;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#92400E">
+        <i class="bi bi-info-circle-fill"></i>
+        O condutor vai receber notificação com o motivo abaixo e poderá reabrir
+        o checklist pra completar/refazer o que faltou.
+      </div>
+      <div class="fleet-form-group">
+        <label class="fleet-label">Motivo da recusa <span class="req">*</span></label>
+        <textarea class="fleet-textarea" id="recSaidaJust" rows="4"
+                  placeholder="Ex: Falta foto do para-lama traseiro. Refaça a inspeção."
+                  maxlength="500"></textarea>
+      </div>
+    </div>
+    <div class="fleet-modal-footer">
+      <button class="btn-fleet btn-fleet-secondary" onclick="closeModal('modalRecusarSaida')">Cancelar</button>
+      <button class="btn-fleet btn-fleet-danger" onclick="confirmarRecusaSaida()">
+        <i class="bi bi-x-circle"></i> Recusar checklist
       </button>
     </div>
   </div>
@@ -3131,10 +3203,181 @@ async function saveVistoriaSaida() {
     method: 'POST',
     body: JSON.stringify({ liberador_id: parseInt(liberador_id), assinatura_liberador: sig }),
   });
-  if (!res?.success) { showToast(res?.detail || 'Erro ao autorizar saída', 'error'); return; }
+  if (!res?.success) {
+    const detail = res?.detail || 'Erro ao autorizar saída';
+    // Se falhou por falta de foto, sugere usar o "Recusar" pra o condutor corrigir
+    if (/Faltam fotos/i.test(detail)) {
+      showToast(detail + ' Use "Recusar (pedir correção)" pra que o condutor complete.', 'error');
+    } else {
+      showToast(detail, 'error');
+    }
+    return;
+  }
 
   showToast('Saída autorizada! O condutor pode iniciar a viagem.', 'success');
   closeModal('modalVistoriaSaida');
+  closeModal('modalChecklistDetail');
+  loadChecklists();
+}
+
+/* ============================================================
+   RECUSAR VISTORIA DE SAÍDA (2026-08-05)
+   Vistoriador não conseguia devolver checklist com foto faltando.
+   Agora abre modal → grava justificativa → condutor recebe notif e reabre.
+   ============================================================ */
+function abrirRecusaSaida() {
+  const id = document.getElementById('vstChecklistId').value;
+  if (!id) { showToast('Checklist não identificado', 'error'); return; }
+  document.getElementById('recSaidaChecklistId').value = id;
+  document.getElementById('recSaidaJust').value = '';
+  openModal('modalRecusarSaida');
+}
+
+async function confirmarRecusaSaida() {
+  const id = document.getElementById('recSaidaChecklistId').value;
+  const justificativa = document.getElementById('recSaidaJust').value.trim();
+  if (!justificativa) {
+    showToast('Descreva o motivo da recusa', 'error');
+    document.getElementById('recSaidaJust').focus();
+    return;
+  }
+  const res = await apiFetch(`/checklists/${id}/recusar-saida`, {
+    method: 'POST',
+    body: JSON.stringify({ justificativa }),
+  });
+  if (!res?.success) { showToast(res?.detail || 'Erro ao recusar', 'error'); return; }
+  showToast('Recusa registrada. O condutor foi notificado.', 'success');
+  closeModal('modalRecusarSaida');
+  closeModal('modalVistoriaSaida');
+  closeModal('modalChecklistDetail');
+  loadChecklists();
+}
+
+async function reenviarSaidaCorrigida(checklistId) {
+  const res = await apiFetch(`/checklists/${checklistId}/reenviar-saida`, {
+    method: 'POST', body: '{}',
+  });
+  if (!res?.success) { showToast(res?.detail || 'Erro ao reenviar', 'error'); return; }
+  showToast('Enviado. Aguarde a vistoria.', 'success');
+  closeModal('modalChecklistDetail');
+  loadChecklists();
+}
+
+/* ============================================================
+   CORRIGIR FOTOS — condutor completa fotos faltantes do checklist
+   ============================================================ */
+let _CORR_STATE = { checklistId: null, done: {} }; // done[angKey] = true quando ja tem foto
+
+async function abrirCorrigirFotos(checklistId) {
+  document.getElementById('corrigirChecklistId').value = checklistId;
+  _CORR_STATE = { checklistId, done: {} };
+
+  // Busca estado atual: motivo da recusa + fotos que já existem
+  const res = await apiFetch(`/checklists/${checklistId}`);
+  if (!res?.success || !res.checklist) {
+    showToast('Erro ao carregar checklist', 'error');
+    return;
+  }
+  const c = res.checklist;
+  const box = document.getElementById('corrigirRecusaBox');
+  if (c.recusa_justificativa) {
+    document.getElementById('corrigirRecusaMotivo').textContent = c.recusa_justificativa;
+    box.style.display = '';
+  } else {
+    box.style.display = 'none';
+  }
+
+  // Marca fotos que já existem (só ângulos padrão, sem prefixo retorno_)
+  const angulosTiradas = new Set();
+  for (const p of (c.inspection_photos || [])) {
+    const a = p.angulo || '';
+    if (a.startsWith('retorno_') || a === 'problema' || a === 'avaria_retorno' || a.startsWith('arranhado_')) continue;
+    angulosTiradas.add(a);
+  }
+
+  // Renderiza grid — 7 caixas (mesmos angulos do checklist novo)
+  const grid = document.getElementById('corrigirGrid');
+  grid.innerHTML = PHOTO_ANGLES.map(ang => {
+    const has = angulosTiradas.has(ang.key);
+    if (has) _CORR_STATE.done[ang.key] = true;
+    return `<div class="corr-tile" id="corrTile_${ang.key}" data-key="${ang.key}"
+                 style="border:2px solid ${has ? '#10B981' : '#EF4444'};background:${has ? '#F0FDF4' : '#FEF2F2'};
+                        border-radius:10px;padding:10px;text-align:center;cursor:pointer"
+                 onclick="document.getElementById('corrFile_${ang.key}').click()">
+      <div style="font-size:24px;color:${has ? '#10B981' : '#EF4444'};margin-bottom:4px">
+        <i class="bi ${has ? 'bi-check-circle-fill' : 'bi-camera'}"></i>
+      </div>
+      <div style="font-weight:700;font-size:12px;color:#374151">${ang.label}</div>
+      <div style="font-size:11px;color:${has ? '#059669' : '#DC2626'};margin-top:2px" id="corrStat_${ang.key}">
+        ${has ? 'OK' : 'Falta'}
+      </div>
+      <input type="file" id="corrFile_${ang.key}" accept="image/*" capture="environment"
+             style="display:none" onchange="onCorrFotoSelecionada('${ang.key}', this)">
+    </div>`;
+  }).join('');
+
+  _atualizarBotaoReenviar();
+  openModal('modalCorrigirFotos');
+}
+
+async function onCorrFotoSelecionada(angKey, input) {
+  if (!input.files?.[0]) return;
+  const file = input.files[0];
+  const tile = document.getElementById(`corrTile_${angKey}`);
+  const stat = document.getElementById(`corrStat_${angKey}`);
+  tile.style.opacity = '0.6';
+  stat.textContent = 'Enviando...';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('angulo', angKey);
+  const token = _getAuthToken();
+  try {
+    const r = await fetch(`${API}/checklists/${_CORR_STATE.checklistId}/photos`, {
+      method: 'POST', credentials: 'include',
+      headers: { 'X-Auth-Token': token }, body: fd,
+    });
+    tile.style.opacity = '1';
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      stat.textContent = 'Erro';
+      stat.style.color = '#DC2626';
+      showToast(err.detail || 'Erro no upload', 'error');
+      return;
+    }
+    // OK — marca visualmente
+    _CORR_STATE.done[angKey] = true;
+    tile.style.border = '2px solid #10B981';
+    tile.style.background = '#F0FDF4';
+    tile.querySelector('i').className = 'bi bi-check-circle-fill';
+    tile.querySelector('i').parentElement.style.color = '#10B981';
+    stat.textContent = 'OK';
+    stat.style.color = '#059669';
+    _atualizarBotaoReenviar();
+  } catch (e) {
+    tile.style.opacity = '1';
+    stat.textContent = 'Erro';
+    showToast('Falha de rede: ' + e.message, 'error');
+  }
+}
+
+function _atualizarBotaoReenviar() {
+  const btn = document.getElementById('btnReenviarSaidaCorr');
+  const faltando = PHOTO_ANGLES.filter(a => !_CORR_STATE.done[a.key]);
+  btn.disabled = faltando.length > 0;
+  btn.title = faltando.length
+    ? `Faltam ${faltando.length} foto(s): ${faltando.map(a => a.label).join(', ')}`
+    : 'Todas as fotos prontas — pode reenviar';
+}
+
+async function reenviarAposCorrigir() {
+  const id = _CORR_STATE.checklistId;
+  const res = await apiFetch(`/checklists/${id}/reenviar-saida`, {
+    method: 'POST', body: '{}',
+  });
+  if (!res?.success) { showToast(res?.detail || 'Erro ao reenviar', 'error'); return; }
+  showToast('Checklist reenviado! Aguarde nova vistoria.', 'success');
+  closeModal('modalCorrigirFotos');
   closeModal('modalChecklistDetail');
   loadChecklists();
 }
@@ -3449,7 +3692,9 @@ async function viewChecklist(id) {
 
     ${c.recusa_justificativa ? `
     <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:12px;margin-bottom:8px">
-      <div style="font-weight:700;font-size:13px;color:#DC2626;margin-bottom:6px"><i class="bi bi-exclamation-triangle-fill"></i> Devolução recusada</div>
+      <div style="font-weight:700;font-size:13px;color:#DC2626;margin-bottom:6px"><i class="bi bi-exclamation-triangle-fill"></i>
+        ${c.status === 'aguardando_vistoria' ? 'Vistoria de saída recusada' : 'Devolução recusada'}
+      </div>
       <div style="font-size:13px;color:#7F1D1D"><strong>Motivo:</strong> ${c.recusa_justificativa}</div>
       ${c.recusa_por_nome ? `<div style="font-size:11px;color:#9CA3AF;margin-top:4px">Por <strong>${c.recusa_por_nome}</strong>${c.recusa_em ? ' em '+fmtDatetime(c.recusa_em) : ''}</div>` : ''}
     </div>` : ''}
@@ -3457,6 +3702,13 @@ async function viewChecklist(id) {
 
   const footer = document.getElementById('checklistDetailFooter');
   footer.innerHTML = '';
+
+  // Condutor pode corrigir se checklist está aguardando vistoria (com ou sem recusa formal)
+  // — cobre tanto o caso de recusa explícita quanto o de foto que faltou sem ter passado pela recusa
+  if (c.status === 'aguardando_vistoria' &&
+      (currentUser?.id === c.condutor_id || ['ADMIN','TI'].includes(currentUser?.role))) {
+    footer.innerHTML += `<button class="btn-fleet btn-fleet-primary" style="background:#3B82F6;border-color:#3B82F6" onclick="abrirCorrigirFotos(${c.id})"><i class="bi bi-camera-fill"></i> Corrigir / adicionar fotos</button>`;
+  }
 
   if (c.status === 'aguardando_vistoria' && canInspectFleet() && currentUser?.id !== c.condutor_id) {
     footer.innerHTML += `<button class="btn-fleet btn-fleet-primary" style="background:#F59E0B;border-color:#F59E0B" onclick="closeModal('modalChecklistDetail');openVistoriaSaida(${c.id})"><i class="bi bi-shield-check"></i> Vistoriar Saída</button>`;
