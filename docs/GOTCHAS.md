@@ -282,6 +282,28 @@ Regra rígida do sistema. Ver `docs/CONVENCOES.md#frontend-modais-sempre-com-gri
 
 ---
 
+## Checklist de fotos do fleet — ordem no frontend (2026-08-05)
+
+**Sintoma:** condutor clica em "Finalizar devolução" e recebe erro "Faltam fotos: retorno_frente, retorno_lateral..." mesmo tendo tirado todas.
+
+**Causa:** o `PUT /checklists/{id}/devolver` valida server-side que existam 7 fotos com `angulo` prefixado `retorno_`. Antes de 2026-08-05, o fluxo do frontend era: PUT devolver → depois upload das fotos. Com a nova validação, PUT rejeita porque as fotos ainda não subiram.
+
+**Fix aplicado (fleet.html `saveDevolver`):** upload das fotos ANTES do PUT devolver. Fotos que falham (ex: duplicata rejeitada por hash) ficam no buffer `RET_INSPECTION_FILES` — condutor refaz e clica de novo, só reenvia as pendentes. PUT devolver só roda se todas subiram.
+
+**Mesmo padrão vale pra `saveChecklist` (saída):** frontend valida `REQUIRED_ANGLES` antes de POST /checklists, mas o backend NÃO valida na criação (fotos ainda não existem). A validação server-side de saída acontece só no `vistoriar-saida` (bloqueio ao vistoriador). Se você mexer no fluxo de criação e precisar validar antes de vistoriar, use `_missing_checklist_angles(cursor, checklist_id, 'saida', needs_painel)`.
+
+---
+
+## Anti-burla de foto no checklist — hash SHA-256 (2026-08-05)
+
+**Comportamento:** `POST /api/fleet/checklists/{id}/photos` calcula SHA-256 dos bytes e rejeita `400` se a mesma imagem já foi enviada nesse checklist (índice único `uq_checklist_hash`). Foto pode ser reusada em CHECKLISTS DIFERENTES (ex: caso de recusa + reenvio) — a chave é (checklist_id, file_hash).
+
+**Não detecta:** foto ligeiramente diferente (mudança de 1 byte quebra o hash). Usuário determinado ainda consegue tirar screenshot recompactada. Mitigação real seria `getUserMedia` (câmera direta) — não foi aplicada nesta iteração pra evitar retrabalho de UX; ver 2026-08-05 pela decisão.
+
+**Coluna nova:** `fleet_checklist_photos.file_hash CHAR(64)`. Uploads antigos ficam NULL — não bloqueiam nada, só não têm proteção retroativa.
+
+---
+
 ## Convenção `docs/`
 
 Já existe:
