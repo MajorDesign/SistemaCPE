@@ -1341,7 +1341,8 @@
      Aberto quando o checklist está aguardando_vistoria e o condutor
      precisa adicionar/refazer fotos (após recusa ou por conta própria).
      ============================================================ -->
-<div class="fleet-modal-overlay" id="modalCorrigirFotos">
+<!-- z-index maior: abre POR CIMA do modalChecklistDetail -->
+<div class="fleet-modal-overlay" id="modalCorrigirFotos" style="z-index:1100">
   <div class="fleet-modal wide">
     <div class="fleet-modal-header" style="background:#EFF6FF;border-bottom:1px solid #BFDBFE">
       <span class="fleet-modal-title" style="color:#1E40AF">
@@ -1374,7 +1375,8 @@
 <!-- ============================================================
      MODAL: RECUSAR VISTORIA DE SAÍDA
      ============================================================ -->
-<div class="fleet-modal-overlay" id="modalRecusarSaida">
+<!-- z-index maior: abre POR CIMA do modalVistoriaSaida -->
+<div class="fleet-modal-overlay" id="modalRecusarSaida" style="z-index:1100">
   <div class="fleet-modal" style="max-width:520px">
     <div class="fleet-modal-header" style="background:#FEF2F2;border-bottom:1px solid #FECACA">
       <span class="fleet-modal-title" style="color:#991B1B">
