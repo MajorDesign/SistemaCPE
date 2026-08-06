@@ -852,3 +852,275 @@ async def remover_email(email_id: int):
     finally:
         if cursor: cursor.close()
         if conn: conn.close()
+
+
+# ============================================================
+# SOLICITAÇÕES DE LIBERAÇÃO (v086, 2026-08-06)
+# Fluxo: user cujo email não está na whitelist pede pra ser adicionado.
+# Admin recebe e libera (ou recusa).
+# ============================================================
+
+class SolicitarLiberacaoIn(BaseModel):
+    email: EmailStr
+    nome: Optional[str] = Field(None, max_length=120)
+    motivo: Optional[str] = Field(None, max_length=500)
+
+
+@router.post("/solicitar-liberacao", status_code=status.HTTP_201_CREATED)
+async def solicitar_liberacao(payload: SolicitarLiberacaoIn):
+    """Público — user cujo email não está autorizado pede liberação.
+    Grava em pre_cadastro_solicitacoes e notifica admin (in-app + email).
+    """
+    email_norm = payload.email.strip().lower()
+    nome = (payload.nome or "").strip() or None
+    motivo = (payload.motivo or "").strip() or None
+
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        # Guarda: já tem user?
+        cursor.execute("SELECT id FROM users WHERE email = %s", (email_norm,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=409, detail="Este e-mail já pertence a um usuário do sistema.")
+
+        # Guarda: já está na whitelist (não precisa pedir liberação)?
+        cursor.execute(
+            "SELECT id, status FROM pre_cadastro_emails WHERE email = %s",
+            (email_norm,),
+        )
+        wl = cursor.fetchone()
+        if wl and wl["status"] == "disponivel":
+            raise HTTPException(
+                status_code=409,
+                detail="Seu e-mail já está liberado. Volte à tela de login e clique em 'Primeiro acesso'.",
+            )
+
+        # Guarda: já tem solicitação pendente?
+        cursor.execute(
+            "SELECT id, status FROM pre_cadastro_solicitacoes "
+            "WHERE email = %s AND status = 'pendente' LIMIT 1",
+            (email_norm,),
+        )
+        existing = cursor.fetchone()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="Você já pediu liberação desse e-mail. Aguarde a resposta do administrador.",
+            )
+
+        cursor.execute(
+            "INSERT INTO pre_cadastro_solicitacoes (email, nome, motivo) VALUES (%s,%s,%s)",
+            (email_norm, nome, motivo),
+        )
+        new_id = cursor.lastrowid
+        conn.commit()
+        logger.info(f"[PRECAD/SOL-LIB] Nova solicitacao #{new_id} email={email_norm}")
+
+        # Notificação in-app + email pro admin (ADMIN/TI/RESPONSAVEL_GRUPO TI)
+        try:
+            _notificar_admins_nova_solicitacao(cursor, new_id, email_norm, nome, motivo)
+            conn.commit()
+        except Exception as ne:
+            logger.warning(f"[PRECAD/SOL-LIB] Falha ao notificar admins: {ne}")
+
+        return {"ok": True, "id": new_id, "message": "Solicitação enviada. Aguarde o administrador."}
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[PRECAD/SOL-LIB] ❌ {err}")
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+def _notificar_admins_nova_solicitacao(cursor, sol_id: int, email: str, nome, motivo):
+    """Cria notificação in-app + email pros admins (ADMIN/TI ativos)."""
+    cursor.execute("""
+        SELECT id, email, name FROM users
+         WHERE is_active=1 AND role IN ('ADMIN','TI')
+    """)
+    admins = cursor.fetchall()
+    msg = f"Nova solicitação de pré-cadastro #{sol_id}: {email}"
+    if nome:
+        msg += f" ({nome})"
+    for a in admins:
+        try:
+            cursor.execute(
+                "INSERT INTO notificacoes (usuario_id, mensagem, tipo, lido) "
+                "VALUES (%s, %s, 'precad_solicitacao', 0)",
+                (a["id"], msg),
+            )
+        except Exception as e:
+            logger.warning(f"[PRECAD] falha notif in-app uid={a['id']}: {e}")
+
+    emails = [a["email"] for a in admins if a.get("email") and "@" in a["email"]]
+    if emails:
+        try:
+            from services.email_service import enviar_email
+            subject = f"[CPE Control] Nova solicitação de pré-cadastro — {email}"
+            html = (
+                "<h3>Nova solicitação de pré-cadastro</h3>"
+                f"<p><strong>E-mail:</strong> {email}</p>"
+                + (f"<p><strong>Nome:</strong> {nome}</p>" if nome else "")
+                + (f"<p><strong>Motivo:</strong> {motivo}</p>" if motivo else "")
+                + "<p>Acesse o painel de usuários pra liberar ou recusar.</p>"
+            )
+            enviar_email(para=emails, assunto=subject, html=html)
+        except Exception as e:
+            logger.warning(f"[PRECAD] falha email admins: {e}")
+
+
+@router.get("/solicitacoes")
+async def listar_solicitacoes():
+    """Admin: lista solicitações de liberação (pendentes primeiro)."""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("""
+            SELECT s.id, s.email, s.nome, s.motivo, s.status, s.created_at,
+                   s.respondido_em, s.motivo_recusa,
+                   u.name AS respondido_por_nome
+              FROM pre_cadastro_solicitacoes s
+              LEFT JOIN users u ON u.id = s.respondido_por
+             ORDER BY (s.status='pendente') DESC, s.created_at DESC
+             LIMIT 200
+        """)
+        return {"solicitacoes": convert_datetime_list(cursor.fetchall())}
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+class LiberarSolicitacaoIn(BaseModel):
+    respondido_por: Optional[int] = None
+    nome_sugerido: Optional[str] = Field(None, max_length=120)
+
+
+@router.post("/solicitacoes/{sol_id}/liberar")
+async def liberar_solicitacao(sol_id: int, payload: LiberarSolicitacaoIn):
+    """Admin libera: adiciona email na whitelist + notifica user por email."""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, email, nome, status FROM pre_cadastro_solicitacoes WHERE id=%s",
+            (sol_id,),
+        )
+        sol = cursor.fetchone()
+        if not sol:
+            raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+        if sol["status"] != "pendente":
+            raise HTTPException(status_code=400, detail=f"Já foi {sol['status']}")
+
+        email_norm = sol["email"]
+        nome = (payload.nome_sugerido or sol.get("nome") or "").strip() or None
+
+        # Adiciona na whitelist (ou reativa se já existe)
+        cursor.execute(
+            "SELECT id, status FROM pre_cadastro_emails WHERE email=%s",
+            (email_norm,),
+        )
+        wl = cursor.fetchone()
+        if not wl:
+            cursor.execute(
+                "INSERT INTO pre_cadastro_emails (email, nome_sugerido, importado_por) "
+                "VALUES (%s, %s, %s)",
+                (email_norm, nome, payload.respondido_por),
+            )
+        elif wl["status"] == "usado":
+            raise HTTPException(status_code=400, detail="Este e-mail já foi utilizado em um cadastro.")
+
+        # Marca solicitação como liberada
+        cursor.execute(
+            "UPDATE pre_cadastro_solicitacoes SET status='liberado', "
+            "respondido_por=%s, respondido_em=NOW() WHERE id=%s",
+            (payload.respondido_por, sol_id),
+        )
+        conn.commit()
+
+        # Email pro usuário: "seu email foi liberado, volte pro login"
+        try:
+            from services.email_service import enviar_email
+            subject = "[CPE Control] Seu pré-cadastro foi liberado"
+            html = (
+                "<h3>E-mail liberado</h3>"
+                f"<p>Olá{' ' + nome if nome else ''},</p>"
+                f"<p>Seu e-mail <strong>{email_norm}</strong> foi liberado pra iniciar o cadastro "
+                "no sistema CPE Control.</p>"
+                f"<p><a href=\"{PUBLIC_BASE_URL}/SistemaCPE/web/login.html\" "
+                'style="display:inline-block;background:#F59E0B;color:#000;padding:10px 20px;'
+                'text-decoration:none;border-radius:6px;font-weight:600">'
+                "Ir pra tela de login</a></p>"
+                "<p>Clique em <strong>&laquo;Solicitar primeiro acesso&raquo;</strong>, "
+                "informe seu e-mail e complete os dados.</p>"
+            )
+            enviar_email(para=[email_norm], assunto=subject, html=html)
+        except Exception as e:
+            logger.warning(f"[PRECAD/LIBERAR] falha email usuario: {e}")
+
+        logger.info(f"[PRECAD/LIBERAR] sol_id={sol_id} email={email_norm} liberado")
+        return {"ok": True, "message": "E-mail liberado. Usuário foi notificado por e-mail."}
+    except HTTPException:
+        raise
+    except Exception as err:
+        conn.rollback()
+        logger.error(f"[PRECAD/LIBERAR] ❌ {err}")
+        raise HTTPException(status_code=500, detail=str(err))
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+class RecusarSolicitacaoIn(BaseModel):
+    respondido_por: Optional[int] = None
+    motivo_recusa: str = Field(..., min_length=3, max_length=500)
+
+
+@router.post("/solicitacoes/{sol_id}/recusar")
+async def recusar_solicitacao(sol_id: int, payload: RecusarSolicitacaoIn):
+    """Admin recusa: grava motivo + envia email pro usuário."""
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, email, status FROM pre_cadastro_solicitacoes WHERE id=%s",
+            (sol_id,),
+        )
+        sol = cursor.fetchone()
+        if not sol:
+            raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+        if sol["status"] != "pendente":
+            raise HTTPException(status_code=400, detail=f"Já foi {sol['status']}")
+
+        cursor.execute(
+            "UPDATE pre_cadastro_solicitacoes SET status='recusado', "
+            "respondido_por=%s, respondido_em=NOW(), motivo_recusa=%s WHERE id=%s",
+            (payload.respondido_por, payload.motivo_recusa, sol_id),
+        )
+        conn.commit()
+
+        try:
+            from services.email_service import enviar_email
+            enviar_email(
+                para=[sol["email"]],
+                assunto="[CPE Control] Solicitação de pré-cadastro recusada",
+                html=(
+                    "<h3>Pré-cadastro recusado</h3>"
+                    "<p>Sua solicitação não foi aprovada pelo administrador.</p>"
+                    f"<p><strong>Motivo:</strong> {payload.motivo_recusa}</p>"
+                    "<p>Se achar que houve engano, procure a TI.</p>"
+                ),
+            )
+        except Exception as e:
+            logger.warning(f"[PRECAD/RECUSAR] falha email usuario: {e}")
+
+        return {"ok": True, "message": "Recusada. Usuário foi notificado por e-mail."}
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
