@@ -38,6 +38,26 @@
     .fa-link:hover { color: #FFA500; text-decoration: underline; }
     .fa-link strong { color: #B45309; }
 
+    /* Pulso 5 vezes pra chamar atencao no primeiro acesso.
+       Aplicado ao btnFirstAccess via classe .pulse-attention adicionada
+       pelo JS quando a pagina carrega. */
+    @keyframes cpe-pulse-attention {
+      0%, 100% {
+        background: transparent;
+        box-shadow: 0 0 0 0 rgba(245,158,11,0);
+        transform: scale(1);
+      }
+      50% {
+        background: rgba(253,224,71,.35);
+        box-shadow: 0 0 0 8px rgba(245,158,11,.0);
+        transform: scale(1.03);
+      }
+    }
+    .pulse-attention {
+      animation: cpe-pulse-attention .9s ease-in-out 5;
+      border-radius: 8px;
+    }
+
     .fa-overlay {
       position: fixed; inset: 0;
       background: rgba(15, 23, 42, .65);
@@ -976,10 +996,67 @@
             <input type="email" id="faEmail" placeholder="seu.email@cpe.com.br" maxlength="190" autocomplete="email">
           </div>
 
+          <!-- Ação secundária que aparece quando o email NÃO está autorizado -->
+          <div id="faStep1NotAuth" style="display:none;margin-top:12px">
+            <button type="button" class="fa-btn fa-btn-secondary" id="faIrParaLiberacao"
+                    style="width:100%;background:#FEF9C3;color:#92400E;border:1px solid #F59E0B">
+              <i class="bi bi-envelope-plus"></i> Enviar solicitação de pré-cadastro
+            </button>
+            <p class="fa-help" style="margin-top:8px;font-size:12px;color:#6b7280;text-align:center">
+              O administrador vai avaliar seu e-mail e liberar o cadastro.
+            </p>
+          </div>
+
           <div class="fa-actions">
             <button type="button" class="fa-btn fa-btn-secondary" id="faCancel1">Cancelar</button>
             <button type="button" class="fa-btn fa-btn-primary" id="faVerificar">
               <i class="bi bi-check2-circle"></i> Verificar
+            </button>
+          </div>
+        </div>
+
+        <!-- ============ STEP 4: SOLICITAR LIBERAÇÃO (v086) ============ -->
+        <div class="fa-step" id="faStep4">
+          <div class="fa-alert info">
+            <i class="bi bi-info-circle"></i>
+            <span>Preencha pra que o administrador libere seu e-mail. Você recebe email quando for aprovado.</span>
+          </div>
+          <div id="faStep4Alert"></div>
+          <div class="fa-field">
+            <label><i class="bi bi-envelope"></i> Seu e-mail</label>
+            <input type="email" id="faLibEmail" readonly
+                   style="background:#F9FAFB;color:#374151">
+          </div>
+          <div class="fa-field">
+            <label for="faLibNome"><i class="bi bi-person"></i> Seu nome</label>
+            <input type="text" id="faLibNome" placeholder="Nome completo" maxlength="120">
+          </div>
+          <div class="fa-field">
+            <label for="faLibMotivo"><i class="bi bi-chat-left-text"></i> Seu setor / motivo <small style="color:#6b7280">(opcional)</small></label>
+            <textarea id="faLibMotivo" placeholder="Ex: Sou do financeiro, preciso acessar contratos e chamados"
+                      maxlength="500" rows="2"></textarea>
+          </div>
+          <div class="fa-actions">
+            <button type="button" class="fa-btn fa-btn-secondary" id="faLibVoltar">
+              <i class="bi bi-arrow-left"></i> Voltar
+            </button>
+            <button type="button" class="fa-btn fa-btn-primary" id="faLibEnviar">
+              <i class="bi bi-send"></i> Enviar solicitação
+            </button>
+          </div>
+        </div>
+
+        <!-- ============ STEP 5: CONFIRMAÇÃO DE LIBERAÇÃO ENVIADA ============ -->
+        <div class="fa-step" id="faStep5">
+          <div class="fa-success">
+            <i class="bi bi-check-circle-fill" style="font-size:56px;color:#16a34a"></i>
+            <h3 style="margin-top:16px">Solicitação enviada!</h3>
+            <p style="max-width:340px">
+              O administrador recebeu seu pedido. Quando seu e-mail for liberado, você recebe uma confirmação por e-mail —
+              basta voltar aqui e clicar em <strong>Solicitar primeiro acesso</strong>.
+            </p>
+            <button type="button" class="fa-btn fa-btn-primary" id="faLibFechar" style="margin-top:20px">
+              <i class="bi bi-check"></i> Entendi
             </button>
           </div>
         </div>
@@ -1225,6 +1302,12 @@
     function fechar() { overlay.classList.remove('show'); }
 
     // ---- step 1: verificar e-mail -----------------------------------------
+    // Ao editar o email, esconde o botão de "solicitar liberação" (que
+    // referencia o email anterior verificado)
+    document.getElementById('faEmail').addEventListener('input', () => {
+      document.getElementById('faStep1NotAuth').style.display = 'none';
+    });
+
     async function verificarEmail() {
       const email = document.getElementById('faEmail').value.trim().toLowerCase();
       clearAlert('faStep1Alert');
@@ -1250,6 +1333,11 @@
         if (!data.autorizado) {
           const tipo = data.ja_cadastrado || data.ja_pendente ? 'warning' : 'danger';
           alert('faStep1Alert', tipo, data.mensagem);
+          // v086: se motivo é "não autorizado" (sem já_cadastrado/pendente),
+          // ofereço botão pra pedir liberação. Se já cadastrado/pendente,
+          // não faz sentido pedir de novo.
+          const podePedir = !data.ja_cadastrado && !data.ja_pendente;
+          document.getElementById('faStep1NotAuth').style.display = podePedir ? 'block' : 'none';
           return;
         }
 
@@ -1522,7 +1610,15 @@
     }
 
     // ---- bind events ------------------------------------------------------
-    document.getElementById('btnFirstAccess').addEventListener('click', abrir);
+    const _btnFirst = document.getElementById('btnFirstAccess');
+    _btnFirst.addEventListener('click', abrir);
+    // 2026-08-06: pulsa 5x pra chamar atencao no primeiro acesso.
+    // Delay curto pra dar tempo do layout estabilizar.
+    setTimeout(() => {
+      _btnFirst.classList.add('pulse-attention');
+      // Remove a classe apos as 5 pulsacoes (5 x 0.9s = 4.5s + folga)
+      setTimeout(() => _btnFirst.classList.remove('pulse-attention'), 5000);
+    }, 500);
     document.getElementById('faClose').addEventListener('click', fechar);
     document.getElementById('faCancel1').addEventListener('click', fechar);
     document.getElementById('faFechar3').addEventListener('click', fechar);
@@ -1550,6 +1646,54 @@
     });
 
     overlay.addEventListener('click', e => { if (e.target === overlay) fechar(); });
+
+    // ============================================================
+    // v086 (2026-08-06) — solicitar liberação de pré-cadastro
+    // ============================================================
+    document.getElementById('faIrParaLiberacao').addEventListener('click', () => {
+      const email = document.getElementById('faEmail').value.trim().toLowerCase();
+      if (!email) return;
+      document.getElementById('faLibEmail').value = email;
+      document.getElementById('faLibNome').value = '';
+      document.getElementById('faLibMotivo').value = '';
+      clearAlert('faStep4Alert');
+      showStep(4);
+    });
+
+    document.getElementById('faLibVoltar').addEventListener('click', () => showStep(1));
+    document.getElementById('faLibFechar').addEventListener('click', fechar);
+
+    document.getElementById('faLibEnviar').addEventListener('click', async () => {
+      const btn = document.getElementById('faLibEnviar');
+      clearAlert('faStep4Alert');
+      const email  = document.getElementById('faLibEmail').value.trim().toLowerCase();
+      const nome   = document.getElementById('faLibNome').value.trim();
+      const motivo = document.getElementById('faLibMotivo').value.trim();
+      if (!nome) {
+        alert('faStep4Alert', 'danger', 'Informe seu nome.');
+        return;
+      }
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando...';
+      try {
+        const r = await fetch(`${PRECAD}/solicitar-liberacao`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, nome, motivo: motivo || null }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          alert('faStep4Alert', 'danger', data.detail || 'Erro ao enviar solicitação.');
+          return;
+        }
+        showStep(5);
+      } catch (err) {
+        alert('faStep4Alert', 'danger', 'Erro de conexão: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-send"></i> Enviar solicitação';
+      }
+    });
   })();
   </script>
 

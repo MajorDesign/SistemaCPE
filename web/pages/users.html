@@ -952,6 +952,22 @@
         </div>
         <!-- [FIM] Page Header -->
 
+        <!-- [INICIO] Solicitações de LIBERAÇÃO de e-mail (v086, 2026-08-06) -->
+        <!-- Users cujo e-mail não estava na whitelist pedem pra ser adicionados. -->
+        <div class="pc-section" id="pcSolicitacoesSection" style="display:none;background:#FEF9C3;border-color:#F59E0B">
+          <h3 style="color:#92400E">
+            <i class="bi bi-envelope-plus"></i>
+            Solicitações de liberação de e-mail
+            <span class="badge-count" id="pcSolicitacoesCount" style="background:#F59E0B">0</span>
+          </h3>
+          <p style="font-size:13px;color:#78350F;margin:-4px 0 8px">
+            Pessoas cujo e-mail não estava importado pediram pra ser incluídas.
+            Ao <strong>liberar</strong>, o e-mail entra na whitelist e o usuário recebe email pra fazer o primeiro acesso.
+          </p>
+          <div id="pcSolicitacoesList"></div>
+        </div>
+        <!-- [FIM] Solicitações de liberação -->
+
         <!-- [INICIO] Pré-cadastros pendentes -->
         <div class="pc-section" id="pcPendentesSection" style="display:none;">
           <h3>
@@ -2394,6 +2410,89 @@ function renderUsers(list = users) {
 
     document.getElementById('csvImportModal').addEventListener('hidden.bs.modal', () => setArquivo(null));
 
+    // ============================================================
+    // SOLICITAÇÕES DE LIBERAÇÃO (v086, 2026-08-06)
+    // ============================================================
+    let solicitacoes = [];
+
+    async function loadSolicitacoes() {
+      try {
+        const r = await fetch(PRECAD + '/solicitacoes');
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const data = await r.json();
+        solicitacoes = data.solicitacoes || [];
+        renderSolicitacoes();
+      } catch (err) {
+        console.error('[PRECAD-SOL] Erro:', err.message);
+      }
+    }
+
+    function renderSolicitacoes() {
+      const sec  = document.getElementById('pcSolicitacoesSection');
+      const list = document.getElementById('pcSolicitacoesList');
+      const cnt  = document.getElementById('pcSolicitacoesCount');
+
+      // Mostra só as pendentes (aprovadas/recusadas ficam no histórico do banco)
+      const pendentes = solicitacoes.filter(s => s.status === 'pendente');
+      if (!pendentes.length) {
+        sec.style.display = 'none';
+        return;
+      }
+      sec.style.display = 'block';
+      cnt.textContent = pendentes.length;
+
+      list.innerHTML = pendentes.map(s => `
+        <div class="pc-card">
+          <div class="info">
+            <div class="name">${escapeHtml(s.nome || '(sem nome)')}</div>
+            <div class="email"><i class="bi bi-envelope"></i> ${escapeHtml(s.email)}</div>
+            <div class="meta">
+              ${s.motivo ? `<span><i class="bi bi-chat-left-text"></i> ${escapeHtml(s.motivo)}</span>` : ''}
+              <span><i class="bi bi-clock"></i> ${formatarData(s.created_at)}</span>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn btn-sm btn-success" onclick="liberarSolicitacao(${s.id}, '${escapeHtml(s.email)}')">
+              <i class="bi bi-check-lg"></i> Liberar
+            </button>
+            <button class="btn btn-sm btn-outline-danger" onclick="recusarSolicitacao(${s.id}, '${escapeHtml(s.email)}')">
+              <i class="bi bi-x-lg"></i> Recusar
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function liberarSolicitacao(id, email) {
+      if (!confirm(`Liberar o e-mail ${email}?\n\nEle será adicionado à whitelist e o usuário receberá email pra fazer o primeiro acesso.`)) return;
+      try {
+        const r = await fetch(`${PRECAD}/solicitacoes/${id}/liberar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) { alert(data.detail || 'Erro ao liberar.'); return; }
+        // Recarrega ambas as listas (a whitelist mudou)
+        await Promise.all([loadSolicitacoes(), loadEmailsAutorizados?.() ?? Promise.resolve()]);
+      } catch (e) { alert('Erro: ' + e.message); }
+    }
+
+    async function recusarSolicitacao(id, email) {
+      const motivo = prompt(`Recusar solicitação de ${email}\n\nMotivo (mín 3 caracteres):`);
+      if (!motivo || motivo.trim().length < 3) return;
+      try {
+        const r = await fetch(`${PRECAD}/solicitacoes/${id}/recusar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ motivo_recusa: motivo.trim() }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) { alert(data.detail || 'Erro ao recusar.'); return; }
+        await loadSolicitacoes();
+      } catch (e) { alert('Erro: ' + e.message); }
+    }
+
     // ------ PENDENTES: LISTAR ---------------------------------------------
     async function loadPendentes() {
       try {
@@ -2693,7 +2792,7 @@ function renderUsers(list = users) {
     submitBtn.addEventListener('click', () => setTimeout(loadEmailsAutorizados, 800));
 
     // ------ INIT -----------------------------------------------------------
-    function init() { loadPendentes(); loadEmailsAutorizados(); }
+    function init() { loadSolicitacoes(); loadPendentes(); loadEmailsAutorizados(); }
     document.addEventListener('authenticationSuccess', init);
     if (document.readyState !== 'loading') setTimeout(init, 200);
     else document.addEventListener('DOMContentLoaded', () => setTimeout(init, 200));
