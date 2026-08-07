@@ -1043,21 +1043,13 @@ async def liberar_solicitacao(sol_id: int, payload: LiberarSolicitacaoIn):
         )
         conn.commit()
 
-        # Email pro usuário: "seu email foi liberado, volte pro login"
+        # Email pro usuário: "seu email foi liberado — passo a passo pro primeiro acesso"
         try:
-            from services.email_service import enviar_email
-            subject = "[CPE Control] Seu pré-cadastro foi liberado"
-            html = (
-                "<h3>E-mail liberado</h3>"
-                f"<p>Olá{' ' + nome if nome else ''},</p>"
-                f"<p>Seu e-mail <strong>{email_norm}</strong> foi liberado pra iniciar o cadastro "
-                "no sistema CPE Control.</p>"
-                f"<p><a href=\"{PUBLIC_BASE_URL}/SistemaCPE/web/login.html\" "
-                'style="display:inline-block;background:#F59E0B;color:#000;padding:10px 20px;'
-                'text-decoration:none;border-radius:6px;font-weight:600">'
-                "Ir pra tela de login</a></p>"
-                "<p>Clique em <strong>&laquo;Solicitar primeiro acesso&raquo;</strong>, "
-                "informe seu e-mail e complete os dados.</p>"
+            from services.email_service import enviar_email, email_precadastro_liberado
+            subject, html = email_precadastro_liberado(
+                nome=nome,
+                email=email_norm,
+                link_login=f"{PUBLIC_BASE_URL}/SistemaCPE/web/login.html",
             )
             enviar_email(para=[email_norm], assunto=subject, html=html)
         except Exception as e:

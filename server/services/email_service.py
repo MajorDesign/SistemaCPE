@@ -973,6 +973,64 @@ def email_cadastro_aprovado(
     return subject, html
 
 
+def email_precadastro_liberado(
+    nome: str | None,
+    email: str,
+    link_login: str,
+) -> tuple[str, str]:
+    """E-mail pro usuário quando o admin libera a solicitação de pré-cadastro.
+
+    Diferente de `email_cadastro_aprovado` (esse é o passo FINAL, quando o user
+    já preencheu tudo e virou usuário): aqui o email só entrou na whitelist e
+    o usuário ainda precisa voltar na tela de login pra completar o cadastro.
+    """
+    subject = "Seu e-mail foi liberado — CPE Control"
+    saudacao = f"Olá <strong>{_escape(nome)}</strong>," if nome else "Olá,"
+    body = f"""
+        <p>{saudacao}</p>
+        <p>Boa notícia! Seu e-mail <strong>{_escape(email)}</strong> foi
+        <span style="color:#16A34A;font-weight:600;">liberado pelo administrador</span>
+        e agora você já pode iniciar o cadastro no <strong>CPE Control</strong>.</p>
+
+        <div style="margin:18px 0;padding:16px 18px;background:#FFFBEB;
+                    border-left:4px solid #F59E0B;border-radius:6px;font-size:13.5px;">
+          <div style="font-weight:700;color:#92400E;margin-bottom:10px;font-size:14px;">
+            📋 Como fazer seu primeiro acesso — passo a passo
+          </div>
+          <ol style="margin:0;padding-left:22px;color:#1f2937;line-height:1.75;">
+            <li>Clique no botão <strong>“Ir pra tela de login”</strong> abaixo.</li>
+            <li>Na tela de login, clique em <strong>«Solicitar primeiro acesso»</strong>.</li>
+            <li>Informe seu e-mail (o mesmo que foi liberado: <em>{_escape(email)}</em>).</li>
+            <li>Preencha nome completo, CPF, unidade e escolha uma senha.</li>
+            <li>Envie a solicitação — o administrador vai revisar e aprovar seu cadastro.</li>
+            <li>Quando aprovado, você recebe outro e-mail confirmando e pode entrar no sistema normalmente.</li>
+          </ol>
+        </div>
+
+        <p style="text-align:center;margin:24px 0 8px;">
+          <a href="{_escape(link_login)}"
+             style="display:inline-block;padding:12px 28px;background:#FFC107;
+                    color:#1A1A1A;font-weight:700;font-size:14px;text-decoration:none;
+                    border-radius:8px;box-shadow:0 4px 12px rgba(255,193,7,.35);">
+            🚀 Ir pra tela de login
+          </a>
+        </p>
+
+        <p style="font-size:12px;color:#6B7280;text-align:center;margin-top:8px;">
+          Se o botão não funcionar, copie e cole este link no navegador:<br>
+          <span style="word-break:break-all;">{_escape(link_login)}</span>
+        </p>
+
+        <div style="margin-top:18px;padding:12px 14px;background:#F3F4F6;
+                    border-radius:6px;font-size:12px;color:#6B7280;">
+          <strong>💡 Dica:</strong> use o mesmo e-mail liberado — se digitar outro,
+          a solicitação vai ficar bloqueada de novo e você precisará pedir liberação outra vez.
+        </div>
+    """
+    html = _BASE_TEMPLATE.format(title="Seu e-mail foi liberado", tag="Acesso liberado", body=body)
+    return subject, html
+
+
 def email_reset_senha(
     nome: str,
     link_reset: str,
