@@ -1,5 +1,111 @@
 # Deploy
 
+## Setup de máquina nova (ou desatualizada há muito tempo)
+
+Ordem obrigatória. Pular passos causa problemas sutis depois.
+
+### 1. Pré-requisitos de sistema
+
+- **Python 3.11** — versão RÍGIDA. 3.12/3.13/3.14 quebram na instalação por causa do `pydantic-core` (ver `docs/GOTCHAS.md#python-311-é-requisito-rígido`). Instala:
+  ```bash
+  winget install --id Python.Python.3.11 --silent --accept-package-agreements --accept-source-agreements
+  py -0     # confirma "3.11" na lista
+  ```
+- **Git for Windows** (com Git Bash).
+- **XAMPP** com MariaDB 10.4+ rodando (porta 3306).
+- **MySQL client acessível**: `c:/xampp/mysql/bin/mysql.exe`.
+
+### 2. Repositório
+
+```bash
+cd c:/xampp/htdocs/SistemaCPE
+git fetch origin
+git status                            # se houver mudanças locais, stash antes
+git stash push -m "wip antes de update" 2>/dev/null
+git pull origin dev
+git stash pop 2>/dev/null || true     # reaplica se stashou
+```
+
+### 3. Banco de dados
+
+Se a máquina ficou muito tempo sem uso, o schema local está desatualizado. Reset com dump fresco:
+
+```bash
+# Backup do estado atual (por segurança)
+mkdir -p backups
+"c:/xampp/mysql/bin/mysqldump.exe" -u root cpe_plus > "backups/local_pre_update_$(date +%Y%m%d_%H%M%S).sql"
+
+# Drop + reimport do dump do repo
+"c:/xampp/mysql/bin/mysql.exe" -u root -e "DROP DATABASE IF EXISTS cpe_plus; CREATE DATABASE cpe_plus CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+"c:/xampp/mysql/bin/mysql.exe" -u root cpe_plus < cpe_plus.sql
+
+# Cria _migrations_log e marca as NÃO-chat como aplicadas (schema já no dump)
+"c:/xampp/mysql/bin/mysql.exe" -u root cpe_plus -e "CREATE TABLE IF NOT EXISTS _migrations_log (nome VARCHAR(100) PRIMARY KEY, aplicada_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB;"
+
+# Marca todas EXCETO as de chat (056-064, 066-067, 078-079) como aplicadas
+VALUES=""; for f in server/migrations/[0-9][0-9][0-9]_*.sql; do
+  name=$(basename "$f")
+  case "$name" in 056_*|057_*|058_*|059_*|060_*|061_*|062_*|063_*|064_*|066_*|067_*|078_*|079_*) continue ;; esac
+  VALUES="$VALUES('$name'),"
+done; VALUES="${VALUES%,}"
+"c:/xampp/mysql/bin/mysql.exe" -u root cpe_plus -e "INSERT IGNORE INTO _migrations_log (nome) VALUES $VALUES;"
+
+# Roda as migrations de cpe_chat (criam o database do zero)
+for f in server/migrations/056_*.sql server/migrations/057_*.sql server/migrations/058_*.sql \
+         server/migrations/059_*.sql server/migrations/060_*.sql server/migrations/061_*.sql \
+         server/migrations/062_*.sql server/migrations/063_*.sql server/migrations/064_*.sql \
+         server/migrations/066_*.sql server/migrations/067_*.sql server/migrations/078_*.sql \
+         server/migrations/079_*.sql; do
+  name=$(basename "$f")
+  "c:/xampp/mysql/bin/mysql.exe" -u root cpe_plus < "$f" \
+    && "c:/xampp/mysql/bin/mysql.exe" -u root cpe_plus -e "INSERT IGNORE INTO _migrations_log (nome) VALUES ('$name');"
+done
+```
+
+⚠️ **Se o MySQL local NÃO tem senha em root**, o `apply_migrations.sh` trava — por isso rodamos os comandos direto acima. Ver `docs/GOTCHAS.md#apply_migrations-sh-trava`.
+
+### 4. Virtualenv Python
+
+```bash
+# Se existir venv em outra versão de Python, apaga
+[ -d server/.venv ] && mv server/.venv server/.venv.old
+
+py -3.11 -m venv server/.venv
+server/.venv/Scripts/python.exe --version     # deve ser 3.11.x
+server/.venv/Scripts/python.exe -m pip install --upgrade pip
+server/.venv/Scripts/python.exe -m pip install -r server/requirements.txt
+
+# Depois de confirmar que instalou tudo:
+rm -rf server/.venv.old
+```
+
+### 5. Arquivo `.env`
+
+Compare com `server/.env.example` — hoje tem 40+ chaves (integrações opcionais: SMTP, Carbonio, Clicksign, Gemini, Mikrotik, Omada, Cloudflare TURN, etc). Copiar do env da empresa. Se faltar, o servidor sobe mas com essas integrações desativadas — só quebra quando você chamar a feature específica.
+
+```bash
+grep -E "^[A-Z_]+=" server/.env.example | cut -d= -f1 | sort > /tmp/example_keys.txt
+grep -E "^[A-Z_]+=" server/.env         | cut -d= -f1 | sort > /tmp/local_keys.txt
+comm -23 /tmp/example_keys.txt /tmp/local_keys.txt    # lista o que falta
+```
+
+### 6. Smoke test
+
+```bash
+cd server
+.venv/Scripts/python.exe -m uvicorn app:app --host 127.0.0.1 --port 8000 --log-level info &
+sleep 8
+curl -s http://127.0.0.1:8000/health
+# esperado: {"status":"ok","api":"CPE Control API","version":"2.0.0",...,"database":"✅ OK"}
+
+# Para parar
+"c:/Windows/System32/taskkill.exe" //F //IM python.exe
+```
+
+Se `/health` responder 200 e log mostrar `✅ TODOS OS ROUTERS REGISTRADOS!`, ambiente OK pra codar.
+
+---
+
 ## Fluxo padrão (dev → prod)
 
 1. Trabalha na branch `dev`

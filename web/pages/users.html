@@ -2800,6 +2800,9 @@ function renderUsers(list = users) {
     // expõe pra outras partes do código se quiserem refrescar
     window.loadPendentes = loadPendentes;
     window.loadEmailsAutorizados = loadEmailsAutorizados;
+    // expõe handlers usados por onclick= inline (não visíveis do escopo global sem isso)
+    window.liberarSolicitacao = liberarSolicitacao;
+    window.recusarSolicitacao = recusarSolicitacao;
   })();
   </script>
 
