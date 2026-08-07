@@ -1288,3 +1288,129 @@ def email_reserva_expirada_responsavel(
         body=body,
     )
     return subject, html
+
+
+def email_fleet_saida_recusada(
+    *, condutor_nome: str, veiculo_modelo: str, veiculo_placa: str,
+    checklist_id: int, motivo: str, vistoriador_nome: str,
+    link_checklist: str,
+) -> tuple[str, str]:
+    """Email pro condutor quando vistoriador recusa a vistoria de SAÍDA.
+
+    Fluxo: condutor precisa abrir o checklist, corrigir (geralmente adicionar
+    foto faltante) e clicar em "Reenviar Saída". Só depois o vistoriador
+    consegue aprovar de novo.
+    """
+    subject = f"⚠️ Vistoria de saída recusada — checklist #{checklist_id}"
+    body = f"""
+        <p>Olá <strong>{_escape(condutor_nome)}</strong>,</p>
+        <p>A vistoria de saída do veículo
+        <strong>{_escape(veiculo_modelo)}</strong> ({_escape(veiculo_placa)})
+        foi <span style="color:#DC2626;font-weight:600;">recusada</span>
+        por <strong>{_escape(vistoriador_nome)}</strong>.</p>
+
+        <div style="margin:16px 0;padding:14px 16px;background:#FEF2F2;
+                    border-left:4px solid #DC2626;border-radius:6px;font-size:13.5px;">
+          <div style="font-weight:700;color:#991B1B;margin-bottom:6px;">Motivo:</div>
+          <div style="white-space:pre-wrap;color:#1f2937;">{_escape(motivo)}</div>
+        </div>
+
+        <div style="margin:18px 0;padding:16px 18px;background:#FFFBEB;
+                    border-left:4px solid #F59E0B;border-radius:6px;font-size:13.5px;">
+          <div style="font-weight:700;color:#92400E;margin-bottom:10px;font-size:14px;">
+            📋 Como corrigir — passo a passo
+          </div>
+          <ol style="margin:0;padding-left:22px;color:#1f2937;line-height:1.75;">
+            <li>Clique no botão <strong>“Abrir checklist”</strong> abaixo.</li>
+            <li>No detalhe do checklist, clique em <strong>“Corrigir / adicionar fotos”</strong>.</li>
+            <li>Envie a(s) foto(s) que faltam nos ângulos marcados em vermelho.</li>
+            <li>Quando todas as caixas ficarem verdes, clique em <strong>“Reenviar Saída”</strong>.</li>
+            <li>Avise o responsável de Frotas pra fazer a vistoria de novo.</li>
+          </ol>
+        </div>
+
+        <p style="text-align:center;margin:24px 0 8px;">
+          <a href="{_escape(link_checklist)}"
+             style="display:inline-block;padding:12px 28px;background:#FFC107;
+                    color:#1A1A1A;font-weight:700;font-size:14px;text-decoration:none;
+                    border-radius:8px;box-shadow:0 4px 12px rgba(255,193,7,.35);">
+            🔧 Abrir checklist
+          </a>
+        </p>
+
+        <p style="font-size:12px;color:#6B7280;text-align:center;margin-top:8px;">
+          Se o botão não funcionar, copie e cole este link no navegador:<br>
+          <span style="word-break:break-all;">{_escape(link_checklist)}</span>
+        </p>
+
+        <p style="font-size:12px;color:#6B7280;margin-top:14px;">
+          Checklist: <code>#{checklist_id}</code>
+        </p>
+    """
+    html = _BASE_TEMPLATE.format(title="Vistoria de saída recusada",
+                                  tag="Ação necessária", body=body)
+    return subject, html
+
+
+def email_fleet_retorno_recusado(
+    *, condutor_nome: str, veiculo_modelo: str, veiculo_placa: str,
+    checklist_id: int, motivo: str, vistoriador_nome: str,
+    link_checklist: str,
+) -> tuple[str, str]:
+    """Email pro condutor quando vistoriador recusa a vistoria de DEVOLUÇÃO.
+
+    Diferente da recusa de saída: aqui o checklist volta pro status 'em_viagem'
+    e o condutor precisa refazer todo o processo de devolução (KM, combustível,
+    fotos, assinatura).
+    """
+    subject = f"⚠️ Vistoria de devolução recusada — checklist #{checklist_id}"
+    body = f"""
+        <p>Olá <strong>{_escape(condutor_nome)}</strong>,</p>
+        <p>A vistoria de devolução do veículo
+        <strong>{_escape(veiculo_modelo)}</strong> ({_escape(veiculo_placa)})
+        foi <span style="color:#DC2626;font-weight:600;">recusada</span>
+        por <strong>{_escape(vistoriador_nome)}</strong>.</p>
+
+        <div style="margin:16px 0;padding:14px 16px;background:#FEF2F2;
+                    border-left:4px solid #DC2626;border-radius:6px;font-size:13.5px;">
+          <div style="font-weight:700;color:#991B1B;margin-bottom:6px;">Motivo:</div>
+          <div style="white-space:pre-wrap;color:#1f2937;">{_escape(motivo)}</div>
+        </div>
+
+        <div style="margin:18px 0;padding:16px 18px;background:#FFFBEB;
+                    border-left:4px solid #F59E0B;border-radius:6px;font-size:13.5px;">
+          <div style="font-weight:700;color:#92400E;margin-bottom:10px;font-size:14px;">
+            📋 Como corrigir — passo a passo
+          </div>
+          <ol style="margin:0;padding-left:22px;color:#1f2937;line-height:1.75;">
+            <li>O checklist voltou para o status <strong>“Em viagem”</strong> —
+              os dados de retorno foram apagados.</li>
+            <li>Clique no botão <strong>“Abrir checklist”</strong> abaixo.</li>
+            <li>Clique em <strong>“Devolver veículo”</strong> e refaça o checklist:
+              informe KM final, nível de combustível, tire as 7 fotos e assine.</li>
+            <li>Corrija o que foi apontado no motivo acima.</li>
+            <li>Avise o responsável de Frotas pra fazer a vistoria de novo.</li>
+          </ol>
+        </div>
+
+        <p style="text-align:center;margin:24px 0 8px;">
+          <a href="{_escape(link_checklist)}"
+             style="display:inline-block;padding:12px 28px;background:#FFC107;
+                    color:#1A1A1A;font-weight:700;font-size:14px;text-decoration:none;
+                    border-radius:8px;box-shadow:0 4px 12px rgba(255,193,7,.35);">
+            🔧 Abrir checklist
+          </a>
+        </p>
+
+        <p style="font-size:12px;color:#6B7280;text-align:center;margin-top:8px;">
+          Se o botão não funcionar, copie e cole este link no navegador:<br>
+          <span style="word-break:break-all;">{_escape(link_checklist)}</span>
+        </p>
+
+        <p style="font-size:12px;color:#6B7280;margin-top:14px;">
+          Checklist: <code>#{checklist_id}</code>
+        </p>
+    """
+    html = _BASE_TEMPLATE.format(title="Vistoria de devolução recusada",
+                                  tag="Ação necessária", body=body)
+    return subject, html
