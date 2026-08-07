@@ -1090,10 +1090,17 @@ def recusar_saida(checklist_id: int, request: Request, data: dict):
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute(
-            "SELECT id, condutor_id, status FROM fleet_checklists WHERE id=%s",
-            (checklist_id,)
-        )
+        # Enriquece a query pra pegar dados que o email precisa
+        cursor.execute("""
+            SELECT c.id, c.condutor_id, c.status, c.vehicle_id,
+                   u.name  AS condutor_nome,
+                   u.email AS condutor_email,
+                   v.model AS veiculo_modelo, v.plate AS veiculo_placa
+              FROM fleet_checklists c
+              LEFT JOIN users u ON u.id = c.condutor_id
+              LEFT JOIN fleet_vehicles v ON v.id = c.vehicle_id
+             WHERE c.id=%s
+        """, (checklist_id,))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Checklist não encontrado")
@@ -1126,6 +1133,25 @@ def recusar_saida(checklist_id: int, request: Request, data: dict):
             logger.warning(f"[FLEET] Falha ao notificar condutor da recusa: {ne}")
 
         conn.commit()
+
+        # Email pro condutor (após commit — se falhar não desfaz a recusa)
+        if row.get("condutor_email"):
+            try:
+                from services.email_service import enviar_email, email_fleet_saida_recusada
+                from config import PUBLIC_BASE_URL
+                subject, html = email_fleet_saida_recusada(
+                    condutor_nome=row.get("condutor_nome") or "condutor",
+                    veiculo_modelo=row.get("veiculo_modelo") or "—",
+                    veiculo_placa=row.get("veiculo_placa") or "—",
+                    checklist_id=checklist_id,
+                    motivo=justificativa,
+                    vistoriador_nome=user.get("name") or "responsável de Frotas",
+                    link_checklist=f"{PUBLIC_BASE_URL}/SistemaCPE/web/pages/fleet.html",
+                )
+                enviar_email(para=[row["condutor_email"]], assunto=subject, html=html)
+            except Exception as ee:
+                logger.warning(f"[FLEET] Falha ao enviar email de recusa de saída: {ee}")
+
         logger.info(
             f"[FLEET] Checklist {checklist_id} saída recusada por user {user['id']}: {justificativa}"
         )
@@ -1506,10 +1532,17 @@ def recusar_retorno(checklist_id: int, request: Request, data: dict):
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute(
-            "SELECT vehicle_id, status FROM fleet_checklists WHERE id=%s",
-            (checklist_id,)
-        )
+        # Enriquece a query pra pegar dados que o email/notificacao precisam
+        cursor.execute("""
+            SELECT c.vehicle_id, c.status, c.condutor_id,
+                   u.name  AS condutor_nome,
+                   u.email AS condutor_email,
+                   v.model AS veiculo_modelo, v.plate AS veiculo_placa
+              FROM fleet_checklists c
+              LEFT JOIN users u ON u.id = c.condutor_id
+              LEFT JOIN fleet_vehicles v ON v.id = c.vehicle_id
+             WHERE c.id=%s
+        """, (checklist_id,))
         row = cursor.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Checklist nao encontrado")
@@ -1551,7 +1584,39 @@ def recusar_retorno(checklist_id: int, request: Request, data: dict):
             except Exception:
                 pass
 
+        # Notificação in-app pro condutor (antes do commit pra ficar na mesma transação)
+        if row.get("condutor_id"):
+            try:
+                msg = (f"Vistoria de devolução recusada — checklist #{checklist_id}. "
+                       f"Motivo: {justificativa[:180]}. Refaça a devolução no sistema.")
+                cursor.execute(
+                    "INSERT INTO notificacoes (usuario_id, mensagem, tipo, lido) "
+                    "VALUES (%s, %s, 'fleet_retorno_recusado', 0)",
+                    (row["condutor_id"], msg),
+                )
+            except Exception as ne:
+                logger.warning(f"[FLEET] Falha ao notificar condutor da recusa de retorno: {ne}")
+
         conn.commit()
+
+        # Email pro condutor (após commit — se falhar não desfaz a recusa)
+        if row.get("condutor_email"):
+            try:
+                from services.email_service import enviar_email, email_fleet_retorno_recusado
+                from config import PUBLIC_BASE_URL
+                subject, html = email_fleet_retorno_recusado(
+                    condutor_nome=row.get("condutor_nome") or "condutor",
+                    veiculo_modelo=row.get("veiculo_modelo") or "—",
+                    veiculo_placa=row.get("veiculo_placa") or "—",
+                    checklist_id=checklist_id,
+                    motivo=justificativa,
+                    vistoriador_nome=user.get("name") or "responsável de Frotas",
+                    link_checklist=f"{PUBLIC_BASE_URL}/SistemaCPE/web/pages/fleet.html",
+                )
+                enviar_email(para=[row["condutor_email"]], assunto=subject, html=html)
+            except Exception as ee:
+                logger.warning(f"[FLEET] Falha ao enviar email de recusa de retorno: {ee}")
+
         logger.info(f"[FLEET] Checklist {checklist_id} retorno recusado por user {user['id']}: {justificativa}")
         return {"success": True, "message": "Devolucao recusada. O condutor sera notificado para corrigir."}
     except HTTPException:
