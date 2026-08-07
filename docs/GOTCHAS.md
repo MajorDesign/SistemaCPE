@@ -304,6 +304,84 @@ Regra rígida do sistema. Ver `docs/CONVENCOES.md#frontend-modais-sempre-com-gri
 
 ---
 
+## Função dentro de IIFE + `onclick=` inline não funciona
+
+**Sintoma:** console imprime `Uncaught ReferenceError: nomeFuncao is not defined` ao clicar num botão que tem `onclick="nomeFuncao(...)"`. A função obviamente EXISTE no arquivo — grep encontra.
+
+**Causa:** a função foi declarada como `function nomeFuncao() {}` **dentro de uma IIFE** (`(function(){ ... })();`). Toda declaração `function` dentro de IIFE fica no escopo da closure e **não** no `window`. O parser do `onclick=` inline no HTML só consegue resolver nomes que estão no escopo global (`window.*`).
+
+**Fix:** expor no `window.*` antes do fechamento da IIFE, no mesmo padrão que as outras funções já expostas:
+```javascript
+(function () {
+  async function liberarSolicitacao(id, email) { /* ... */ }
+
+  // Antes do })():
+  window.liberarSolicitacao = liberarSolicitacao;
+})();
+```
+
+**Padrão alternativo** (usado no resto do mesmo bloco): declarar direto como `window.xxx = function() {}` ou `window.xxx = async function() {}`. Mantém o handler visível globalmente sem precisar de exposição separada.
+
+**Como pegar antes de bugar:**
+- Se você adicionar handler novo pra `onclick=` inline dentro de um `<script>` que abre com `(function(){` — SEMPRE expõe em `window.` no fim.
+- Considera usar `addEventListener` em vez de `onclick=` — não sofre desse escopo.
+
+**Descoberto:** 2026-08-07, no botão "Liberar" das solicitações de pré-cadastro em `users.html` (funções `liberarSolicitacao`/`recusarSolicitacao` presas na IIFE `<script>` do bloco pré-cadastro, linhas 2331-2803).
+
+---
+
+## Python 3.11 é requisito rígido — 3.12+ quebra na instalação
+
+**Sintoma:** ao rodar `pip install -r server/requirements.txt` num venv de Python 3.12/3.13/3.14, falha em `pydantic-core` com erro do `link.exe` / `rustc` / `maturin failed`.
+
+**Causa:** `pydantic-core==2.20.1` (dependência transitiva de `pydantic==2.8.2`) só publica wheels pré-compiladas até Python 3.11. Em versões mais novas o pip cai no fallback de compilação via Rust/maturin, que exige toolchain MSVC + rustup — nada disso vem por padrão no Windows.
+
+**Fix:**
+```bash
+# 1. Instala 3.11 se não tiver
+winget install --id Python.Python.3.11 --silent --accept-package-agreements --accept-source-agreements
+py -0                                # confirma que 3.11 aparece
+
+# 2. Recria venv com 3.11
+mv server/.venv server/.venv.old     # backup, deleta depois
+py -3.11 -m venv server/.venv
+server/.venv/Scripts/python.exe --version   # deve dizer 3.11.x
+
+# 3. Instala deps normalmente
+server/.venv/Scripts/python.exe -m pip install --upgrade pip
+server/.venv/Scripts/python.exe -m pip install -r server/requirements.txt
+```
+
+**Prod usa 3.11.** Manter dev igual pra evitar bugs sutis (behavior de `asyncio`, `typing`, walrus edge cases).
+
+**Descoberto:** 2026-08-07, em setup de máquina antiga que tinha só Python 3.14.
+
+---
+
+## `apply_migrations.sh` trava com `MYSQL_PASSWORD=` vazio no Windows
+
+**Sintoma:** script imprime `============ Aplicando migrations em: cpe_plus ============` e nunca imprime mais nada. Task Manager mostra `mysql.exe` vivo consumindo 0% CPU indefinidamente.
+
+**Causa:** o script chama `mysql -u root -p"$PASS"` — quando `$PASS` é vazio, vira `mysql -u root -p ""`. No Windows/Git Bash, `-p` sem valor (ou `-p ""`) faz o cliente MySQL **abrir prompt interativo** pedindo senha. Sem TTY conectado ao processo, fica bloqueado pra sempre.
+
+**Fix (opção A — recomendada, alinha com prod):** setar senha real no MySQL local + `MYSQL_PASSWORD=senha` no `server/.env`. XAMPP padrão vem sem senha, mas nada impede setar uma só pro dev.
+
+**Fix (opção B — quando não puder mexer no MySQL):** rodar migrations manualmente, uma por uma, omitindo `-p`:
+```bash
+for f in server/migrations/056_*.sql server/migrations/057_*.sql ... ; do
+  name=$(basename "$f")
+  "c:/xampp/mysql/bin/mysql.exe" -u root cpe_plus < "$f" \
+    && "c:/xampp/mysql/bin/mysql.exe" -u root cpe_plus \
+       -e "INSERT IGNORE INTO _migrations_log (nome) VALUES ('$name');"
+done
+```
+
+**Fix (opção C — futuro):** patch no `apply_migrations.sh` pra montar comando sem `-p` quando `$PASS` vazio. Ainda não aplicado — se você fizer, teste em prod primeiro (onde a senha SEMPRE tem valor).
+
+**Descoberto:** 2026-08-07, em setup de máquina onde XAMPP MySQL tinha root sem senha.
+
+---
+
 ## Convenção `docs/`
 
 Já existe:
