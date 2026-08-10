@@ -211,9 +211,22 @@ Ordem alfabética.
 
 **Arquivo:** `server/routes/atendimentos.py`
 
-**Frontend:** `web/pages/equipe-suporte.html`
+**Frontend:** `web/pages/equipe-suporte.html` + `web/pages/agendar.html` (público)
 
-**Acesso:** ADMIN/TI + RESPONSAVEL_GRUPO do grupo Suporte (tratado como admin do módulo — ver `_GRUPOS_RESP_ADMIN` em `atendimentos.py:96`).
+**Níveis de acesso:**
+- `admin`: ADMIN/TI/RESPONSAVEL_GRUPO Suporte/grupo "Suporte ti" — CRUD de estrutura
+- `op`: USER do grupo Suporte — administra a PRÓPRIA agenda (aprova/recusa pendentes só dela)
+- `view`: Comercial — somente leitura
+
+**Migration 084 (2026-08-05) — agenda por instrutor + link direto:**
+- `atend_agendas.instrutor_id` (FK users, UNIQUE): dono da agenda. NULL = agenda de unidade coletiva (só admin gerencia)
+- `atend_agendas.slug` (UNIQUE): URL amigável — `agendar.html?agenda=<slug>` cai direto no formulário do instrutor
+- `atend_agendas.oferece_presencial`/`oferece_online` (TINYINT): substituem restrição do antigo `atend_agendas.tipo`. Toda agenda oferece as duas modalidades por padrão
+- Capacidade unificada: 1 slot = 1 vaga total (não separa presencial/online). `cap_presencial`/`cap_online` de `atend_servicos`/`atend_treinamentos` ficam no banco mas são ignorados por `_checar_vaga`/`_slot_tem_vaga`
+- Notificação in-app + email quando cai agendamento novo: instrutor dono + todos os RESPONSAVEL_GRUPO Suporte (função `_notificar_novo_agendamento`)
+- USER Suporte que é dono aprova só a própria agenda (helper `_pode_aceitar_agendamento`)
+- `/pendentes` filtra por `instrutor_id = user.id` quando nível é `op`
+- Rota pública nova: `GET /api/atendimentos/publico/agendas/slug/{slug}`
 
 ---
 

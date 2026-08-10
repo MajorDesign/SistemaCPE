@@ -175,6 +175,39 @@ Frontend agora chama `/api/auth/me` no boot (`syncMeFromServer`). Sem isso, muda
 
 ---
 
+## Equipe de Suporte / Atendimentos
+
+Módulo `equipe-suporte.html` gerencia agendas de atendimento (treinamentos, cursos, drones) e o link público de agendamento (`agendar.html`).
+
+### Modelo agenda × instrutor (2026-08-05, migration 084)
+- 1 agenda por instrutor (UNIQUE em `atend_agendas.instrutor_id`)
+- Agenda de unidade coletiva: `instrutor_id NULL` — só admin gerencia
+- Cada agenda tem `slug` único → link direto `agendar.html?agenda=<slug>` cai direto no formulário do instrutor
+- Link público geral `/agendar.html` continua funcionando (cliente escolhe agenda no passo 1)
+
+### Modalidade (unificada internamente)
+- Antes: `atend_agendas.tipo` restringia a agenda a `fisica` OU `online`; capacidade separada
+- **Agora:** toda agenda oferece as duas modalidades por padrão (campos `oferece_presencial`/`oferece_online`, ambos 1 por default)
+- Cliente escolhe presencial ou online no público
+- **Internamente 1 slot = 1 vaga total**: um agendamento (qualquer modalidade) ocupa o horário inteiro. Instrutor faz 1 atendimento por vez
+- Curso e drone continuam sendo APENAS presenciais (regra física — precisa laboratório/drone real)
+
+### Aprovação
+- ADMIN/TI/RESPONSAVEL_GRUPO Suporte: aprova/recusa qualquer agendamento
+- USER do Suporte (`op`): aprova/recusa APENAS os da própria agenda (helper `_pode_aceitar_agendamento`)
+- `/pendentes` filtra por `instrutor_id = user.id` quando nível é `op` — cada instrutor vê só a sua fila
+- Backend garante o guardrail via 403; frontend também filtra pra UX
+
+### Notificação quando cai agendamento novo (público → pendente)
+- **Cliente** recebe email "recebido, aguardando confirmação" (`_dispatch_email_agendamento`)
+- **Instrutor dono da agenda + todos RESPONSAVEL_GRUPO Suporte** recebem:
+  - Notificação in-app (`notificacoes` tipo `atend_novo_agendamento`)
+  - Email do agendamento (mesmo template `email_equipe_novo_agendamento`)
+- Legado `EQUIPE_AGENDA_EMAILS` continua ativo se configurado no .env (dispara email adicional pra caixa coletiva)
+- Todas as falhas de email/notif são silenciosas (não bloqueiam o endpoint)
+
+---
+
 ## Permissões / Autoriazação de páginas
 
 Sistema refatorado em 2026-05 (`docs/PLANO_PERMISSOES.md`). Fonte da verdade é o banco.

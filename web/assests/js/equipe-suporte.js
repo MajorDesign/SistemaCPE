@@ -137,6 +137,7 @@ function showSection(name) {
   else if (name === 'treinamentos') initSecaoTreinamentos();
   else if (name === 'drones') initSecaoDrones();
   else if (name === 'clientes') initSecaoClientes();
+  else if (name === 'instrutores') initSecaoInstrutores();
   else if (name === 'agendas') initSecaoAgendas();
   else if (name === 'calendario') initSecaoCalendario();
   else if (name === 'cursos') initSecaoCursos();
@@ -501,7 +502,31 @@ async function carregarUnidades() {
   } catch (e) { console.warn('[SUP] unidades:', e.message); }
 }
 
-function abrirModalAgenda(id) {
+async function carregarListaInstrutores() {
+  // Instrutores = users ativos do grupo Suporte. Preenche o select do modal.
+  // Cache no window pra nao repetir chamada dentro da mesma sessao.
+  if (window.__instrutoresCache) return window.__instrutoresCache;
+  try {
+    const token = (typeof _getAuthToken === 'function')
+      ? _getAuthToken()
+      : (localStorage.getItem('access_token') || '');
+    const base = (window.API_BASE_URL || '') + '/api/users?is_active=1';
+    const resp = await fetch(base, {
+      credentials: 'include',
+      headers: token ? { 'X-Auth-Token': token } : {},
+    });
+    if (!resp.ok) return [];
+    const d = await resp.json();
+    const users = (d.users || d || []).filter(u => (u.group_name || '') === 'Suporte');
+    window.__instrutoresCache = users;
+    return users;
+  } catch (e) {
+    console.warn('[SUP] erro ao carregar instrutores:', e);
+    return [];
+  }
+}
+
+async function abrirModalAgenda(id) {
   setErro('erroAgenda', '');
   const a = id ? agendas.find(x => x.id === id) : null;
   document.getElementById('modalAgendaTitulo').textContent = a ? 'Editar agenda' : 'Nova agenda';
@@ -510,36 +535,66 @@ function abrirModalAgenda(id) {
   document.getElementById('agTipo').value = a && a.tipo ? a.tipo : 'fisica';
   document.getElementById('agUnidade').value = a && a.unidade_id ? a.unidade_id : '';
   document.getElementById('agDuracao').value = a ? a.slot_duracao_min : 30;
-  onAgTipoChange();
   document.getElementById('agCor').value = a ? (a.cor || '#0d9488') : '#0d9488';
   document.getElementById('agAtivo').value = a ? (a.ativo ? '1' : '0') : '1';
   document.getElementById('agDescricao').value = a && a.descricao ? a.descricao : '';
   document.getElementById('agInstrucoes').value = a && a.instrucoes ? a.instrucoes : '';
-  // Excluir agenda: so admin pode (DELETE destrutivo).
+
+  // Novos campos (2026-08-05): instrutor + modalidades + link direto
+  const selIns = document.getElementById('agInstrutor');
+  const instrutores = await carregarListaInstrutores();
+  selIns.innerHTML = '<option value="">— Agenda de unidade (sem instrutor) —</option>' +
+    instrutores.map(u => `<option value="${u.id}">${esc(u.name || u.nome || '(sem nome)')}</option>`).join('');
+  selIns.value = (a && a.instrutor_id) ? a.instrutor_id : '';
+
+  document.getElementById('agOferecePresencial').checked =
+    a ? !!a.oferece_presencial : true;
+  document.getElementById('agOfereceOnline').checked =
+    a ? !!a.oferece_online : true;
+
+  // Link direto — só mostra quando a agenda já tem slug (editando)
+  const wrap = document.getElementById('agSlugFieldWrap');
+  const previewInput = document.getElementById('agSlugPreview');
+  if (a && a.slug) {
+    const base = window.location.origin + '/SistemaCPE/web/pages/agendar.html?agenda=' + encodeURIComponent(a.slug);
+    previewInput.value = base;
+    wrap.style.display = '';
+  } else {
+    previewInput.value = '';
+    wrap.style.display = 'none';
+  }
+
   document.getElementById('btnExcluirAgenda').style.display =
     (a && _canAdmin) ? 'inline-flex' : 'none';
   abrirModal('modalAgenda');
 }
 
-function onAgTipoChange() {
-  const tipo = document.getElementById('agTipo').value;
-  const sel = document.getElementById('agUnidade');
-  if (tipo === 'online') {
-    sel.value = '';
-    sel.disabled = true;
-  } else {
-    sel.disabled = false;
-  }
+function copiarLinkAgenda() {
+  const link = document.getElementById('agSlugPreview').value;
+  if (!link) { toast('Salve a agenda primeiro pra gerar o link.', 'warning'); return; }
+  navigator.clipboard.writeText(link)
+    .then(() => toast('Link copiado!', 'success'))
+    .catch(() => { window.prompt('Copie o link:', link); });
 }
 
 async function salvarAgenda() {
   const id = document.getElementById('agendaId').value;
-  const tipo = document.getElementById('agTipo').value;
+  const instrutorId = document.getElementById('agInstrutor').value || null;
+  const oferecePres = document.getElementById('agOferecePresencial').checked;
+  const ofereceOnl  = document.getElementById('agOfereceOnline').checked;
+  if (!oferecePres && !ofereceOnl) {
+    setErro('erroAgenda', 'Marque pelo menos uma modalidade (presencial ou online).');
+    return;
+  }
   const payload = {
     nome: document.getElementById('agNome').value.trim(),
-    tipo: tipo === 'online' ? 'online' : 'fisica',
-    // agenda online nao se vincula a unidade fisica
-    unidade_id: tipo === 'online' ? null : (document.getElementById('agUnidade').value || null),
+    // tipo vira legado mas mantido pra compat com backend antigo. Se instrutor
+    // definido, agenda vira 'fisica' por default (nao afeta nada visualmente).
+    tipo: 'fisica',
+    unidade_id: document.getElementById('agUnidade').value || null,
+    instrutor_id: instrutorId ? parseInt(instrutorId) : null,
+    oferece_presencial: oferecePres,
+    oferece_online: ofereceOnl,
     slot_duracao_min: parseInt(document.getElementById('agDuracao').value) || 30,
     cor: document.getElementById('agCor').value,
     ativo: document.getElementById('agAtivo').value === '1',
@@ -2463,9 +2518,12 @@ async function abrirPendentes() {
   await renderPendentes();
 }
 
+let _ultimosPendentes = [];
+
 async function renderPendentes() {
   const r = await apiFetch('/pendentes');
   const ps = r.success ? (r.pendentes || []) : [];
+  _ultimosPendentes = ps;
   const tbody = document.getElementById('tbodyPendentes');
   if (!ps.length) {
     tbody.innerHTML = '<tr><td colspan="6" class="sup-empty">' +
@@ -2486,6 +2544,12 @@ async function renderPendentes() {
       <td>${esc(p.servico_nome || p.titulo || '—')}</td>
       <td>${modal}</td>
       <td style="white-space:nowrap">
+        <button class="btn-sup btn-sup-primary btn-sup-sm" onclick="assumirAgendamento(${p.id})" data-need-op
+                title="Assumir e confirmar em nome do instrutor logado">
+          <i class="bi bi-hand-index-thumb"></i> Puxar</button>
+        <button class="btn-sup btn-sup-secondary btn-sup-sm" onclick="abrirTransferir(${p.id})" data-need-op
+                title="Transferir pra outro instrutor com a mesma especialidade">
+          <i class="bi bi-arrow-left-right"></i> Transferir</button>
         <button class="btn-sup btn-sup-primary btn-sup-sm" onclick="confirmarPendente(${p.id})" data-need-op>
           <i class="bi bi-check-lg"></i> Confirmar</button>
         <button class="btn-sup btn-sup-danger btn-sup-sm" onclick="recusarPendente(${p.id})" data-need-op>
@@ -2493,6 +2557,116 @@ async function renderPendentes() {
       </td></tr>`;
   }).join('');
   aplicarPermissoes();
+}
+
+async function assumirAgendamento(id) {
+  const r = await apiFetch('/agendamentos/' + id + '/assumir', { method: 'POST', body: '{}' });
+  if (!r.success) { toast(r.detail || 'Erro ao assumir.', 'error'); return; }
+  toast('Você assumiu esse agendamento. Cliente foi notificado.', 'success');
+  await renderPendentes();
+  loadDashboard();
+}
+
+let _transferirEscolhaId = null;
+
+async function abrirTransferir(agId) {
+  // Recupera o agendamento na lista renderizada pra ter contexto + especialidade
+  const ag = (_ultimosPendentes || []).find(p => p.id === agId);
+  if (!ag) { toast('Agendamento não encontrado na fila.', 'error'); return; }
+
+  // Garante instrutores em cache
+  if (!_instrutoresCache.length) {
+    const ri = await apiFetch('/instrutores');
+    _instrutoresCache = ri.success ? (ri.instrutores || []) : [];
+  }
+
+  // Contexto: cliente + treinamento + data + agenda
+  const dt = new Date(ag.inicio);
+  const dtFmt = isNaN(dt) ? ag.inicio
+    : dt.toLocaleDateString('pt-BR') + ' às ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const espLabel = ag.especialidade_nome
+    ? ` <span class="sup-chip" style="background:#EFF6FF;color:#1E40AF;border:1px solid #BFDBFE">${esc(ag.especialidade_nome)}</span>`
+    : '';
+  document.getElementById('transferirContexto').innerHTML = `
+    <div><strong>${esc(ag.cliente_nome || 'Cliente')}</strong> · ${esc(ag.servico_nome || ag.titulo || 'Atendimento')}${espLabel}</div>
+    <div style="color:#6B7280;margin-top:2px">${esc(dtFmt)} · ${esc(ag.agenda_nome || '—')}</div>
+  `;
+  document.getElementById('transferirAgId').value = agId;
+  document.getElementById('transferirMotivo').value = '';
+  document.getElementById('btnTransferirConfirma').disabled = true;
+  _transferirEscolhaId = null;
+  setErro('erroTransferir', '');
+
+  // Filtra instrutores elegíveis:
+  //   - Precisam ter a especialidade do treinamento (se agendamento tiver uma)
+  //   - Não pode ser o instrutor que já está atribuído (evita transferir pra ele mesmo)
+  const espId = ag.especialidade_id;
+  const atualId = ag.instrutor_atribuido_id;
+  let candidatos = _instrutoresCache.filter(i =>
+    (espId ? (i.especialidades || []).some(e => e.id === espId) : true)
+    && i.id !== atualId,
+  );
+
+  const lista = document.getElementById('transferirLista');
+  if (!candidatos.length) {
+    const msgFalta = espId
+      ? `Nenhum instrutor tem a especialidade "${esc(ag.especialidade_nome || '')}" cadastrada.
+         Marque em <strong>Instrutores → Editar</strong> e volte aqui.`
+      : `Nenhum outro instrutor disponível.`;
+    lista.innerHTML = `<div class="sup-help" style="padding:12px;text-align:center;
+        background:#FEF9C3;border:1px solid #F59E0B;border-radius:8px;color:#92400E">
+        <i class="bi bi-exclamation-triangle"></i> ${msgFalta}
+      </div>`;
+    abrirModal('modalTransferir');
+    return;
+  }
+
+  lista.innerHTML = candidatos.map(i => {
+    const esps = (i.especialidades || []).map(e => esc(e.nome)).join(' · ');
+    return `<label class="sup-instr-card" data-id="${i.id}"
+              style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;
+                     border:1px solid #E5E7EB;border-radius:8px;cursor:pointer;
+                     transition:border-color .12s,background-color .12s">
+        <input type="radio" name="transferirDest" value="${i.id}"
+               style="margin-top:3px;accent-color:#0d9488"
+               onchange="_transferirSelecionar(${i.id})">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;color:#111827">${esc(i.name)}</div>
+          <div style="font-size:12px;color:#6B7280;margin-top:2px">${esps}</div>
+        </div>
+      </label>`;
+  }).join('');
+
+  abrirModal('modalTransferir');
+}
+
+function _transferirSelecionar(id) {
+  _transferirEscolhaId = id;
+  document.getElementById('btnTransferirConfirma').disabled = false;
+  // Realça o card selecionado
+  document.querySelectorAll('#transferirLista .sup-instr-card').forEach(el => {
+    const isSel = parseInt(el.dataset.id) === id;
+    el.style.borderColor = isSel ? '#0d9488' : '#E5E7EB';
+    el.style.background  = isSel ? '#F0FDFA' : '';
+  });
+}
+
+async function confirmarTransferir() {
+  const agId = parseInt(document.getElementById('transferirAgId').value);
+  if (!_transferirEscolhaId) {
+    setErro('erroTransferir', 'Escolha um instrutor.');
+    return;
+  }
+  const motivo = document.getElementById('transferirMotivo').value.trim();
+  const r = await apiFetch('/agendamentos/' + agId + '/transferir', {
+    method: 'POST',
+    body: JSON.stringify({ novo_instrutor_id: _transferirEscolhaId, motivo }),
+  });
+  if (!r.success) { setErro('erroTransferir', r.detail || 'Erro ao transferir.'); return; }
+  const nome = (_instrutoresCache.find(i => i.id === _transferirEscolhaId) || {}).name || 'o instrutor';
+  toast(`Transferido pra ${nome}.`, 'success');
+  fecharModal('modalTransferir');
+  await renderPendentes();
 }
 
 async function confirmarPendente(id) {
@@ -3169,4 +3343,99 @@ async function excluirModuloAtual() {
   toast('Módulo excluído.', 'success');
   fecharModal('modalModulo');
   carregarModulos(entidade, entidadeId, kind);
+}
+
+/* ============================================================
+   INSTRUTORES + ESPECIALIDADES (v085, 2026-08-05)
+   ============================================================ */
+let _instrutoresCache = [];
+let _especialidadesCache = [];
+
+async function initSecaoInstrutores() {
+  const tbody = document.getElementById('tbodyInstrutores');
+  tbody.innerHTML = '<tr><td colspan="4" class="sup-empty">Carregando...</td></tr>';
+
+  const [ri, re] = await Promise.all([
+    apiFetch('/instrutores'),
+    apiFetch('/especialidades'),
+  ]);
+  _instrutoresCache   = ri.success ? (ri.instrutores || []) : [];
+  _especialidadesCache = re.success ? (re.especialidades || []) : [];
+
+  if (!_instrutoresCache.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="sup-empty">' +
+      'Nenhum instrutor ativo no grupo Suporte.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = _instrutoresCache.map(i => {
+    const chips = (i.especialidades || []).map(e =>
+      `<span class="sup-chip">${esc(e.nome)}</span>`).join(' ');
+    return `<tr>
+      <td><strong>${esc(i.name)}</strong>${i.role === 'RESPONSAVEL_GRUPO'
+        ? ' <span class="sup-chip sup-chip-role">Resp. grupo</span>' : ''}</td>
+      <td><small>${esc(i.email || '—')}</small></td>
+      <td>${chips || '<span class="sup-help">— nenhuma especialidade —</span>'}</td>
+      <td>
+        <button class="btn-sup btn-sup-secondary btn-sup-sm"
+                onclick="abrirModalEspInstrutor(${i.id})">
+          <i class="bi bi-pencil"></i> Editar
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+  aplicarPermissoes();
+}
+
+function abrirModalEspInstrutor(userId) {
+  const inst = _instrutoresCache.find(x => x.id === userId);
+  if (!inst) return;
+  document.getElementById('modalEspUserId').value = userId;
+  document.getElementById('modalEspNome').textContent = inst.name;
+  setErro('erroEspInstrutor', '');
+
+  const marcadas = new Set((inst.especialidades || []).map(e => e.id));
+  const container = document.getElementById('modalEspLista');
+  container.innerHTML = _especialidadesCache.map(e =>
+    `<label class="sup-checkbox">
+       <input type="checkbox" value="${e.id}" ${marcadas.has(e.id) ? 'checked' : ''}>
+       <span>${esc(e.nome)}</span>
+     </label>`
+  ).join('');
+  abrirModal('modalEspInstrutor');
+}
+
+async function salvarEspInstrutor() {
+  const uid = parseInt(document.getElementById('modalEspUserId').value);
+  const checks = document.querySelectorAll('#modalEspLista input[type="checkbox"]:checked');
+  const ids = Array.from(checks).map(c => parseInt(c.value));
+  const r = await apiFetch('/instrutores/' + uid + '/especialidades', {
+    method: 'PUT', body: JSON.stringify({ especialidade_ids: ids }),
+  });
+  if (!r.success) { setErro('erroEspInstrutor', r.detail || 'Erro ao salvar.'); return; }
+  toast(`${r.count || 0} especialidade(s) salvas.`, 'success');
+  fecharModal('modalEspInstrutor');
+  initSecaoInstrutores();
+}
+
+function abrirModalEspecialidade() {
+  setErro('erroNovaEsp', '');
+  document.getElementById('novaEspNome').value = '';
+  document.getElementById('novaEspDescricao').value = '';
+  abrirModal('modalNovaEsp');
+}
+
+async function salvarNovaEsp() {
+  const nome = document.getElementById('novaEspNome').value.trim();
+  if (!nome) { setErro('erroNovaEsp', 'Informe o nome.'); return; }
+  const r = await apiFetch('/especialidades', {
+    method: 'POST',
+    body: JSON.stringify({
+      nome, descricao: document.getElementById('novaEspDescricao').value.trim()
+    }),
+  });
+  if (!r.success) { setErro('erroNovaEsp', r.detail || 'Erro.'); return; }
+  toast('Especialidade criada.', 'success');
+  fecharModal('modalNovaEsp');
+  initSecaoInstrutores();
 }
