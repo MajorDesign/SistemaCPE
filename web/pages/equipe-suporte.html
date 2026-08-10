@@ -60,6 +60,9 @@
         <div class="sup-nav-item" data-section="equipamentos" onclick="showSection('equipamentos')">
           <i class="bi bi-pc-display"></i><span class="sup-nav-label">Equipamentos</span>
         </div>
+        <div class="sup-nav-item" data-section="instrutores" onclick="showSection('instrutores')">
+          <i class="bi bi-person-badge"></i><span class="sup-nav-label">Instrutores</span>
+        </div>
         <div class="sup-nav-item" data-section="clientes" onclick="showSection('clientes')">
           <i class="bi bi-people"></i><span class="sup-nav-label">Clientes</span>
         </div>
@@ -414,6 +417,37 @@
         </div>
       </section>
 
+      <!-- ====== INSTRUTORES ====== -->
+      <section class="sup-page" id="page-instrutores">
+        <div class="sup-page-header">
+          <span class="sup-page-title" data-stn="STN · IN / Cadastros">Instrutores &amp; especialidades</span>
+          <span class="sup-spacer"></span>
+          <button class="btn-sup btn-sup-primary" onclick="abrirModalEspecialidade()" data-need-admin>
+            <i class="bi bi-tag"></i> Nova especialidade
+          </button>
+        </div>
+        <p class="sup-help" style="margin:-4px 0 12px">
+          Instrutores são os users ativos do grupo <strong>Suporte</strong>.
+          Marque as especialidades de cada um — quando um cliente agendar um treinamento,
+          só os instrutores com aquela especialidade recebem notificação e podem "puxar" o atendimento.
+        </p>
+        <div id="tblInstrutoresWrap" class="sup-card" style="padding:0">
+          <table class="sup-table" style="width:100%">
+            <thead>
+              <tr>
+                <th style="min-width:180px">Instrutor</th>
+                <th style="min-width:180px">Email</th>
+                <th>Especialidades</th>
+                <th style="width:1%;white-space:nowrap">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyInstrutores">
+              <tr><td colspan="4" class="sup-empty">Carregando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- ====== CLIENTES ====== -->
       <section class="sup-page" id="page-clientes">
         <div class="sup-page-header">
@@ -479,6 +513,96 @@
     </div>
   </div>
 
+  <!-- ============ MODAL: EDITAR ESPECIALIDADES DE INSTRUTOR ============ -->
+  <div class="sup-modal-overlay" id="modalEspInstrutor">
+    <div class="sup-modal">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-tags"></i> Especialidades de <span id="modalEspNome"></span></span>
+        <button class="sup-modal-close" onclick="fecharModal('modalEspInstrutor')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroEspInstrutor"></div>
+        <input type="hidden" id="modalEspUserId">
+        <p class="sup-help" style="margin-bottom:12px">Marque tudo que o instrutor sabe dar.</p>
+        <div id="modalEspLista" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px"></div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalEspInstrutor')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarEspInstrutor()">
+          <i class="bi bi-check-lg"></i> Salvar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: TRANSFERIR AGENDAMENTO ============ -->
+  <!-- z-index maior porque abre POR CIMA do modal de Pendentes -->
+  <div class="sup-modal-overlay" id="modalTransferir" style="z-index:2100">
+    <div class="sup-modal">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-arrow-left-right"></i> Transferir agendamento</span>
+        <button class="sup-modal-close" onclick="fecharModal('modalTransferir')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroTransferir"></div>
+        <input type="hidden" id="transferirAgId">
+
+        <div id="transferirContexto"
+             style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;
+                    padding:10px 12px;margin-bottom:14px;font-size:13px;color:#374151">
+        </div>
+
+        <div style="font-size:12px;font-weight:600;color:#6B7280;
+                    text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">
+          Instrutor pra receber
+        </div>
+        <div id="transferirLista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;
+                                         max-height:280px;overflow-y:auto"></div>
+
+        <div class="sup-field">
+          <label>Motivo <small style="color:#6b7280">(opcional — vai na notificação)</small></label>
+          <textarea class="sup-input" id="transferirMotivo" rows="2" maxlength="300"
+                    placeholder="Ex: Vou estar em viagem no dia."></textarea>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalTransferir')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" id="btnTransferirConfirma"
+                onclick="confirmarTransferir()" disabled>
+          <i class="bi bi-check-lg"></i> Transferir agora
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: NOVA ESPECIALIDADE ============ -->
+  <div class="sup-modal-overlay" id="modalNovaEsp">
+    <div class="sup-modal" style="max-width:480px">
+      <div class="sup-modal-header">
+        <span class="sup-modal-title"><i class="bi bi-tag"></i> Nova especialidade</span>
+        <button class="sup-modal-close" onclick="fecharModal('modalNovaEsp')">&times;</button>
+      </div>
+      <div class="sup-modal-body">
+        <div class="sup-modal-erro" id="erroNovaEsp"></div>
+        <div class="sup-field">
+          <label>Nome *</label>
+          <input type="text" class="sup-input" id="novaEspNome" maxlength="120"
+                 placeholder="Ex: Treinamento GNSS">
+        </div>
+        <div class="sup-field">
+          <label>Descrição (opcional)</label>
+          <textarea class="sup-textarea" id="novaEspDescricao" maxlength="500"></textarea>
+        </div>
+      </div>
+      <div class="sup-modal-footer">
+        <button class="btn-sup btn-sup-secondary" onclick="fecharModal('modalNovaEsp')">Cancelar</button>
+        <button class="btn-sup btn-sup-primary" onclick="salvarNovaEsp()">
+          <i class="bi bi-check-lg"></i> Criar
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ MODAL: AGENDA ============ -->
   <div class="sup-modal-overlay" id="modalAgenda">
     <div class="sup-modal">
@@ -495,21 +619,56 @@
         </div>
         <div class="sup-grid-2">
           <div class="sup-field">
-            <label>Tipo de agenda *</label>
-            <select class="sup-select" id="agTipo" onchange="onAgTipoChange()">
-              <option value="fisica">Física (unidade CPE)</option>
-              <option value="online">Online (atendimento remoto)</option>
+            <label>Instrutor responsável <small style="color:#6b7280">(dono da agenda)</small></label>
+            <select class="sup-select" id="agInstrutor">
+              <option value="">— Agenda de unidade (sem instrutor) —</option>
             </select>
-            <div class="sup-help">Online: aparece para clientes que escolherem "Online" no agendamento público.</div>
+            <div class="sup-help">
+              Cada instrutor tem UMA agenda própria — ela vira o "link direto"
+              dele. Deixe em branco para agendas coletivas (só admin gerencia).
+            </div>
           </div>
           <div class="sup-field">
-            <label>Unidade CPE <small style="color:#6b7280">(só para tipo Física)</small></label>
+            <label>Unidade CPE <small style="color:#6b7280">(opcional)</small></label>
             <select class="sup-select" id="agUnidade"><option value="">— Nenhuma —</option></select>
           </div>
         </div>
+
+        <div class="sup-grid-2">
+          <div class="sup-field">
+            <label>Modalidades oferecidas <small style="color:#6b7280">(o que o cliente pode escolher no público)</small></label>
+            <div style="display:flex;gap:16px;padding:8px 0">
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="agOferecePresencial" checked> Presencial
+              </label>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                <input type="checkbox" id="agOfereceOnline" checked> Online
+              </label>
+            </div>
+            <div class="sup-help">
+              Internamente o horário fica ocupado igual — cliente escolhe a modalidade
+              que preferir. Deixe só uma marcada se o instrutor não atende de um jeito.
+            </div>
+          </div>
+          <div class="sup-field" id="agSlugFieldWrap" style="display:none">
+            <label>Link direto de agendamento</label>
+            <div style="display:flex;gap:6px">
+              <input type="text" class="sup-input" id="agSlugPreview" readonly
+                     style="background:#f8fafc;font-family:monospace;font-size:.85rem">
+              <button type="button" class="btn-sup btn-sup-secondary" onclick="copiarLinkAgenda()"
+                      style="white-space:nowrap"><i class="bi bi-clipboard"></i> Copiar</button>
+            </div>
+            <div class="sup-help">
+              Mande este link direto pro cliente — ele cai no formulário
+              já com a sua agenda selecionada.
+            </div>
+          </div>
+        </div>
+
         <!-- Slot oculto — mantido por compatibilidade. Valor default = 30,
              nao influencia mais o passo da grade (que vem da duracao do curso). -->
         <input type="hidden" id="agDuracao" value="30">
+        <input type="hidden" id="agTipo" value="fisica">
 
         <div class="sup-grid-2">
           <div class="sup-field">
@@ -1703,7 +1862,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/equipe-suporte.js?v=2026-06-16c"></script>
+  <script src="/SistemaCPE/web/assests/js/equipe-suporte.js?v=2026-08-05e"></script>
 <script id="cpe-autofill-guard-v1">
 /* Bloqueia autofill do Chrome/Edge em inputs de busca.
    Chrome ignora autocomplete="off" em type=text, mas NAO preenche input

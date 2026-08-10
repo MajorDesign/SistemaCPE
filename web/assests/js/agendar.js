@@ -79,22 +79,31 @@ async function escolherModalidade(m) {
   // garante que as agendas estao carregadas (caso o usuario abra direto via deep-link)
   if (!agendasPub.length) await carregarAgendas();
 
-  if (m === 'online') {
-    const onlines = agendasPub.filter(a => a.tipo === 'online');
-    if (!onlines.length) {
-      alert('No momento nao ha agenda de atendimento online disponivel. '
-          + 'Por favor escolha presencial ou tente novamente mais tarde.');
-      voltarModalidade();
-      return;
-    }
-    // cai direto no form com a primeira agenda online
-    abrirForm(onlines[0].id);
+  // 2026-08-05: unificado. Mesmas agendas (unidades) aparecem em AMBAS
+  // modalidades. Cliente escolhe presencial ou online — internamente ocupa
+  // o mesmo slot da mesma agenda. Landing lista todas as unidades que
+  // oferecem a modalidade escolhida.
+  const disponiveis = _agendasPelaModalidade(m);
+  if (!disponiveis.length) {
+    alert('No momento nao ha unidade oferecendo atendimento ' + m + '. '
+        + 'Por favor tente a outra modalidade ou volte mais tarde.');
+    voltarModalidade();
     return;
   }
-
-  // presencial: mostra os cards das unidades fisicas
   _mostrarApenas('viewLanding');
   renderCards();
+}
+
+/* Retorna as agendas que oferecem a modalidade. Cai back-compat pro campo
+   `tipo` quando `oferece_*` não vem do backend (banco antigo sem migration 084). */
+function _agendasPelaModalidade(m) {
+  if (!m) return agendasPub;
+  return agendasPub.filter(a => {
+    if (m === 'online') {
+      return a.oferece_online != null ? !!a.oferece_online : (a.tipo === 'online');
+    }
+    return a.oferece_presencial != null ? !!a.oferece_presencial : (a.tipo !== 'online');
+  });
 }
 
 /* Detecta se o visitante é funcionário CPE logado (token salvo no storage).
@@ -125,9 +134,7 @@ function renderCards() {
   };
   const _labelOferta = (n) => n === 1 ? '1 atendimento disponível'
                                       : n + ' atendimentos disponíveis';
-  const lista = agendasPub
-    // só físicas aparecem na landing (online tem fluxo próprio)
-    .filter(a => a.tipo !== 'online')
+  const lista = _agendasPelaModalidade(modalidadeSel)
     // esconde agendas SEM ofertas visíveis para o visitante atual.
     // Anônimo não vê agenda só de drones; funcionário CPE vê tudo.
     .filter(a => _ofertasDe(a).length > 0)
@@ -600,20 +607,18 @@ function abrirForm(agendaId, preselect) {
 
   // Filtra as opcoes do select de agendas pela modalidade escolhida.
   // Se nao houver modalidade (deep link ?agenda=ID), mostra todas.
-  const opcoes = agendasPub.filter(a => {
-    if (!modalidadeSel) return true;
-    return modalidadeSel === 'online' ? a.tipo === 'online' : a.tipo !== 'online';
-  });
+  const opcoes = _agendasPelaModalidade(modalidadeSel);
   el('fAgenda').innerHTML = opcoes.map(a =>
     `<option value="${a.id}">${esc(a.nome)}</option>`).join('');
   el('fAgenda').value = agendaId;
 
-  // Se ja temos modalidade, pre-marca o radio e bloqueia a troca
-  // (cliente nao pode pular do online pro presencial sem voltar).
+  // 2026-08-05: modelo unificado — cliente pode trocar de modalidade dentro
+  // do form (antes bloqueava porque online tinha fluxo separado). Só
+  // pre-marca a que ele escolheu na landing.
   const radios = document.querySelectorAll('input[name="modalidade"]');
   radios.forEach(r => {
     r.checked = (modalidadeSel && r.value === modalidadeSel);
-    r.disabled = !!modalidadeSel;
+    r.disabled = false;
   });
 
   onAgendaChange();
@@ -635,13 +640,9 @@ function abrirForm(agendaId, preselect) {
 }
 
 function voltarLanding() {
-  // Online voltou direto pro form, sem passar pela landing.
-  // Entao "voltar" do online deve ir pra escolha de modalidade.
-  if (modalidadeSel === 'online') {
-    voltarModalidade();
-  } else {
-    _mostrarApenas('viewLanding');
-  }
+  // 2026-08-05: online e presencial usam a mesma landing.
+  // Voltar do form vai pra landing sempre.
+  _mostrarApenas('viewLanding');
 }
 
 function marcarStep(n) {
@@ -1021,15 +1022,44 @@ async function bootstrap() {
 
   const params = new URLSearchParams(window.location.search);
   const modal = params.get('modalidade');
-  const idStr = params.get('agenda');
+  const agParam = params.get('agenda');
 
-  if (idStr) {
-    const id = parseInt(idStr, 10);
-    const alvo = agendasPub.find(a => a.id === id);
+  // ?agenda=<id> (compat) OU ?agenda=<slug> (2026-08-05, link direto do instrutor)
+  if (agParam) {
+    let alvo = null;
+    if (/^\d+$/.test(agParam)) {
+      alvo = agendasPub.find(a => a.id === parseInt(agParam, 10));
+    } else {
+      // Slug: primeiro tenta na lista já carregada, senão resolve via endpoint
+      alvo = agendasPub.find(a => a.slug === agParam);
+      if (!alvo) {
+        try {
+          const r = await fetch(`${API_BASE_URL}/api/atendimentos/publico/agendas/slug/${encodeURIComponent(agParam)}`);
+          if (r.ok) {
+            const d = await r.json();
+            alvo = d.agenda;
+            // Injeta na lista pra views subsequentes acharem
+            if (alvo && !agendasPub.find(a => a.id === alvo.id)) agendasPub.push(alvo);
+          }
+        } catch (_) { /* segue pra erro genérico abaixo */ }
+      }
+    }
     if (alvo) {
-      // adota a modalidade implicita da propria agenda
-      modalidadeSel = alvo.tipo === 'online' ? 'online' : 'presencial';
-      abrirForm(id);
+      // Agenda unificada (2026-08-05): oferece as duas modalidades por padrão.
+      // Se o instrutor desligou uma, respeita — senão mostra tela de escolha.
+      const pres = alvo.oferece_presencial != null ? !!alvo.oferece_presencial : true;
+      const onl  = alvo.oferece_online     != null ? !!alvo.oferece_online     : (alvo.tipo === 'online');
+      if (pres && onl) {
+        // Cliente escolhe modalidade — se veio junto na URL, aplica direto
+        if (modal === 'presencial' || modal === 'online') {
+          modalidadeSel = modal;
+        } else {
+          modalidadeSel = 'presencial';
+        }
+      } else {
+        modalidadeSel = pres ? 'presencial' : 'online';
+      }
+      abrirForm(alvo.id);
       return;
     }
     setErro('Agenda nao encontrada ou desativada. Escolha uma da lista.');

@@ -148,6 +148,32 @@ def _exigir_admin_suporte(request: Request) -> dict:
     return user
 
 
+def _pode_aceitar_agendamento(user: dict, cursor, agendamento_id: int) -> bool:
+    """Decide se o usuario logado pode confirmar/cancelar um agendamento.
+
+    Regra 2026-08-05:
+      - admin (ADMIN/TI/RESPONSAVEL_GRUPO Suporte/Suporte ti): sempre pode
+      - USER do Suporte: pode SE for dono da agenda desse agendamento
+        (atend_agendas.instrutor_id == user.id)
+      - Ninguem mais: nao pode
+    """
+    nivel = _calc_nivel_suporte(user)
+    if nivel == "admin":
+        return True
+    if nivel != "op":  # USER fora do Suporte cai aqui — bloqueado
+        return False
+    cursor.execute(
+        "SELECT ag.instrutor_id FROM atend_agendamentos a "
+        "JOIN atend_agendas ag ON ag.id = a.agenda_id "
+        "WHERE a.id = %s LIMIT 1",
+        (agendamento_id,),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return False
+    return row.get("instrutor_id") == user["id"]
+
+
 # Alias retro-compat: mantem chamadas existentes (vao ser trocadas abaixo).
 _exigir_suporte = _exigir_admin_suporte
 
@@ -232,51 +258,24 @@ def _eventos_periodo(cursor, agenda_id: int, ini: datetime, fim: datetime):
 
 def _slot_tem_vaga(ags, blqs, oferta_id, cap_p, cap_o, ini, fim,
                    modalidade=None, entidade="servico") -> bool:
-    """True se o slot tem vaga. Se `modalidade` for informada, checa so ela;
-    senao, considera vaga em qualquer modalidade. Presencial e online sao
-    contados de forma independente.
+    """True se o slot tem vaga.
 
-    `entidade` = 'servico' | 'treinamento' — define qual campo do agendamento
-    deve bater com oferta_id.
+    REGRA UNIFICADA (2026-08-05): 1 slot = 1 vaga total. Se existe qualquer
+    agendamento (qualquer oferta, qualquer modalidade) no horario, o slot
+    esta ocupado. Parametros `oferta_id`/`cap_p`/`cap_o` continuam na
+    assinatura por retrocompatibilidade mas nao sao mais usados aqui.
 
-    REGRA DE COLISÃO (2026-06-03): curso e treinamento compartilham o mesmo
-    recurso (sala/instrutor). Se for slot de curso, qualquer treinamento no
-    horário bloqueia. E vice-versa. Modalidade não conta aqui — recurso comum.
-    DRONE usa recurso próprio (drone físico): NÃO entra nessa regra de colisão.
-    REGRA CURSO E DRONE: ambos são apenas presenciais. Slot online sempre False.
+    Curso e drone continuam sendo apenas presenciais — cliente que pede
+    modalidade='online' pra essas entidades recebe False imediatamente.
     """
     if modalidade == "online" and entidade in ("servico", "drone"):
         return False
     if any(b["inicio"] < fim and b["fim"] > ini for b in blqs):
         return False
-
-    # Colisão curso<->treinamento (mesmo recurso). Drone fica de fora.
-    if entidade == "servico":
-        if any(a.get("treinamento_id") is not None
-               and a["inicio"] < fim and a["fim"] > ini for a in ags):
-            return False
-    elif entidade == "treinamento":
-        if any(a.get("servico_id") is not None
-               and a["inicio"] < fim and a["fim"] > ini for a in ags):
-            return False
-    # entidade == "drone": sem checagem de colisão entre entidades
-
-    if entidade == "servico":         chave = "servico_id"
-    elif entidade == "treinamento":   chave = "treinamento_id"
-    else:                              chave = "drone_id"
-
-    def _conta(modal):
-        return sum(1 for a in ags if a.get(chave) == oferta_id
-                   and a["modalidade"] == modal
-                   and a["inicio"] < fim and a["fim"] > ini)
-
-    cp = max(1, int(cap_p or 1))
-    co = max(1, int(cap_o or 1))
-    if modalidade == "presencial":
-        return _conta("presencial") < cp
-    if modalidade == "online":
-        return _conta("online") < co
-    return _conta("presencial") < cp or _conta("online") < co
+    # Qualquer agendamento no slot ocupa o slot inteiro
+    if any(a["inicio"] < fim and a["fim"] > ini for a in ags):
+        return False
+    return True
 
 
 def _eh_feriado(cursor, agenda_id, dia) -> bool:
@@ -343,10 +342,16 @@ def _pertence_agenda(cursor, tabela: str, id_: int, agenda_id: int) -> bool:
 def _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
                  excluir_id=None, treinamento_id=None, drone_id=None):
     """Valida se cabe um agendamento. Retorna None se ha vaga, ou uma
-    mensagem de erro. Capacidade vem da oferta (curso, treinamento ou drone);
-    presencial e online sao limites independentes.
+    mensagem de erro.
 
-    Drone NAO entra na regra de colisao curso<->treinamento (recurso proprio).
+    REGRA UNIFICADA (2026-08-05): 1 slot = 1 vaga total. Se qualquer
+    agendamento (qualquer modalidade, qualquer oferta) ocupa o horario
+    nessa agenda, bloqueia. cap_presencial/cap_online ficam no banco mas
+    sao ignorados — instrutor faz 1 atendimento por vez.
+
+    Cursos e drones continuam sendo APENAS presenciais (regra de negocio
+    fisica: precisa laboratorio/drone real). Cliente escolhe modalidade
+    no publico; internamente e um slot ocupado igual.
     """
     if _eh_feriado(cursor, agenda_id, inicio.date()):
         return "Esse dia e feriado nessa agenda."
@@ -356,80 +361,35 @@ def _checar_vaga(cursor, agenda_id, servico_id, modalidade, inicio, fim,
     if cursor.fetchone():
         return "Esse horario esta bloqueado nessa agenda."
 
-    # Regra: curso e drone são APENAS presenciais. Bloqueia online.
+    # Curso e drone continuam sendo apenas presenciais.
     if servico_id and modalidade == "online":
         return "Curso é apenas presencial — escolha a modalidade presencial."
     if drone_id and modalidade == "online":
         return "Drone é apenas presencial — escolha a modalidade presencial."
 
-    cap = 1
-    cap_por_oferta = (servico_id or treinamento_id or drone_id) and modalidade in ("presencial", "online")
-    if cap_por_oferta:
-        if servico_id:    tabela, oferta_id = "atend_servicos", servico_id
-        elif treinamento_id: tabela, oferta_id = "atend_treinamentos", treinamento_id
-        else:             tabela, oferta_id = "atend_drones", drone_id
-        cursor.execute(
-            f"SELECT cap_presencial, cap_online FROM {tabela} WHERE id=%s",
-            (oferta_id,))
-        s = cursor.fetchone()
-        if s:
-            bruto = s["cap_online"] if modalidade == "online" else s["cap_presencial"]
-            cap = max(1, int(bruto or 1))
+    # Modalidade oferecida pela agenda: bloqueia se cliente escolheu uma que
+    # o instrutor desativou (oferece_presencial=0 ou oferece_online=0).
+    cursor.execute(
+        "SELECT oferece_presencial, oferece_online FROM atend_agendas WHERE id=%s",
+        (agenda_id,),
+    )
+    ag_row = cursor.fetchone()
+    if ag_row:
+        if modalidade == "presencial" and not int(ag_row.get("oferece_presencial", 1) or 0):
+            return "Essa agenda não aceita atendimento presencial no momento."
+        if modalidade == "online" and not int(ag_row.get("oferece_online", 1) or 0):
+            return "Essa agenda não aceita atendimento online no momento."
 
-    # REGRA DE COLISÃO CURSO ↔ TREINAMENTO (adicionada 2026-06-03):
-    # Curso e treinamento compartilham o mesmo recurso físico (sala/instrutor).
-    # Se estamos agendando um CURSO e existe TREINAMENTO ocupando o horário
-    # naquela agenda, bloqueia. E vice-versa. Não distingue modalidade aqui —
-    # se há treinamento marcado no slot, o curso entra em conflito mesmo se
-    # for modalidade diferente (recurso comum).
-    if servico_id:
-        cursor.execute(
-            "SELECT id FROM atend_agendamentos WHERE agenda_id=%s "
-            "AND status IN ('pendente','agendado','atendido') "
-            "AND treinamento_id IS NOT NULL "
-            "AND inicio<%s AND fim>%s "
-            + ("AND id != %s LIMIT 1" if excluir_id else "LIMIT 1"),
-            ([agenda_id, fim, inicio, excluir_id] if excluir_id else [agenda_id, fim, inicio]),
-        )
-        if cursor.fetchone():
-            return ("Esse horário já tem um treinamento marcado nessa agenda. "
-                    "Curso e treinamento não podem coexistir no mesmo horário.")
-    elif treinamento_id:
-        cursor.execute(
-            "SELECT id FROM atend_agendamentos WHERE agenda_id=%s "
-            "AND status IN ('pendente','agendado','atendido') "
-            "AND servico_id IS NOT NULL "
-            "AND inicio<%s AND fim>%s "
-            + ("AND id != %s LIMIT 1" if excluir_id else "LIMIT 1"),
-            ([agenda_id, fim, inicio, excluir_id] if excluir_id else [agenda_id, fim, inicio]),
-        )
-        if cursor.fetchone():
-            return ("Esse horário já tem um curso marcado nessa agenda. "
-                    "Curso e treinamento não podem coexistir no mesmo horário.")
-
+    # 1 slot = 1 vaga total. Qualquer agendamento no horario bloqueia.
     sql = ("SELECT COUNT(*) AS n FROM atend_agendamentos WHERE agenda_id=%s "
            "AND status IN ('pendente','agendado','atendido') "
            "AND inicio<%s AND fim>%s")
     params = [agenda_id, fim, inicio]
-    if cap_por_oferta:
-        # capacidade por oferta + modalidade (presencial e online independentes)
-        if servico_id:
-            sql += " AND servico_id=%s AND modalidade=%s"
-            params += [servico_id, modalidade]
-        elif treinamento_id:
-            sql += " AND treinamento_id=%s AND modalidade=%s"
-            params += [treinamento_id, modalidade]
-        else:
-            sql += " AND drone_id=%s AND modalidade=%s"
-            params += [drone_id, modalidade]
     if excluir_id:
         sql += " AND id != %s"
         params.append(excluir_id)
     cursor.execute(sql, params)
-    if cursor.fetchone()["n"] >= cap:
-        if cap_por_oferta:
-            rotulo = "online" if modalidade == "online" else "presenciais"
-            return f"Esse horario ja atingiu o limite de atendimentos {rotulo}."
+    if cursor.fetchone()["n"] >= 1:
         return "Esse horario ja esta ocupado nessa agenda."
     return None
 
@@ -571,6 +531,175 @@ def _dispatch_email_equipe_novo(cursor, agendamento_id: int) -> None:
     except Exception as err:
         logger.warning(f"[ATENDIMENTOS] Falha ao montar alerta interno "
                        f"agendamento_id={agendamento_id}: {err}")
+
+
+# ============================================================
+# SLUG + NOTIFICACOES (2026-08-05)
+# ============================================================
+
+def _slugify(texto: str) -> str:
+    """Normaliza 'Mateus Carvalho' → 'mateus-carvalho'. ASCII, minúsculas,
+    espaços viram '-', só letras/números/hífens."""
+    import re, unicodedata
+    if not texto:
+        return ""
+    txt = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
+    txt = re.sub(r"[^a-zA-Z0-9\s-]", "", txt).strip().lower()
+    txt = re.sub(r"[\s-]+", "-", txt)
+    return txt[:60]
+
+
+def _slug_unico_agenda(cursor, base: str, ignorar_agenda_id: int | None = None) -> str:
+    """Gera slug único pra atend_agendas.slug. Se `base` já existe, tenta
+    base-2, base-3... até achar livre. Se `ignorar_agenda_id` for informado,
+    exclui essa agenda do check (útil no UPDATE do próprio slug)."""
+    if not base:
+        base = f"agenda-{_uuid.uuid4().hex[:6]}"
+    candidato = base
+    n = 1
+    while True:
+        sql = "SELECT id FROM atend_agendas WHERE slug=%s"
+        params = [candidato]
+        if ignorar_agenda_id:
+            sql += " AND id != %s"
+            params.append(ignorar_agenda_id)
+        cursor.execute(sql, params)
+        if not cursor.fetchone():
+            return candidato
+        n += 1
+        candidato = f"{base}-{n}"[:60]
+
+
+def _resp_grupo_suporte_ids(cursor) -> list[int]:
+    """IDs dos users que são RESPONSAVEL_GRUPO do grupo Suporte (ativos).
+    Notificados junto com o instrutor quando cai agendamento novo."""
+    cursor.execute("""
+        SELECT u.id FROM users u
+        JOIN cpe_grupo g ON g.id = u.group_id
+        WHERE u.is_active=1 AND u.role='RESPONSAVEL_GRUPO' AND g.name=%s
+    """, (_GRUPO_SUPORTE,))
+    return [r["id"] for r in cursor.fetchall()]
+
+
+def _instrutor_dono_agenda(cursor, agenda_id: int) -> tuple[int | None, str, str]:
+    """Retorna (user_id, nome, email) do instrutor dono da agenda.
+    (None,'','') se a agenda não tem instrutor atribuído."""
+    cursor.execute("""
+        SELECT u.id, u.name, u.email FROM atend_agendas a
+        LEFT JOIN users u ON u.id = a.instrutor_id
+        WHERE a.id=%s LIMIT 1
+    """, (agenda_id,))
+    r = cursor.fetchone()
+    if not r or not r.get("id"):
+        return (None, "", "")
+    return (r["id"], r["name"] or "", r["email"] or "")
+
+
+def _instrutores_da_especialidade(cursor, treinamento_id: int) -> list[int]:
+    """Retorna IDs dos users (grupo Suporte, ativos) que têm a especialidade
+    do treinamento em questão. Vazio se treinamento não tem especialidade
+    definida ou ninguém foi marcado com ela."""
+    if not treinamento_id:
+        return []
+    cursor.execute("""
+        SELECT DISTINCT u.id
+          FROM atend_treinamentos t
+          JOIN atend_instrutor_especialidade ie ON ie.especialidade_id = t.especialidade_id
+          JOIN users u ON u.id = ie.instrutor_id
+          JOIN cpe_grupo g ON g.id = u.group_id
+         WHERE t.id = %s AND t.especialidade_id IS NOT NULL
+           AND u.is_active = 1 AND g.name = %s
+    """, (treinamento_id, _GRUPO_SUPORTE))
+    return [r["id"] for r in cursor.fetchall()]
+
+
+def _notificar_novo_agendamento(cursor, agendamento_id: int) -> None:
+    """Dispara notificação in-app + email pros instrutores COM A ESPECIALIDADE
+    do treinamento e pros responsáveis do grupo Suporte. Chamado quando cai
+    agendamento novo (do público, status='pendente').
+
+    Regra 2026-08-05 (v085): matching por especialidade — não é mais "dono
+    da agenda". Todos instrutores marcados com a especialidade do treinamento
+    recebem; qualquer um pode "assumir" via POST /agendamentos/{id}/assumir.
+    Fallback: se treinamento não tem especialidade, ninguém do time de
+    instrutores é notificado — só os responsáveis (fluxo antigo).
+
+    Falhas nunca propagam — email/notificação é side-effect."""
+    try:
+        cursor.execute("""
+            SELECT a.agenda_id, a.cliente_nome, a.inicio, a.modalidade,
+                   a.treinamento_id, a.servico_id, a.drone_id,
+                   ag.nome AS agenda_nome
+            FROM atend_agendamentos a
+            JOIN atend_agendas ag ON ag.id = a.agenda_id
+            WHERE a.id=%s
+        """, (agendamento_id,))
+        row = cursor.fetchone()
+        if not row:
+            return
+
+        cliente = row.get("cliente_nome") or "Cliente"
+        agenda_nome = row.get("agenda_nome") or "Agenda"
+        ini = row["inicio"]
+        modal = row.get("modalidade") or "presencial"
+        msg = (f"Novo agendamento pendente #{agendamento_id}: {cliente} — "
+               f"{ini.strftime('%d/%m/%Y %H:%M')} ({modal}) na agenda '{agenda_nome}'")
+
+        # Instrutores com a especialidade do treinamento em questão
+        # (só faz sentido pra treinamento hoje — curso e drone têm outro fluxo)
+        instrutores_ids = _instrutores_da_especialidade(
+            cursor, row.get("treinamento_id"),
+        )
+        resp_ids = _resp_grupo_suporte_ids(cursor)
+        destinos_uid = set(resp_ids) | set(instrutores_ids)
+
+        # Notificação in-app
+        for uid in destinos_uid:
+            try:
+                cursor.execute(
+                    "INSERT INTO notificacoes (usuario_id, mensagem, tipo, lido) "
+                    "VALUES (%s, %s, 'atend_novo_agendamento', 0)",
+                    (uid, msg),
+                )
+            except Exception as e:
+                logger.warning(f"[ATENDIMENTOS] Falha notificacao in-app uid={uid}: {e}")
+
+        # Email — todos os notificados in-app que têm email
+        if destinos_uid:
+            in_clause = ",".join(["%s"] * len(destinos_uid))
+            cursor.execute(
+                f"SELECT email FROM users WHERE id IN ({in_clause}) AND email IS NOT NULL",
+                tuple(destinos_uid),
+            )
+            emails = sorted({r["email"] for r in cursor.fetchall()
+                             if r.get("email") and "@" in r["email"]})
+        else:
+            emails = []
+
+        if emails:
+            try:
+                row_full = _dados_agendamento_completo(cursor, agendamento_id)
+                from services.email_service import (
+                    enviar_email, email_equipe_novo_agendamento,
+                )
+                subject, html = email_equipe_novo_agendamento(
+                    cliente_nome=row_full.get("cliente_nome") or "Cliente",
+                    cliente_email=row_full.get("cliente_email") or "—",
+                    cliente_telefone=row_full.get("cliente_telefone") or "—",
+                    servico_nome=row_full.get("servico_nome") or row_full.get("titulo") or "Atendimento",
+                    agenda_nome=row_full.get("agenda_nome") or "Agenda",
+                    unidade_nome=row_full.get("unidade_nome"),
+                    inicio=row_full["inicio"],
+                    modalidade=row_full.get("modalidade") or "presencial",
+                    observacoes=row_full.get("observacoes"),
+                    instrutor=row_full.get("servico_instrutor"),
+                )
+                enviar_email(para=emails, assunto=subject, html=html, perfil="agenda")
+            except Exception as e:
+                logger.warning(f"[ATENDIMENTOS] Falha email agendamento_id={agendamento_id}: {e}")
+    except Exception as err:
+        logger.warning(f"[ATENDIMENTOS] _notificar_novo_agendamento falhou "
+                       f"id={agendamento_id}: {err}")
 
 
 def _agenda_ou_404(cursor, agenda_id: int) -> dict:
@@ -829,17 +958,40 @@ def historico_cliente(request: Request, email: str):
 
 @router.get("/pendentes")
 def listar_pendentes(request: Request):
-    """Todos os agendamentos aguardando confirmacao, de todas as agendas."""
-    _exigir_view_suporte(request)
+    """Agendamentos aguardando confirmacao.
+
+    Visão depende do nível (v085, 2026-08-05):
+      - admin/view: vê TODOS os pendentes AINDA SEM instrutor atribuído
+        (órfãos). Após alguém "puxar" ou "transferir", o pendente some da
+        fila do admin — vai pra fila do dono.
+      - op (USER do Suporte): vê os SEM dono (que ele pode puxar, se tem a
+        especialidade) OU os que foram transferidos pra ele.
+    """
+    user = _exigir_view_suporte(request)
+    nivel = _calc_nivel_suporte(user)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("""
+        where_extra = ""
+        params: list = []
+        if nivel == "op":
+            # Sem dono OU dono é o próprio user
+            where_extra = " AND (a.instrutor_atribuido_id IS NULL OR a.instrutor_atribuido_id = %s)"
+            params.append(user["id"])
+        else:
+            # Admin/view: só os que ainda ninguém puxou (órfãos).
+            # Já atribuídos ficam na fila do responsável — some daqui.
+            where_extra = " AND a.instrutor_atribuido_id IS NULL"
+
+        cursor.execute(f"""
             SELECT a.id, a.titulo, a.cliente_nome, a.cliente_email, a.cliente_telefone,
                    a.inicio, a.fim, a.modalidade, a.tipo_negocio, a.observacoes, a.origem,
+                   a.treinamento_id, a.servico_id, a.drone_id, a.instrutor_atribuido_id,
                    ag.nome AS agenda_nome, u.nome AS unidade_nome,
                    COALESCE(s.nome, t.nome) AS servico_nome,
                    CASE WHEN a.treinamento_id IS NOT NULL THEN 'treinamento' ELSE 'curso' END AS tipo_oferta,
+                   t.especialidade_id AS especialidade_id,
+                   esp.nome           AS especialidade_nome,
                    e.nome AS equipamento_nome,
                    COALESCE(v.name, a.vendedor_nome) AS vendedor_nome
             FROM atend_agendamentos a
@@ -847,12 +999,327 @@ def listar_pendentes(request: Request):
             LEFT JOIN unidades_cpe u       ON u.id  = ag.unidade_id
             LEFT JOIN atend_servicos s     ON s.id  = a.servico_id
             LEFT JOIN atend_treinamentos t ON t.id  = a.treinamento_id
+            LEFT JOIN atend_especialidades esp ON esp.id = t.especialidade_id
             LEFT JOIN atend_equipamentos e ON e.id  = a.equipamento_id
             LEFT JOIN users v              ON v.id  = a.vendedor_id
-            WHERE a.status = 'pendente'
+            WHERE a.status = 'pendente' {where_extra}
             ORDER BY a.inicio
-        """)
+        """, tuple(params))
         return {"success": True, "pendentes": convert_datetime_list(cursor.fetchall())}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================
+# INSTRUTORES + ESPECIALIDADES (v085, 2026-08-05)
+# ============================================================
+
+@router.get("/instrutores")
+def listar_instrutores(request: Request):
+    """Lista users do grupo Suporte ativos, com as especialidades de cada.
+    Nível de acesso: view (todos que veem o módulo)."""
+    _exigir_view_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT u.id, u.name, u.email, u.username, u.role
+              FROM users u
+              JOIN cpe_grupo g ON g.id = u.group_id
+             WHERE g.name = %s AND u.is_active = 1
+             ORDER BY u.name
+        """, (_GRUPO_SUPORTE,))
+        instrutores = cursor.fetchall()
+        # Puxa especialidades de cada num único round-trip
+        cursor.execute("""
+            SELECT ie.instrutor_id, e.id, e.nome
+              FROM atend_instrutor_especialidade ie
+              JOIN atend_especialidades e ON e.id = ie.especialidade_id
+             WHERE e.ativo = 1
+             ORDER BY e.nome
+        """)
+        by_user = {}
+        for r in cursor.fetchall():
+            by_user.setdefault(r["instrutor_id"], []).append(
+                {"id": r["id"], "nome": r["nome"]}
+            )
+        for i in instrutores:
+            i["especialidades"] = by_user.get(i["id"], [])
+        return {"success": True, "instrutores": instrutores}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.get("/especialidades")
+def listar_especialidades(request: Request):
+    """Catálogo de especialidades (tipos de treinamento)."""
+    _exigir_view_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id, nome, descricao, ativo FROM atend_especialidades "
+            "WHERE ativo=1 ORDER BY nome"
+        )
+        return {"success": True, "especialidades": cursor.fetchall()}
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/especialidades")
+def criar_especialidade(request: Request, data: dict):
+    """Cria uma especialidade nova. Só admin."""
+    _exigir_admin_suporte(request)
+    nome = (data.get("nome") or "").strip()
+    if not nome:
+        raise HTTPException(status_code=400, detail="Nome é obrigatório")
+    descricao = (data.get("descricao") or "").strip() or None
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "INSERT INTO atend_especialidades (nome, descricao) VALUES (%s, %s)",
+            (nome, descricao),
+        )
+        new_id = cursor.lastrowid
+        conn.commit()
+        return {"success": True, "id": new_id}
+    except Exception as e:
+        conn.rollback()
+        if "Duplicate" in str(e):
+            raise HTTPException(status_code=400, detail="Já existe uma especialidade com esse nome")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.put("/instrutores/{user_id}/especialidades")
+def set_especialidades_instrutor(user_id: int, request: Request, data: dict):
+    """Substitui a lista de especialidades do instrutor.
+    Body: {"especialidade_ids": [1, 5, 8]}
+    Permissão: admin OU o próprio instrutor editando o próprio."""
+    user = _get_user(request)
+    if user["id"] != user_id and _calc_nivel_suporte(user) != "admin":
+        raise HTTPException(status_code=403, detail="Só admin ou o próprio instrutor pode editar.")
+
+    ids = data.get("especialidade_ids") or []
+    if not isinstance(ids, list):
+        raise HTTPException(status_code=400, detail="especialidade_ids deve ser lista")
+    ids = [int(x) for x in ids if x]
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        # Confirma que o user existe e é do grupo Suporte
+        cursor.execute("""
+            SELECT u.id FROM users u
+            JOIN cpe_grupo g ON g.id = u.group_id
+            WHERE u.id=%s AND g.name=%s AND u.is_active=1
+        """, (user_id, _GRUPO_SUPORTE))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail="Instrutor não encontrado no grupo Suporte")
+
+        cursor.execute(
+            "DELETE FROM atend_instrutor_especialidade WHERE instrutor_id=%s",
+            (user_id,),
+        )
+        if ids:
+            cursor.executemany(
+                "INSERT INTO atend_instrutor_especialidade (instrutor_id, especialidade_id) "
+                "VALUES (%s, %s)",
+                [(user_id, eid) for eid in ids],
+            )
+        conn.commit()
+        return {"success": True, "count": len(ids)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================
+# ASSUMIR / TRANSFERIR AGENDAMENTO (v085)
+# ============================================================
+
+@router.post("/agendamentos/{agendamento_id}/assumir")
+def assumir_agendamento(agendamento_id: int, request: Request):
+    """Instrutor puxa o agendamento pra ele. Só faz sentido se ele tem a
+    especialidade do treinamento. Status vira 'agendado' + email pro cliente.
+
+    Permissão:
+      - USER do Suporte que tem a especialidade do treinamento
+      - Admin/TI/RESPONSAVEL_GRUPO Suporte também podem (útil pra atribuir
+        em nome de alguém)
+    """
+    user = _get_user(request)
+    nivel = _calc_nivel_suporte(user)
+    if nivel not in ("op", "admin"):
+        raise HTTPException(status_code=403, detail="Sem permissão pra assumir agendamento.")
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id, treinamento_id, status, instrutor_atribuido_id "
+            "FROM atend_agendamentos WHERE id=%s",
+            (agendamento_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Agendamento não encontrado")
+        if row["status"] in ("cancelado", "atendido"):
+            raise HTTPException(status_code=400, detail=f"Agendamento está {row['status']}, não pode ser assumido.")
+
+        # USER só pode puxar se tem a especialidade
+        if nivel == "op":
+            elegiveis = _instrutores_da_especialidade(cursor, row["treinamento_id"])
+            if user["id"] not in elegiveis:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Você não tem a especialidade requerida por esse treinamento.",
+                )
+
+        status_novo = "agendado" if row["status"] == "pendente" else row["status"]
+        cursor.execute("""
+            UPDATE atend_agendamentos
+               SET instrutor_atribuido_id=%s, status=%s
+             WHERE id=%s
+        """, (user["id"], status_novo, agendamento_id))
+        conn.commit()
+
+        # Se virou 'agendado' agora, dispara email de confirmação pro cliente
+        if row["status"] == "pendente" and status_novo == "agendado":
+            _dispatch_email_agendamento(cursor, agendamento_id, "confirmado")
+
+        return {"success": True, "message": "Agendamento assumido.", "status": status_novo}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.post("/agendamentos/{agendamento_id}/transferir")
+def transferir_agendamento(agendamento_id: int, request: Request, data: dict):
+    """Transfere o agendamento pra outro instrutor com a mesma especialidade.
+    Body: {"novo_instrutor_id": 37, "motivo": "..."}
+    O novo instrutor recebe notificação + email.
+
+    Permissão:
+      - Instrutor atual (que assumiu)
+      - Admin/TI/RESPONSAVEL_GRUPO Suporte
+    """
+    user = _get_user(request)
+    nivel = _calc_nivel_suporte(user)
+    if nivel not in ("op", "admin"):
+        raise HTTPException(status_code=403, detail="Sem permissão pra transferir.")
+
+    novo_id = data.get("novo_instrutor_id")
+    if not novo_id:
+        raise HTTPException(status_code=400, detail="Informe novo_instrutor_id.")
+    novo_id = int(novo_id)
+    motivo = (data.get("motivo") or "").strip()
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id, treinamento_id, status, instrutor_atribuido_id, "
+            "cliente_nome, inicio "
+            "FROM atend_agendamentos WHERE id=%s",
+            (agendamento_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Agendamento não encontrado")
+        if row["status"] in ("cancelado", "atendido"):
+            raise HTTPException(status_code=400, detail=f"Agendamento está {row['status']}, não pode ser transferido.")
+
+        # Instrutor comum só pode transferir se é o atual dono
+        if nivel == "op" and row.get("instrutor_atribuido_id") != user["id"]:
+            raise HTTPException(status_code=403, detail="Só o instrutor atual pode transferir.")
+
+        # Novo instrutor precisa ter a especialidade
+        elegiveis = _instrutores_da_especialidade(cursor, row["treinamento_id"])
+        if novo_id not in elegiveis:
+            raise HTTPException(
+                status_code=400,
+                detail="O instrutor escolhido não tem a especialidade requerida.",
+            )
+
+        cursor.execute(
+            "UPDATE atend_agendamentos SET instrutor_atribuido_id=%s WHERE id=%s",
+            (novo_id, agendamento_id),
+        )
+
+        # Notificação in-app pro novo instrutor
+        ini = row["inicio"]
+        msg = (f"Agendamento #{agendamento_id} transferido pra você: "
+               f"{row.get('cliente_nome') or 'Cliente'} — "
+               f"{ini.strftime('%d/%m/%Y %H:%M')}"
+               + (f". Motivo: {motivo}" if motivo else ""))
+        try:
+            cursor.execute(
+                "INSERT INTO notificacoes (usuario_id, mensagem, tipo, lido) "
+                "VALUES (%s, %s, 'atend_transferencia', 0)",
+                (novo_id, msg),
+            )
+        except Exception as e:
+            logger.warning(f"[ATENDIMENTOS] Falha notif in-app transferencia: {e}")
+
+        conn.commit()
+
+        # Email pro novo instrutor — reusa o template de "novo agendamento"
+        # com contexto extra sobre a transferência. Falha silenciosa.
+        try:
+            cursor.execute("SELECT email, name FROM users WHERE id=%s", (novo_id,))
+            urow = cursor.fetchone()
+            if urow and urow.get("email") and "@" in urow["email"]:
+                row_full = _dados_agendamento_completo(cursor, agendamento_id)
+                if row_full:
+                    from services.email_service import (
+                        enviar_email, email_equipe_novo_agendamento,
+                    )
+                    prefix_obs = f"[TRANSFERIDO PRA VOCÊ] "
+                    if motivo:
+                        prefix_obs += f"Motivo: {motivo}. "
+                    obs_final = prefix_obs + (row_full.get("observacoes") or "")
+                    subject, html = email_equipe_novo_agendamento(
+                        cliente_nome=row_full.get("cliente_nome") or "Cliente",
+                        cliente_email=row_full.get("cliente_email") or "—",
+                        cliente_telefone=row_full.get("cliente_telefone") or "—",
+                        servico_nome=row_full.get("servico_nome")
+                            or row_full.get("titulo") or "Atendimento",
+                        agenda_nome=row_full.get("agenda_nome") or "Agenda",
+                        unidade_nome=row_full.get("unidade_nome"),
+                        inicio=row_full["inicio"],
+                        modalidade=row_full.get("modalidade") or "presencial",
+                        observacoes=obs_final,
+                        instrutor=row_full.get("servico_instrutor"),
+                    )
+                    # Sobrescreve assunto pra deixar claro que é transferência
+                    subject = f"[Transferência] {subject}"
+                    enviar_email(para=[urow["email"]], assunto=subject, html=html, perfil="agenda")
+        except Exception as e:
+            logger.warning(f"[ATENDIMENTOS] Falha email transferencia id={agendamento_id}: {e}")
+
+        return {"success": True, "message": "Agendamento transferido."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()
         conn.close()
@@ -870,9 +1337,11 @@ def listar_agendas(request: Request, incluir_inativas: int = 0):
     try:
         where = "" if incluir_inativas else "WHERE a.ativo = 1"
         cursor.execute(f"""
-            SELECT a.*, u.nome AS unidade_nome, u.sigla AS unidade_sigla
+            SELECT a.*, u.nome AS unidade_nome, u.sigla AS unidade_sigla,
+                   ins.name AS instrutor_nome, ins.email AS instrutor_email
             FROM atend_agendas a
             LEFT JOIN unidades_cpe u ON u.id = a.unidade_id
+            LEFT JOIN users ins      ON ins.id = a.instrutor_id
             {where}
             ORDER BY a.nome
         """)
@@ -925,9 +1394,11 @@ def obter_agenda(agenda_id: int, request: Request):
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute("""
-            SELECT a.*, u.nome AS unidade_nome, u.sigla AS unidade_sigla
+            SELECT a.*, u.nome AS unidade_nome, u.sigla AS unidade_sigla,
+                   ins.name AS instrutor_nome, ins.email AS instrutor_email
             FROM atend_agendas a
             LEFT JOIN unidades_cpe u ON u.id = a.unidade_id
+            LEFT JOIN users ins      ON ins.id = a.instrutor_id
             WHERE a.id = %s
         """, (agenda_id,))
         ag = cursor.fetchone()
@@ -943,7 +1414,15 @@ def obter_agenda(agenda_id: int, request: Request):
 def criar_agenda(request: Request, data: dict):
     """Cria uma nova agenda + pre-popula horarios de funcionamento padrao
     (Seg-Sex 08:00-12:00 + 13:00-18:00 — almoco "bloqueado" naturalmente).
-    O admin pode personalizar depois em 'Configurar horarios'."""
+    O admin pode personalizar depois em 'Configurar horarios'.
+
+    Novo (2026-08-05):
+      - instrutor_id: user dono da agenda pessoal (UNIQUE; agenda de unidade
+        deixa NULL)
+      - slug: URL amigável pro link direto. Gerado do nome do instrutor
+        ou do nome da agenda se instrutor_id for NULL. Único.
+      - oferece_presencial/oferece_online: 1/0 (default 1 pra ambos).
+    """
     user = _exigir_suporte(request)
     nome = (data.get("nome") or "").strip()
     if not nome:
@@ -952,18 +1431,50 @@ def criar_agenda(request: Request, data: dict):
     # afeta mais a grade (passo agora vem da duracao do curso). Default 30.
     slot_legado = int(data.get("slot_duracao_min") or 30)
     tipo = data.get("tipo") if data.get("tipo") in ("fisica", "online") else "fisica"
+    instrutor_id_raw = data.get("instrutor_id")
+    instrutor_id = int(instrutor_id_raw) if instrutor_id_raw else None
+    oferece_pres = 1 if data.get("oferece_presencial", 1) else 0
+    oferece_onl  = 1 if data.get("oferece_online", 1) else 0
+    if not oferece_pres and not oferece_onl:
+        raise HTTPException(
+            status_code=400,
+            detail="A agenda precisa oferecer pelo menos uma modalidade (presencial ou online).",
+        )
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
         cursor.execute("SELECT id FROM atend_agendas WHERE nome=%s", (nome,))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Ja existe uma agenda com esse nome")
+
+        # Instrutor precisa existir + ser único (1 agenda por instrutor)
+        instrutor_nome_base = ""
+        if instrutor_id:
+            cursor.execute("SELECT id, name FROM users WHERE id=%s AND is_active=1", (instrutor_id,))
+            u = cursor.fetchone()
+            if not u:
+                raise HTTPException(status_code=400, detail="Instrutor não encontrado ou inativo")
+            instrutor_nome_base = u["name"] or ""
+            cursor.execute("SELECT id FROM atend_agendas WHERE instrutor_id=%s", (instrutor_id,))
+            if cursor.fetchone():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Esse instrutor já tem uma agenda. Cada usuário pode ter apenas uma.",
+                )
+
+        # Slug — do nome do instrutor se tem, senão do nome da agenda
+        slug_base = _slugify(instrutor_nome_base) if instrutor_nome_base else _slugify(nome)
+        slug = _slug_unico_agenda(cursor, slug_base)
+
         cursor.execute("""
             INSERT INTO atend_agendas
-                (nome, unidade_id, tipo, descricao, instrucoes, cor, slot_duracao_min, ativo, created_by)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 1, %s)
+                (nome, unidade_id, instrutor_id, slug, oferece_presencial, oferece_online,
+                 tipo, descricao, instrucoes, cor, slot_duracao_min, ativo, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
         """, (
-            nome, data.get("unidade_id") or None, tipo,
+            nome, data.get("unidade_id") or None, instrutor_id, slug,
+            oferece_pres, oferece_onl,
+            tipo,
             (data.get("descricao") or "").strip() or None,
             (data.get("instrucoes") or "").strip() or None,
             (data.get("cor") or "#0d9488").strip(), slot_legado, user["id"],
@@ -1005,20 +1516,69 @@ def atualizar_agenda(agenda_id: int, request: Request, data: dict):
         cursor.execute("SELECT id FROM atend_agendas WHERE nome=%s AND id!=%s", (nome, agenda_id))
         if cursor.fetchone():
             raise HTTPException(status_code=400, detail="Ja existe uma agenda com esse nome")
+
+        # Novo (2026-08-05): instrutor_id + slug + oferece_*
+        instrutor_id_raw = data.get("instrutor_id")
+        if "instrutor_id" in data:
+            instrutor_id = int(instrutor_id_raw) if instrutor_id_raw else None
+        else:
+            instrutor_id = atual.get("instrutor_id")
+
+        if instrutor_id:
+            cursor.execute("SELECT id, name FROM users WHERE id=%s AND is_active=1", (instrutor_id,))
+            u = cursor.fetchone()
+            if not u:
+                raise HTTPException(status_code=400, detail="Instrutor não encontrado ou inativo")
+            cursor.execute(
+                "SELECT id FROM atend_agendas WHERE instrutor_id=%s AND id!=%s",
+                (instrutor_id, agenda_id),
+            )
+            if cursor.fetchone():
+                raise HTTPException(
+                    status_code=400,
+                    detail="Esse instrutor já tem outra agenda. Cada usuário pode ter apenas uma.",
+                )
+
+        # Slug: mantém o atual, ou aceita override, ou regenera se instrutor mudou
+        slug = atual.get("slug")
+        if data.get("slug"):
+            candidato = _slugify(data["slug"])
+            if candidato != slug:
+                slug = _slug_unico_agenda(cursor, candidato, ignorar_agenda_id=agenda_id)
+        elif not slug:
+            base = ""
+            if instrutor_id:
+                cursor.execute("SELECT name FROM users WHERE id=%s", (instrutor_id,))
+                r = cursor.fetchone()
+                base = _slugify((r or {}).get("name") or "")
+            slug = _slug_unico_agenda(cursor, base or _slugify(nome), ignorar_agenda_id=agenda_id)
+
+        oferece_pres = 1 if data.get("oferece_presencial", atual.get("oferece_presencial", 1)) else 0
+        oferece_onl  = 1 if data.get("oferece_online", atual.get("oferece_online", 1)) else 0
+        if not oferece_pres and not oferece_onl:
+            raise HTTPException(
+                status_code=400,
+                detail="A agenda precisa oferecer pelo menos uma modalidade.",
+            )
+
         cursor.execute("""
             UPDATE atend_agendas
-               SET nome=%s, unidade_id=%s, tipo=%s, descricao=%s, instrucoes=%s, cor=%s,
+               SET nome=%s, unidade_id=%s, instrutor_id=%s, slug=%s,
+                   oferece_presencial=%s, oferece_online=%s,
+                   tipo=%s, descricao=%s, instrucoes=%s, cor=%s,
                    slot_duracao_min=%s, ativo=%s
              WHERE id=%s
         """, (
-            nome, data.get("unidade_id") or None, tipo or atual["tipo"],
+            nome, data.get("unidade_id") or None, instrutor_id, slug,
+            oferece_pres, oferece_onl,
+            tipo or atual["tipo"],
             (data.get("descricao") or "").strip() or None,
             (data.get("instrucoes") or "").strip() or None,
             (data.get("cor") or "#0d9488").strip(), dur,
             1 if data.get("ativo", 1) else 0, agenda_id,
         ))
         conn.commit()
-        return {"success": True}
+        return {"success": True, "slug": slug}
     finally:
         cursor.close()
         conn.close()
@@ -1981,7 +2541,7 @@ def criar_agendamento(request: Request, data: dict):
 
 @router.put("/agendamentos/{agendamento_id}")
 def atualizar_agendamento(agendamento_id: int, request: Request, data: dict):
-    _exigir_op_suporte(request)
+    user = _exigir_op_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -1989,6 +2549,14 @@ def atualizar_agendamento(agendamento_id: int, request: Request, data: dict):
         atual = cursor.fetchone()
         if not atual:
             raise HTTPException(status_code=404, detail="Agendamento nao encontrado")
+
+        # 2026-08-05: USER do Suporte só pode alterar agendamentos da própria
+        # agenda. Admin/TI/Responsável Suporte continuam podendo tudo.
+        if not _pode_aceitar_agendamento(user, cursor, agendamento_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Voce so pode alterar agendamentos da sua propria agenda.",
+            )
 
         titulo = (data.get("titulo") or atual["titulo"] or "").strip()
         if not titulo:
@@ -2983,22 +3551,38 @@ def pub_listar_agendas(request: Request, tipo: str = None):
     - Treinamentos: sempre incluídos (público).
     - Cursos: incluídos APENAS se request vem com token de funcionário CPE.
 
-    Filtro opcional por tipo ('fisica' ou 'online')."""
+    Filtro `tipo` (2026-08-05):
+      Antes: filtrava por `atend_agendas.tipo` (fisica|online — agenda
+      inteira era de um tipo só).
+      Agora: mesma agenda oferece as duas modalidades por default. O filtro
+      `tipo=online` retorna agendas com `oferece_online=1`; `tipo=fisica`
+      retorna com `oferece_presencial=1`. Cliente escolhe a modalidade;
+      internamente 1 slot = 1 vaga total.
+    """
     filtro_tipo = tipo if tipo in ("fisica", "online") else None
     ehFunc = _request_eh_funcionario_cpe(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        if filtro_tipo:
-            cursor.execute("""
-                SELECT id, nome, descricao, instrucoes, cor, tipo
+        base_cols = ("id, nome, descricao, instrucoes, cor, tipo, slug, "
+                     "oferece_presencial, oferece_online, instrutor_id")
+        if filtro_tipo == "online":
+            cursor.execute(f"""
+                SELECT {base_cols}
                 FROM atend_agendas
-                WHERE ativo=1 AND tipo=%s
+                WHERE ativo=1 AND oferece_online=1
                 ORDER BY nome
-            """, (filtro_tipo,))
+            """)
+        elif filtro_tipo == "fisica":
+            cursor.execute(f"""
+                SELECT {base_cols}
+                FROM atend_agendas
+                WHERE ativo=1 AND oferece_presencial=1
+                ORDER BY nome
+            """)
         else:
-            cursor.execute("""
-                SELECT id, nome, descricao, instrucoes, cor, tipo
+            cursor.execute(f"""
+                SELECT {base_cols}
                 FROM atend_agendas WHERE ativo=1 ORDER BY nome
             """)
         agendas = cursor.fetchall()
@@ -3051,9 +3635,15 @@ def pub_obter_agenda(agenda_id: int, request: Request):
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute(
-            "SELECT id, nome, descricao, instrucoes, cor, tipo, slot_duracao_min "
-            "FROM atend_agendas WHERE id=%s AND ativo=1", (agenda_id,))
+        cursor.execute("""
+            SELECT a.id, a.nome, a.descricao, a.instrucoes, a.cor, a.tipo,
+                   a.slot_duracao_min, a.slug,
+                   a.oferece_presencial, a.oferece_online,
+                   a.instrutor_id, ins.name AS instrutor_nome
+            FROM atend_agendas a
+            LEFT JOIN users ins ON ins.id = a.instrutor_id
+            WHERE a.id=%s AND a.ativo=1
+        """, (agenda_id,))
         ag = cursor.fetchone()
         if not ag:
             raise HTTPException(status_code=404, detail="Agenda nao encontrada")
@@ -3064,6 +3654,33 @@ def pub_obter_agenda(agenda_id: int, request: Request):
     finally:
         cursor.close()
         conn.close()
+
+
+@router.get("/publico/agendas/slug/{slug}")
+def pub_agenda_por_slug(slug: str, request: Request):
+    """Resolve slug (link direto) → dados da agenda pública.
+
+    Uso: cliente acessa `/agendar.html?agenda=<slug>` — frontend chama esse
+    endpoint pra pegar o agenda_id e seguir o fluxo padrão sem exibir a
+    lista de agendas (passo 1 pulado).
+    """
+    slug_norm = _slugify(slug or "")
+    if not slug_norm:
+        raise HTTPException(status_code=400, detail="Slug invalido")
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id FROM atend_agendas WHERE slug=%s AND ativo=1", (slug_norm,)
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="Agenda nao encontrada")
+    # Reaproveita o endpoint que já monta o detalhe completo
+    return pub_obter_agenda(row["id"], request)
 
 
 @router.get("/publico/servicos/{servico_id}/equipamentos")
@@ -3351,12 +3968,13 @@ def pub_agendar(data: dict, request: Request):
             "piloto_id": piloto_id_pub,
             "inicio": inicio, "fim": fim, "status": "pendente",
         }, origem="publico", created_by=None)
-        conn.commit()
         # 1) E-mail de "recebido, aguardando confirmacao" para o cliente
-        # 2) Alerta interno pra equipe (suporte.agenda.cpe@) — fica sabendo do pendente
-        # Ambos sao async no email_service — nunca bloqueiam nem derrubam o endpoint.
+        # 2) Notificação in-app + email pro instrutor dono e responsáveis do Suporte (2026-08-05)
+        # 3) Alerta interno legacy pra EQUIPE_AGENDA_EMAILS (só se configurado)
         _dispatch_email_agendamento(cursor, novo, "recebido")
+        _notificar_novo_agendamento(cursor, novo)
         _dispatch_email_equipe_novo(cursor, novo)
+        conn.commit()
         return {"success": True, "id": novo,
                 "mensagem": "Agendamento registrado! Aguarde a confirmacao da equipe."}
     finally:
