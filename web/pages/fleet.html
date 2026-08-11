@@ -1407,6 +1407,45 @@
   </div>
 </div>
 
+<!-- z-index maior: liberação de emergência do ADMIN — abre por cima do detail -->
+<div class="fleet-modal-overlay" id="modalLibAdmin" style="z-index:1100">
+  <div class="fleet-modal" style="max-width:560px">
+    <div class="fleet-modal-header" style="background:#FEF3C7;border-bottom:2px solid #F59E0B">
+      <span class="fleet-modal-title" style="color:#92400E">
+        <i class="bi bi-shield-fill-exclamation"></i> Liberação de emergência
+      </span>
+      <button class="fleet-modal-close" onclick="closeModal('modalLibAdmin')">&times;</button>
+    </div>
+    <div class="fleet-modal-body">
+      <input type="hidden" id="libAdminChecklistId">
+      <input type="hidden" id="libAdminFromStatus">
+
+      <div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#7F1D1D">
+        <div style="font-weight:700;margin-bottom:4px">
+          <i class="bi bi-exclamation-triangle-fill"></i> Ação de exceção — pula validações
+        </div>
+        <div id="libAdminEfeito"></div>
+      </div>
+
+      <div class="fleet-form-group">
+        <label class="fleet-label">Motivo da liberação <span class="req">*</span></label>
+        <textarea class="fleet-textarea" id="libAdminMotivo" rows="4"
+                  placeholder="Ex: Condutor esqueceu foto do painel mas o veículo já saiu — libera pra próxima reserva."
+                  maxlength="500" minlength="5"></textarea>
+        <div style="font-size:11px;color:#6B7280;margin-top:4px">
+          Fica registrado no histórico do checklist com seu nome + data. Auditável.
+        </div>
+      </div>
+    </div>
+    <div class="fleet-modal-footer">
+      <button class="btn-fleet btn-fleet-secondary" onclick="closeModal('modalLibAdmin')">Cancelar</button>
+      <button class="btn-fleet btn-fleet-danger" onclick="confirmarLibAdmin()">
+        <i class="bi bi-check-lg"></i> Liberar agora
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- ============================================================
      MODAL: CORREÇÃO DE AVARIA
      ============================================================ -->
@@ -3235,6 +3274,45 @@ function abrirRecusaSaida() {
   openModal('modalRecusarSaida');
 }
 
+// ============================================================
+// LIBERAÇÃO DE EMERGÊNCIA (ADMIN/TI, 2026-08-11)
+// ============================================================
+function abrirLiberacaoAdmin(id, statusAtual) {
+  document.getElementById('libAdminChecklistId').value = id;
+  document.getElementById('libAdminFromStatus').value = statusAtual;
+  document.getElementById('libAdminMotivo').value = '';
+
+  const efeitos = {
+    'aguardando_vistoria': 'Vai forçar a saída como <strong>APROVADA</strong> (sem checagem de fotos ou vistoriador). Condutor poderá iniciar viagem imediatamente.',
+    'em_viagem':           'Vai fechar a viagem sem devolução formal. Checklist vira <strong>RETORNADO</strong> e veículo fica <strong>ATIVO</strong> pra próximo uso.',
+    'devolvido':           'Vai aprovar o retorno sem vistoria. Checklist vira <strong>RETORNADO</strong> e veículo fica <strong>ATIVO</strong>.'
+  };
+  document.getElementById('libAdminEfeito').innerHTML =
+    efeitos[statusAtual] || 'Vai transicionar o checklist pra próximo estado.';
+
+  openModal('modalLibAdmin');
+  setTimeout(() => document.getElementById('libAdminMotivo').focus(), 100);
+}
+
+async function confirmarLibAdmin() {
+  const id = document.getElementById('libAdminChecklistId').value;
+  const motivo = document.getElementById('libAdminMotivo').value.trim();
+  if (motivo.length < 5) {
+    showToast('Motivo obrigatório (mínimo 5 caracteres)', 'error');
+    document.getElementById('libAdminMotivo').focus();
+    return;
+  }
+  const res = await apiFetch(`/checklists/${id}/liberacao-admin`, {
+    method: 'POST',
+    body: JSON.stringify({ motivo }),
+  });
+  if (!res?.success) { showToast(res?.detail || 'Erro ao liberar', 'error'); return; }
+  showToast(res.message || 'Checklist liberado com registro de auditoria.', 'success');
+  closeModal('modalLibAdmin');
+  closeModal('modalChecklistDetail');
+  loadChecklists();
+}
+
 async function confirmarRecusaSaida() {
   const id = document.getElementById('recSaidaChecklistId').value;
   const justificativa = document.getElementById('recSaidaJust').value.trim();
@@ -3700,10 +3778,31 @@ async function viewChecklist(id) {
       <div style="font-size:13px;color:#7F1D1D"><strong>Motivo:</strong> ${c.recusa_justificativa}</div>
       ${c.recusa_por_nome ? `<div style="font-size:11px;color:#9CA3AF;margin-top:4px">Por <strong>${c.recusa_por_nome}</strong>${c.recusa_em ? ' em '+fmtDatetime(c.recusa_em) : ''}</div>` : ''}
     </div>` : ''}
+
+    ${c.liberacao_admin_por ? `
+    <div style="background:#FEF3C7;border:2px solid #F59E0B;border-radius:8px;padding:12px;margin-bottom:8px">
+      <div style="font-weight:700;font-size:13px;color:#92400E;margin-bottom:6px">
+        <i class="bi bi-shield-fill-exclamation"></i> Liberação de emergência por ADMIN
+      </div>
+      <div style="font-size:13px;color:#78350F">
+        <strong>Estado original:</strong> ${c.liberacao_admin_from_status || '—'}<br>
+        <strong>Motivo:</strong> ${c.liberacao_admin_motivo || '—'}
+      </div>
+      ${c.liberacao_admin_por_nome ? `<div style="font-size:11px;color:#9CA3AF;margin-top:4px">Liberado por <strong>${c.liberacao_admin_por_nome}</strong>${c.liberacao_admin_em ? ' em '+fmtDatetime(c.liberacao_admin_em) : ''}</div>` : ''}
+    </div>` : ''}
   `;
 
   const footer = document.getElementById('checklistDetailFooter');
   footer.innerHTML = '';
+
+  // 2026-08-11: liberação de emergência pra ADMIN/TI em qualquer estado
+  // que trave o veículo. Bypassa validações normais.
+  if (['ADMIN','TI'].includes(currentUser?.role)
+      && ['aguardando_vistoria','em_viagem','devolvido'].includes(c.status)) {
+    footer.innerHTML += `<button class="btn-fleet btn-fleet-danger" onclick="abrirLiberacaoAdmin(${c.id}, '${c.status}')" title="Só admin — bypassa validações">
+      <i class="bi bi-shield-fill-exclamation"></i> Liberação de emergência
+    </button>`;
+  }
 
   // Condutor pode corrigir se checklist está aguardando vistoria (com ou sem recusa formal)
   // — cobre tanto o caso de recusa explícita quanto o de foto que faltou sem ter passado pela recusa

@@ -678,6 +678,7 @@ def get_checklist(checklist_id: int, request: Request):
                    rec.name   AS recebedor_nome,
                    apv.name   AS aprovado_por_nome,
                    rp.name    AS recusa_por_nome,
+                   la.name    AS liberacao_admin_por_nome,
                    ph.foto_path AS foto_veiculo
             FROM fleet_checklists c
             JOIN  fleet_vehicles v   ON v.id = c.vehicle_id
@@ -686,6 +687,7 @@ def get_checklist(checklist_id: int, request: Request):
             LEFT JOIN users rec  ON rec.id  = c.recebedor_id
             LEFT JOIN users apv  ON apv.id  = c.aprovado_por
             LEFT JOIN users rp   ON rp.id   = c.recusa_por
+            LEFT JOIN users la   ON la.id   = c.liberacao_admin_por
             LEFT JOIN fleet_vehicle_photos ph ON ph.vehicle_id = v.id AND ph.is_current = 1 AND ph.angulo = 'frente'
             WHERE c.id = %s
         """, (checklist_id,))
@@ -1619,6 +1621,124 @@ def recusar_retorno(checklist_id: int, request: Request, data: dict):
 
         logger.info(f"[FLEET] Checklist {checklist_id} retorno recusado por user {user['id']}: {justificativa}")
         return {"success": True, "message": "Devolucao recusada. O condutor sera notificado para corrigir."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# ============================================================
+# LIBERAÇÃO DE EMERGÊNCIA — só ADMIN/TI (2026-08-11)
+# Força o próximo estado do checklist pulando as validações normais
+# (fotos, assinatura, etc). Grava auditoria completa.
+# ============================================================
+@router.post("/checklists/{checklist_id}/liberacao-admin")
+def liberacao_admin(checklist_id: int, request: Request, data: dict):
+    """Admin força a transição do checklist pulando validações.
+
+    Efeito por status atual:
+      - aguardando_vistoria → aprovado  (saída autorizada, condutor pode iniciar)
+      - em_viagem           → retornado (fecha viagem sem devolução formal)
+      - devolvido           → retornado (aprova retorno sem vistoria)
+      - retornado / cancelado → 400 (nada a liberar)
+
+    Só ADMIN/TI. Motivo obrigatório. Registrado em liberacao_admin_*.
+    Notifica o condutor por in-app.
+    """
+    user = _get_user_role(request)
+    if user.get("role") not in ("ADMIN", "TI"):
+        raise HTTPException(
+            status_code=403,
+            detail="Apenas ADMIN ou TI podem forçar liberação de checklist.",
+        )
+    motivo = (data.get("motivo") or "").strip()
+    if len(motivo) < 5:
+        raise HTTPException(status_code=400, detail="Motivo obrigatório (mínimo 5 caracteres).")
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id, vehicle_id, condutor_id, status FROM fleet_checklists WHERE id=%s",
+            (checklist_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Checklist não encontrado")
+
+        status_atual = row["status"]
+        # Decide próximo estado + estado do veículo
+        if status_atual == "aguardando_vistoria":
+            novo_status_ck = "aprovado"
+            novo_status_veic = "em_viagem"
+            veic_where_from = "aguardando_vistoria"
+            msg_condutor = (
+                f"Sua saída (checklist #{checklist_id}) foi liberada em caráter de urgência "
+                f"por ADMIN. Você pode iniciar a viagem. Motivo registrado: {motivo[:180]}"
+            )
+        elif status_atual in ("em_viagem", "devolvido"):
+            novo_status_ck = "retornado"
+            novo_status_veic = "ativo"
+            veic_where_from = None  # aceita qualquer status atual
+            msg_condutor = (
+                f"Checklist #{checklist_id} foi encerrado em caráter de urgência por ADMIN. "
+                f"Veículo liberado pra próximo uso. Motivo: {motivo[:180]}"
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Checklist está em '{status_atual}', não há o que liberar.",
+            )
+
+        # Atualiza checklist — grava auditoria
+        cursor.execute("""
+            UPDATE fleet_checklists SET
+                status=%s,
+                liberacao_admin_por=%s,
+                liberacao_admin_em=NOW(),
+                liberacao_admin_motivo=%s,
+                liberacao_admin_from_status=%s
+            WHERE id=%s
+        """, (novo_status_ck, user["id"], motivo, status_atual, checklist_id))
+
+        # Atualiza veículo pra estado consistente
+        if veic_where_from:
+            cursor.execute(
+                "UPDATE fleet_vehicles SET status=%s WHERE id=%s AND status=%s",
+                (novo_status_veic, row["vehicle_id"], veic_where_from),
+            )
+        else:
+            # Retorno forçado: libera veículo (a menos que esteja em manutenção)
+            cursor.execute(
+                "UPDATE fleet_vehicles SET status='ativo' WHERE id=%s AND status IN ('em_viagem','aguardando_vistoria')",
+                (row["vehicle_id"],),
+            )
+
+        # Notif in-app pro condutor (best-effort)
+        if row.get("condutor_id"):
+            try:
+                cursor.execute(
+                    "INSERT INTO notificacoes (usuario_id, mensagem, tipo, lido) "
+                    "VALUES (%s, %s, 'fleet_liberacao_admin', 0)",
+                    (row["condutor_id"], msg_condutor),
+                )
+            except Exception as ne:
+                logger.warning(f"[FLEET/LIB-ADMIN] Falha notif in-app: {ne}")
+
+        conn.commit()
+        logger.info(
+            f"[FLEET/LIB-ADMIN] Checklist {checklist_id} forçado de "
+            f"'{status_atual}' → '{novo_status_ck}' por user {user['id']}. Motivo: {motivo}"
+        )
+        return {
+            "success": True,
+            "message": f"Checklist liberado ({status_atual} → {novo_status_ck}). Ação registrada.",
+            "status_novo": novo_status_ck,
+        }
     except HTTPException:
         raise
     except Exception as e:
