@@ -438,6 +438,44 @@ def desbanir(ip: str):
 
 
 # =========================================
+# 8.15 MIDDLEWARE: rastreio de "última atividade" (usuários online)
+# Dict in-memory {user_id: monotonic_ts}. Atualizado toda vez que o
+# request tem token autenticado. Zerado no restart — reponta em segundos
+# conforme users abrem qualquer página. Consultado por
+# /api/dashboard/online pra o KPI.
+# Path allowlist evita atualizar em polling puro (nao inflaciona).
+# =========================================
+import time as _time_mod
+_LAST_SEEN: dict[int, float] = {}
+_ONLINE_TIMEOUT_SEC = 300  # 5 min sem request => offline
+
+@app.middleware("http")
+async def track_last_seen(request, call_next):
+    # Marca before pra pegar mesmo se a request falhar depois
+    try:
+        from security import parse_session_token, COOKIE_NAME
+        token = request.cookies.get(COOKIE_NAME)
+        if not token:
+            token = request.headers.get("X-Auth-Token") or request.headers.get("x-auth-token")
+        if token:
+            uid = parse_session_token(token)
+            if uid:
+                _LAST_SEEN[int(uid)] = _time_mod.monotonic()
+    except Exception:
+        pass
+    return await call_next(request)
+
+def _online_user_ids() -> list[int]:
+    """Retorna IDs dos users com last_seen nos ultimos 5 min."""
+    now = _time_mod.monotonic()
+    return [uid for uid, ts in _LAST_SEEN.items() if (now - ts) < _ONLINE_TIMEOUT_SEC]
+
+# Expõe pra outros modulos importarem
+app.state.online_user_ids = _online_user_ids
+
+logger.info("✅ Track last_seen middleware ativo (timeout 5min)")
+
+# =========================================
 # 8.2 MIDDLEWARE: Headers de segurança
 # =========================================
 @app.middleware("http")

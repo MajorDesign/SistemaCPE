@@ -614,30 +614,35 @@ def _pendencias_resp_grupo(cursor, user_id: int, group_id: Optional[int]) -> lis
     return out[:8]
 
 
+def _online_ids() -> list[int]:
+    """Import local — app.state.online_user_ids é setado pelo middleware
+    do app.py que rastreia last_seen (5min). Fallback: manager do chat
+    (WS ativo) se o middleware nao estiver disponivel."""
+    try:
+        from app import _online_user_ids
+        return _online_user_ids()
+    except Exception:
+        try:
+            from routes.chat import manager as _chat_manager
+            return list(_chat_manager.online_users())
+        except Exception:
+            return []
+
+
 def _kpis_admin(cursor) -> list[dict]:
     """Visão executiva."""
     out = []
 
-    # 1) Usuários online AGORA (WebSocket do chat ativo)
-    # Import local pra evitar circular no boot do FastAPI.
-    try:
-        from routes.chat import manager as _chat_manager
-        online = len(_chat_manager.online_users())
-        total_ativos = 0
-        cursor.execute("SELECT COUNT(*) AS total FROM users WHERE is_active = 1")
-        total_ativos = (cursor.fetchone() or {}).get("total", 0)
-        out.append(_kpi(
-            "Online agora", online,
-            f"de {total_ativos} ativos", "bi-broadcast-pin",
-            "success" if online > 0 else "default",
-            "/SistemaCPE/web/pages/users.html",
-        ))
-    except Exception as e:
-        logger.warning(f"[DASHBOARD] Nao foi possivel contar online: {e}")
-        cursor.execute("SELECT COUNT(*) AS total FROM users WHERE is_active = 1")
-        n = (cursor.fetchone() or {}).get("total", 0)
-        out.append(_kpi("Usuários ativos", n, "no sistema", "bi-people-fill",
-                        "info", "/SistemaCPE/web/pages/users.html"))
+    # 1) Usuários online AGORA (última atividade < 5 min)
+    online = len(_online_ids())
+    cursor.execute("SELECT COUNT(*) AS total FROM users WHERE is_active = 1")
+    total_ativos = (cursor.fetchone() or {}).get("total", 0)
+    out.append(_kpi(
+        "Online agora", online,
+        f"de {total_ativos} ativos", "bi-broadcast-pin",
+        "success" if online > 0 else "default",
+        "/SistemaCPE/web/pages/users.html",
+    ))
 
     # 2) Tickets abertos no sistema
     cursor.execute("""
@@ -742,20 +747,16 @@ def _kpis_ti(cursor) -> list[dict]:
     """TI — operacional + admin (foco em chamados e infraestrutura)."""
     out = []
 
-    # 1) Usuários online AGORA (WS do chat ativo)
-    try:
-        from routes.chat import manager as _chat_manager
-        online = len(_chat_manager.online_users())
-        cursor.execute("SELECT COUNT(*) AS total FROM users WHERE is_active = 1")
-        total_ativos = (cursor.fetchone() or {}).get("total", 0)
-        out.append(_kpi(
-            "Online agora", online,
-            f"de {total_ativos} ativos", "bi-broadcast-pin",
-            "success" if online > 0 else "default",
-            "/SistemaCPE/web/pages/users.html",
-        ))
-    except Exception as e:
-        logger.warning(f"[DASHBOARD] Nao foi possivel contar online: {e}")
+    # 1) Usuários online AGORA (última atividade < 5 min)
+    online = len(_online_ids())
+    cursor.execute("SELECT COUNT(*) AS total FROM users WHERE is_active = 1")
+    total_ativos = (cursor.fetchone() or {}).get("total", 0)
+    out.append(_kpi(
+        "Online agora", online,
+        f"de {total_ativos} ativos", "bi-broadcast-pin",
+        "success" if online > 0 else "default",
+        "/SistemaCPE/web/pages/users.html",
+    ))
 
     # 2) Tickets críticos (prioridade Alta/Urgente)
     cursor.execute("""
@@ -830,17 +831,12 @@ _ATALHOS_ADMIN = _ATALHOS_BASE + [
 # ---------------------------------------------------------------------
 @router.get("/online")
 def dashboard_online():
-    """Retorna users online AGORA (WS do chat ativo).
+    """Retorna users online AGORA (última atividade nos últimos 5 min).
     Uso: KPI da dashboard admin + polling opcional.
     Sem auth pra facilitar polling do frontend — apenas retorna id/nome/grupo
     (dados nao-sensíveis; qualquer user logado ja ve os colegas no chat).
     """
-    try:
-        from routes.chat import manager as _chat_manager
-        ids = _chat_manager.online_users()
-    except Exception:
-        ids = []
-
+    ids = _online_ids()
     if not ids:
         return {"success": True, "total": 0, "users": []}
 
