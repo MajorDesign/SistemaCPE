@@ -618,11 +618,26 @@ def _kpis_admin(cursor) -> list[dict]:
     """Visão executiva."""
     out = []
 
-    # 1) Usuários ativos (logaram nos últimos 7 dias) — fallback: total ativos
-    cursor.execute("SELECT COUNT(*) AS total FROM users WHERE is_active = 1")
-    n = (cursor.fetchone() or {}).get("total", 0)
-    out.append(_kpi("Usuários ativos", n, "no sistema", "bi-people-fill",
-                    "info", "/SistemaCPE/web/pages/users.html"))
+    # 1) Usuários online AGORA (WebSocket do chat ativo)
+    # Import local pra evitar circular no boot do FastAPI.
+    try:
+        from routes.chat import manager as _chat_manager
+        online = len(_chat_manager.online_users())
+        total_ativos = 0
+        cursor.execute("SELECT COUNT(*) AS total FROM users WHERE is_active = 1")
+        total_ativos = (cursor.fetchone() or {}).get("total", 0)
+        out.append(_kpi(
+            "Online agora", online,
+            f"de {total_ativos} ativos", "bi-broadcast-pin",
+            "success" if online > 0 else "default",
+            "/SistemaCPE/web/pages/users.html",
+        ))
+    except Exception as e:
+        logger.warning(f"[DASHBOARD] Nao foi possivel contar online: {e}")
+        cursor.execute("SELECT COUNT(*) AS total FROM users WHERE is_active = 1")
+        n = (cursor.fetchone() or {}).get("total", 0)
+        out.append(_kpi("Usuários ativos", n, "no sistema", "bi-people-fill",
+                        "info", "/SistemaCPE/web/pages/users.html"))
 
     # 2) Tickets abertos no sistema
     cursor.execute("""
@@ -727,7 +742,22 @@ def _kpis_ti(cursor) -> list[dict]:
     """TI — operacional + admin (foco em chamados e infraestrutura)."""
     out = []
 
-    # 1) Tickets críticos (prioridade Alta/Urgente)
+    # 1) Usuários online AGORA (WS do chat ativo)
+    try:
+        from routes.chat import manager as _chat_manager
+        online = len(_chat_manager.online_users())
+        cursor.execute("SELECT COUNT(*) AS total FROM users WHERE is_active = 1")
+        total_ativos = (cursor.fetchone() or {}).get("total", 0)
+        out.append(_kpi(
+            "Online agora", online,
+            f"de {total_ativos} ativos", "bi-broadcast-pin",
+            "success" if online > 0 else "default",
+            "/SistemaCPE/web/pages/users.html",
+        ))
+    except Exception as e:
+        logger.warning(f"[DASHBOARD] Nao foi possivel contar online: {e}")
+
+    # 2) Tickets críticos (prioridade Alta/Urgente)
     cursor.execute("""
         SELECT COUNT(*) AS total FROM tickets t
          JOIN ticket_prioridades p ON p.id = t.prioridade_id
@@ -793,6 +823,44 @@ _ATALHOS_ADMIN = _ATALHOS_BASE + [
     {"label": "Usuários",   "url": "/SistemaCPE/web/pages/users.html",       "icon": "bi-people"},
     {"label": "Permissões", "url": "/SistemaCPE/web/pages/permissions.html", "icon": "bi-shield-lock"},
 ]
+
+
+# ---------------------------------------------------------------------
+# USERS ONLINE — endpoint leve pra polling (KPI + lista nome+grupo)
+# ---------------------------------------------------------------------
+@router.get("/online")
+def dashboard_online():
+    """Retorna users online AGORA (WS do chat ativo).
+    Uso: KPI da dashboard admin + polling opcional.
+    Sem auth pra facilitar polling do frontend — apenas retorna id/nome/grupo
+    (dados nao-sensíveis; qualquer user logado ja ve os colegas no chat).
+    """
+    try:
+        from routes.chat import manager as _chat_manager
+        ids = _chat_manager.online_users()
+    except Exception:
+        ids = []
+
+    if not ids:
+        return {"success": True, "total": 0, "users": []}
+
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        placeholders = ",".join(["%s"] * len(ids))
+        cursor.execute(f"""
+            SELECT u.id, u.name, u.role, g.name AS group_name
+              FROM users u
+              LEFT JOIN cpe_grupo g ON g.id = u.group_id
+             WHERE u.id IN ({placeholders}) AND u.is_active = 1
+             ORDER BY u.name
+        """, tuple(ids))
+        users = cursor.fetchall()
+        return {"success": True, "total": len(users), "users": users}
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 
 # ---------------------------------------------------------------------
