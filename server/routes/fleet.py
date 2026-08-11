@@ -3015,6 +3015,83 @@ def list_reservations(request: Request, month: str = None, vehicle_id: int = Non
         conn.close()
 
 
+def _notificar_resp_frotas_nova_reserva(cursor, res_id: int) -> None:
+    """Notif in-app + email pros RESPONSAVEL_GRUPO do grupo Frotas
+    quando cai reserva nova aguardando aprovação. Falha silenciosa —
+    não deve bloquear a criação da reserva."""
+    cursor.execute("""
+        SELECT r.id, r.destino, r.data_reserva, r.data_fim,
+               r.horario_inicio, r.horario_fim,
+               v.modelo AS veiculo_modelo, v.placa AS veiculo_placa,
+               sol.name AS solicitante_nome
+          FROM fleet_reservations r
+          JOIN fleet_vehicles v ON v.id = r.vehicle_id
+          JOIN users sol ON sol.id = r.solicitante_id
+         WHERE r.id = %s
+    """, (res_id,))
+    r = cursor.fetchone()
+    if not r:
+        return
+
+    # RESPONSAVEL_GRUPO do grupo Frotas
+    cursor.execute("""
+        SELECT id, name, email FROM users
+         WHERE is_active=1 AND role='RESPONSAVEL_GRUPO' AND group_id=%s
+    """, (FLEET_GROUP_ID,))
+    resps = cursor.fetchall()
+    if not resps:
+        return
+
+    ini = r["horario_inicio"]
+    hi = str(ini) if not hasattr(ini, "strftime") else ini.strftime("%H:%M")
+    fim = r["horario_fim"]
+    hf = str(fim) if not hasattr(fim, "strftime") else fim.strftime("%H:%M")
+    dt_ini = str(r["data_reserva"])
+    dt_fim = str(r["data_fim"]) if r.get("data_fim") else None
+
+    msg_curta = (
+        f"Nova reserva #{res_id}: {r['solicitante_nome']} — "
+        f"{r['veiculo_modelo']} ({r['veiculo_placa']}) — "
+        f"{dt_ini} {hi} até {hf}. Destino: {r['destino']}"
+    )
+
+    # In-app pra cada responsável
+    for u in resps:
+        try:
+            cursor.execute(
+                "INSERT INTO notificacoes (usuario_id, mensagem, tipo, lido) "
+                "VALUES (%s, %s, 'fleet_nova_reserva', 0)",
+                (u["id"], msg_curta),
+            )
+        except Exception as e:
+            logger.warning(f"[FLEET/NOVA-RES] Falha notif in-app uid={u['id']}: {e}")
+
+    # Email — best-effort
+    emails = sorted({u["email"] for u in resps
+                     if u.get("email") and "@" in u["email"]})
+    if not emails:
+        return
+    try:
+        from services.email_service import enviar_email, email_fleet_nova_reserva
+        from config import PUBLIC_BASE_URL
+        link = f"{PUBLIC_BASE_URL}/SistemaCPE/web/pages/fleet.html"
+        subject, html = email_fleet_nova_reserva(
+            solicitante_nome=r["solicitante_nome"],
+            veiculo_modelo=r["veiculo_modelo"],
+            veiculo_placa=r["veiculo_placa"],
+            data_reserva=dt_ini,
+            data_fim=dt_fim,
+            horario_inicio=hi,
+            horario_fim=hf,
+            destino=r["destino"],
+            reserva_id=res_id,
+            link_fleet=link,
+        )
+        enviar_email(para=emails, assunto=subject, html=html)
+    except Exception as e:
+        logger.warning(f"[FLEET/NOVA-RES] Falha email resp frotas: {e}")
+
+
 @router.post("/reservations")
 def create_reservation(request: Request, data: dict):
     user_id = _get_user_id(request)
@@ -3154,8 +3231,17 @@ def create_reservation(request: Request, data: dict):
                 (vehicle_id, solicitante_id, destino, data_reserva, data_fim, horario_inicio, horario_fim)
             VALUES (%s,%s,%s,%s,%s,%s,%s)
         """, (vehicle_id, user_id, destino, data_reserva, data_fim, horario_inicio, horario_fim))
+        res_id = cursor.lastrowid
+
+        # 2026-08-11: notifica RESPONSAVEL_GRUPO Frotas (in-app + email).
+        # Best-effort — falha não bloqueia a criação.
+        try:
+            _notificar_resp_frotas_nova_reserva(cursor, res_id)
+        except Exception as e:
+            logger.warning(f"[FLEET] Falha notif resp frotas nova reserva: {e}")
+
         conn.commit()
-        return {"success": True, "id": cursor.lastrowid, "message": "Reserva enviada para aprovacao!"}
+        return {"success": True, "id": res_id, "message": "Reserva enviada para aprovacao!"}
     except HTTPException:
         raise
     except Exception as e:
