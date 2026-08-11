@@ -1414,3 +1414,48 @@ def email_fleet_retorno_recusado(
     html = _BASE_TEMPLATE.format(title="Vistoria de devolução recusada",
                                   tag="Ação necessária", body=body)
     return subject, html
+
+
+def email_fleet_nova_reserva(
+    *, solicitante_nome: str, veiculo_modelo: str, veiculo_placa: str,
+    data_reserva: str, data_fim: str | None, horario_inicio: str, horario_fim: str,
+    destino: str, reserva_id: int, link_fleet: str,
+) -> tuple[str, str]:
+    """Email pros RESPONSAVEL_GRUPO Frotas quando cai reserva nova
+    aguardando aprovação. Traz dados essenciais + link direto pro módulo."""
+    subject = f"Nova reserva de veículo #{reserva_id} — aguardando aprovação"
+    periodo = data_reserva
+    if data_fim and data_fim != data_reserva:
+        periodo = f"{data_reserva} a {data_fim}"
+    body = f"""
+        <p>Olá,</p>
+        <p><strong>{_escape(solicitante_nome)}</strong> solicitou uma reserva
+        do veículo <strong>{_escape(veiculo_modelo)}</strong>
+        ({_escape(veiculo_placa)}).</p>
+
+        <div style="margin:16px 0;padding:14px 18px;background:#F9FAFB;
+                    border-left:4px solid #FFC107;border-radius:6px;font-size:13.5px;">
+          <div style="margin-bottom:6px"><strong>Período:</strong> {_escape(periodo)}</div>
+          <div style="margin-bottom:6px"><strong>Horário:</strong> {_escape(horario_inicio)} — {_escape(horario_fim)}</div>
+          <div><strong>Destino:</strong> {_escape(destino)}</div>
+        </div>
+
+        <p style="margin-top:16px">Abra o módulo de Frotas pra aprovar ou rejeitar.</p>
+
+        <p style="text-align:center;margin:24px 0 8px;">
+          <a href="{_escape(link_fleet)}"
+             style="display:inline-block;padding:12px 28px;background:#FFC107;
+                    color:#1A1A1A;font-weight:700;font-size:14px;text-decoration:none;
+                    border-radius:8px;box-shadow:0 4px 12px rgba(255,193,7,.35);">
+            🚗 Abrir módulo de Frotas
+          </a>
+        </p>
+
+        <p style="font-size:12px;color:#6B7280;text-align:center;margin-top:8px;">
+          Se o botão não funcionar, copie e cole no navegador:<br>
+          <span style="word-break:break-all;">{_escape(link_fleet)}</span>
+        </p>
+    """
+    html = _BASE_TEMPLATE.format(title="Nova reserva de veículo",
+                                  tag="Aprovação pendente", body=body)
+    return subject, html
