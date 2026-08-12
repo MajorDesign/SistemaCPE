@@ -28,7 +28,18 @@ UPLOAD_DIR = os.path.normpath(
 )
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
+ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif'}
+
+# 2026-08-12: fallback por MIME quando o mobile manda filename sem extensao
+# (acontece em iOS Safari + capture=environment em alguns casos, e no
+# Android quando o arquivo vem de share-sheet). Sem isso, fotos boas
+# eram rejeitadas com "Formato invalido" e sumiam do checklist.
+_MIME_TO_EXT = {
+    "image/jpeg": ".jpg", "image/jpg": ".jpg",
+    "image/png":  ".png",
+    "image/webp": ".webp",
+    "image/heic": ".heic", "image/heif": ".heif",
+}
 
 
 # ============================================================
@@ -506,7 +517,19 @@ async def upload_vehicle_photo(
 
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Formato inválido. Use JPG, PNG ou WEBP.")
+        ct = (file.content_type or "").lower().strip()
+        fallback = _MIME_TO_EXT.get(ct)
+        if fallback:
+            ext = fallback
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Formato invalido. Use JPG, PNG, WEBP ou HEIC "
+                    f"(recebido: {file.filename or 'sem-nome'} / "
+                    f"tipo: {ct or 'desconhecido'})."
+                ),
+            )
 
     filename = f"v{vehicle_id}_{angulo}_{uuid.uuid4().hex[:8]}{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
@@ -749,12 +772,41 @@ async def upload_checklist_photo(
 
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail="Formato inválido. Use JPG, PNG ou WEBP.")
+        # Fallback: mobile as vezes manda sem extensao (ou com nome
+        # generico tipo "image"). Tenta MIME type antes de rejeitar.
+        ct = (file.content_type or "").lower().strip()
+        fallback = _MIME_TO_EXT.get(ct)
+        if fallback:
+            ext = fallback
+        else:
+            print(
+                f"[FLEET UPLOAD 400] checklist={checklist_id} angulo={angulo} "
+                f"filename={file.filename!r} content_type={ct!r} — extensao rejeitada",
+                flush=True,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Formato invalido. Use JPG, PNG, WEBP ou HEIC "
+                    f"(recebido: {file.filename or 'sem-nome'} / "
+                    f"tipo: {ct or 'desconhecido'})."
+                ),
+            )
 
     # Ler os bytes uma vez para calcular hash e gravar (fotos de checklist são
     # pequenas, seguro carregar em memória). Anti-reuso: SHA-256 dos bytes —
     # se o mesmo arquivo já existe neste checklist, rejeita antes de gravar.
     raw = await file.read()
+    if not raw:
+        print(
+            f"[FLEET UPLOAD 400] checklist={checklist_id} angulo={angulo} "
+            f"filename={file.filename!r} — arquivo VAZIO (0 bytes)",
+            flush=True,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Foto veio vazia (0 bytes). Tente fotografar novamente.",
+        )
     file_hash = hashlib.sha256(raw).hexdigest()
 
     conn = get_db_or_404()
@@ -767,6 +819,11 @@ async def upload_checklist_photo(
         )
         dup = cursor.fetchone()
         if dup:
+            print(
+                f"[FLEET UPLOAD 400] checklist={checklist_id} angulo={angulo} "
+                f"— DUPLICADO (mesma imagem ja existe no angulo '{dup['angulo']}')",
+                flush=True,
+            )
             raise HTTPException(
                 status_code=400,
                 detail=(
