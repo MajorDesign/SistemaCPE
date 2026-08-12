@@ -9,8 +9,21 @@ import os
 import uuid
 import shutil
 import hashlib
+import io
 import logging
 from datetime import datetime, date
+
+# HEIC/HEIF: iPhone salva fotos nesse formato quando o user escolhe
+# "Photo Library" ao inves de "Camera" no input capture=environment.
+# Chrome/Firefox/Edge desktop NAO renderiza HEIC nativo — o vistoriador
+# via desktop nao consegue ver. Solucao: converter pra JPG no upload.
+try:
+    from PIL import Image
+    from pillow_heif import register_heif_opener
+    register_heif_opener()
+    _HEIF_OK = True
+except ImportError:
+    _HEIF_OK = False
 
 # Data de corte da regra de painel obrigatório (Migration 083).
 # Checklists criados a partir desta data precisam ter as 7 fotos (incluindo
@@ -40,6 +53,27 @@ _MIME_TO_EXT = {
     "image/webp": ".webp",
     "image/heic": ".heic", "image/heif": ".heif",
 }
+
+
+def _maybe_convert_heic_to_jpg(raw: bytes, ext: str) -> tuple[bytes, str]:
+    """Se o upload for HEIC/HEIF, converte pra JPEG (Chrome/Firefox/Edge
+    desktop nao renderiza HEIC). Se conversao falha ou pillow-heif nao
+    esta disponivel, mantem o arquivo original — melhor salvar bruto do
+    que perder a foto."""
+    if ext not in (".heic", ".heif"):
+        return raw, ext
+    if not _HEIF_OK:
+        return raw, ext
+    try:
+        img = Image.open(io.BytesIO(raw))
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=88, optimize=True)
+        return out.getvalue(), ".jpg"
+    except Exception as e:
+        print(f"[FLEET UPLOAD] HEIC->JPG falhou: {e} (salvando cru)", flush=True)
+        return raw, ext
 
 
 # ============================================================
@@ -531,10 +565,19 @@ async def upload_vehicle_photo(
                 ),
             )
 
+    # Le em memoria pra permitir conversao HEIC->JPG (iPhone).
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(
+            status_code=400,
+            detail="Foto veio vazia (0 bytes). Tente fotografar novamente.",
+        )
+    raw, ext = _maybe_convert_heic_to_jpg(raw, ext)
+
     filename = f"v{vehicle_id}_{angulo}_{uuid.uuid4().hex[:8]}{ext}"
     filepath = os.path.join(UPLOAD_DIR, filename)
     with open(filepath, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+        f.write(raw)
 
     photo_url = f"/SistemaCPE/web/uploads/fleet/{filename}"
     legenda_clean = (legenda or "").strip()[:80] or None
@@ -807,6 +850,8 @@ async def upload_checklist_photo(
             status_code=400,
             detail="Foto veio vazia (0 bytes). Tente fotografar novamente.",
         )
+    # HEIC (iPhone) -> JPG pra desktop conseguir renderizar
+    raw, ext = _maybe_convert_heic_to_jpg(raw, ext)
     file_hash = hashlib.sha256(raw).hexdigest()
 
     conn = get_db_or_404()
