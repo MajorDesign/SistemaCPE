@@ -2577,8 +2577,14 @@ function populateVehicleSelects() {
   // chega o dia (data_entrada <= hoje), e quando isso acontece o status
   // já vira 'manutencao' (some do filtro 'ativo'). Aqui só sinalizamos
   // visualmente que existe agendamento futuro com um ⚠️ no rótulo.
-  const disponíveis  = allVehicles.filter(v => v.status === 'ativo' && !v.checklist_pendente_id);
-  const comPendencia = allVehicles.filter(v => v.status === 'ativo' && v.checklist_pendente_id);
+  // 2026-08-12: se o user tem uma reserva pendente pra fazer checklist,
+  // o veiculo dessa reserva SEMPRE aparece como disponivel — mesmo que
+  // esteja marcado como pendente por outro motivo (ex: race com auto-block).
+  // Sem isso, o dono da reserva nao conseguia selecionar o proprio veiculo
+  // pra iniciar o checklist de saida.
+  const pendVehicleId = _pendingReservation?.vehicle_id ? Number(_pendingReservation.vehicle_id) : null;
+  const disponíveis  = allVehicles.filter(v => v.status === 'ativo' && (!v.checklist_pendente_id || v.id === pendVehicleId));
+  const comPendencia = allVehicles.filter(v => v.status === 'ativo' && v.checklist_pendente_id && v.id !== pendVehicleId);
   const clSel = document.getElementById('clVehicle');
   if (clSel) {
     const cur = clSel.value;
