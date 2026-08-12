@@ -1204,7 +1204,7 @@ def recusar_saida(checklist_id: int, request: Request, data: dict):
             SELECT c.id, c.condutor_id, c.status, c.vehicle_id,
                    u.name  AS condutor_nome,
                    u.email AS condutor_email,
-                   v.model AS veiculo_modelo, v.plate AS veiculo_placa
+                   v.modelo AS veiculo_modelo, v.placa AS veiculo_placa
               FROM fleet_checklists c
               LEFT JOIN users u ON u.id = c.condutor_id
               LEFT JOIN fleet_vehicles v ON v.id = c.vehicle_id
@@ -1646,7 +1646,7 @@ def recusar_retorno(checklist_id: int, request: Request, data: dict):
             SELECT c.vehicle_id, c.status, c.condutor_id,
                    u.name  AS condutor_nome,
                    u.email AS condutor_email,
-                   v.model AS veiculo_modelo, v.plate AS veiculo_placa
+                   v.modelo AS veiculo_modelo, v.placa AS veiculo_placa
               FROM fleet_checklists c
               LEFT JOIN users u ON u.id = c.condutor_id
               LEFT JOIN fleet_vehicles v ON v.id = c.vehicle_id
