@@ -883,8 +883,11 @@ def create_checklist(request: Request, data: dict):
                 detail=f"Veiculo com manutencao agendada ({manut_bloqueio['tipo']}) a partir de {manut_bloqueio['data_entrada']}. Aguarde liberacao pelo responsavel."
             )
 
-        # Verificar reserva aprovada para outro usuario (1h antes do inicio ate o fim)
+        # Verificar reserva aprovada para outro condutor (1h antes do inicio ate o fim)
         # Considera reservas multi-dia: ativa se NOW() esta em [inicio-1h, fim_efetivo]
+        # 2026-08-11: check contra CONDUTOR (dono do checklist), nao user logado —
+        # permite admin criar checklist em nome do proprio dono da reserva.
+        condutor_final = int(data.get("condutor_id") or user_id)
         cursor.execute("""
             SELECT r.id, r.solicitante_id, r.data_reserva, r.data_fim,
                    r.horario_inicio, r.horario_fim, sol.name AS sol_nome
@@ -894,7 +897,7 @@ def create_checklist(request: Request, data: dict):
               AND r.solicitante_id != %s
               AND TIMESTAMP(r.data_reserva, r.horario_inicio) - INTERVAL 1 HOUR <= NOW()
               AND TIMESTAMP(COALESCE(r.data_fim, r.data_reserva), r.horario_fim) > NOW()
-        """, (vehicle_id, user_id))
+        """, (vehicle_id, condutor_final))
         reserva_bloqueio = cursor.fetchone()
         if reserva_bloqueio:
             df_ex = reserva_bloqueio.get("data_fim") or reserva_bloqueio["data_reserva"]
@@ -902,7 +905,9 @@ def create_checklist(request: Request, data: dict):
                 status_code=400,
                 detail=(f"Veiculo reservado por {reserva_bloqueio['sol_nome']} de "
                         f"{reserva_bloqueio['data_reserva']} {reserva_bloqueio['horario_inicio']} "
-                        f"ate {df_ex} {reserva_bloqueio['horario_fim']}")
+                        f"ate {df_ex} {reserva_bloqueio['horario_fim']} — "
+                        f"so o dono da reserva pode fazer o checklist. "
+                        f"Se precisar tirar em nome de outra pessoa, indique o condutor correto.")
             )
 
         cursor.execute("""
