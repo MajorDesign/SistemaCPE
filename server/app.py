@@ -1750,6 +1750,14 @@ try:
     logger.info("✅ Router de Tickets registrado: /api/tickets")
     logger.info("✅ Router de Interações registrado: /api/ticket-interacoes")
 
+    # Permissoes de categoria por membro (migration 089)
+    try:
+        from routes.ticket_permissoes import router as ticket_permissoes_router
+        app.include_router(ticket_permissoes_router)
+        logger.info("✅ Router de Permissoes por Categoria: /api/tickets/permissoes")
+    except Exception as perm_err:
+        logger.error(f"⚠️ Router de Permissoes por Categoria falhou: {perm_err}")
+
     # Router de Chamados Antigos (somente consulta)
     try:
         from routes.chamados_antigos import router as chamados_antigos_router

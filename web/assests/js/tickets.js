@@ -352,7 +352,227 @@ function applyRolePermissions() {
   const btnAtribuir = document.getElementById('btnAtribuir');
   if (btnAtribuir) btnAtribuir.style.display = gestor ? '' : 'none';
 
+  // Botao "Permissoes" — so ADMIN e RESPONSAVEL_GRUPO
+  // (TI/MANAGER veem tudo por padrao e nao precisam configurar restricao
+  // por membro; UI so faz sentido pra quem gerencia o proprio time)
+  const btnPerm = document.getElementById('btnPermissoesCat');
+  if (btnPerm) {
+    const podePerm = (role === 'ADMIN' || role === 'RESPONSAVEL_GRUPO');
+    btnPerm.style.display = podePerm ? '' : 'none';
+  }
+
   console.log(`[PERMISSAO] ✅ Elementos ajustados para role: ${role}`);
+}
+
+/* ================================================================
+   PERMISSOES POR CATEGORIA — configuracao do responsavel do grupo
+   Ver /api/tickets/permissoes/*
+   ================================================================ */
+let _permGroupId = null;
+let _permMembroSelId = null;
+let _permCatSelecionadas = new Set(); // "cat:ID" ou "sub:ID"
+
+async function abrirModalPermissoes() {
+  const cu = getCurrentUser() || {};
+  const role = cu.role || 'USER';
+  // ADMIN edita qualquer grupo — por ora, permite escolher SO o grupo do
+  // proprio user autenticado (admin manda group_id via nav). Simplificado:
+  // ambos usam users.group_id como alvo. Admin sem group_id ve alerta.
+  _permGroupId = cu.group_id || null;
+  if (!_permGroupId) {
+    alert('Você não tem um grupo definido — impossível configurar permissões.\n' +
+          'Se você é admin, atribua-se a um grupo em Usuários.');
+    return;
+  }
+  _permMembroSelId = null;
+  _permCatSelecionadas.clear();
+  document.getElementById('permCatErro').classList.add('d-none');
+  document.getElementById('permCatBtnSalvar').classList.add('d-none');
+  document.getElementById('permCatBtnZerar').classList.add('d-none');
+  document.getElementById('permCatCabecalho').innerHTML =
+    '<div class="text-muted small">Selecione um membro à esquerda pra configurar.</div>';
+  document.getElementById('permCatArvore').innerHTML = '';
+
+  const modal = new bootstrap.Modal(document.getElementById('permCatModal'));
+  modal.show();
+  await _permCarregarMembros();
+}
+
+async function _permCarregarMembros() {
+  const list = document.getElementById('permMembrosList');
+  list.innerHTML = '<div class="text-center py-3 text-muted small"><i class="bi bi-hourglass-split"></i> Carregando...</div>';
+  try {
+    const r = await fetch(`${API_BASE_URL}/api/tickets/permissoes/grupo/${_permGroupId}/membros`, {
+      credentials: 'include',
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const membros = (j.membros || []).filter(m => (m.role || 'USER').toUpperCase() === 'USER');
+    if (!membros.length) {
+      list.innerHTML = '<div class="text-muted small py-3 text-center">Nenhum membro USER no grupo.</div>';
+      return;
+    }
+    list.innerHTML = membros.map(m => {
+      const badge = m.ve_tudo
+        ? '<span class="perm-badge" style="background:#d1fae5;color:#065f46">vê tudo</span>'
+        : `<span class="perm-badge" style="background:#fef3c7;color:#78350f">${m.restricoes_count} restrição(ões)</span>`;
+      return `<div class="perm-membro" data-uid="${m.id}" onclick="permCatSelecionarMembro(${m.id})">
+        <span class="perm-nome">${_escHtmlP(m.name)}</span>
+        <div class="small text-muted">${_escHtmlP(m.email)}</div>
+        <div class="mt-1">${badge}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<div class="text-danger small py-3">Erro: ${_escHtmlP(e.message)}</div>`;
+  }
+}
+
+async function permCatSelecionarMembro(userId) {
+  _permMembroSelId = userId;
+  document.querySelectorAll('#permMembrosList .perm-membro').forEach(el => {
+    el.classList.toggle('active', Number(el.dataset.uid) === userId);
+  });
+
+  const arv = document.getElementById('permCatArvore');
+  arv.innerHTML = '<div class="text-center py-3 text-muted small"><i class="bi bi-hourglass-split"></i> Carregando...</div>';
+  try {
+    const r = await fetch(`${API_BASE_URL}/api/tickets/permissoes/user/${userId}`, { credentials:'include' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+
+    _permCatSelecionadas.clear();
+    (j.restricoes || []).forEach(rc => {
+      if (rc.subcategoria_id) _permCatSelecionadas.add('sub:' + rc.subcategoria_id);
+      else _permCatSelecionadas.add('cat:' + rc.categoria_id);
+    });
+
+    document.getElementById('permCatCabecalho').innerHTML =
+      `<div style="font-weight:600">${_escHtmlP(j.membro.name)}</div>
+       <div class="small text-muted">${_escHtmlP(j.membro.email)}</div>`;
+
+    const cats = j.categorias_disponiveis || [];
+    if (!cats.length) {
+      arv.innerHTML = '<div class="text-muted small py-3 text-center">Este grupo não tem categorias cadastradas.</div>';
+    } else {
+      arv.innerHTML = cats.map(c => {
+        const catKey = 'cat:' + c.categoria_id;
+        const catChecked = _permCatSelecionadas.has(catKey);
+        const subsHtml = (c.subcategorias || []).map(sc => {
+          const subKey = 'sub:' + sc.subcategoria_id;
+          const subChecked = _permCatSelecionadas.has(subKey);
+          return `<label class="perm-sub-item">
+            <input type="checkbox" data-key="${subKey}" data-parent-cat="${c.categoria_id}"
+                   onchange="permCatToggle(this)" ${subChecked ? 'checked' : ''}>
+            ${_escHtmlP(sc.subcategoria_nome)}
+          </label>`;
+        }).join('');
+        return `<div class="perm-cat-block">
+          <div class="perm-cat-title">
+            <input type="checkbox" data-key="${catKey}" data-cat-id="${c.categoria_id}"
+                   onchange="permCatToggle(this)" ${catChecked ? 'checked' : ''}>
+            <i class="bi bi-folder"></i> ${_escHtmlP(c.categoria_nome)}
+            <span class="text-muted small" style="font-weight:400">
+              — marcar aqui libera a categoria inteira
+            </span>
+          </div>
+          ${subsHtml ? `<div class="perm-sub-list">${subsHtml}</div>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    document.getElementById('permCatBtnSalvar').classList.remove('d-none');
+    document.getElementById('permCatBtnZerar').classList.toggle('d-none', _permCatSelecionadas.size === 0);
+  } catch (e) {
+    arv.innerHTML = `<div class="text-danger small py-3">Erro: ${_escHtmlP(e.message)}</div>`;
+  }
+}
+
+function permCatToggle(el) {
+  const k = el.dataset.key;
+  if (el.checked) {
+    _permCatSelecionadas.add(k);
+    // Se marcou uma categoria inteira, desmarca as subs dela (redundante)
+    if (k.startsWith('cat:')) {
+      const catId = el.dataset.catId;
+      document.querySelectorAll(`#permCatArvore input[data-parent-cat="${catId}"]`).forEach(sub => {
+        const sk = sub.dataset.key;
+        _permCatSelecionadas.delete(sk);
+        sub.checked = false;
+      });
+    }
+  } else {
+    _permCatSelecionadas.delete(k);
+  }
+  document.getElementById('permCatBtnZerar').classList.toggle('d-none', _permCatSelecionadas.size === 0);
+}
+
+async function permCatSalvar() {
+  if (!_permMembroSelId) return;
+  const items = [];
+  _permCatSelecionadas.forEach(k => {
+    const [tipo, idStr] = k.split(':');
+    const id = Number(idStr);
+    if (tipo === 'cat') items.push({ categoria_id: id });
+    else if (tipo === 'sub') {
+      // Precisa achar a categoria pai (procura no DOM)
+      const el = document.querySelector(`#permCatArvore input[data-key="${k}"]`);
+      const catId = Number(el?.dataset?.parentCat);
+      if (catId) items.push({ categoria_id: catId, subcategoria_id: id });
+    }
+  });
+  const btn = document.getElementById('permCatBtnSalvar');
+  const orig = btn.innerHTML;
+  btn.disabled = true; btn.innerHTML = '<i class="bi bi-arrow-repeat" style="animation:spin 1s linear infinite"></i> Salvando...';
+  try {
+    const r = await fetch(`${API_BASE_URL}/api/tickets/permissoes/user/${_permMembroSelId}`, {
+      method:'PUT', credentials:'include',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({ categorias: items }),
+    });
+    const j = await r.json();
+    if (!r.ok || !j.success) throw new Error(j.detail || 'Falha ao salvar');
+    document.getElementById('permCatErro').classList.add('d-none');
+    // Recarrega lista de membros pra atualizar o badge
+    await _permCarregarMembros();
+    document.querySelectorAll('#permMembrosList .perm-membro').forEach(el => {
+      if (Number(el.dataset.uid) === _permMembroSelId) el.classList.add('active');
+    });
+    if (typeof showSuccess === 'function') showSuccess(`Salvo! ${j.restricoes_ativas} restrição(ões) ativa(s).`);
+  } catch (e) {
+    const err = document.getElementById('permCatErro');
+    err.textContent = e.message;
+    err.classList.remove('d-none');
+  } finally {
+    btn.disabled = false; btn.innerHTML = orig;
+  }
+}
+
+async function permCatZerar() {
+  if (!_permMembroSelId) return;
+  if (!confirm('Remover todas as restrições deste membro (ele volta a ver tudo do grupo)?')) return;
+  try {
+    const r = await fetch(`${API_BASE_URL}/api/tickets/permissoes/user/${_permMembroSelId}`, {
+      method:'DELETE', credentials:'include',
+    });
+    const j = await r.json();
+    if (!r.ok || !j.success) throw new Error(j.detail || 'Falha');
+    _permCatSelecionadas.clear();
+    await permCatSelecionarMembro(_permMembroSelId);
+    await _permCarregarMembros();
+    document.querySelectorAll('#permMembrosList .perm-membro').forEach(el => {
+      if (Number(el.dataset.uid) === _permMembroSelId) el.classList.add('active');
+    });
+  } catch (e) {
+    const err = document.getElementById('permCatErro');
+    err.textContent = e.message;
+    err.classList.remove('d-none');
+  }
+}
+
+function _escHtmlP(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
 }
 
 /**
