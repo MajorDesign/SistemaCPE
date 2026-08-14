@@ -1459,3 +1459,145 @@ def email_fleet_nova_reserva(
     html = _BASE_TEMPLATE.format(title="Nova reserva de veículo",
                                   tag="Aprovação pendente", body=body)
     return subject, html
+
+
+# =====================================================================
+# REUNIOES AGENDADAS (chat/meet)
+# =====================================================================
+
+def _fmt_dt_br(dt) -> str:
+    """Formata datetime pra 'dd/mm/AAAA as HH:MM'."""
+    if not dt:
+        return "—"
+    try:
+        return dt.strftime("%d/%m/%Y às %H:%M")
+    except Exception:
+        return str(dt)
+
+
+def _fmt_hora_br(dt) -> str:
+    if not dt:
+        return "—"
+    try:
+        return dt.strftime("%H:%M")
+    except Exception:
+        return str(dt)
+
+
+def email_meeting_convite(dest_nome: str, host_nome: str, titulo: str,
+                          descricao: str, start_at, end_at, link: str):
+    """Convite pra reuniao agendada."""
+    subject = f"📅 Reunião: {titulo} — {_fmt_dt_br(start_at)}"
+    descricao_html = ""
+    if descricao:
+        descricao_html = (
+            '<div style="margin-top:12px;padding:12px 14px;background:#F9FAFB;'
+            'border-left:3px solid #D1D5DB;border-radius:4px;font-size:13.5px;'
+            'color:#374151;white-space:pre-wrap;line-height:1.5">'
+            f'{_escape(descricao)}</div>'
+        )
+    body = f"""
+        <p>Olá <strong>{_escape(dest_nome)}</strong>,</p>
+        <p><strong>{_escape(host_nome)}</strong> está te convidando pra uma reunião.</p>
+
+        <div style="margin:16px 0;padding:16px 20px;background:#FEF3C7;
+                    border-left:4px solid #F59E0B;border-radius:6px;font-size:14px;">
+          <div style="font-size:15px;font-weight:700;color:#78350F;margin-bottom:8px;">
+            {_escape(titulo)}
+          </div>
+          <div style="margin-bottom:4px"><strong>📅 Data e hora:</strong> {_fmt_dt_br(start_at)}</div>
+          <div><strong>⏱ Término previsto:</strong> {_fmt_hora_br(end_at)}</div>
+          {descricao_html}
+        </div>
+
+        <p style="text-align:center;margin:24px 0 8px;">
+          <a href="{_escape(link)}"
+             style="display:inline-block;padding:14px 32px;background:#1D4ED8;
+                    color:#FFFFFF;font-weight:700;font-size:14px;text-decoration:none;
+                    border-radius:8px;box-shadow:0 4px 12px rgba(29,78,216,.35);">
+            🎥 Entrar na reunião
+          </a>
+        </p>
+
+        <p style="font-size:12px;color:#6B7280;text-align:center;margin-top:8px;">
+          Se o botão não abrir, copie e cole no navegador:<br>
+          <span style="word-break:break-all;">{_escape(link)}</span>
+        </p>
+
+        <p style="font-size:12px;color:#6B7280;margin-top:16px;">
+          💡 Você entra numa sala de espera; o host aprova sua entrada. Chegue
+          alguns minutos antes pra testar câmera e microfone.
+        </p>
+    """
+    html = _BASE_TEMPLATE.format(title="Convite pra reunião", tag="Reunião agendada", body=body)
+    return subject, html
+
+
+def email_meeting_cancelamento(dest_nome: str, host_nome: str, titulo: str,
+                                start_at, motivo: str):
+    subject = f"❌ Reunião cancelada: {titulo}"
+    motivo_html = ""
+    if motivo:
+        motivo_html = (
+            '<div style="margin-top:12px;padding:12px 14px;background:#FEF2F2;'
+            'border-left:3px solid #DC2626;border-radius:4px;font-size:13.5px;'
+            'color:#7F1D1D"><strong>Motivo:</strong> ' + _escape(motivo) + '</div>'
+        )
+    body = f"""
+        <p>Olá <strong>{_escape(dest_nome)}</strong>,</p>
+        <p><strong>{_escape(host_nome)}</strong> cancelou a reunião que estava marcada:</p>
+
+        <div style="margin:16px 0;padding:14px 18px;background:#F9FAFB;
+                    border-left:4px solid #9CA3AF;border-radius:6px;font-size:14px;">
+          <div style="font-weight:700;margin-bottom:6px">{_escape(titulo)}</div>
+          <div><strong>Data original:</strong> {_fmt_dt_br(start_at)}</div>
+          {motivo_html}
+        </div>
+
+        <p style="font-size:13px;color:#6B7280;margin-top:16px;">
+          Se precisar remarcar, entre em contato com {_escape(host_nome)} diretamente.
+        </p>
+    """
+    html = _BASE_TEMPLATE.format(title="Reunião cancelada", tag="Cancelamento", body=body)
+    return subject, html
+
+
+def email_meeting_lembrete(dest_nome: str, host_nome: str, titulo: str,
+                            start_at, link: str, quando: str):
+    """quando: '24h' ou '15min' — muda tom do email."""
+    if quando == "24h":
+        subject = f"🔔 Amanhã: {titulo} — {_fmt_hora_br(start_at)}"
+        tag = "Lembrete — 1 dia"
+        intro = "Sua reunião está marcada para <strong>amanhã</strong>."
+    else:
+        subject = f"⏰ Em 15 min: {titulo}"
+        tag = "Lembrete — 15 minutos"
+        intro = "Sua reunião começa em <strong>alguns minutos</strong>."
+    body = f"""
+        <p>Olá <strong>{_escape(dest_nome)}</strong>,</p>
+        <p>{intro}</p>
+
+        <div style="margin:16px 0;padding:16px 20px;background:#DBEAFE;
+                    border-left:4px solid #1D4ED8;border-radius:6px;font-size:14px;">
+          <div style="font-size:15px;font-weight:700;color:#1E3A8A;margin-bottom:8px;">
+            {_escape(titulo)}
+          </div>
+          <div><strong>📅 Data e hora:</strong> {_fmt_dt_br(start_at)}</div>
+          <div><strong>👤 Host:</strong> {_escape(host_nome)}</div>
+        </div>
+
+        <p style="text-align:center;margin:24px 0 8px;">
+          <a href="{_escape(link)}"
+             style="display:inline-block;padding:14px 32px;background:#1D4ED8;
+                    color:#FFFFFF;font-weight:700;font-size:14px;text-decoration:none;
+                    border-radius:8px;">
+            🎥 Entrar na reunião
+          </a>
+        </p>
+
+        <p style="font-size:12px;color:#6B7280;text-align:center;margin-top:8px;">
+          Link: <span style="word-break:break-all;">{_escape(link)}</span>
+        </p>
+    """
+    html = _BASE_TEMPLATE.format(title="Lembrete de reunião", tag=tag, body=body)
+    return subject, html

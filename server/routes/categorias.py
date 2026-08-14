@@ -309,12 +309,38 @@ async def deletar_categoria(
     usuario_id:   int = Query(..., gt=0)
 ):
     """Desativa categoria e suas subcategorias (soft-delete).
-    ADMIN/TI ou Responsável do próprio grupo."""
+    ADMIN/TI ou Responsável do próprio grupo.
+
+    Regra (2026-08-14): bloqueia se existe QUALQUER ticket vinculado
+    a categoria ou a alguma subcategoria dela — mesmo ticket resolvido/
+    fechado. Motivo: historico do chamado precisa manter referencia
+    valida pra rastreabilidade. Se precisar mesmo remover, resp. deve
+    reclassificar os tickets antes.
+    """
     conn   = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
         gid = _group_id_da_categoria(cursor, categoria_id)
         _verificar_permissao(cursor, usuario_id, group_id=gid)
+
+        # Bloqueio: chamado vinculado direto OU via subcategoria
+        cursor.execute("""
+            SELECT COUNT(*) AS n FROM tickets
+             WHERE categoria_id = %s
+                OR subcategoria_id IN (
+                    SELECT id FROM subcategorias WHERE categoria_id = %s
+                )
+        """, (categoria_id, categoria_id))
+        n = (cursor.fetchone() or {}).get("n", 0) or 0
+        if n > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Nao e possivel excluir esta categoria: {n} chamado(s) "
+                    "vinculado(s) a ela ou a alguma subcategoria. Reclassifique "
+                    "os chamados antes de excluir."
+                ),
+            )
 
         cursor.execute("UPDATE subcategorias SET ativo = 0 WHERE categoria_id = %s", (categoria_id,))
         cursor.execute("UPDATE categorias    SET ativo = 0 WHERE id = %s",           (categoria_id,))
@@ -448,12 +474,27 @@ async def deletar_subcategoria(
     subcategoria_id: int = Path(..., gt=0),
     usuario_id:      int = Query(..., gt=0)
 ):
-    """Desativa subcategoria (soft-delete). ADMIN/TI ou Responsável do grupo da categoria pai."""
+    """Desativa subcategoria (soft-delete). ADMIN/TI ou Responsável do grupo da categoria pai.
+
+    Regra (2026-08-14): bloqueia se algum ticket referencia esta
+    subcategoria (mesmo motivo do delete_categoria)."""
     conn   = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
         gid = _group_id_da_subcategoria(cursor, subcategoria_id)
         _verificar_permissao(cursor, usuario_id, group_id=gid)
+
+        cursor.execute("SELECT COUNT(*) AS n FROM tickets WHERE subcategoria_id = %s",
+                       (subcategoria_id,))
+        n = (cursor.fetchone() or {}).get("n", 0) or 0
+        if n > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Nao e possivel excluir esta subcategoria: {n} chamado(s) "
+                    "vinculado(s). Reclassifique os chamados antes."
+                ),
+            )
 
         cursor.execute("UPDATE subcategorias SET ativo = 0 WHERE id = %s", (subcategoria_id,))
         conn.commit()

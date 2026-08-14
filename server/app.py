@@ -11,7 +11,7 @@ Gerenciamento de Usuarios, Grupos, Tickets e Notificacoes com Autenticacao Bcryp
 # =========================================
 # 1. IMPORTACOES BASE
 # =========================================
-from fastapi import FastAPI, HTTPException, APIRouter, status, Query, Response, Request
+from fastapi import FastAPI, HTTPException, APIRouter, status, Query, Response, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field, validator
@@ -754,33 +754,66 @@ def login(login_data: LoginRequest, response: Response, request: Request = None)
 # 10. ROUTER DE GRUPOS
 # =========================================
 
+from security import get_current_user
 groups_router = APIRouter(prefix="/api/groups", tags=["groups"])
 
+
+# Helpers de permissao dos grupos (aplicam em todos os endpoints deste router).
+# Regras (2026-08-14):
+#   ADMIN                -> tudo (criar, editar, excluir, listar todos)
+#   TI, MANAGER          -> listar, ver, editar (mas nao criar/excluir)
+#   RESPONSAVEL_GRUPO    -> so ve/edita o proprio grupo (users.group_id).
+#                           NAO cria e NAO exclui grupo. NAO desativa
+#                           (is_active).
+#   USER                 -> so ve o proprio grupo (mesma logica UI).
+def _grp_role(cu: dict) -> str:
+    return (cu.get("role") or "").upper()
+
+def _grp_is_gestor(cu: dict) -> bool:
+    return _grp_role(cu) in ("ADMIN", "TI", "MANAGER")
+
+def _grp_pode_ver(cu: dict, group_id: int) -> bool:
+    if _grp_is_gestor(cu):
+        return True
+    return cu.get("group_id") == group_id
+
+def _grp_pode_editar(cu: dict, group_id: int) -> bool:
+    if _grp_is_gestor(cu):
+        return True
+    return _grp_role(cu) == "RESPONSAVEL_GRUPO" and cu.get("group_id") == group_id
+
+
 @groups_router.get("/")
-async def get_groups():
-    """Obtem todos os grupos"""
-    logger.info("\n[GROUPS] 📋 Listando todos os grupos...")
-    
+async def get_groups(current_user: dict = Depends(get_current_user)):
+    """Lista grupos filtrado por role. RESPONSAVEL_GRUPO e USER veem
+    apenas o proprio grupo; ADMIN/TI/MANAGER veem todos."""
+    role = _grp_role(current_user)
     conn = get_db_or_404()
     cursor = None
-    
     try:
         cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT id, department_id, name, description, created_at FROM `cpe_grupo` ORDER BY created_at DESC")
-        groups = cursor.fetchall()
-        groups = convert_datetime_list(groups)
-        
-        logger.info(f"[GROUPS] ✅ {len(groups)} grupo(s) encontrado(s)\n")
+        if _grp_is_gestor(current_user):
+            cursor.execute(
+                "SELECT id, department_id, name, description, created_at "
+                "FROM `cpe_grupo` ORDER BY created_at DESC"
+            )
+        elif current_user.get("group_id"):
+            cursor.execute(
+                "SELECT id, department_id, name, description, created_at "
+                "FROM `cpe_grupo` WHERE id = %s",
+                (current_user["group_id"],),
+            )
+        else:
+            return []
+        groups = convert_datetime_list(cursor.fetchall())
+        logger.info(f"[GROUPS] user={current_user['id']} role={role} -> {len(groups)} grupo(s)")
         return groups or []
-        
     except Exception as err:
         logger.error(f"[GROUPS] ❌ ERRO: {str(err)}\n")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao listar grupos: {str(err)}")
     finally:
-        if cursor:
-            cursor.close()
-        if conn:
-            conn.close()
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 @groups_router.get("/departments")
 async def list_departments():
@@ -891,13 +924,17 @@ async def delete_department(dept_id: int):
         if conn: conn.close()
 
 @groups_router.get("/{group_id}")
-async def get_group(group_id: int):
-    """Obtem um grupo especifico"""
+async def get_group(group_id: int, current_user: dict = Depends(get_current_user)):
+    """Obtem um grupo especifico. RESPONSAVEL_GRUPO/USER so acessam
+    o proprio (users.group_id)."""
+    if not _grp_pode_ver(current_user, group_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Voce so pode visualizar o proprio grupo.")
     logger.info(f"\n[GROUPS] 🔍 Obtendo grupo #{group_id}...")
-    
+
     conn = get_db_or_404()
     cursor = None
-    
+
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute("SELECT id, department_id, name, description, created_at FROM `cpe_grupo` WHERE id = %s", (group_id,))
@@ -923,8 +960,11 @@ async def get_group(group_id: int):
             conn.close()
 
 @groups_router.post("/", status_code=status.HTTP_201_CREATED)
-async def create_group(group: GroupCreate):
-    """Cria um novo grupo"""
+async def create_group(group: GroupCreate, current_user: dict = Depends(get_current_user)):
+    """Cria um novo grupo. Restrito ao ADMIN."""
+    if _grp_role(current_user) != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Criacao de grupo e restrita ao administrador.")
     logger.info("\n[GROUPS] ➕ CRIANDO NOVO GRUPO")
     logger.info(f"[GROUPS]   - Nome: {group.name}")
     
@@ -967,8 +1007,13 @@ async def create_group(group: GroupCreate):
             conn.close()
 
 @groups_router.put("/{group_id}")
-async def update_group(group_id: int, group: GroupUpdate):
-    """Atualiza um grupo"""
+async def update_group(group_id: int, group: GroupUpdate,
+                        current_user: dict = Depends(get_current_user)):
+    """Atualiza um grupo. ADMIN/TI/MANAGER editam qualquer;
+    RESPONSAVEL_GRUPO edita SO o proprio (nome/descricao)."""
+    if not _grp_pode_editar(current_user, group_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Voce so pode editar o proprio grupo.")
     logger.info(f"\n[GROUPS] ✏️ ATUALIZANDO GRUPO #{group_id}")
     
     conn = get_db_or_404()
@@ -1017,8 +1062,8 @@ async def update_group(group_id: int, group: GroupUpdate):
             conn.close()
 
 @groups_router.delete("/{group_id}")
-async def delete_group(group_id: int):
-    """Deleta um grupo.
+async def delete_group(group_id: int, current_user: dict = Depends(get_current_user)):
+    """Deleta um grupo. Restrito ao ADMIN.
 
     - Users no grupo: group_id vira NULL (desvincula).
     - permission_page_group: apaga em cascata (grants triviais).
@@ -1029,6 +1074,9 @@ async def delete_group(group_id: int):
     Rationale: pastas de contrato, tickets historicos e senhas do
     cofre sao dados de negocio. Deletar cegamente seria destrutivo.
     """
+    if _grp_role(current_user) != "ADMIN":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Exclusao de grupo e restrita ao administrador.")
     logger.info(f"\n[GROUPS] 🗑️ DELETANDO GRUPO #{group_id}...")
 
     conn = get_db_or_404()
@@ -1992,6 +2040,15 @@ if os.getenv("TESTING") != "1":
         logger.info("✅ Fleet scheduler iniciado (3 jobs)")
     except Exception as sched_err:
         logger.error(f"⚠️  Fleet scheduler falhou ao iniciar: {sched_err}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+    try:
+        from services.meeting_scheduler import iniciar_scheduler as iniciar_meet_sched
+        iniciar_meet_sched()
+        logger.info("✅ Meeting scheduler iniciado (lembretes 24h/15min + auto-concluir)")
+    except Exception as sched_err:
+        logger.error(f"⚠️  Meeting scheduler falhou ao iniciar: {sched_err}")
         import traceback
         logger.error(traceback.format_exc())
 else:
