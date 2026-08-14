@@ -41,26 +41,41 @@ async def list_departments():
 async def list_groups(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Lista todos os grupos"""
-    print(f"[GROUPS/LIST] Listando grupos (solicitado por: {current_user['id']})")
-    
+    """Lista grupos.
+
+    Regras (2026-08-14):
+      - ADMIN / TI / MANAGER  -> todos os grupos ativos.
+      - RESPONSAVEL_GRUPO     -> SO o proprio grupo (users.group_id).
+      - USER                  -> so o proprio grupo (mesma logica —
+        UI da pagina Grupos so faz sentido pra quem gerencia).
+    """
+    role = (current_user.get("role") or "").upper()
+    user_group_id = current_user.get("group_id")
+    print(f"[GROUPS/LIST] user={current_user['id']} role={role} group_id={user_group_id}")
+
     try:
         with engine.connect() as conn:
-            groups_result = conn.execute(
-                text("""
+            if role in ("ADMIN", "TI", "MANAGER"):
+                rows = conn.execute(text("""
                     SELECT id, name, description, is_active, created_at
-                    FROM `cpe_grupo`
-                    ORDER BY name ASC
-                """)
-            ).mappings().all()
+                      FROM `cpe_grupo`
+                     ORDER BY name ASC
+                """)).mappings().all()
+            elif user_group_id:
+                rows = conn.execute(text("""
+                    SELECT id, name, description, is_active, created_at
+                      FROM `cpe_grupo`
+                     WHERE id = :gid
+                """), {"gid": user_group_id}).mappings().all()
+            else:
+                rows = []
 
-        groups = [dict(g) for g in groups_result]
-
-        print(f"[GROUPS/LIST] ✓ {len(groups)} grupos listados")
+        groups = [dict(g) for g in rows]
+        print(f"[GROUPS/LIST] ✓ {len(groups)} grupos retornados (role={role})")
         return {
             "success": True,
             "total": len(groups),
-            "groups": groups
+            "groups": groups,
         }
 
     except Exception as e:
@@ -80,9 +95,20 @@ async def get_group(
     group_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Obtém dados de um grupo"""
+    """Obtém dados de um grupo.
+
+    Regra: ADMIN/TI/MANAGER veem qualquer grupo. RESPONSAVEL_GRUPO e
+    USER so podem ver o proprio grupo (users.group_id).
+    """
+    role = (current_user.get("role") or "").upper()
+    if role not in ("ADMIN", "TI", "MANAGER"):
+        if current_user.get("group_id") != group_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Voce so pode visualizar o seu proprio grupo.",
+            )
     print(f"[GROUPS/GET] Obtendo grupo: {group_id}")
-    
+
     try:
         with engine.connect() as conn:
             group_result = conn.execute(
@@ -132,10 +158,10 @@ async def create_group(
     
     try:
         # Verifica permissão
-        if current_user["role"] != "ADMIN":
+        if (current_user.get("role") or "").upper() != "ADMIN":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas ADMINs podem criar grupos"
+                detail="Criacao de grupo e restrita ao administrador."
             )
 
         name = normalize_string(data.get("name", ""))
@@ -206,15 +232,24 @@ async def update_group(
     data: dict,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Atualiza um grupo (apenas ADMIN)"""
+    """Atualiza um grupo.
+
+    Regra (2026-08-14):
+      - ADMIN / TI / MANAGER    -> pode editar qualquer grupo.
+      - RESPONSAVEL_GRUPO       -> pode editar SO o proprio grupo,
+        e SO nome/descricao (nunca is_active — desativar exige ADMIN).
+    """
     print(f"[GROUPS/UPDATE] Atualizando grupo: {group_id}")
-    
+
     try:
-        # Verifica permissão
-        if current_user["role"] != "ADMIN":
+        role = (current_user.get("role") or "").upper()
+        is_gestor = role in ("ADMIN", "TI", "MANAGER")
+        is_resp   = (role == "RESPONSAVEL_GRUPO"
+                     and current_user.get("group_id") == group_id)
+        if not is_gestor and not is_resp:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas ADMINs podem atualizar grupos"
+                detail="Voce so pode editar o proprio grupo.",
             )
 
         updates = {}
@@ -232,6 +267,11 @@ async def update_group(
             updates["description"] = normalize_string(data["description"]) or None
 
         if "is_active" in data:
+            if not is_gestor:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Desativar/reativar o grupo e uma acao restrita ao administrador.",
+                )
             updates["is_active"] = 1 if data["is_active"] else 0
 
         if not updates:
@@ -297,10 +337,10 @@ async def delete_group(
     print(f"[GROUPS/DELETE] Deletando grupo: {group_id}")
 
     try:
-        if current_user["role"] != "ADMIN":
+        if (current_user.get("role") or "").upper() != "ADMIN":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas ADMINs podem deletar grupos"
+                detail="Exclusao de grupo e restrita ao administrador."
             )
 
         with engine.begin() as conn:

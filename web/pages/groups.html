@@ -71,10 +71,10 @@
             <i class="bi bi-folder-plus"></i> Meus Grupos
           </h2>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="btn btn-sm" onclick="toggleDeptPanel()" title="Gerenciar departamentos">
+            <button id="btnToggleDept" class="btn btn-sm" onclick="toggleDeptPanel()" title="Gerenciar departamentos">
               <i class="bi bi-building"></i> Departamentos
             </button>
-            <button class="btn btn-sm" onclick="toggleUnitPanel()" title="Gerenciar unidades">
+            <button id="btnToggleUnit" class="btn btn-sm" onclick="toggleUnitPanel()" title="Gerenciar unidades">
               <i class="bi bi-geo-alt"></i> Unidades
             </button>
             <button class="btn-new-group" id="btnNewGroup" data-bs-toggle="modal" data-bs-target="#groupModal">
@@ -282,6 +282,38 @@
       const u = getCurrentUser();
       return u.id || u.usuario_id || null;
     }
+    function getCurrentUserRole() {
+      return String(getCurrentUser().role || '').toUpperCase();
+    }
+    function getCurrentUserGroupId() {
+      const u = getCurrentUser();
+      return u.group_id || u.grupo_id || null;
+    }
+    // ADMIN, TI e MANAGER veem/gerenciam qualquer grupo.
+    function _isGestor() {
+      return ['ADMIN', 'TI', 'MANAGER'].includes(getCurrentUserRole());
+    }
+    // So ADMIN pode criar/excluir grupo.
+    function podeCriarGrupo()    { return getCurrentUserRole() === 'ADMIN'; }
+    function podeExcluirGrupo()  { return getCurrentUserRole() === 'ADMIN'; }
+    // ADMIN/TI/MANAGER editam qualquer; RESPONSAVEL_GRUPO edita o proprio.
+    function podeEditarGrupo(group) {
+      if (_isGestor()) return true;
+      if (getCurrentUserRole() === 'RESPONSAVEL_GRUPO'
+          && getCurrentUserGroupId() === group.id) return true;
+      return false;
+    }
+
+    /* Aplica na abertura da pagina os gates que dependem so do role
+       do user (nao dos dados dos grupos). Novo Grupo / Departamentos /
+       Unidades sao gestao de estrutura — restringido a ADMIN. */
+    function aplicarGatesRole() {
+      const isAdmin = podeCriarGrupo();
+      const isGestor = _isGestor();
+      const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
+      if (!isAdmin) hide('btnNewGroup');
+      if (!isGestor) { hide('btnToggleDept'); hide('btnToggleUnit'); }
+    }
 
     // Resolvida na inicialização — define o escopo de gerenciamento de categorias
     //   _catScope = 'all' → ADMIN/TI/exceção: pode em qualquer grupo
@@ -357,6 +389,9 @@
         if (containerMain) containerMain.style.display = "flex";
         
         console.log("[GROUPS/INIT] ✅ Página inicializada com sucesso");
+
+        // ===== Aplicar gates de UI por role (nao-admin nao ve "Novo Grupo") =====
+        aplicarGatesRole();
 
         // ===== Resolver permissão de categorias e carregar grupos =====
         await resolverPermissaoCategorias();
@@ -487,16 +522,18 @@
             </div>
 
             <div class="group-actions">
+              ${podeEditarGrupo(group) ? `
               <button class="btn-group-action" onclick="editGroup(${group.id}, event)">
                 <i class="bi bi-pencil"></i> Editar
-              </button>
+              </button>` : ''}
               ${podeGerenciarCategoriasDo(group) ? `
               <button class="btn-group-action" style="background:#6f42c1;color:#fff;" onclick="abrirGerenciarCategorias(${group.id}, '${group.name.replace(/'/g, "\\'")}', event)">
                 <i class="bi bi-tags"></i> Categorias
               </button>` : ''}
+              ${podeExcluirGrupo() ? `
               <button class="btn-group-action danger" onclick="deleteGroup(${group.id}, '${group.name.replace(/'/g, "\\'")}', event)">
                 <i class="bi bi-trash"></i> Deletar
-              </button>
+              </button>` : ''}
             </div>
           </div>
         `;
