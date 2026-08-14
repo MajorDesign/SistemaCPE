@@ -192,6 +192,18 @@
                   <option value="sem_sla">Sem SLA</option>
                 </select>
               </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Categoria</label>
+                <select class="form-select form-select-sm" id="rptCategoria" onchange="rptOnCategoriaChange()">
+                  <option value="">Todas</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Subcategoria</label>
+                <select class="form-select form-select-sm" id="rptSubcategoria" disabled>
+                  <option value="">Todas</option>
+                </select>
+              </div>
               <div class="col-6 col-md-2 d-flex gap-2">
                 <button class="btn btn-primary btn-sm flex-grow-1" onclick="rptCarregar()">
                   <i class="bi bi-search me-1"></i>Filtrar
@@ -600,6 +612,8 @@
 
     // Preencher responsáveis do grupo
     _carregarResponsaveis(user);
+    // Preencher categorias do grupo
+    _rptCarregarCategorias(user);
 
     // Datas padrão: mês corrente
     const hoje = new Date();
@@ -648,12 +662,16 @@
     const dataFim   = document.getElementById('rptDataFim').value;
     const statusId  = document.getElementById('rptStatus').value;
     const respId    = document.getElementById('rptResponsavel').value;
+    const catId     = document.getElementById('rptCategoria')?.value    || '';
+    const subId     = document.getElementById('rptSubcategoria')?.value || '';
 
     let url = `/tickets/?usuario_id=${user.id}&limite=500`;
     if (dataIni)  url += `&data_inicio=${dataIni}`;
     if (dataFim)  url += `&data_fim=${dataFim}`;
     if (statusId) url += `&status_id=${statusId}`;
     if (respId)   url += `&responsavel_id=${respId}`;
+    if (catId)    url += `&categoria_id=${catId}`;
+    if (subId)    url += `&subcategoria_id=${subId}`;
 
     document.getElementById('rptTbody').innerHTML =
       '<tr><td colspan="8" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Carregando...</td></tr>';
@@ -815,6 +833,36 @@
     _renderTabela();
   }
 
+  /* ── Categorias / Subcategorias no filtro ────────────────────── */
+  let _rptCatsCache = null;
+  async function _rptCarregarCategorias(user) {
+    const sel = document.getElementById('rptCategoria');
+    if (!sel) return;
+    const gid = user?.group_id;
+    if (!gid) { sel.disabled = true; return; }
+    try {
+      const cats = await apiRequest('GET', `/categorias?group_id=${gid}`);
+      _rptCatsCache = cats || [];
+      sel.innerHTML = '<option value="">Todas</option>' +
+        _rptCatsCache.map(c =>
+          `<option value="${c.id}" data-subs='${JSON.stringify(c.subcategorias || [])}'>${_esc(c.nome)}</option>`
+        ).join('');
+    } catch (e) {
+      console.warn('[RPT] erro ao carregar categorias:', e);
+    }
+  }
+
+  function rptOnCategoriaChange() {
+    const catSel = document.getElementById('rptCategoria');
+    const subSel = document.getElementById('rptSubcategoria');
+    if (!catSel || !subSel) return;
+    const opt = catSel.options[catSel.selectedIndex];
+    const subs = (opt && opt.dataset.subs) ? JSON.parse(opt.dataset.subs || '[]') : [];
+    subSel.innerHTML = '<option value="">Todas</option>' +
+      subs.map(s => `<option value="${s.id}">${_esc(s.nome)}</option>`).join('');
+    subSel.disabled = !catSel.value || subs.length === 0;
+  }
+
   function rptLimparFiltros() {
     const hoje = new Date();
     const ini  = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -823,6 +871,10 @@
     document.getElementById('rptStatus').value      = '';
     document.getElementById('rptResponsavel').value = '';
     document.getElementById('rptSlaFiltro').value   = '';
+    const catSel = document.getElementById('rptCategoria');
+    const subSel = document.getElementById('rptSubcategoria');
+    if (catSel) catSel.value = '';
+    if (subSel) { subSel.innerHTML = '<option value="">Todas</option>'; subSel.disabled = true; }
     document.getElementById('rptBusca').value       = '';
     rptCarregar();
   }

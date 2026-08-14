@@ -669,7 +669,7 @@ Docs interativa (Swagger UI): `https://cpecontrol.cpetecnologia.com.br/api/docs`
 
 | Método | Path | Descrição |
 |---|---|---|
-| `GET` | `/api/tickets/` | Obter Tickets |
+| `GET` | `/api/tickets/` | Obter Tickets — filtros: `data_inicio`, `data_fim`, `status_id`, `responsavel_id`, `grupo_id`, `prioridade_id`, `categoria_id`, `subcategoria_id`, `vista=meus\|para_mim`, `pular`, `limite` |
 | `POST` | `/api/tickets/` | Criar Ticket |
 | `GET` | `/api/tickets/attachments/{attach_id}` | Baixar Attachment |
 | `DELETE` | `/api/tickets/attachments/{attach_id}` | Deletar Attachment |

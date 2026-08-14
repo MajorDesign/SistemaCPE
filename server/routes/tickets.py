@@ -626,6 +626,8 @@ async def obter_tickets(
     prioridade_id: Optional[int] = Query(None, gt=0),
     data_inicio: Optional[str] = Query(None, description="Filtro de data inicial (YYYY-MM-DD)"),
     data_fim: Optional[str] = Query(None, description="Filtro de data final (YYYY-MM-DD)"),
+    categoria_id: Optional[int] = Query(None, gt=0),
+    subcategoria_id: Optional[int] = Query(None, gt=0),
     vista: Optional[str] = Query(None, description="Aba: 'meus' (eu sou solicitante), 'para_mim' (eu sou responsavel), ou None=todos"),
     pular: int = Query(0, ge=0),
     limite: int = Query(LIMITE_PADRAO, ge=1, le=500)
@@ -724,6 +726,12 @@ async def obter_tickets(
         if data_fim:
             filtros.append("DATE(t.created_at) <= %s")
             params.append(data_fim)
+        if categoria_id:
+            filtros.append("t.categoria_id = %s")
+            params.append(categoria_id)
+        if subcategoria_id:
+            filtros.append("t.subcategoria_id = %s")
+            params.append(subcategoria_id)
 
         # ✅ FILTRO DE VISTA (abas no front: 'Para mim' / 'Abertos por mim' / 'Todos')
         if vista == "meus":
@@ -1963,6 +1971,7 @@ async def finalizar_ticket(ticket_id: int, payload: FinalizarPayload):
                     solicitante_nome=sol.get("nome") or "",
                     finalizador_nome=nome_usuario,
                     solucao=solucao_texto,
+                    ticket_id=ticket_id,
                 )
                 enviar_email(sol["email"], subj, html)
         except Exception as e_mail:
