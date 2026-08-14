@@ -2286,16 +2286,32 @@ async function openInSplit(id) {
   console.log(`[SPLIT] Ativo: esquerda=#${viewingTicketId} | direita=#${id}`);
 }
 
-// Quando o modal principal fechar, limpa o split automaticamente.
+// Cleanup defensivo global de modais Bootstrap:
+// - Limpa split se fechou o ticketDetailModal
+// - Remove .modal-backdrop preso quando ja nao ha nenhum modal aberto
+//   (bug conhecido do Bootstrap 5 com data-bs-backdrop="static": as
+//    vezes o backdrop permanece no DOM apos o hide, deixando a pagina
+//    escura e travada). Ver bug reportado 2026-08-14.
 document.addEventListener('DOMContentLoaded', () => {
-  const modal = document.getElementById('ticketDetailModal');
-  if (!modal) return;
-  modal.addEventListener('hidden.bs.modal', () => {
-    if (document.body.classList.contains('ticket-split-mode')) {
-      document.body.classList.remove('ticket-split-mode');
-      _splitTicketId = null;
+  document.addEventListener('hidden.bs.modal', (ev) => {
+    // Split: so ativa quando o modal principal fecha
+    if (ev.target?.id === 'ticketDetailModal') {
+      if (document.body.classList.contains('ticket-split-mode')) {
+        document.body.classList.remove('ticket-split-mode');
+        _splitTicketId = null;
+      }
+      viewingTicketId = null;
     }
-  });
+    // Cleanup de backdrop residual (independente de qual modal fechou)
+    setTimeout(() => {
+      if (!document.querySelector('.modal.show')) {
+        document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow      = '';
+        document.body.style.paddingRight  = '';
+      }
+    }, 50);
+  }, true);
 });
 
 /** Renderiza o conteúdo do painel direito (somente leitura). */
