@@ -133,6 +133,30 @@ Decisões que **não existem no código como constante óbvia** — vieram de co
 - Cada subcategoria pode ter campos extras (`categoria_campos`): text/select/checkbox/date/número
 - Backend salva serializado em `tickets.campos_customizados` (JSON)
 
+### Excluir categoria/subcategoria (2026-08-14)
+- Backend bloqueia com 409 se algum ticket referencia a categoria (direto OU via subcategoria filha) ou a subcategoria.
+- Mesmo tickets `Resolvido`/`Fechado` bloqueiam — histórico precisa manter a referência.
+- Fluxo esperado: reclassificar tickets pra outra (sub)categoria antes de excluir.
+
+### Permissões por categoria por membro (2026-08-14, migration 089)
+Tabela `ticket_membro_categorias` (`user_id`, `group_id`, `categoria_id`, `subcategoria_id` NULL, `created_by`).
+
+**Quem configura:** ADMIN ou RESPONSAVEL_GRUPO do MESMO grupo do USER alvo. Endpoints em `/api/tickets/permissoes/*`.
+
+**Regra de leitura** (aplicada em `GET /api/tickets/`):
+- USER sem nenhuma linha → **vê tudo do grupo** (default; não quebra comportamento antigo).
+- USER com 1+ linhas → vê SÓ tickets que caem em alguma restrição dele + os próprios (`solicitante_id = self`).
+- Por linha: `subcategoria_id IS NULL` = categoria inteira liberada; se preenchida = só aquela subcategoria.
+- ADMIN, TI, MANAGER, RESPONSAVEL_GRUPO **não** são filtrados por esta tabela (por design — gestores veem tudo do escopo).
+- Tentar restringir role ≠ USER retorna **400** ("não é possível restringir um {role}").
+
+**Auto-grant ao atribuir** (`PUT /api/tickets/{id}` com `responsavel_id`, e `POST /api/tickets/{id}/assumir`):
+- Se o responsável indicado tem restrições e o ticket NÃO cai em nenhuma, backend cria automaticamente uma linha em `ticket_membro_categorias` cobrindo aquela (sub)categoria.
+- Silencioso — não interrompe a atribuição se o auto-grant falhar.
+- Se user tem 0 linhas (vê tudo) → não mexe.
+
+**Frontend:** botão "Permissões" na action-bar de `tickets.html`, visível só pra ADMIN e RESPONSAVEL_GRUPO. Modal com lista de membros + árvore de categorias/subcategorias com checkboxes.
+
 ---
 
 ## Tasks (kanban)

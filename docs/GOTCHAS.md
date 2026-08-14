@@ -24,9 +24,9 @@ Cada seção aqui foi um bug real que custou tempo. Lê antes de mexer em códig
 
 **Sintoma:** correção em `server/routes/groups.py` "não faz efeito" — request continua caindo no comportamento antigo.
 
-**Causa:** o arquivo `routes/groups.py` **NUNCA foi importado** em `app.py`. Endpoints de grupo estão embutidos em `app.py` (`groups_router = APIRouter(prefix="/api/groups")` na linha 719+).
+**Causa:** o arquivo `routes/groups.py` **NUNCA foi importado** em `app.py`. Endpoints de grupo estão embutidos em `app.py` (`groups_router = APIRouter(prefix="/api/groups")` na linha 757+).
 
-**Fix:** editar `app.py` (handler ativo), não `routes/groups.py`.
+**Fix:** editar `app.py` (handler ativo), não `routes/groups.py`. **Atualização 2026-08-14** (commit 8e3b8cf): os dois arquivos foram endurecidos com as mesmas regras de permissão por role, então mudanças de comportamento agora batem em ambos os lugares. Se um dia o duplicado for removido, o outro já está pronto — mas siga cuidando de manter os dois iguais até isso acontecer.
 
 **Descoberto:** 2026-08-04, num fix de bloqueio 409 no delete de grupo.
 
@@ -379,6 +379,24 @@ done
 **Fix (opção C — futuro):** patch no `apply_migrations.sh` pra montar comando sem `-p` quando `$PASS` vazio. Ainda não aplicado — se você fizer, teste em prod primeiro (onde a senha SEMPRE tem valor).
 
 **Descoberto:** 2026-08-07, em setup de máquina onde XAMPP MySQL tinha root sem senha.
+
+---
+
+## Auto-grant silencioso de permissão de categoria (2026-08-14)
+
+**Sintoma:** membro do grupo aparece com uma restrição de categoria em `ticket_membro_categorias` que ninguém configurou manualmente. Responsável do grupo abre a modal "Permissões" e vê badge "N restrição(ões)" onde antes era "vê tudo".
+
+**Causa:** feature de auto-grant. Quando um gestor **atribui** um ticket cuja categoria o novo responsável não tem permissão pra ver (ou quando o próprio user **assume** um ticket via `POST /tickets/{id}/assumir`), `conceder_acesso_auto()` em `routes/ticket_permissoes.py` insere uma linha em `ticket_membro_categorias` cobrindo aquela (sub)categoria. **Silencioso** — não avisa e não interrompe a atribuição.
+
+**Regras do auto-grant:**
+- Só dispara se o user já tem 1+ restrições (se ele "vê tudo", não mexe).
+- Se ticket tem `subcategoria_id`, cria linha específica; senão, categoria inteira.
+- Se cobertura já existe (categoria inteira ou subcategoria exata), não duplica.
+- Falha silenciosa (log warning) — nunca bloqueia a atribuição.
+
+**Não é bug — é feature.** Documentado em `REGRAS_NEGOCIO.md` (Tickets → Permissões por categoria).
+
+**Como remover essa permissão auto-adicionada:** modal "Permissões" → membro → desmarcar → Salvar. Ou botão "Voltar ao padrão (ver tudo)" pra zerar todas.
 
 ---
 

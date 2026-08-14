@@ -100,6 +100,16 @@
               <i class="bi bi-person-check"></i> Atribuir
             </button>
 
+            <!--
+              Permissoes por categoria - visivel para ADMIN e RESPONSAVEL_GRUPO.
+              tickets.js -> applyRolePermissions() oculta pra USER/TI/MANAGER.
+            -->
+            <button id="btnPermissoesCat" class="btn btn-outline-secondary btn-sm"
+                    onclick="abrirModalPermissoes()"
+                    title="Configurar quais categorias cada membro do grupo pode ver">
+              <i class="bi bi-shield-lock"></i> Permissões
+            </button>
+
           </div>
 
           <div class="search-filters">
@@ -1381,11 +1391,104 @@
   <div id="ticketDock" class="ticket-dock"></div>
 
   <!-- ========================================
+       MODAL - PERMISSOES DE CATEGORIA POR MEMBRO
+       ======================================== -->
+  <div class="modal fade" id="permCatModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-shield-lock"></i> Permissões por membro
+            <small class="text-muted d-block" style="font-size:.75rem;font-weight:400;margin-top:2px">
+              Configure quais categorias cada pessoa do grupo consegue ver
+            </small>
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div id="permCatErro" class="alert alert-danger d-none py-2 px-3 small mb-2"></div>
+
+          <div class="row g-2 mb-2 small text-muted">
+            <div class="col-12">
+              <i class="bi bi-info-circle"></i>
+              <strong>Padrão:</strong> membro sem nenhuma categoria selecionada vê <strong>todos</strong>
+              os tickets do grupo. Ao marcar uma ou mais categorias, ele passa a ver <strong>somente</strong>
+              essas + os próprios chamados.
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <!-- Lista de membros -->
+            <div class="col-md-4 border-end">
+              <label class="form-label fw-semibold small text-uppercase text-muted">
+                Membros do grupo
+              </label>
+              <div id="permMembrosList" style="max-height:52vh;overflow-y:auto"></div>
+            </div>
+
+            <!-- Categorias do membro selecionado -->
+            <div class="col-md-8">
+              <div id="permCatCabecalho" class="mb-2">
+                <div class="text-muted small">Selecione um membro à esquerda pra configurar.</div>
+              </div>
+              <div id="permCatArvore" style="max-height:52vh;overflow-y:auto"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-danger btn-sm me-auto d-none"
+                  id="permCatBtnZerar" onclick="permCatZerar()">
+            <i class="bi bi-arrow-counterclockwise"></i> Voltar ao padrão (ver tudo)
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" class="btn btn-primary btn-sm d-none"
+                  id="permCatBtnSalvar" onclick="permCatSalvar()">
+            <i class="bi bi-check-lg"></i> Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    #permMembrosList .perm-membro {
+      padding:8px 10px;border-radius:6px;cursor:pointer;
+      border:1px solid transparent;margin-bottom:4px;
+    }
+    #permMembrosList .perm-membro:hover { background:#f8f9fa; }
+    #permMembrosList .perm-membro.active {
+      background:#fff3cd;border-color:#f59e0b;
+    }
+    #permMembrosList .perm-membro .perm-nome {
+      font-weight:600;font-size:.9rem;display:block;
+    }
+    #permMembrosList .perm-membro .perm-badge {
+      font-size:.72rem;padding:2px 6px;border-radius:4px;
+    }
+    #permCatArvore .perm-cat-block {
+      border:1px solid #e5e7eb;border-radius:6px;
+      padding:10px 12px;margin-bottom:8px;background:#fafafa;
+    }
+    #permCatArvore .perm-cat-title {
+      display:flex;align-items:center;gap:8px;
+      font-weight:600;font-size:.92rem;color:#111827;
+    }
+    #permCatArvore .perm-sub-list {
+      margin-top:6px;padding-left:22px;
+      display:flex;flex-wrap:wrap;gap:6px 14px;
+    }
+    #permCatArvore .perm-sub-item {
+      display:inline-flex;align-items:center;gap:5px;
+      font-size:.85rem;color:#374151;
+    }
+  </style>
+
+  <!-- ========================================
        SCRIPTS
        ======================================== -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-07-28"></script>
-  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-06-22c"></script>
+  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-14perm"></script>
 
 <script id="cpe-autofill-guard-v1">
 /* Bloqueia autofill do Chrome/Edge em inputs de busca.

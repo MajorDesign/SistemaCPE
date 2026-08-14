@@ -335,7 +335,8 @@ def log_fim(status_text: str, **kwargs):
 
 def validar_ticket_existe(cursor, ticket_id: int):
     cursor.execute(
-        "SELECT id, numero, group_id, solicitante_id, responsavel_id FROM tickets WHERE id = %s",
+        "SELECT id, numero, group_id, solicitante_id, responsavel_id, "
+        "categoria_id, subcategoria_id FROM tickets WHERE id = %s",
         (ticket_id,)
     )
     ticket = cursor.fetchone()
@@ -676,6 +677,33 @@ async def obter_tickets(
             filtros.append("(t.group_id = %s OR t.solicitante_id = %s)")
             params.append(group_id_usuario)
             params.append(usuario_id)  # Permitir visualizar ticket que ele criou
+
+            # 2026-08-14: restricao por categoria configurada pelo responsavel
+            # do grupo (migration 089). Se o USER tem 1+ linhas em
+            # ticket_membro_categorias, filtra pra so ver tickets que caem
+            # em alguma categoria/subcategoria liberada dele — mais os
+            # proprios (solicitante_id = ele mesmo). Se nao tem nenhuma
+            # linha, mantem o comportamento default (ve tudo do grupo).
+            cursor.execute(
+                "SELECT COUNT(*) AS n FROM ticket_membro_categorias WHERE user_id = %s",
+                (usuario_id,),
+            )
+            tem_restricao = (cursor.fetchone() or {}).get("n", 0) or 0
+            if tem_restricao:
+                logger.info(f"  ✓ USER #{usuario_id} tem {tem_restricao} restricao(oes) de categoria — aplicando filtro extra")
+                filtros.append(
+                    "(t.solicitante_id = %s"
+                    " OR EXISTS ("
+                    "   SELECT 1 FROM ticket_membro_categorias mc"
+                    "    WHERE mc.user_id = %s"
+                    "      AND ("
+                    "        (mc.subcategoria_id IS NULL AND mc.categoria_id = t.categoria_id)"
+                    "        OR (mc.subcategoria_id IS NOT NULL AND mc.subcategoria_id = t.subcategoria_id)"
+                    "      )"
+                    "))"
+                )
+                params.append(usuario_id)
+                params.append(usuario_id)
 
         # ✅ STEP 3: Aplicar filtros adicionais do frontend
         if grupo_id:
@@ -1260,6 +1288,19 @@ async def assumir_ticket(ticket_id: int, payload: AssumiPayload):
             "UPDATE tickets SET responsavel_id = %s, status_id = 2, updated_at = NOW() WHERE id = %s",
             (payload.usuario_id, ticket_id)
         )
+
+        # Auto-grant de permissao — quem assume ganha acesso a essa (sub)categoria
+        try:
+            from routes.ticket_permissoes import conceder_acesso_auto
+            conceder_acesso_auto(
+                cursor,
+                user_id=payload.usuario_id,
+                categoria_id=ticket_db.get("categoria_id"),
+                subcategoria_id=ticket_db.get("subcategoria_id"),
+                granted_by=payload.usuario_id,
+            )
+        except Exception as e_grant:
+            logger.warning(f"[TICKET-PERMS] auto-grant assumir #{ticket_id}: {e_grant}")
 
         # Registrar interação
         cursor.execute(
@@ -2574,6 +2615,24 @@ async def atualizar_ticket(
             f"UPDATE tickets SET {', '.join(updates)} WHERE id = %s",
             params
         )
+
+        # 2026-08-14: auto-grant de permissao ao atribuir ticket.
+        # Se o novo responsavel tem restricoes de categoria (migration 089)
+        # e o ticket atribuido nao cai em nenhuma, adiciona a (sub)categoria
+        # do ticket na lista de restricoes dele — assim ele passa a ver
+        # esse ticket e futuros da mesma (sub)categoria. Silencioso.
+        if payload.responsavel_id is not None:
+            try:
+                from routes.ticket_permissoes import conceder_acesso_auto
+                conceder_acesso_auto(
+                    cursor,
+                    user_id=payload.responsavel_id,
+                    categoria_id=ticket_db.get("categoria_id"),
+                    subcategoria_id=ticket_db.get("subcategoria_id"),
+                    granted_by=usuario_id,
+                )
+            except Exception as e_grant:
+                logger.warning(f"[TICKET-PERMS] auto-grant falhou ticket #{ticket_id}: {e_grant}")
 
         # ✅ SLA: parar contagem quando ticket é finalizado (Resolvido=4 ou Fechado=5)
         if payload.status_id in (4, 5):

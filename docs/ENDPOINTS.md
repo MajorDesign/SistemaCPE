@@ -688,6 +688,15 @@ Docs interativa (Swagger UI): `https://cpecontrol.cpetecnologia.com.br/api/docs`
 | `POST` | `/api/tickets/{ticket_id}/sla/pausar` | Pausar Sla Manual |
 | `POST` | `/api/tickets/{ticket_id}/sla/retomar` | Retomar Sla Manual |
 
+## tickets-permissoes (permissão por categoria por membro — migration 089)
+
+| Método | Path | Descrição |
+|---|---|---|
+| `GET`    | `/api/tickets/permissoes/grupo/{group_id}/membros` | Lista membros USER do grupo + resumo (quantas restrições, `ve_tudo` bool). ADMIN/RESP do grupo. |
+| `GET`    | `/api/tickets/permissoes/user/{user_id}`           | Detalhes das restrições do membro + árvore de categorias/subcategorias do grupo pra popular UI. |
+| `PUT`    | `/api/tickets/permissoes/user/{user_id}`           | Substitui todas restrições. Body: `{categorias: [{categoria_id, subcategoria_id?}, ...]}`. |
+| `DELETE` | `/api/tickets/permissoes/user/{user_id}`           | Zera todas as restrições do membro (volta a ver tudo do grupo). |
+
 ## unidades
 
 | Método | Path | Descrição |
