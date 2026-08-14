@@ -45,8 +45,9 @@ Ordem alfabética.
 **Arquivos:**
 - `server/routes/tickets.py`, `server/routes/ticket_interacoes.py`, `server/routes/atendimentos.py`, `server/routes/avaliacoes.py`
 - `server/routes/categorias.py`, `server/routes/subcategorias.py`, `server/routes/categoria_campos.py` (formulário dinâmico)
+- `server/routes/ticket_permissoes.py` (permissão por categoria por membro — migration 089)
 
-**Tabelas:** `tickets`, `ticket_interacoes`, `avaliacoes`, `categorias`, `subcategorias`, `categoria_campos`
+**Tabelas:** `tickets`, `ticket_interacoes`, `avaliacoes`, `categorias`, `subcategorias`, `categoria_campos`, `ticket_membro_categorias`
 
 **Frontend:** `web/pages/tickets.html`
 
@@ -56,6 +57,8 @@ Ordem alfabética.
 - ADMIN/TI/MANAGER veem tudo
 - **Reabrir chamado:** ADMIN/TI/MANAGER + o próprio solicitante (regras: até 3x, dentro de 2 meses, status `Resolvido`)
 - Categoria tem `group_id` — quem responde é o RESPONSAVEL_GRUPO desse grupo
+- **Excluir categoria/subcategoria** (2026-08-14): bloqueia com 409 se existir qualquer ticket vinculado (mesmo resolvido/fechado). Reclassifique antes.
+- **Permissão por categoria por membro** (2026-08-14, migration 089): RESPONSAVEL_GRUPO (ou ADMIN) pode restringir quais categorias/subcategorias cada USER do grupo enxerga na lista de tickets. Ver `REGRAS_NEGOCIO.md` (seção "Permissões por categoria").
 
 ---
 
