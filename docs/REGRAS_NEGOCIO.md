@@ -138,6 +138,17 @@ Decisões que **não existem no código como constante óbvia** — vieram de co
 - Mesmo tickets `Resolvido`/`Fechado` bloqueiam — histórico precisa manter a referência.
 - Fluxo esperado: reclassificar tickets pra outra (sub)categoria antes de excluir.
 
+### Avaliação de atendimento (fluxo confirmado 2026-08-14)
+Ao finalizar um ticket (`POST /api/tickets/{id}/finalizar`) o backend faz **3 coisas**:
+1. Cria linha em `ticket_avaliacoes` com `expira_em = NOW + 7 dias` (`INSERT IGNORE` — idempotente).
+2. **Notif in-app** `avaliacao_pendente` em `notificacoes`. Aparece no sino do topo E dispara popup automático quando o solicitante abre `/tickets.html` (via `verificarAvaliacoesPendentes()` → `GET /api/avaliacoes/pendentes?usuario_id=X`).
+3. **Email** `email_ticket_finalizado` com bloco âmbar "⭐ Avaliar atendimento" + botão que aponta pra `/tickets.html?ticket_id=X` — abrir esse link dispara o popup direto (sem precisar navegar).
+
+Quando conferir se o user está recebendo:
+- notif in-app: `SELECT * FROM notificacoes WHERE usuario_id=X AND tipo='avaliacao_pendente' ORDER BY id DESC`
+- registro pendente: `SELECT * FROM ticket_avaliacoes WHERE solicitante_id=X AND respondida_em IS NULL AND expira_em > NOW()`
+- email enviado: `api-stdout.log` do CPEDC22 tem linhas `[EMAIL] ✓ ... assunto='[Chamado ...] Finalizado — ...'`
+
 ### Filtros salvos como preferência (2026-08-14)
 - Painel "Filtros" (`advancedFilters`) inclui status, prioridade, **categoria** e **subcategoria** (subcategorias em cascata a partir da categoria escolhida).
 - Categorias vêm do próprio grupo do user (`GET /api/categorias?group_id={users.group_id}`); admin sem grupo definido não vê categorias filtráveis.

@@ -896,10 +896,19 @@ def email_ticket_comentario_interno(
 
 def email_ticket_finalizado(
     *, ticket_numero: str, assunto: str, solicitante_nome: str,
-    finalizador_nome: str, solucao: str
+    finalizador_nome: str, solucao: str,
+    ticket_id: int | None = None,
 ) -> tuple[str, str]:
-    """E-mail final com motivo/solução."""
+    """E-mail de finalização com solução aplicada + CTA pra avaliar."""
+    from config import PUBLIC_BASE_URL
     subject = f"[Chamado {ticket_numero}] Finalizado — {assunto}"
+
+    # Link direto pro ticket em tickets.html; ao abrir, o popup de
+    # avaliação dispara automaticamente (verificarAvaliacoesPendentes()).
+    link_ticket = f"{PUBLIC_BASE_URL}/SistemaCPE/web/pages/tickets.html"
+    if ticket_id:
+        link_ticket += f"?ticket_id={ticket_id}"
+
     body = f"""
         <p>Olá <strong>{_escape(solicitante_nome)}</strong>,</p>
         <p>Seu chamado <strong>{_escape(ticket_numero)}</strong> foi finalizado por
@@ -913,8 +922,29 @@ def email_ticket_finalizado(
           <div style="white-space:pre-wrap;">{_escape(solucao) or 'Sem detalhes adicionais.'}</div>
         </div>
 
-        <p>Se o problema retornar ou se você não estiver satisfeito com a solução,
-        é possível reabrir o chamado no sistema.</p>
+        <div style="margin:20px 0;padding:16px 18px;background:#FEF9C3;
+                    border-left:4px solid #F59E0B;border-radius:6px;">
+          <div style="font-size:13.5px;color:#78350F;margin-bottom:10px;line-height:1.5;">
+            <strong>⭐ Como foi o atendimento?</strong><br>
+            Sua opinião ajuda a melhorar o suporte. A avaliação leva menos de 30 segundos.
+          </div>
+          <p style="text-align:center;margin:0;">
+            <a href="{_escape(link_ticket)}"
+               style="display:inline-block;padding:12px 28px;background:#F59E0B;
+                      color:#1A1A1A;font-weight:700;font-size:14px;text-decoration:none;
+                      border-radius:8px;box-shadow:0 4px 12px rgba(245,158,11,.35);">
+              ⭐ Avaliar atendimento
+            </a>
+          </p>
+          <p style="font-size:11px;color:#92400E;text-align:center;margin-top:8px;margin-bottom:0;">
+            Você tem <strong>7 dias</strong> pra avaliar. Ao abrir o link o formulário aparece direto.
+          </p>
+        </div>
+
+        <p style="font-size:13px;color:#6B7280;">
+          Se o problema retornar ou se você não estiver satisfeito com a solução,
+          é possível <strong>reabrir o chamado</strong> no sistema (até 3 vezes, dentro de 2 meses).
+        </p>
     """
     html = _BASE_TEMPLATE.format(title="Chamado finalizado", tag="Resolvido", body=body)
     return subject, html
