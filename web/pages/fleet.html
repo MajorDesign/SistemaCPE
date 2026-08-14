@@ -4242,6 +4242,7 @@ async function saveDevolver() {
   // Reuso de imagem já usada neste checklist é rejeitado (hash SHA-256).
   const retUploadToken = _getAuthToken();
   const retUploadErrors = [];
+  let painelAvisoOcr = null; // alerta OCR do painel — mostra toast amarelo no final
   for (const angKey of Object.keys(RET_INSPECTION_FILES)) {
     const file = RET_INSPECTION_FILES[angKey];
     if (!file) continue;
@@ -4257,11 +4258,20 @@ async function saveDevolver() {
         const err = await upRes.json().catch(() => ({}));
         const label = PHOTO_ANGLES.find(a => a.key === angKey)?.label || angKey;
         retUploadErrors.push(`${label}: ${err.detail || upRes.status}`);
+      } else if (angKey === 'painel') {
+        // Backend rodou OCR — se veio alerta, avisa condutor sem barrar
+        try {
+          const r = await upRes.json();
+          if (r && r.painel_alerta) painelAvisoOcr = r.painel_alerta;
+        } catch (_) {}
       }
     } catch (e) {
       console.error('[FLEET RET UPLOAD]', e);
       retUploadErrors.push(`${angKey}: falha de rede`);
     }
+  }
+  if (painelAvisoOcr) {
+    showToast('⚠️ ' + painelAvisoOcr, 'warning');
   }
 
   if (retUploadErrors.length) {
@@ -4373,7 +4383,22 @@ async function openVistoriaRetorno(id) {
 
   // Resumo
   const retProblems = (c.problems||[]).filter(p => p.fase === 'retorno');
-  document.getElementById('vrResumo').innerHTML = `
+
+  // Alerta OCR do painel (analise automatica no upload — nunca bloqueia,
+  // so avisa). retorno_painel_alerta=null significa "ok" ou nao analisado.
+  const painelAlerta = c.retorno_painel_alerta;
+  const painelKmOcr  = c.retorno_painel_km_ocr;
+  const alertaBanner = painelAlerta ? `
+    <div style="background:#FEF9C3;border:2px solid #F59E0B;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;gap:10px;align-items:flex-start">
+      <i class="bi bi-exclamation-triangle-fill" style="font-size:20px;color:#B45309;flex-shrink:0;margin-top:2px"></i>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:13px;color:#78350F;margin-bottom:2px">Alerta na foto do painel</div>
+        <div style="font-size:12.5px;color:#78350F;line-height:1.4">${painelAlerta}</div>
+        ${painelKmOcr ? `<div style="font-size:11px;color:#92400E;margin-top:4px">KM lido pelo OCR: <strong>${Number(painelKmOcr).toLocaleString('pt-BR')}</strong></div>` : ''}
+      </div>
+    </div>` : '';
+
+  document.getElementById('vrResumo').innerHTML = alertaBanner + `
     <div style="font-weight:700;font-size:14px;margin-bottom:10px"><i class="bi bi-box-arrow-in-left"></i> Resumo da Devolucao</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px">
       <div><span style="color:#6B7280">Veículo:</span> <strong>${c.placa} — ${c.modelo}</strong></div>
@@ -6300,12 +6325,16 @@ async function apiFetch(path, options = {}) {
    ============================================================ */
 function showToast(msg, type = 'info') {
   const container = document.getElementById('fleetToast');
-  const icons = { success:'bi-check-circle-fill', error:'bi-x-circle-fill', info:'bi-info-circle-fill' };
+  const icons = { success:'bi-check-circle-fill', error:'bi-x-circle-fill', info:'bi-info-circle-fill', warning:'bi-exclamation-triangle-fill' };
   const el = document.createElement('div');
   el.className = `fleet-toast-item ${type}`;
+  if (type === 'warning') {
+    el.style.cssText = 'background:#FEF9C3;border:1px solid #F59E0B;color:#78350F;font-weight:500';
+  }
   el.innerHTML = `<i class="bi ${icons[type]||icons.info}"></i> ${msg}`;
   container.appendChild(el);
-  setTimeout(() => el.remove(), 3500);
+  // Warning fica visivel mais tempo — user precisa conseguir ler o motivo do alerta
+  setTimeout(() => el.remove(), type === 'warning' ? 8000 : 3500);
 }
 
 /* ============================================================
