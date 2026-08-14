@@ -258,10 +258,44 @@
               </select>
             </div>
             <div class="col-md-3">
+              <select id="categoriaFilter" class="form-select form-select-sm" onchange="onCategoriaFilterChange()">
+                <option value="">Categoria</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select id="subcategoriaFilter" class="form-select form-select-sm" onchange="applyFilters()" disabled>
+                <option value="">Subcategoria</option>
+              </select>
+            </div>
+            <div class="col-md-3">
               <button class="btn btn-outline-danger btn-sm w-100" onclick="clearFilters()">
                 <i class="bi bi-arrow-counterclockwise"></i> Limpar
               </button>
             </div>
+          </div>
+
+          <!-- Banner: perguntar se salva filtros como preferencia -->
+          <div id="filterPrefBanner" class="alert alert-warning py-2 px-3 mt-2 mb-0 d-none"
+               style="font-size:.85rem;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <i class="bi bi-bookmark-star"></i>
+            <span class="me-auto">Deseja salvar esta combinação como <strong>filtro padrão</strong>? Da próxima vez que abrir esta página os filtros serão aplicados automaticamente.</span>
+            <button class="btn btn-sm btn-warning" onclick="salvarFiltrosPref()">
+              <i class="bi bi-check-lg"></i> Salvar como padrão
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="descartarBannerFiltroPref()">
+              Agora não
+            </button>
+          </div>
+
+          <!-- Indicador quando ha pref ativa -->
+          <div id="filterPrefAtiva" class="small text-muted mt-2 d-none"
+               style="display:flex;align-items:center;gap:8px">
+            <i class="bi bi-bookmark-fill text-warning"></i>
+            <span>Filtros aplicados a partir da sua preferência salva.</span>
+            <button class="btn btn-sm btn-link p-0 text-danger" onclick="apagarFiltrosPref()"
+                    style="text-decoration:none">
+              <i class="bi bi-x-circle"></i> Remover preferência
+            </button>
           </div>
         </div>
 
@@ -1488,7 +1522,7 @@
        ======================================== -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-07-28"></script>
-  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-14perm"></script>
+  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-14filt"></script>
 
 <script id="cpe-autofill-guard-v1">
 /* Bloqueia autofill do Chrome/Edge em inputs de busca.

@@ -317,6 +317,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     await loadGroups();
     await loadTickets();
 
+    // Carrega categorias e aplica preferencia salva de filtros (se houver)
+    _carregarCategoriasFiltro().catch(() => {});
+
     // ✅ Abre ticket automaticamente se vier de notificação (?ticket_id=X)
     checkUrlTicketId();
 
@@ -1126,6 +1129,8 @@ async function loadTickets() {
         assignedTo:      t.responsavel_id,
         assignedName:    t.responsavel_nome || "Não atribuído",
         solicitante_id:  t.solicitante_id,
+        categoria_id:    t.categoria_id    || null,
+        subcategoria_id: t.subcategoria_id || null,
         reopen_count:    t.reopen_count || 0,
         createdAt:       formatDate(t.created_at),
         createdAtFull:   t.created_at,
@@ -1198,6 +1203,8 @@ function applyFilters() {
   const search   = document.getElementById("searchInput")?.value?.toLowerCase().trim() || "";
   const status   = document.getElementById("statusFilter")?.value || "";
   const priority = document.getElementById("priorityFilter")?.value || "";
+  const catId    = document.getElementById("categoriaFilter")?.value    || "";
+  const subId    = document.getElementById("subcategoriaFilter")?.value || "";
 
   const userId = getCurrentUserId();
   const matchVista = (t) => {
@@ -1210,6 +1217,8 @@ function applyFilters() {
     matchVista(t) &&
     (!status   || t.status   === status)   &&
     (!priority || t.priority === priority) &&
+    (!catId    || String(t.categoria_id)    === catId) &&
+    (!subId    || String(t.subcategoria_id) === subId) &&
     (!search   || t.title.toLowerCase().includes(search) ||
                   t.userName.toLowerCase().includes(search) ||
                   t.numero.toLowerCase().includes(search))
@@ -1218,19 +1227,199 @@ function applyFilters() {
   updateVistaCounts();
   currentPage = 1;
   renderTable();
+
+  // Depois de renderizar, decide se abre banner "salvar como padrão"
+  atualizarBannerFiltroPref();
 }
 
 function clearFilters() {
-  ['searchInput', 'statusFilter', 'priorityFilter'].forEach(id => {
+  ['searchInput', 'statusFilter', 'priorityFilter', 'categoriaFilter', 'subcategoriaFilter'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
+  const subSel = document.getElementById('subcategoriaFilter');
+  if (subSel) subSel.disabled = true;
   applyFilters();
   showSuccess("✅ Filtros limpos");
 }
 
 function toggleAdvancedFilters() {
-  document.getElementById("advancedFilters")?.classList.toggle('d-none');
+  const el = document.getElementById("advancedFilters");
+  el?.classList.toggle('d-none');
+  // Carrega categorias lazy — só quando o painel abre a primeira vez
+  if (el && !el.classList.contains('d-none')) {
+    _carregarCategoriasFiltro();
+  }
+}
+
+/* ================================================================
+   FILTRO POR CATEGORIA / SUBCATEGORIA + PREFERENCIA SALVA
+   ================================================================ */
+
+// Cache das categorias do grupo do user (com subs embutidas)
+let _categoriasFiltroCache = null;
+// True enquanto o banner "salvar como padrao" fica aberto pra combinacao atual
+let _bannerFiltroSuprimido = new Set(); // combinacoes ja descartadas
+
+/**
+ * Carrega categorias do grupo do usuario e popula o select. Cada
+ * option tem `data-subs` com o JSON das subcategorias — mesma
+ * convencao do modal Novo Ticket.
+ */
+async function _carregarCategoriasFiltro() {
+  const sel = document.getElementById('categoriaFilter');
+  if (!sel) return;
+  if (_categoriasFiltroCache) return; // ja carregado
+
+  const cu = getCurrentUser() || {};
+  const gid = cu.group_id;
+  if (!gid) {
+    // Sem grupo (ex: admin sem grupo) — desabilita os selects
+    sel.disabled = true;
+    return;
+  }
+  try {
+    const r = await fetch(`${API_BASE}/categorias?group_id=${gid}`);
+    if (!r.ok) return;
+    const cats = await r.json();
+    _categoriasFiltroCache = cats || [];
+    sel.innerHTML = '<option value="">Categoria</option>' +
+      _categoriasFiltroCache.map(c =>
+        `<option value="${c.id}" data-subs='${JSON.stringify(c.subcategorias || [])}'>${_escHtmlP(c.nome)}</option>`
+      ).join('');
+
+    // Se ha pref salva, aplica agora que os selects estao populados
+    _aplicarFiltrosPrefSeExiste();
+  } catch (e) {
+    console.warn('[TICKETS/FILTRO] erro ao carregar categorias:', e);
+  }
+}
+
+function onCategoriaFilterChange() {
+  const catSel = document.getElementById('categoriaFilter');
+  const subSel = document.getElementById('subcategoriaFilter');
+  if (!catSel || !subSel) return;
+
+  const opt  = catSel.options[catSel.selectedIndex];
+  const subs = (opt && opt.dataset.subs) ? JSON.parse(opt.dataset.subs || '[]') : [];
+  subSel.innerHTML = '<option value="">Subcategoria</option>' +
+    subs.map(s => `<option value="${s.id}">${_escHtmlP(s.nome)}</option>`).join('');
+  subSel.disabled = !catSel.value || subs.length === 0;
+  applyFilters();
+}
+
+// Estado atual dos filtros como objeto simples
+function _filtrosAtuaisSnapshot() {
+  return {
+    status:          document.getElementById("statusFilter")?.value        || "",
+    priority:        document.getElementById("priorityFilter")?.value      || "",
+    categoria_id:    document.getElementById("categoriaFilter")?.value     || "",
+    subcategoria_id: document.getElementById("subcategoriaFilter")?.value  || "",
+  };
+}
+
+function _filtroVazio(f) {
+  return !f.status && !f.priority && !f.categoria_id && !f.subcategoria_id;
+}
+
+function _filtroIguais(a, b) {
+  return a.status === b.status && a.priority === b.priority &&
+         a.categoria_id === b.categoria_id && a.subcategoria_id === b.subcategoria_id;
+}
+
+function _prefKey() {
+  const uid = getCurrentUserId() || 'anon';
+  return `tickets_filter_prefs_v1_${uid}`;
+}
+
+function _lerPref() {
+  try { return JSON.parse(localStorage.getItem(_prefKey()) || 'null'); }
+  catch { return null; }
+}
+
+function _salvarPref(f) {
+  try { localStorage.setItem(_prefKey(), JSON.stringify(f)); }
+  catch (_) {}
+}
+
+function _limparPref() {
+  try { localStorage.removeItem(_prefKey()); } catch (_) {}
+}
+
+/**
+ * Decide se mostra o banner "salvar como padrao" (aparece quando o
+ * usuario aplicou filtros diferentes do que ja esta salvo e ainda nao
+ * descartou essa combinacao nesta sessao).
+ */
+function atualizarBannerFiltroPref() {
+  const banner = document.getElementById('filterPrefBanner');
+  const ativo  = document.getElementById('filterPrefAtiva');
+  if (!banner || !ativo) return;
+
+  const atual = _filtrosAtuaisSnapshot();
+  const pref  = _lerPref();
+
+  // Indicador de pref ativa (mostrado se ha pref salva)
+  ativo.classList.toggle('d-none', !pref);
+
+  // Banner: mostra so quando ha filtro nao-vazio, nao bate com pref, e
+  // essa combinacao ainda nao foi descartada nesta sessao.
+  const chave = JSON.stringify(atual);
+  const jaDescartou = _bannerFiltroSuprimido.has(chave);
+  const igualPref   = pref && _filtroIguais(atual, pref);
+  const mostrar     = !_filtroVazio(atual) && !igualPref && !jaDescartou;
+  banner.classList.toggle('d-none', !mostrar);
+}
+
+function salvarFiltrosPref() {
+  const f = _filtrosAtuaisSnapshot();
+  _salvarPref(f);
+  document.getElementById('filterPrefBanner')?.classList.add('d-none');
+  showSuccess('✅ Filtro salvo como padrão. Vai aplicar automaticamente na próxima vez.');
+  atualizarBannerFiltroPref();
+}
+
+function descartarBannerFiltroPref() {
+  const chave = JSON.stringify(_filtrosAtuaisSnapshot());
+  _bannerFiltroSuprimido.add(chave);
+  document.getElementById('filterPrefBanner')?.classList.add('d-none');
+}
+
+function apagarFiltrosPref() {
+  if (!confirm('Remover a preferência salva? Os filtros ficarão em branco no próximo acesso.')) return;
+  _limparPref();
+  clearFilters();
+  showSuccess('Preferência removida.');
+}
+
+function _aplicarFiltrosPrefSeExiste() {
+  const pref = _lerPref();
+  if (!pref) return;
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = String(val); };
+
+  set('statusFilter',   pref.status || '');
+  set('priorityFilter', pref.priority || '');
+  set('categoriaFilter', pref.categoria_id || '');
+
+  // Popular subcategorias antes de aplicar valor da sub
+  const catSel = document.getElementById('categoriaFilter');
+  const subSel = document.getElementById('subcategoriaFilter');
+  if (catSel && subSel) {
+    const opt = catSel.options[catSel.selectedIndex];
+    const subs = (opt && opt.dataset.subs) ? JSON.parse(opt.dataset.subs || '[]') : [];
+    subSel.innerHTML = '<option value="">Subcategoria</option>' +
+      subs.map(s => `<option value="${s.id}">${_escHtmlP(s.nome)}</option>`).join('');
+    subSel.disabled = !catSel.value || subs.length === 0;
+    if (pref.subcategoria_id) subSel.value = String(pref.subcategoria_id);
+  }
+
+  // Se ha algum filtro, abre o painel pra o user ver o que ta aplicado
+  const temFiltro = pref.status || pref.priority || pref.categoria_id || pref.subcategoria_id;
+  if (temFiltro) {
+    document.getElementById('advancedFilters')?.classList.remove('d-none');
+  }
+  applyFilters();
 }
 
 // =========================================

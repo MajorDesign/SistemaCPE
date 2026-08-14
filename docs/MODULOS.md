@@ -59,6 +59,7 @@ Ordem alfabética.
 - Categoria tem `group_id` — quem responde é o RESPONSAVEL_GRUPO desse grupo
 - **Excluir categoria/subcategoria** (2026-08-14): bloqueia com 409 se existir qualquer ticket vinculado (mesmo resolvido/fechado). Reclassifique antes.
 - **Permissão por categoria por membro** (2026-08-14, migration 089): RESPONSAVEL_GRUPO (ou ADMIN) pode restringir quais categorias/subcategorias cada USER do grupo enxerga na lista de tickets. Ver `REGRAS_NEGOCIO.md` (seção "Permissões por categoria").
+- **Filtro por categoria/subcategoria + preferência salva** (2026-08-14): painel "Filtros" ganhou 2 selects extras (categoria + subcategoria em cascata, do grupo do user). Aplicou → banner pergunta se salva como padrão em `localStorage`. Ver `REGRAS_NEGOCIO.md` (seção "Filtros salvos como preferência").
 
 ---
 

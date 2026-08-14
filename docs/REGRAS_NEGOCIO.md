@@ -138,6 +138,13 @@ Decisões que **não existem no código como constante óbvia** — vieram de co
 - Mesmo tickets `Resolvido`/`Fechado` bloqueiam — histórico precisa manter a referência.
 - Fluxo esperado: reclassificar tickets pra outra (sub)categoria antes de excluir.
 
+### Filtros salvos como preferência (2026-08-14)
+- Painel "Filtros" (`advancedFilters`) inclui status, prioridade, **categoria** e **subcategoria** (subcategorias em cascata a partir da categoria escolhida).
+- Categorias vêm do próprio grupo do user (`GET /api/categorias?group_id={users.group_id}`); admin sem grupo definido não vê categorias filtráveis.
+- **Filtragem é client-side** — filtra `tickets` já carregado; backend não recebe params novos.
+- Aplicou filtro? Banner âmbar pergunta se quer salvar como padrão. **Sim** → grava em `localStorage['tickets_filter_prefs_v1_<userId>']` (por user, por browser). **Agora não** → suprime o banner só naquela combinação, na sessão atual.
+- Ao abrir `/tickets.html`, se há pref salva, aplica automaticamente + abre o painel + mostra "Remover preferência".
+
 ### Permissões por categoria por membro (2026-08-14, migration 089)
 Tabela `ticket_membro_categorias` (`user_id`, `group_id`, `categoria_id`, `subcategoria_id` NULL, `created_by`).
 
