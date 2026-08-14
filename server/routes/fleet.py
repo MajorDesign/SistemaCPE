@@ -18,12 +18,33 @@ from datetime import datetime, date
 # Chrome/Firefox/Edge desktop NAO renderiza HEIC nativo — o vistoriador
 # via desktop nao consegue ver. Solucao: converter pra JPG no upload.
 try:
-    from PIL import Image
+    from PIL import Image, ImageFilter, ImageOps
     from pillow_heif import register_heif_opener
     register_heif_opener()
     _HEIF_OK = True
 except ImportError:
     _HEIF_OK = False
+
+# OCR: le o KM do painel na foto de retorno pra comparar com km_saida.
+# Tesseract precisa do binario instalado no sistema (Windows: default
+# em C:\Program Files\Tesseract-OCR ou E:\CPE\bin\tesseract no CPEDC22).
+# Env var TESSERACT_CMD sobrescreve o caminho se preciso.
+try:
+    import pytesseract
+    _tess_env = os.environ.get("TESSERACT_CMD")
+    if _tess_env and os.path.exists(_tess_env):
+        pytesseract.pytesseract.tesseract_cmd = _tess_env
+    else:
+        for _cand in (
+            r"E:\CPE\bin\tesseract\tesseract.exe",
+            r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        ):
+            if os.path.exists(_cand):
+                pytesseract.pytesseract.tesseract_cmd = _cand
+                break
+    _TESSERACT_OK = True
+except ImportError:
+    _TESSERACT_OK = False
 
 # Data de corte da regra de painel obrigatório (Migration 083).
 # Checklists criados a partir desta data precisam ter as 7 fotos (incluindo
@@ -74,6 +95,93 @@ def _maybe_convert_heic_to_jpg(raw: bytes, ext: str) -> tuple[bytes, str]:
     except Exception as e:
         print(f"[FLEET UPLOAD] HEIC->JPG falhou: {e} (salvando cru)", flush=True)
         return raw, ext
+
+
+def _ocr_painel_km(raw: bytes) -> tuple[int | None, str]:
+    """Roda OCR na foto do painel pra extrair o KM.
+    Retorna (km_int_ou_None, motivo).
+
+    motivo:
+      "ok"          -> conseguiu extrair um numero plausivel
+      "sem_tess"    -> pytesseract/binario nao disponivel (skip silencioso)
+      "ilegivel"    -> tesseract rodou mas nao achou digitos
+      "erro:<msg>"  -> excecao inesperada
+    """
+    if not _TESSERACT_OK or not _HEIF_OK:
+        return None, "sem_tess"
+    try:
+        img = Image.open(io.BytesIO(raw))
+        # Correcao de orientacao EXIF (iPhone as vezes salva rotacionado)
+        img = ImageOps.exif_transpose(img)
+        # Tesseract vai melhor com grayscale + contraste alto + tamanho medio
+        img = img.convert("L")
+        w, h = img.size
+        if w > 1600:
+            new_w = 1600
+            img = img.resize((new_w, int(h * new_w / w)))
+        img = ImageOps.autocontrast(img, cutoff=2)
+        img = img.filter(ImageFilter.SHARPEN)
+        # Roda tesseract restringindo whitelist a digitos + separadores comuns
+        cfg = "--psm 6 -c tessedit_char_whitelist=0123456789.,"
+        text = pytesseract.image_to_string(img, config=cfg, timeout=8) or ""
+    except Exception as e:
+        return None, f"erro:{e.__class__.__name__}"
+
+    # Extrai TODOS os grupos de digitos e escolhe o maior — no painel
+    # o hodometro (KM) e o maior numero visivel (nao confunde com rpm/temp).
+    import re
+    grupos = re.findall(r"\d[\d.,]*", text)
+    numeros = []
+    for g in grupos:
+        n = g.replace(".", "").replace(",", "")
+        if n.isdigit():
+            v = int(n)
+            # KM real fica tipicamente entre 100 e 999.999
+            if 100 <= v <= 9_999_999:
+                numeros.append(v)
+    if not numeros:
+        return None, "ilegivel"
+    return max(numeros), "ok"
+
+
+def _sync_painel_referencia(cursor, vehicle_id: int, raw: bytes, ext: str, user_id: int, checklist_id: int) -> None:
+    """Substitui a foto de referencia de painel do veiculo pela nova
+    (do retorno). NAO mantem historico — deleta o registro e o arquivo
+    antigo. Novo arquivo tem nome estavel v<vid>_painel_<uuid> pra
+    sobreviver caso o checklist seja apagado depois."""
+    # 1) Localiza foto atual pra apagar arquivo fisico
+    cursor.execute(
+        "SELECT id, foto_path FROM fleet_vehicle_photos "
+        "WHERE vehicle_id=%s AND angulo='painel' AND is_current=1",
+        (vehicle_id,),
+    )
+    for old in cursor.fetchall() or []:
+        old_url = old.get("foto_path") or ""
+        # foto_path e do tipo "/SistemaCPE/web/uploads/fleet/<file>"
+        fname = os.path.basename(old_url)
+        if fname:
+            try:
+                os.remove(os.path.join(UPLOAD_DIR, fname))
+            except FileNotFoundError:
+                pass
+            except OSError as e:
+                print(f"[FLEET PAINEL SYNC] falha ao remover {fname}: {e}", flush=True)
+        cursor.execute("DELETE FROM fleet_vehicle_photos WHERE id=%s", (old["id"],))
+
+    # 2) Grava novo arquivo com nome estavel (nao amarrado ao checklist)
+    ref_filename = f"v{vehicle_id}_painel_{uuid.uuid4().hex[:8]}{ext}"
+    ref_path = os.path.join(UPLOAD_DIR, ref_filename)
+    with open(ref_path, "wb") as f:
+        f.write(raw)
+    ref_url = f"/SistemaCPE/web/uploads/fleet/{ref_filename}"
+
+    # 3) Insere novo registro (is_current=1, sem historico)
+    cursor.execute(
+        """INSERT INTO fleet_vehicle_photos
+           (vehicle_id, foto_path, angulo, is_current)
+           VALUES (%s, %s, 'painel', 1)""",
+        (vehicle_id, ref_url),
+    )
 
 
 # ============================================================
@@ -796,7 +904,7 @@ async def upload_checklist_photo(
     file: UploadFile = File(...),
     angulo: str = Form("frente"),
 ):
-    _get_user_id(request)
+    user_id = _get_user_id(request)
 
     # "retorno_<angulo>" (2026-07-15): fotos que o condutor tira na
     # DEVOLUCAO. Aceita retorno_<key> onde key esta em ALLOWED_ANGULOS
@@ -890,12 +998,62 @@ async def upload_checklist_photo(
             "(checklist_id, angulo, foto_path, file_hash) VALUES (%s, %s, %s, %s)",
             (checklist_id, angulo, photo_url, file_hash),
         )
+
+        # 2026-08-14: quando o condutor tira a foto do painel no RETORNO,
+        # sincroniza a foto de referencia de painel do veiculo e roda OCR
+        # pra comparar com o km_saida. Gera alerta pro vistoriador (nunca
+        # bloqueia). Ver docs/REGRAS_NEGOCIO.md.
+        painel_extra = {}
+        if angulo == "retorno_painel":
+            cursor.execute(
+                "SELECT vehicle_id, km_saida FROM fleet_checklists WHERE id=%s",
+                (checklist_id,),
+            )
+            ck_row = cursor.fetchone()
+            if ck_row and ck_row.get("vehicle_id"):
+                vid = int(ck_row["vehicle_id"])
+                km_saida = ck_row.get("km_saida")
+
+                # Substitui foto de referencia (SEM historico)
+                _sync_painel_referencia(cursor, vid, raw, ext, user_id, checklist_id)
+
+                # OCR + comparacao
+                km_ocr, motivo = _ocr_painel_km(raw)
+                alerta = None
+                if motivo == "ilegivel":
+                    alerta = "Foto do painel ilegivel — nao foi possivel ler o KM automaticamente. Vistoriador, confira manualmente."
+                elif motivo.startswith("erro:"):
+                    alerta = f"Falha na leitura automatica do painel ({motivo}). Vistoriador, confira manualmente."
+                elif motivo == "ok" and km_saida is not None and km_ocr is not None:
+                    if km_ocr <= int(km_saida):
+                        alerta = (
+                            f"KM no painel ({km_ocr:,} km) parece igual ou menor que a saida "
+                            f"({int(km_saida):,} km) — verifique se a foto e do retorno."
+                        ).replace(",", ".")
+                cursor.execute(
+                    "UPDATE fleet_checklists SET "
+                    "retorno_painel_alerta=%s, retorno_painel_km_ocr=%s "
+                    "WHERE id=%s",
+                    (alerta, km_ocr, checklist_id),
+                )
+                painel_extra = {
+                    "painel_km_ocr": km_ocr,
+                    "painel_alerta": alerta,
+                }
+                print(
+                    f"[FLEET PAINEL OCR] ck={checklist_id} vid={vid} "
+                    f"km_saida={km_saida} km_ocr={km_ocr} motivo={motivo} "
+                    f"alerta={bool(alerta)}",
+                    flush=True,
+                )
+
         conn.commit()
         return {
             "success": True,
             "foto_path": photo_url,
             "angulo": angulo,
             "file_hash": file_hash,
+            **painel_extra,
         }
     except HTTPException:
         raise
