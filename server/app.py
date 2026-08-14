@@ -1994,6 +1994,15 @@ if os.getenv("TESTING") != "1":
         logger.error(f"⚠️  Fleet scheduler falhou ao iniciar: {sched_err}")
         import traceback
         logger.error(traceback.format_exc())
+
+    try:
+        from services.meeting_scheduler import iniciar_scheduler as iniciar_meet_sched
+        iniciar_meet_sched()
+        logger.info("✅ Meeting scheduler iniciado (lembretes 24h/15min + auto-concluir)")
+    except Exception as sched_err:
+        logger.error(f"⚠️  Meeting scheduler falhou ao iniciar: {sched_err}")
+        import traceback
+        logger.error(traceback.format_exc())
 else:
     logger.info("⚙️  TESTING=1 — fleet scheduler NÃO iniciado")
 

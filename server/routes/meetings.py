@@ -102,6 +102,31 @@ class MeetingCreate(BaseModel):
     nome: str = Field(..., min_length=2, max_length=120)
 
 
+class ScheduleInviteeIn(BaseModel):
+    nome: str = Field(..., min_length=1, max_length=120)
+    email: str = Field(..., min_length=5, max_length=200)
+
+
+class ScheduleCreate(BaseModel):
+    titulo: str = Field(..., min_length=2, max_length=150)
+    descricao: Optional[str] = Field(None, max_length=2000)
+    start_at: str = Field(..., description="ISO 8601 local BR (ex: 2026-08-20T14:30)")
+    duracao_min: int = Field(30, ge=5, le=480, description="duracao em minutos (5 a 480)")
+    invitees: List[ScheduleInviteeIn] = Field(default_factory=list)
+
+
+class ScheduleUpdate(BaseModel):
+    titulo: Optional[str] = Field(None, min_length=2, max_length=150)
+    descricao: Optional[str] = Field(None, max_length=2000)
+    start_at: Optional[str] = None
+    duracao_min: Optional[int] = Field(None, ge=5, le=480)
+    invitees: Optional[List[ScheduleInviteeIn]] = None
+
+
+class ScheduleCancel(BaseModel):
+    motivo: Optional[str] = Field(None, max_length=300)
+
+
 class RequestEntryBody(BaseModel):
     guest_name: Optional[str] = Field(None, max_length=80,
                                        description="Nome do externo (NULL pra users logados)")
@@ -441,6 +466,386 @@ def criar_meeting(body: MeetingCreate, request: Request):
         "nome": body.nome.strip(),
         "url_path": f"/SistemaCPE/web/pages/meet.html?code={code}",
     }
+
+
+# ---------------------------------------------------------------------
+# AGENDAMENTOS (schedules): reunioes marcadas pra data/hora futura,
+# convidados por email. Cada agendamento cria uma sala meeting_rooms
+# ja no ato — link vai estavel no email. Cancelamento manda email
+# tambem. Lembretes 24h e 15min por background job (meeting_scheduler).
+# ---------------------------------------------------------------------
+
+def _parse_start_at(s: str) -> datetime:
+    """Aceita 'YYYY-MM-DDTHH:MM' ou 'YYYY-MM-DD HH:MM(:SS)'. Timezone
+    tratada como horario local BR (sem tz-info) — evita confusao com
+    UTC no MySQL DATETIME que ja e naive."""
+    s = (s or "").strip().replace("T", " ")
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    raise HTTPException(status_code=400, detail=f"Data/hora invalida: {s!r} — use YYYY-MM-DDTHH:MM")
+
+
+def _schedule_link(code: str) -> str:
+    from config import PUBLIC_BASE_URL
+    return f"{PUBLIC_BASE_URL}/SistemaCPE/web/pages/meet.html?code={code}"
+
+
+def _fetch_schedule(cur, schedule_id: int) -> Optional[dict]:
+    cur.execute("""
+        SELECT s.*, m.codigo AS meeting_code
+          FROM chat_meeting_schedules s
+          LEFT JOIN chat_meeting_rooms m ON m.id = s.meeting_id
+         WHERE s.id = %s
+    """, (schedule_id,))
+    return cur.fetchone()
+
+
+def _fetch_invitees(cur, schedule_id: int) -> List[dict]:
+    cur.execute("""
+        SELECT id, nome, email, user_id, token, convite_enviado_em, entrou_em
+          FROM chat_meeting_schedule_invitees
+         WHERE schedule_id = %s
+         ORDER BY id
+    """, (schedule_id,))
+    return cur.fetchall() or []
+
+
+def _host_nome(user_id: int) -> str:
+    plus = get_db_or_404()
+    pcur = plus.cursor(dictionary=True)
+    try:
+        pcur.execute("SELECT name FROM users WHERE id=%s", (user_id,))
+        u = pcur.fetchone()
+        return (u or {}).get("name") or "CPE Tecnologia"
+    finally:
+        pcur.close(); plus.close()
+
+
+def _resolve_internal_user_ids(emails: List[str]) -> Dict[str, int]:
+    """Retorna map {email_lower: user_id} pros emails que existem em cpe_plus.users."""
+    if not emails:
+        return {}
+    plus = get_db_or_404()
+    pcur = plus.cursor(dictionary=True)
+    try:
+        placeholders = ",".join(["%s"] * len(emails))
+        pcur.execute(
+            f"SELECT id, email FROM users WHERE LOWER(email) IN ({placeholders})",
+            [e.lower() for e in emails],
+        )
+        return {r["email"].lower(): r["id"] for r in pcur.fetchall() or []}
+    finally:
+        pcur.close(); plus.close()
+
+
+def _enviar_convite(dest_email: str, dest_nome: str, host_nome: str,
+                    titulo: str, descricao: Optional[str],
+                    start_at: datetime, end_at: datetime, link: str) -> None:
+    try:
+        from services.email_service import enviar_email, email_meeting_convite
+        subject, html = email_meeting_convite(
+            dest_nome=dest_nome, host_nome=host_nome,
+            titulo=titulo, descricao=descricao or "",
+            start_at=start_at, end_at=end_at, link=link,
+        )
+        enviar_email(dest_email, subject, html)
+    except Exception as e:
+        logger.warning(f"[MEET-SCHED] falha convite {dest_email}: {e}")
+
+
+def _enviar_cancelamento(dest_email: str, dest_nome: str, host_nome: str,
+                          titulo: str, start_at: datetime, motivo: Optional[str]) -> None:
+    try:
+        from services.email_service import enviar_email, email_meeting_cancelamento
+        subject, html = email_meeting_cancelamento(
+            dest_nome=dest_nome, host_nome=host_nome,
+            titulo=titulo, start_at=start_at, motivo=motivo or "",
+        )
+        enviar_email(dest_email, subject, html)
+    except Exception as e:
+        logger.warning(f"[MEET-SCHED] falha cancelamento {dest_email}: {e}")
+
+
+@router.post("/schedules")
+def criar_schedule(body: ScheduleCreate, request: Request):
+    """Cria agendamento + sala. Envia convite pra cada invitee."""
+    user = _exigir_user(request)
+    start_at = _parse_start_at(body.start_at)
+    if start_at < datetime.now():
+        raise HTTPException(status_code=400, detail="Data/hora ja passou — agende pra o futuro")
+    from datetime import timedelta
+    end_at = start_at + timedelta(minutes=body.duracao_min)
+
+    # Dedup convidados por email (case-insensitive)
+    seen = set()
+    invitees_norm = []
+    for inv in body.invitees:
+        key = inv.email.strip().lower()
+        if not key or "@" not in key or key in seen:
+            continue
+        seen.add(key)
+        invitees_norm.append({"nome": inv.nome.strip()[:120], "email": inv.email.strip()[:200]})
+
+    # Resolve users internos pra linkar user_id
+    internal_map = _resolve_internal_user_ids([i["email"] for i in invitees_norm])
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # 1) Cria sala (chat_meeting_rooms) — link estavel ate a reuniao rolar
+        code = _gen_code(cur)
+        cur.execute("""
+            INSERT INTO chat_meeting_rooms (codigo, nome, criado_por)
+            VALUES (%s, %s, %s)
+        """, (code, body.titulo.strip(), user["id"]))
+        meeting_id = cur.lastrowid
+
+        # 2) Cria schedule
+        cur.execute("""
+            INSERT INTO chat_meeting_schedules
+                (meeting_id, host_id, titulo, descricao, start_at, end_at, status)
+            VALUES (%s, %s, %s, %s, %s, %s, 'agendada')
+        """, (
+            meeting_id, user["id"],
+            body.titulo.strip(),
+            (body.descricao or "").strip() or None,
+            start_at, end_at,
+        ))
+        schedule_id = cur.lastrowid
+
+        # 3) Grava invitees com token
+        now = datetime.now()
+        for inv in invitees_norm:
+            token = _gen_token()
+            uid_int = internal_map.get(inv["email"].lower())
+            cur.execute("""
+                INSERT INTO chat_meeting_schedule_invitees
+                    (schedule_id, nome, email, user_id, token, convite_enviado_em)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (schedule_id, inv["nome"], inv["email"], uid_int, token, now))
+
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    # 4) Envia emails (fora do lock DB — enviar_email e async por default)
+    link = _schedule_link(code)
+    host = _host_nome(user["id"])
+    for inv in invitees_norm:
+        _enviar_convite(
+            dest_email=inv["email"], dest_nome=inv["nome"],
+            host_nome=host, titulo=body.titulo.strip(),
+            descricao=body.descricao, start_at=start_at, end_at=end_at,
+            link=link,
+        )
+
+    return {
+        "success": True,
+        "schedule_id": schedule_id,
+        "meeting_id": meeting_id,
+        "codigo": code,
+        "link": link,
+        "invitees_enviados": len(invitees_norm),
+    }
+
+
+@router.get("/schedules")
+def listar_schedules(request: Request, status: Optional[str] = None):
+    """Lista MINHAS reunioes agendadas. Filtro por status opcional."""
+    user = _exigir_user(request)
+    where = ["host_id = %s"]
+    params: List = [user["id"]]
+    if status and status in ("agendada", "em_andamento", "concluida", "cancelada"):
+        where.append("status = %s")
+        params.append(status)
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute(f"""
+            SELECT s.id, s.titulo, s.descricao, s.start_at, s.end_at, s.status,
+                   s.cancelamento_motivo, s.cancelado_em, s.created_at,
+                   m.codigo AS meeting_code,
+                   (SELECT COUNT(*) FROM chat_meeting_schedule_invitees i
+                     WHERE i.schedule_id = s.id) AS total_invitees
+              FROM chat_meeting_schedules s
+              LEFT JOIN chat_meeting_rooms m ON m.id = s.meeting_id
+             WHERE {' AND '.join(where)}
+             ORDER BY s.start_at DESC
+             LIMIT 200
+        """, params)
+        rows = cur.fetchall() or []
+    finally:
+        cur.close(); conn.close()
+
+    for r in rows:
+        r["link"] = _schedule_link(r["meeting_code"]) if r.get("meeting_code") else None
+    return {"success": True, "schedules": rows}
+
+
+@router.get("/schedules/{schedule_id}")
+def obter_schedule(schedule_id: int, request: Request):
+    user = _exigir_user(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        s = _fetch_schedule(cur, schedule_id)
+        if not s:
+            raise HTTPException(status_code=404, detail="Agendamento nao encontrado")
+        if s["host_id"] != user["id"]:
+            raise HTTPException(status_code=403, detail="So o host pode ver este agendamento")
+        s["link"] = _schedule_link(s["meeting_code"]) if s.get("meeting_code") else None
+        s["invitees"] = _fetch_invitees(cur, schedule_id)
+    finally:
+        cur.close(); conn.close()
+    return {"success": True, "schedule": s}
+
+
+@router.patch("/schedules/{schedule_id}")
+def editar_schedule(schedule_id: int, body: ScheduleUpdate, request: Request):
+    """Edita agendamento. Se mudou horario ou lista de convidados, reenvia
+    convite pra todos (novos e antigos)."""
+    user = _exigir_user(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    reenviar = False
+    novos_convidados: List[dict] = []
+    try:
+        s = _fetch_schedule(cur, schedule_id)
+        if not s:
+            raise HTTPException(status_code=404, detail="Agendamento nao encontrado")
+        if s["host_id"] != user["id"]:
+            raise HTTPException(status_code=403, detail="So o host pode editar")
+        if s["status"] != "agendada":
+            raise HTTPException(status_code=400, detail=f"Nao e possivel editar (status: {s['status']})")
+
+        sets = []
+        params: List = []
+        start_at_novo = s["start_at"]
+        end_at_novo = s["end_at"]
+        if body.titulo is not None:
+            sets.append("titulo = %s"); params.append(body.titulo.strip())
+        if body.descricao is not None:
+            sets.append("descricao = %s"); params.append((body.descricao or "").strip() or None)
+        if body.start_at is not None or body.duracao_min is not None:
+            from datetime import timedelta
+            start_at_novo = _parse_start_at(body.start_at) if body.start_at else s["start_at"]
+            if start_at_novo < datetime.now():
+                raise HTTPException(status_code=400, detail="Data/hora ja passou")
+            dur = body.duracao_min if body.duracao_min else int(
+                (s["end_at"] - s["start_at"]).total_seconds() // 60
+            )
+            end_at_novo = start_at_novo + timedelta(minutes=dur)
+            sets.append("start_at = %s"); params.append(start_at_novo)
+            sets.append("end_at = %s"); params.append(end_at_novo)
+            # Zera flags de lembrete pra reenviar
+            sets.append("lembrete_24h_enviado_em = NULL")
+            sets.append("lembrete_15min_enviado_em = NULL")
+            reenviar = True
+
+        if sets:
+            params.append(schedule_id)
+            cur.execute(f"UPDATE chat_meeting_schedules SET {', '.join(sets)} WHERE id = %s", params)
+
+        # Substituir lista de invitees se veio
+        if body.invitees is not None:
+            cur.execute("DELETE FROM chat_meeting_schedule_invitees WHERE schedule_id = %s", (schedule_id,))
+            seen = set()
+            invitees_norm = []
+            for inv in body.invitees:
+                key = inv.email.strip().lower()
+                if not key or "@" not in key or key in seen:
+                    continue
+                seen.add(key)
+                invitees_norm.append({"nome": inv.nome.strip()[:120], "email": inv.email.strip()[:200]})
+            internal_map = _resolve_internal_user_ids([i["email"] for i in invitees_norm])
+            now = datetime.now()
+            for inv in invitees_norm:
+                token = _gen_token()
+                uid_int = internal_map.get(inv["email"].lower())
+                cur.execute("""
+                    INSERT INTO chat_meeting_schedule_invitees
+                        (schedule_id, nome, email, user_id, token, convite_enviado_em)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (schedule_id, inv["nome"], inv["email"], uid_int, token, now))
+            novos_convidados = invitees_norm
+            reenviar = True
+
+        conn.commit()
+
+        # Reenviar convites se preciso (fora do commit)
+        if reenviar:
+            invitees_to_notify = novos_convidados if novos_convidados else [
+                {"nome": r["nome"], "email": r["email"]}
+                for r in _fetch_invitees(cur, schedule_id)
+            ]
+            link = _schedule_link(s["meeting_code"]) if s.get("meeting_code") else None
+            host = _host_nome(user["id"])
+            titulo_final = body.titulo.strip() if body.titulo is not None else s["titulo"]
+            for inv in invitees_to_notify:
+                _enviar_convite(
+                    dest_email=inv["email"], dest_nome=inv["nome"],
+                    host_nome=host, titulo=titulo_final,
+                    descricao=body.descricao if body.descricao is not None else s.get("descricao"),
+                    start_at=start_at_novo, end_at=end_at_novo,
+                    link=link or "",
+                )
+    finally:
+        cur.close(); conn.close()
+
+    return {"success": True}
+
+
+@router.delete("/schedules/{schedule_id}")
+def cancelar_schedule(schedule_id: int, request: Request,
+                      motivo: Optional[str] = Query(None, max_length=300)):
+    """Cancela agendamento. Marca status='cancelada' e envia email pros invitees."""
+    user = _exigir_user(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    invitees = []
+    try:
+        s = _fetch_schedule(cur, schedule_id)
+        if not s:
+            raise HTTPException(status_code=404, detail="Agendamento nao encontrado")
+        if s["host_id"] != user["id"]:
+            raise HTTPException(status_code=403, detail="So o host pode cancelar")
+        if s["status"] == "cancelada":
+            return {"success": True, "message": "Ja estava cancelado"}
+
+        cur.execute("""
+            UPDATE chat_meeting_schedules
+               SET status='cancelada',
+                   cancelamento_motivo=%s,
+                   cancelado_por=%s,
+                   cancelado_em=NOW()
+             WHERE id=%s
+        """, ((motivo or "").strip() or None, user["id"], schedule_id))
+
+        # Encerrar a sala tambem (evita links "zumbi")
+        if s.get("meeting_id"):
+            cur.execute(
+                "UPDATE chat_meeting_rooms SET encerrada_em=NOW() WHERE id=%s AND encerrada_em IS NULL",
+                (s["meeting_id"],),
+            )
+
+        invitees = _fetch_invitees(cur, schedule_id)
+        conn.commit()
+    finally:
+        cur.close(); conn.close()
+
+    # Emails de cancelamento
+    host = _host_nome(user["id"])
+    for inv in invitees:
+        _enviar_cancelamento(
+            dest_email=inv["email"], dest_nome=inv["nome"],
+            host_nome=host, titulo=s["titulo"],
+            start_at=s["start_at"], motivo=motivo,
+        )
+    return {"success": True, "invitees_notificados": len(invitees)}
 
 
 @router.get("/info/{code}")
