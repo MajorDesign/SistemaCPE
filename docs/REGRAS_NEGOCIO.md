@@ -146,7 +146,7 @@ Ao finalizar um ticket (`POST /api/tickets/{id}/finalizar`) o backend faz **3 co
 
 Quando conferir se o user está recebendo:
 - notif in-app: `SELECT * FROM notificacoes WHERE usuario_id=X AND tipo='avaliacao_pendente' ORDER BY id DESC`
-- registro pendente: `SELECT * FROM ticket_avaliacoes WHERE solicitante_id=X AND respondida_em IS NULL AND expira_em > NOW()`
+- registro pendente: `SELECT * FROM ticket_avaliacoes WHERE solicitante_id=X AND avaliado_em IS NULL AND expira_em > NOW()`
 - email enviado: `api-stdout.log` do CPEDC22 tem linhas `[EMAIL] ✓ ... assunto='[Chamado ...] Finalizado — ...'`
 
 ### Filtros salvos como preferência (2026-08-14)
