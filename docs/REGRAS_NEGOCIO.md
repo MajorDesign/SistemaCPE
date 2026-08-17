@@ -133,6 +133,14 @@ Decisões que **não existem no código como constante óbvia** — vieram de co
 - Cada subcategoria pode ter campos extras (`categoria_campos`): text/select/checkbox/date/número
 - Backend salva serializado em `tickets.campos_customizados` (JSON)
 
+### Transferir grupo entre departamentos (2026-08-17)
+- `PUT /api/groups/{id}` agora aceita `department_id` opcional.
+- Backend valida existência do departamento antes de gravar.
+- **Só ADMIN/TI/MANAGER** pode alterar — RESPONSAVEL_GRUPO recebe 403 (reorg estrutural, mesma lógica do `is_active`).
+- Frontend `groups.html` modal Editar mostra o select de departamento pré-preenchido com o dept atual do grupo; desabilitado (com tooltip) pra não-gestor.
+
+---
+
 ### Excluir categoria/subcategoria (2026-08-14)
 - Backend bloqueia com 409 se algum ticket referencia a categoria (direto OU via subcategoria filha) ou a subcategoria.
 - Mesmo tickets `Resolvido`/`Fechado` bloqueiam — histórico precisa manter a referência.

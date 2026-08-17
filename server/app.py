@@ -125,6 +125,7 @@ class GroupCreate(GroupBase):
 class GroupUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=3, max_length=255)
     description: Optional[str] = Field(None, max_length=500)
+    department_id: Optional[int] = Field(None, gt=0)
 
 class GroupResponse(BaseModel):
     id: int
@@ -1054,7 +1055,26 @@ async def update_group(group_id: int, group: GroupUpdate,
         if group.description is not None:
             updates.append("description = %s")
             params.append(group.description)
-        
+
+        # 2026-08-17: transferir grupo entre departamentos.
+        # Restrito a ADMIN/TI/MANAGER (reorg estrutural — RESPONSAVEL_GRUPO
+        # nao muda departamento do proprio grupo, so nome/descricao,
+        # mesma logica do is_active).
+        if group.department_id is not None:
+            if not _grp_is_gestor(current_user):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Transferir grupo entre departamentos e uma acao restrita a ADMIN/TI/MANAGER.",
+                )
+            cursor.execute("SELECT id FROM departments WHERE id = %s", (group.department_id,))
+            if not cursor.fetchone():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Departamento #{group.department_id} nao existe.",
+                )
+            updates.append("department_id = %s")
+            params.append(group.department_id)
+
         if not updates:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
         
