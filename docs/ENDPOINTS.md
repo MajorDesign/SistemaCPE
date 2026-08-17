@@ -197,6 +197,10 @@ Docs interativa (Swagger UI): `https://cpecontrol.cpetecnologia.com.br/api/docs`
 
 ## chamados-antigos
 
+`GET /api/chamados-antigos/status` retorna `[{nome_status, total}]` distintos da tabela `chamados_antigos` — usado pra popular filtro do frontend (vocabulário legado Novo/Respondido/Em Progresso/etc não bate com o novo).
+`GET /api/chamados-antigos/categorias` retorna `[{categoria, total}]` distintos — mesmo padrão.
+
+
 | Método | Path | Descrição |
 |---|---|---|
 | `GET` | `/api/chamados-antigos` | Listar |

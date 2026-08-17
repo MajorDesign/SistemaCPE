@@ -182,12 +182,10 @@
               </select>
             </div>
             <div class="col-md-2">
+              <!-- Opcoes populadas dinamicamente por _antigosCarregarStatus()
+                   (evita hardcode desalinhado com o vocabulario do sistema legado) -->
               <select id="antigosStatus" class="form-select form-select-sm" onchange="buscarChamadosAntigos(1)">
                 <option value="">Todos status</option>
-                <option value="Aberto">Aberto</option>
-                <option value="Em andamento">Em andamento</option>
-                <option value="Resolvido">Resolvido</option>
-                <option value="Fechado">Fechado</option>
               </select>
             </div>
             <div class="col-md-1">
@@ -1532,7 +1530,7 @@
        ======================================== -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-07-28"></script>
-  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-17cascb"></script>
+  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-17antst"></script>
 
 <script id="cpe-autofill-guard-v1">
 /* Bloqueia autofill do Chrome/Edge em inputs de busca.

@@ -399,6 +399,20 @@ done
 
 ---
 
+## Chamados antigos: vocabulário de status diferente do sistema novo (2026-08-17)
+
+**Sintoma:** filtro por status na aba "Chamados antigos" de `tickets.html` retorna 0 pra qualquer opção que não seja "Resolvido". User seleciona "Aberto" ou "Em andamento" → tabela vazia.
+
+**Causa:** as opções do select estavam hardcoded no HTML com o vocabulário do sistema NOVO (`Aberto`, `Em andamento`, `Resolvido`, `Fechado` — tabela `ticket_status`). Mas os `chamados_antigos` vieram do sistema legado, onde `nome_status` usa outro vocabulário: `Novo`, `Respondido`, `Em Progresso`, `Aguardando Resposta`, `Em Espera`, `Resolvido`.
+
+Backend faz `WHERE nome_status = ?` (comparação exata case-sensitive). Só "Resolvido" batia por acidente. "Em andamento" ≠ "Em Progresso" (palavra + caixa alta diferentes).
+
+**Fix (commit atual):** novo endpoint `GET /api/chamados-antigos/status` retorna `[{nome_status, total}]` distintos da própria tabela. Frontend popula o select dinamicamente ao entrar na aba (mesmo padrão de `/categorias`). Nunca mais desalinha, independente do vocabulário do legado.
+
+**Regra:** ao popular dropdown com valores de tabela importada de outro sistema, prefira endpoint dinâmico em vez de hardcode — ou documente o mapeamento explicitamente.
+
+---
+
 ## Auto-grant silencioso de permissão de categoria (2026-08-14)
 
 **Sintoma:** membro do grupo aparece com uma restrição de categoria em `ticket_membro_categorias` que ninguém configurou manualmente. Responsável do grupo abre a modal "Permissões" e vê badge "N restrição(ões)" onde antes era "vê tudo".

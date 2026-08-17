@@ -3306,6 +3306,7 @@ function setTicketsVista(vista) {
     elementosNormais.forEach(el => el.classList.add('d-none'));
     if (painelAntigos) painelAntigos.classList.remove('d-none');
     carregarCategoriasAntigas();
+    carregarStatusAntigos();
     carregarTotalChamadosAntigos();
     buscarChamadosAntigos(1);
   } else {
@@ -3361,6 +3362,29 @@ async function carregarCategoriasAntigas() {
     sel.value = valorAtual;
     _antigosCategoriasCarregadas = true;
   } catch (e) { console.warn('[ANTIGOS] erro categorias:', e); }
+}
+
+/** Popula o select de status com os valores reais da base (cacheado).
+ *  Legado usa Novo/Respondido/Em Progresso/etc — hardcode antigo
+ *  (Aberto/Em andamento/Fechado) nao batia e sempre retornava 0. */
+let _antigosStatusCarregados = false;
+async function carregarStatusAntigos() {
+  if (_antigosStatusCarregados) return;
+  try {
+    const r = await fetch(`${API_BASE}/chamados-antigos/status`);
+    if (!r.ok) return;
+    const arr = await r.json();
+    const sel = document.getElementById('antigosStatus');
+    if (!sel) return;
+    const valorAtual = sel.value;
+    sel.innerHTML = '<option value="">Todos status</option>' +
+      arr.map(s => {
+        const nome = (s.nome_status || '').replace(/</g,'&lt;');
+        return `<option value="${nome}">${nome} (${s.total})</option>`;
+      }).join('');
+    sel.value = valorAtual;
+    _antigosStatusCarregados = true;
+  } catch (e) { console.warn('[ANTIGOS] erro status:', e); }
 }
 
 async function buscarChamadosAntigos(pagina = 1) {
