@@ -1292,8 +1292,8 @@ async function _carregarFiltrosCascata() {
   }
   try {
     const [grupos, users] = await Promise.all([
-      fetch(`${API_BASE}/api/groups?scope=all`, { credentials: 'include' }).then(r => r.ok ? r.json() : []),
-      fetch(`${API_BASE}/api/users/`,             { credentials: 'include' }).then(r => r.ok ? r.json() : []),
+      fetch(`${API_BASE}/groups?scope=all`, { credentials: 'include' }).then(r => r.ok ? r.json() : []),
+      fetch(`${API_BASE}/users/`,             { credentials: 'include' }).then(r => r.ok ? r.json() : []),
     ]);
     _gruposFiltroCache = Array.isArray(grupos) ? grupos : (grupos?.groups || []);
     const arrUsers = Array.isArray(users) ? users : (users?.users || []);
@@ -1337,7 +1337,7 @@ async function onGrupoFilterChange() {
 
   if (gid) {
     try {
-      const r = await fetch(`${API_BASE}/api/categorias?group_id=${gid}`, { credentials:'include' });
+      const r = await fetch(`${API_BASE}/categorias?group_id=${gid}`, { credentials:'include' });
       if (r.ok) {
         const cats = await r.json();
         _categoriasFiltroCache = cats || [];
