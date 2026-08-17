@@ -721,6 +721,17 @@
       document.getElementById("groupModalLabel").innerHTML = '<i class="bi bi-pencil-square"></i> <span id="groupModalTitleText">Editar Grupo</span> <span class="modal-eyebrow">CPE / GRUPOS</span>';
       document.getElementById("groupName").value = group.name;
       document.getElementById("groupDescription").value = group.description || '';
+      // 2026-08-17: pre-preenche o select de departamento com o atual
+      // pra permitir transferencia do grupo entre departamentos.
+      // So gestor (ADMIN/TI/MANAGER) pode salvar mudanca (validado no backend);
+      // desabilita o select pra RESPONSAVEL_GRUPO como feedback visual.
+      const deptSel = document.getElementById("groupDepartment");
+      if (deptSel) {
+        deptSel.value = group.department_id != null ? String(group.department_id) : '';
+        const isGestor = _isGestor();
+        deptSel.disabled = !isGestor;
+        deptSel.title = isGestor ? '' : 'Somente ADMIN/TI/MANAGER pode transferir o grupo entre departamentos.';
+      }
       document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Grupo';
 
       hideModalError();
@@ -1103,6 +1114,15 @@
             name,
             description: description || null
           };
+          // 2026-08-17: se o gestor alterou o departamento, envia. Backend
+          // valida (existe? user pode transferir?). Se o select esta
+          // disabled (nao-gestor), department_id fica undefined e nao vai.
+          if (department_id && !document.getElementById("groupDepartment")?.disabled) {
+            const original = (groups.find(g => g.id === selectedGroupId) || {}).department_id;
+            if (department_id !== original) {
+              body.department_id = department_id;
+            }
+          }
 
         } else {
           // ===== CRIAR NOVO GRUPO =====
@@ -1215,6 +1235,12 @@
         const sel = document.getElementById('groupDepartment');
         sel.innerHTML = '<option value="">— Selecione o departamento —</option>' +
           depts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+        // 2026-08-17: se em modo edicao, restaurar o dept do grupo apos
+        // popular o select (senao o value setado por editGroup se perde).
+        if (selectedGroupId) {
+          const g = groups.find(x => x.id === selectedGroupId);
+          if (g && g.department_id != null) sel.value = String(g.department_id);
+        }
       } catch(e) { console.error('[GROUPS/MODAL] Erro ao carregar departamentos:', e); }
     });
     /**
