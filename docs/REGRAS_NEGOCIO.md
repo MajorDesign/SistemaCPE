@@ -133,6 +133,19 @@ Decisões que **não existem no código como constante óbvia** — vieram de co
 - Cada subcategoria pode ter campos extras (`categoria_campos`): text/select/checkbox/date/número
 - Backend salva serializado em `tickets.campos_customizados` (JSON)
 
+### Relatório de Tickets: filtro em cascata (2026-08-17)
+Ordem visual dos selects: **Grupo → Status → Responsável → SLA → Categoria → Subcategoria**.
+
+- **Grupo**: dropdown populado via `GET /api/groups?scope=all` (todos os grupos).
+- **Categoria** e **Subcategoria** ficam desabilitados até o gestor escolher um Grupo.
+  - Ao mudar Grupo: `GET /api/categorias?group_id=X` popula categorias.
+  - Ao mudar Categoria: subcategorias vêm em cascata da categoria (embutidas na resposta).
+- **Responsável**: dropdown carrega TODOS os users ativos via `GET /api/users/` (uma vez). Ao mudar Grupo, o dropdown é re-filtrado só pelos users daquele grupo. Sem Grupo → mostra todos.
+- Reset: botão limpar zera o Grupo e dispara a cascade (todos os selects dependentes voltam ao estado inicial).
+- Backend `GET /api/tickets/` já aceita `grupo_id`, `categoria_id`, `subcategoria_id`, `responsavel_id` como Query.
+
+---
+
 ### Transferir grupo entre departamentos (2026-08-17)
 - `PUT /api/groups/{id}` agora aceita `department_id` opcional.
 - Backend valida existência do departamento antes de gravar.

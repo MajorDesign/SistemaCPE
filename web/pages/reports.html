@@ -166,6 +166,12 @@
                 <input type="date" class="form-control form-control-sm" id="rptDataFim">
               </div>
               <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1">Grupo</label>
+                <select class="form-select form-select-sm" id="rptGrupo" onchange="rptOnGrupoChange()">
+                  <option value="">Todos</option>
+                </select>
+              </div>
+              <div class="col-6 col-md-2">
                 <label class="form-label small fw-semibold mb-1">Status</label>
                 <select class="form-select form-select-sm" id="rptStatus">
                   <option value="">Todos</option>
@@ -194,7 +200,7 @@
               </div>
               <div class="col-6 col-md-2">
                 <label class="form-label small fw-semibold mb-1">Categoria</label>
-                <select class="form-select form-select-sm" id="rptCategoria" onchange="rptOnCategoriaChange()">
+                <select class="form-select form-select-sm" id="rptCategoria" onchange="rptOnCategoriaChange()" disabled>
                   <option value="">Todas</option>
                 </select>
               </div>
@@ -610,10 +616,11 @@
 
     document.getElementById('rptContent').classList.remove('d-none');
 
-    // Preencher responsáveis do grupo
+    // Preencher grupos + responsaveis (todos os users ativos inicialmente)
+    _carregarGruposFiltro();
     _carregarResponsaveis(user);
-    // Preencher categorias do grupo
-    _rptCarregarCategorias(user);
+    // Categorias so aparecem depois de escolher um grupo (cascade
+    // via rptOnGrupoChange). Sem grupo, o select fica desabilitado.
 
     // Datas padrão: mês corrente
     const hoje = new Date();
@@ -639,18 +646,96 @@
     }, 100);
   })();
 
-  async function _carregarResponsaveis(user) {
+  // Cache de todos os users (carregado 1x, filtrado por grupo depois)
+  let _rptUsersCache = null;
+  // Cache dos grupos (usado no select Grupo)
+  let _rptGruposCache = null;
+
+  async function _carregarUsuariosCache() {
+    if (_rptUsersCache) return _rptUsersCache;
     try {
-      const tickets = await apiRequest('GET', `/tickets/?usuario_id=${user.id}&limite=500`);
-      const map = {};
-      tickets.forEach(t => {
-        if (t.responsavel_id && t.responsavel_nome) map[t.responsavel_id] = t.responsavel_nome;
-      });
-      const sel = document.getElementById('rptResponsavel');
-      Object.entries(map).sort((a,b)=>a[1].localeCompare(b[1])).forEach(([id, nome]) => {
-        sel.insertAdjacentHTML('beforeend', `<option value="${id}">${_esc(nome)}</option>`);
-      });
-    } catch(_) {}
+      // Trailing slash evita redirect 307 em alguns clientes.
+      const data = await apiRequest('GET', '/users/');
+      const arr = Array.isArray(data) ? data : (data?.users || []);
+      _rptUsersCache = arr
+        .filter(u => u.is_active !== 0)
+        .map(u => ({ id: u.id, name: u.name, group_id: u.group_id, role: u.role }));
+    } catch (e) {
+      console.warn('[RPT] erro carregar users:', e);
+      _rptUsersCache = [];
+    }
+    return _rptUsersCache;
+  }
+
+  async function _carregarGruposFiltro() {
+    const sel = document.getElementById('rptGrupo');
+    if (!sel) return;
+    try {
+      const data = await apiRequest('GET', '/groups?scope=all');
+      _rptGruposCache = Array.isArray(data) ? data : (data?.groups || []);
+      sel.innerHTML = '<option value="">Todos</option>' +
+        _rptGruposCache.map(g => `<option value="${g.id}">${_esc(g.name)}</option>`).join('');
+    } catch (e) {
+      console.warn('[RPT] erro carregar grupos:', e);
+    }
+  }
+
+  async function _carregarResponsaveis(user) {
+    // Comportamento inicial (sem grupo selecionado): mostra TODOS os users
+    // ativos (gestor precisa ver todos pra filtrar por qualquer um).
+    await _carregarUsuariosCache();
+    _popularResponsavel(null);
+  }
+
+  function _popularResponsavel(grupoId) {
+    const sel = document.getElementById('rptResponsavel');
+    if (!sel || !_rptUsersCache) return;
+    const atualValor = sel.value;
+    let lista = _rptUsersCache;
+    if (grupoId) {
+      lista = lista.filter(u => String(u.group_id || '') === String(grupoId));
+    }
+    lista = [...lista].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    sel.innerHTML = '<option value="">Todos</option>' +
+      lista.map(u => `<option value="${u.id}">${_esc(u.name)}</option>`).join('');
+    // Preserva selecao se ainda faz sentido
+    if (atualValor && lista.some(u => String(u.id) === atualValor)) {
+      sel.value = atualValor;
+    }
+  }
+
+  /* Cascade quando muda o grupo:
+     - Recarrega categorias do grupo (limpa subcategoria)
+     - Refiltra responsavel pros users do grupo (ou todos se grupo=vazio) */
+  async function rptOnGrupoChange() {
+    const grupoSel = document.getElementById('rptGrupo');
+    const catSel   = document.getElementById('rptCategoria');
+    const subSel   = document.getElementById('rptSubcategoria');
+    const grupoId  = grupoSel?.value || '';
+
+    // Reset cat/sub
+    if (catSel) {
+      catSel.innerHTML = '<option value="">Todas</option>';
+      catSel.disabled  = !grupoId;
+    }
+    if (subSel) {
+      subSel.innerHTML = '<option value="">Todas</option>';
+      subSel.disabled  = true;
+    }
+
+    _popularResponsavel(grupoId || null);
+
+    if (!grupoId) return;
+    try {
+      const cats = await apiRequest('GET', `/categorias?group_id=${grupoId}`);
+      _rptCatsCache = cats || [];
+      catSel.innerHTML = '<option value="">Todas</option>' +
+        _rptCatsCache.map(c =>
+          `<option value="${c.id}" data-subs='${JSON.stringify(c.subcategorias || [])}'>${_esc(c.nome)}</option>`
+        ).join('');
+    } catch (e) {
+      console.warn('[RPT] erro carregar categorias do grupo:', e);
+    }
   }
 
   // ── CARREGAR ──────────────────────────────────────────────────
@@ -662,6 +747,7 @@
     const dataFim   = document.getElementById('rptDataFim').value;
     const statusId  = document.getElementById('rptStatus').value;
     const respId    = document.getElementById('rptResponsavel').value;
+    const grupoId   = document.getElementById('rptGrupo')?.value        || '';
     const catId     = document.getElementById('rptCategoria')?.value    || '';
     const subId     = document.getElementById('rptSubcategoria')?.value || '';
 
@@ -670,6 +756,7 @@
     if (dataFim)  url += `&data_fim=${dataFim}`;
     if (statusId) url += `&status_id=${statusId}`;
     if (respId)   url += `&responsavel_id=${respId}`;
+    if (grupoId)  url += `&grupo_id=${grupoId}`;
     if (catId)    url += `&categoria_id=${catId}`;
     if (subId)    url += `&subcategoria_id=${subId}`;
 
@@ -833,24 +920,11 @@
     _renderTabela();
   }
 
-  /* ── Categorias / Subcategorias no filtro ────────────────────── */
+  /* ── Categorias / Subcategorias no filtro ──────────────────────
+     Cache preenchido por rptOnGrupoChange (categorias vem do grupo
+     escolhido). Sem grupo selecionado, o select de categoria fica
+     disabled com so 'Todas'. */
   let _rptCatsCache = null;
-  async function _rptCarregarCategorias(user) {
-    const sel = document.getElementById('rptCategoria');
-    if (!sel) return;
-    const gid = user?.group_id;
-    if (!gid) { sel.disabled = true; return; }
-    try {
-      const cats = await apiRequest('GET', `/categorias?group_id=${gid}`);
-      _rptCatsCache = cats || [];
-      sel.innerHTML = '<option value="">Todas</option>' +
-        _rptCatsCache.map(c =>
-          `<option value="${c.id}" data-subs='${JSON.stringify(c.subcategorias || [])}'>${_esc(c.nome)}</option>`
-        ).join('');
-    } catch (e) {
-      console.warn('[RPT] erro ao carregar categorias:', e);
-    }
-  }
 
   function rptOnCategoriaChange() {
     const catSel = document.getElementById('rptCategoria');
@@ -869,12 +943,11 @@
     document.getElementById('rptDataInicio').value  = ini.toISOString().slice(0,10);
     document.getElementById('rptDataFim').value     = hoje.toISOString().slice(0,10);
     document.getElementById('rptStatus').value      = '';
-    document.getElementById('rptResponsavel').value = '';
     document.getElementById('rptSlaFiltro').value   = '';
-    const catSel = document.getElementById('rptCategoria');
-    const subSel = document.getElementById('rptSubcategoria');
-    if (catSel) catSel.value = '';
-    if (subSel) { subSel.innerHTML = '<option value="">Todas</option>'; subSel.disabled = true; }
+    // Zera Grupo -> dispara cascade que limpa Cat/Sub/Responsavel
+    const grupoSel = document.getElementById('rptGrupo');
+    if (grupoSel) grupoSel.value = '';
+    rptOnGrupoChange();
     document.getElementById('rptBusca').value       = '';
     rptCarregar();
   }
