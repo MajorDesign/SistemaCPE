@@ -39,23 +39,33 @@ async def list_departments():
 
 @router.get("/")
 async def list_groups(
+    scope: str = "managed",
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Lista grupos.
 
     Regras (2026-08-14):
-      - ADMIN / TI / MANAGER  -> todos os grupos ativos.
-      - RESPONSAVEL_GRUPO     -> SO o proprio grupo (users.group_id).
-      - USER                  -> so o proprio grupo (mesma logica —
-        UI da pagina Grupos so faz sentido pra quem gerencia).
+      - scope=all             -> todos os grupos, sem filtro por role.
+        Usado por dropdowns publicos: 'Setor de destino' no modal
+        Novo Ticket, 'Encaminhar', inventario, etc.
+      - scope=managed (default):
+        * ADMIN / TI / MANAGER  -> todos os grupos.
+        * RESPONSAVEL_GRUPO     -> SO o proprio grupo (users.group_id).
+        * USER                  -> so o proprio grupo.
     """
     role = (current_user.get("role") or "").upper()
     user_group_id = current_user.get("group_id")
-    print(f"[GROUPS/LIST] user={current_user['id']} role={role} group_id={user_group_id}")
+    print(f"[GROUPS/LIST] user={current_user['id']} role={role} scope={scope} group_id={user_group_id}")
 
     try:
         with engine.connect() as conn:
-            if role in ("ADMIN", "TI", "MANAGER"):
+            if scope == "all":
+                rows = conn.execute(text("""
+                    SELECT id, name, description, is_active, created_at
+                      FROM `cpe_grupo`
+                     ORDER BY name ASC
+                """)).mappings().all()
+            elif role in ("ADMIN", "TI", "MANAGER"):
                 rows = conn.execute(text("""
                     SELECT id, name, description, is_active, created_at
                       FROM `cpe_grupo`

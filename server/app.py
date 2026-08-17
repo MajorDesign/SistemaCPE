@@ -784,15 +784,34 @@ def _grp_pode_editar(cu: dict, group_id: int) -> bool:
 
 
 @groups_router.get("/")
-async def get_groups(current_user: dict = Depends(get_current_user)):
-    """Lista grupos filtrado por role. RESPONSAVEL_GRUPO e USER veem
-    apenas o proprio grupo; ADMIN/TI/MANAGER veem todos."""
+async def get_groups(scope: str = "managed",
+                     current_user: dict = Depends(get_current_user)):
+    """Lista grupos.
+
+    - scope=managed (default): filtra por role — RESPONSAVEL_GRUPO/USER
+      veem so o proprio grupo. Usado na pagina Grupos (gestao).
+    - scope=all: retorna TODOS os grupos ativos, independente de role.
+      Usado por dropdowns publicos (criar ticket, encaminhar ticket,
+      inventario, etc) — qualquer user precisa poder abrir chamado
+      pra qualquer setor.
+
+    Regra 2026-08-14: com o fix 8e3b8cf o default virou 'managed'
+    (filtro por role). Fluxos publicos como o modal 'Novo Ticket'
+    quebraram porque o USER passou a ver so o proprio grupo no
+    dropdown 'Setor de destino'. `scope=all` restaura a listagem
+    completa apenas quando o consumidor precisa.
+    """
     role = _grp_role(current_user)
     conn = get_db_or_404()
     cursor = None
     try:
         cursor = conn.cursor(dictionary=True)
-        if _grp_is_gestor(current_user):
+        if scope == "all":
+            cursor.execute(
+                "SELECT id, department_id, name, description, created_at "
+                "FROM `cpe_grupo` ORDER BY name ASC"
+            )
+        elif _grp_is_gestor(current_user):
             cursor.execute(
                 "SELECT id, department_id, name, description, created_at "
                 "FROM `cpe_grupo` ORDER BY created_at DESC"
@@ -806,7 +825,7 @@ async def get_groups(current_user: dict = Depends(get_current_user)):
         else:
             return []
         groups = convert_datetime_list(cursor.fetchall())
-        logger.info(f"[GROUPS] user={current_user['id']} role={role} -> {len(groups)} grupo(s)")
+        logger.info(f"[GROUPS] user={current_user['id']} role={role} scope={scope} -> {len(groups)} grupo(s)")
         return groups or []
     except Exception as err:
         logger.error(f"[GROUPS] ❌ ERRO: {str(err)}\n")

@@ -453,7 +453,7 @@
       const [itens, stats, grupos, disps, unidades] = await Promise.all([
         fetch(`${API}/api/inventario/itens`,           {headers:_hdr()}).then(r=>r.json()),
         fetch(`${API}/api/inventario/itens/stats`,     {headers:_hdr()}).then(r=>r.json()),
-        fetch(`${API}/api/groups`,                     {headers:_hdr()}).then(r=>r.json()).catch(()=>({groups:[]})),
+        fetch(`${API}/api/groups?scope=all`,           {headers:_hdr()}).then(r=>r.json()).catch(()=>({groups:[]})),
         fetch(`${API}/api/inventario/itens/dispositivos-disponiveis`, {headers:_hdr()}).then(r=>r.json()).catch(()=>({dispositivos:[]})),
         fetch(`${API}/api/unidades`,                   {headers:_hdr()}).then(r=>r.json()).catch(()=>[]),
       ]);

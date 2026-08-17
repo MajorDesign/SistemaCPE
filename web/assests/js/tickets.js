@@ -900,7 +900,12 @@ function populateUserDropdowns() {
 async function loadGroups() {
   console.log("[GRUPOS] 📥 Carregando grupos da API...");
   try {
-    const data = await apiRequest('GET', '/groups');
+    // scope=all porque o dropdown 'Setor de destino' do modal Novo
+    // Ticket e o modal 'Encaminhar' precisam mostrar TODOS os grupos —
+    // qualquer user abre chamado pra qualquer setor. Sem esse param
+    // o backend filtra por role e USER so ve o proprio grupo (fix
+    // 2026-08-14 documentado em GOTCHAS/REGRAS_NEGOCIO).
+    const data = await apiRequest('GET', '/groups?scope=all');
     if (!data || !Array.isArray(data)) {
       console.warn('[GRUPOS] ⚠️ Resposta inválida');
       groups = [];
