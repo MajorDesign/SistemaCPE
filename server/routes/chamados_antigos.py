@@ -87,6 +87,37 @@ def listar_categorias():
         if conn: conn.close()
 
 
+@router.get("/status")
+def listar_status():
+    """Retorna status distintos da base — para popular o filtro no front.
+    Os valores no legado (Novo/Respondido/Em Progresso/etc) nao batem com
+    o vocabulario do sistema novo (Aberto/Em Andamento/Resolvido/Fechado);
+    listar dinamicamente evita hardcode desalinhado. Ordena pelo mais
+    frequente primeiro."""
+    conn = get_db_or_404()
+    cur = None
+    try:
+        cur = conn.cursor(dictionary=True)
+        cur.execute(
+            """
+            SELECT nome_status, COUNT(*) AS total
+              FROM chamados_antigos
+             WHERE nome_status IS NOT NULL AND nome_status <> ''
+             GROUP BY nome_status
+             ORDER BY total DESC, nome_status ASC
+            """
+        )
+        return cur.fetchall() or []
+    except Exception as e:
+        msg = str(e).lower()
+        if "doesn't exist" in msg or "chamados_antigos" in msg:
+            return []
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+
 @router.get("")
 @router.get("/")
 def listar(
