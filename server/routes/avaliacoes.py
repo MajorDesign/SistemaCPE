@@ -186,6 +186,9 @@ async def listar_avaliacoes(
     estrelas_min:Optional[int] = Query(None, ge=1, le=10),
     estrelas_max:Optional[int] = Query(None, ge=1, le=10),
     apenas_avaliados: bool     = Query(False),
+    responsavel_id: Optional[int] = Query(None, gt=0),
+    categoria_id:    Optional[int] = Query(None, gt=0),
+    subcategoria_id: Optional[int] = Query(None, gt=0),
     pagina:      int           = Query(1, ge=1),
     por_pagina:  int           = Query(50, ge=1, le=200),
 ):
@@ -228,6 +231,15 @@ async def listar_avaliacoes(
             params.append(estrelas_max)
         if apenas_avaliados:
             filtros.append("a.avaliado_em IS NOT NULL")
+        if responsavel_id:
+            filtros.append("a.responsavel_id = %s")
+            params.append(responsavel_id)
+        if categoria_id:
+            filtros.append("t.categoria_id = %s")
+            params.append(categoria_id)
+        if subcategoria_id:
+            filtros.append("t.subcategoria_id = %s")
+            params.append(subcategoria_id)
 
         where = ("WHERE " + " AND ".join(filtros)) if filtros else ""
         offset = (pagina - 1) * por_pagina

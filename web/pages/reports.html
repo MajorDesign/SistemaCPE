@@ -412,6 +412,30 @@
                   <input type="date" class="form-control form-control-sm" id="rptAvalDf">
                 </div>
                 <div class="col-6 col-md-2">
+                  <label class="form-label small fw-semibold mb-1">Grupo</label>
+                  <select class="form-select form-select-sm" id="rptAvalGrupo" onchange="rptAvalOnGrupoChange()">
+                    <option value="">Todos</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-2">
+                  <label class="form-label small fw-semibold mb-1">Responsável</label>
+                  <select class="form-select form-select-sm" id="rptAvalResp">
+                    <option value="">Todos</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-2">
+                  <label class="form-label small fw-semibold mb-1">Categoria</label>
+                  <select class="form-select form-select-sm" id="rptAvalCat" onchange="rptAvalOnCategoriaChange()" disabled>
+                    <option value="">Todas</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-2">
+                  <label class="form-label small fw-semibold mb-1">Subcategoria</label>
+                  <select class="form-select form-select-sm" id="rptAvalSub" disabled>
+                    <option value="">Todas</option>
+                  </select>
+                </div>
+                <div class="col-6 col-md-2">
                   <label class="form-label small fw-semibold mb-1">Nota Mín.</label>
                   <select class="form-select form-select-sm" id="rptAvalEMin">
                     <option value="">Todas</option>
@@ -958,7 +982,14 @@
     document.getElementById('tabAvaliacoes').style.display = aba === 'avaliacoes' ? '' : 'none';
     document.getElementById('tabTicketsBtn').classList.toggle('active',    aba === 'tickets');
     document.getElementById('tabAvaliacoesBtn').classList.toggle('active', aba === 'avaliacoes');
-    if (aba === 'avaliacoes') rptAvalCarregar();
+    if (aba === 'avaliacoes') {
+      // Popula selects de Grupo/Responsavel na primeira abertura (idempotente)
+      if (!document.getElementById('rptAvalGrupo').dataset.rptInit) {
+        document.getElementById('rptAvalGrupo').dataset.rptInit = '1';
+        _rptAvalInit().catch(() => {});
+      }
+      rptAvalCarregar();
+    }
   }
 
   // ── AVALIAÇÕES — estado ───────────────────────────────────────
@@ -975,6 +1006,10 @@
     const eMin = document.getElementById('rptAvalEMin').value;
     const eMax = document.getElementById('rptAvalEMax').value;
     const sit  = document.getElementById('rptAvalSit').value;
+    const gid  = document.getElementById('rptAvalGrupo')?.value || '';
+    const rid  = document.getElementById('rptAvalResp')?.value  || '';
+    const cid  = document.getElementById('rptAvalCat')?.value   || '';
+    const sid  = document.getElementById('rptAvalSub')?.value   || '';
 
     const p = new URLSearchParams({ usuario_id: user.id, pagina, por_pagina: _RPT_AVAL_PP });
     if (di)   p.append('data_inicio', di);
@@ -982,6 +1017,10 @@
     if (eMin) p.append('estrelas_min', eMin);
     if (eMax) p.append('estrelas_max', eMax);
     if (sit === '1') p.append('apenas_avaliados', 'true');
+    if (gid)  p.append('grupo_id', gid);
+    if (rid)  p.append('responsavel_id', rid);
+    if (cid)  p.append('categoria_id', cid);
+    if (sid)  p.append('subcategoria_id', sid);
 
     const pMembro = new URLSearchParams({ usuario_id: user.id });
     if (di) pMembro.append('data_inicio', di);
@@ -1015,10 +1054,75 @@
     document.getElementById('rptAvalEMin').value = '';
     document.getElementById('rptAvalEMax').value = '';
     document.getElementById('rptAvalSit').value  = '';
+    const gSel = document.getElementById('rptAvalGrupo');
+    if (gSel) gSel.value = '';
+    rptAvalOnGrupoChange();
     rptAvalCarregar(1);
   }
 
   function rptAvalPagina(delta) { rptAvalCarregar(_rptAvalPag + delta); }
+
+  /* ── Cascade Grupo -> Cat + Responsavel (aba Avaliacoes) ─────
+     Reusa os caches _rptGruposCache / _rptUsersCache / _rptCatsCache
+     ja carregados pela aba Chamados. */
+  let _rptAvalCatsCache = null;
+
+  async function _rptAvalInit() {
+    // Popula Grupo (reusa cache carregado pela aba Chamados; se ainda
+    // nao carregou, carrega agora)
+    if (!_rptGruposCache) await _carregarGruposFiltro();
+    const gSel = document.getElementById('rptAvalGrupo');
+    if (gSel && _rptGruposCache) {
+      gSel.innerHTML = '<option value="">Todos</option>' +
+        _rptGruposCache.map(g => `<option value="${g.id}">${_esc(g.name)}</option>`).join('');
+    }
+    // Popula Responsavel com todos os users ativos (reusa cache)
+    if (!_rptUsersCache) await _carregarUsuariosCache();
+    _rptAvalPopularResponsavel(null);
+  }
+
+  function _rptAvalPopularResponsavel(grupoId) {
+    const sel = document.getElementById('rptAvalResp');
+    if (!sel || !_rptUsersCache) return;
+    const atual = sel.value;
+    let lista = _rptUsersCache;
+    if (grupoId) lista = lista.filter(u => String(u.group_id || '') === String(grupoId));
+    lista = [...lista].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    sel.innerHTML = '<option value="">Todos</option>' +
+      lista.map(u => `<option value="${u.id}">${_esc(u.name)}</option>`).join('');
+    if (atual && lista.some(u => String(u.id) === atual)) sel.value = atual;
+  }
+
+  async function rptAvalOnGrupoChange() {
+    const gid = document.getElementById('rptAvalGrupo')?.value || '';
+    const catSel = document.getElementById('rptAvalCat');
+    const subSel = document.getElementById('rptAvalSub');
+
+    if (catSel) { catSel.innerHTML = '<option value="">Todas</option>'; catSel.disabled = !gid; }
+    if (subSel) { subSel.innerHTML = '<option value="">Todas</option>'; subSel.disabled = true; }
+    _rptAvalPopularResponsavel(gid || null);
+
+    if (!gid) return;
+    try {
+      const cats = await apiRequest('GET', `/categorias?group_id=${gid}`);
+      _rptAvalCatsCache = cats || [];
+      catSel.innerHTML = '<option value="">Todas</option>' +
+        _rptAvalCatsCache.map(c =>
+          `<option value="${c.id}" data-subs='${JSON.stringify(c.subcategorias || [])}'>${_esc(c.nome)}</option>`
+        ).join('');
+    } catch (e) { console.warn('[AVAL] erro cats:', e); }
+  }
+
+  function rptAvalOnCategoriaChange() {
+    const catSel = document.getElementById('rptAvalCat');
+    const subSel = document.getElementById('rptAvalSub');
+    if (!catSel || !subSel) return;
+    const opt  = catSel.options[catSel.selectedIndex];
+    const subs = (opt && opt.dataset.subs) ? JSON.parse(opt.dataset.subs || '[]') : [];
+    subSel.innerHTML = '<option value="">Todas</option>' +
+      subs.map(s => `<option value="${s.id}">${_esc(s.nome)}</option>`).join('');
+    subSel.disabled = !catSel.value || subs.length === 0;
+  }
 
   // ── TERMÔMETRO ────────────────────────────────────────────────
   function _rptRenderAvalTermometro(r) {

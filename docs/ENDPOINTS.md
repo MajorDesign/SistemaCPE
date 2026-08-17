@@ -160,6 +160,10 @@ Docs interativa (Swagger UI): `https://cpecontrol.cpetecnologia.com.br/api/docs`
 | `POST` | `/api/auth/reset-password` | Reset Password |
 | `GET` | `/api/auth/reset-password/validate` | Reset Password Validate |
 
+## Avaliacoes
+
+`GET /api/avaliacoes` aceita filtros: `usuario_id` (obrig.), `grupo_id`, `data_inicio`, `data_fim`, `estrelas_min`, `estrelas_max`, `apenas_avaliados`, `responsavel_id`, `categoria_id`, `subcategoria_id`, `pagina`, `por_pagina`. Ver GOTCHAS/REGRAS_NEGOCIO.
+
 ## AvaliaÃ§Ãµes
 
 | Método | Path | Descrição |

@@ -133,6 +133,16 @@ Decisões que **não existem no código como constante óbvia** — vieram de co
 - Cada subcategoria pode ter campos extras (`categoria_campos`): text/select/checkbox/date/número
 - Backend salva serializado em `tickets.campos_customizados` (JSON)
 
+### Relatório de Avaliações: filtro em cascata (2026-08-17)
+Mesma cascade da aba Chamados, adaptada:
+- Filtros novos: **Grupo, Responsável, Categoria, Subcategoria** (além dos já existentes: Data Ini/Fim, Nota Mín/Máx, Situação).
+- Grupo → habilita Categoria + re-filtra Responsável pra users do grupo.
+- Categoria → habilita Subcategoria.
+- Backend `GET /api/avaliacoes` aceita `grupo_id` (já existia), `responsavel_id`, `categoria_id`, `subcategoria_id`.
+- Caches (`_rptGruposCache`, `_rptUsersCache`) são compartilhados entre as duas abas — chamada só uma vez.
+
+---
+
 ### Relatório de Tickets: filtro em cascata (2026-08-17)
 Ordem visual dos selects: **Grupo → Status → Responsável → SLA → Categoria → Subcategoria**.
 
