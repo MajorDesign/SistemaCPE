@@ -382,6 +382,23 @@ done
 
 ---
 
+## `/api/groups` filtrada por role quebra dropdowns públicos (2026-08-17)
+
+**Sintoma:** ao abrir o modal "Novo Ticket" em `tickets.html`, o dropdown "Setor de destino" mostra **só o próprio grupo do usuário** — impossível abrir chamado pra outro setor. Reportado por USER do Comercial.
+
+**Causa:** o fix `8e3b8cf` (2026-08-14) tornou `GET /api/groups/` filtrado por role — USER/RESPONSAVEL_GRUPO só vê o próprio grupo. Faz sentido pra página de gestão (`groups.html`), mas quebrou os consumidores públicos: modal Novo Ticket, Encaminhar ticket, aba de grupos em `inventory.html` e `users.html`.
+
+**Fix:** parâmetro `?scope=all` no `GET /api/groups/`. Consumidores públicos passam a chamar com `scope=all` (ignora filtro de role, lista todos os grupos ativos). O default `scope=managed` mantém o comportamento restritivo pra `groups.html`.
+
+**Consumidores atualizados:**
+- `tickets.js loadGroups()` → `/api/groups?scope=all`
+- `inventory.html` → `/api/groups?scope=all`
+- `users.html` → `API_GROUPS_URL + '?scope=all'`
+
+**Regra pra futuros consumidores:** se o dropdown é usado por qualquer usuário pra escolher grupo (não é gestão), use `scope=all`.
+
+---
+
 ## Auto-grant silencioso de permissão de categoria (2026-08-14)
 
 **Sintoma:** membro do grupo aparece com uma restrição de categoria em `ticket_membro_categorias` que ninguém configurou manualmente. Responsável do grupo abre a modal "Permissões" e vê badge "N restrição(ões)" onde antes era "vê tudo".

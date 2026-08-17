@@ -393,6 +393,9 @@ Docs interativa (Swagger UI): `https://cpecontrol.cpetecnologia.com.br/api/docs`
 
 ## groups
 
+Query `?scope=all` em `GET /api/groups/` ignora o filtro por role (retorna todos os grupos). Sem esse param (default `scope=managed`), USER/RESPONSAVEL_GRUPO vê só o próprio grupo. Use `scope=all` em dropdowns públicos como "Novo Ticket", "Encaminhar", inventário. Ver GOTCHAS.
+
+
 | Método | Path | Descrição |
 |---|---|---|
 | `GET` | `/api/groups/` | Get Groups |

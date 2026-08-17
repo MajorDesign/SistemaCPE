@@ -1508,7 +1508,11 @@
       console.log("[USERS/GROUPS] Carregando grupos...");
 
       try {
-        const response = await fetch(API_GROUPS_URL, {
+        // scope=all: pagina Users precisa listar TODOS os grupos pra
+        // permitir atribuir user a qualquer grupo. Sem esse param o
+        // backend filtra por role e nao-admin vê so o proprio grupo
+        // (fix 2026-08-14).
+        const response = await fetch(API_GROUPS_URL + '?scope=all', {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
         });
