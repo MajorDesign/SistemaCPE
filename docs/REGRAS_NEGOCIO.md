@@ -180,6 +180,17 @@ Quando conferir se o user está recebendo:
 - registro pendente: `SELECT * FROM ticket_avaliacoes WHERE solicitante_id=X AND avaliado_em IS NULL AND expira_em > NOW()`
 - email enviado: `api-stdout.log` do CPEDC22 tem linhas `[EMAIL] ✓ ... assunto='[Chamado ...] Finalizado — ...'`
 
+### Filtros da lista de Tickets: cascata Grupo -> Cat/Sub + Responsavel (2026-08-17)
+`tickets.html` (aba "Filtros"): mesma cascata do `reports.html` — **Grupo, Status, Prioridade, Responsável, Categoria, Subcategoria**.
+
+- Escolher Grupo → habilita Categoria (do grupo), refiltra Responsável (só users desse grupo).
+- Escolher Categoria → habilita Subcategoria.
+- Filtragem **client-side** — filtra o `tickets` array; backend não muda.
+- Preferência salva no `localStorage` inclui `grupo_id` e `responsavel_id` (chave `tickets_filter_prefs_v1_<userId>` — versão v1 continua compatível: campos extras adicionados são só apend).
+- Ao carregar `tickets.html`, se há pref salva com Grupo, dispara a cascade completa antes de aplicar os valores dos filhos.
+
+---
+
 ### Filtros salvos como preferência (2026-08-14)
 - Painel "Filtros" (`advancedFilters`) inclui status, prioridade, **categoria** e **subcategoria** (subcategorias em cascata a partir da categoria escolhida).
 - Categorias vêm do próprio grupo do user (`GET /api/categorias?group_id={users.group_id}`); admin sem grupo definido não vê categorias filtráveis.
