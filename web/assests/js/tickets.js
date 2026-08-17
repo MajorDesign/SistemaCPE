@@ -1205,11 +1205,13 @@ function mapaPriorityToCode(priority) {
 // =========================================
 
 function applyFilters() {
-  const search   = document.getElementById("searchInput")?.value?.toLowerCase().trim() || "";
-  const status   = document.getElementById("statusFilter")?.value || "";
-  const priority = document.getElementById("priorityFilter")?.value || "";
-  const catId    = document.getElementById("categoriaFilter")?.value    || "";
-  const subId    = document.getElementById("subcategoriaFilter")?.value || "";
+  const search    = document.getElementById("searchInput")?.value?.toLowerCase().trim() || "";
+  const status    = document.getElementById("statusFilter")?.value || "";
+  const priority  = document.getElementById("priorityFilter")?.value || "";
+  const grupoId   = document.getElementById("grupoFilter")?.value        || "";
+  const respId    = document.getElementById("responsavelFilter")?.value  || "";
+  const catId     = document.getElementById("categoriaFilter")?.value    || "";
+  const subId     = document.getElementById("subcategoriaFilter")?.value || "";
 
   const userId = getCurrentUserId();
   const matchVista = (t) => {
@@ -1222,6 +1224,8 @@ function applyFilters() {
     matchVista(t) &&
     (!status   || t.status   === status)   &&
     (!priority || t.priority === priority) &&
+    (!grupoId  || String(t.group_id)        === grupoId) &&
+    (!respId   || String(t.assignedTo || '') === respId) &&
     (!catId    || String(t.categoria_id)    === catId) &&
     (!subId    || String(t.subcategoria_id) === subId) &&
     (!search   || t.title.toLowerCase().includes(search) ||
@@ -1238,12 +1242,17 @@ function applyFilters() {
 }
 
 function clearFilters() {
-  ['searchInput', 'statusFilter', 'priorityFilter', 'categoriaFilter', 'subcategoriaFilter'].forEach(id => {
+  ['searchInput', 'statusFilter', 'priorityFilter', 'grupoFilter',
+   'responsavelFilter', 'categoriaFilter', 'subcategoriaFilter'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
+  const catSel = document.getElementById('categoriaFilter');
   const subSel = document.getElementById('subcategoriaFilter');
-  if (subSel) subSel.disabled = true;
+  if (catSel) { catSel.innerHTML = '<option value="">Categoria</option>'; catSel.disabled = true; }
+  if (subSel) { subSel.innerHTML = '<option value="">Subcategoria</option>'; subSel.disabled = true; }
+  // Responsavel volta a listar todos os users
+  _popularResponsavelFiltro(null);
   applyFilters();
   showSuccess("✅ Filtros limpos");
 }
@@ -1251,9 +1260,9 @@ function clearFilters() {
 function toggleAdvancedFilters() {
   const el = document.getElementById("advancedFilters");
   el?.classList.toggle('d-none');
-  // Carrega categorias lazy — só quando o painel abre a primeira vez
+  // Carrega Grupo/Responsavel lazy — so quando o painel abre a primeira vez
   if (el && !el.classList.contains('d-none')) {
-    _carregarCategoriasFiltro();
+    _carregarFiltrosCascata();
   }
 }
 
@@ -1266,38 +1275,88 @@ let _categoriasFiltroCache = null;
 // True enquanto o banner "salvar como padrao" fica aberto pra combinacao atual
 let _bannerFiltroSuprimido = new Set(); // combinacoes ja descartadas
 
-/**
- * Carrega categorias do grupo do usuario e popula o select. Cada
- * option tem `data-subs` com o JSON das subcategorias — mesma
- * convencao do modal Novo Ticket.
- */
-async function _carregarCategoriasFiltro() {
-  const sel = document.getElementById('categoriaFilter');
-  if (!sel) return;
-  if (_categoriasFiltroCache) return; // ja carregado
+// Caches de Grupo e Users (compartilhados; carregados 1x)
+let _gruposFiltroCache = null;
+let _usersFiltroCache  = null;
 
-  const cu = getCurrentUser() || {};
-  const gid = cu.group_id;
-  if (!gid) {
-    // Sem grupo (ex: admin sem grupo) — desabilita os selects
-    sel.disabled = true;
+/**
+ * Popula Grupo (todos, via /groups?scope=all) e Responsavel (todos
+ * users ativos, via /users/) — inicial. Cada mudanca no Grupo dispara
+ * onGrupoFilterChange() que refiltra as categorias e o responsavel.
+ * Aplica pref salva no final.
+ */
+async function _carregarFiltrosCascata() {
+  if (_gruposFiltroCache && _usersFiltroCache) {
+    _aplicarFiltrosPrefSeExiste();
     return;
   }
   try {
-    const r = await fetch(`${API_BASE}/categorias?group_id=${gid}`);
-    if (!r.ok) return;
-    const cats = await r.json();
-    _categoriasFiltroCache = cats || [];
-    sel.innerHTML = '<option value="">Categoria</option>' +
-      _categoriasFiltroCache.map(c =>
-        `<option value="${c.id}" data-subs='${JSON.stringify(c.subcategorias || [])}'>${_escHtmlP(c.nome)}</option>`
-      ).join('');
+    const [grupos, users] = await Promise.all([
+      fetch(`${API_BASE}/api/groups?scope=all`, { credentials: 'include' }).then(r => r.ok ? r.json() : []),
+      fetch(`${API_BASE}/api/users/`,             { credentials: 'include' }).then(r => r.ok ? r.json() : []),
+    ]);
+    _gruposFiltroCache = Array.isArray(grupos) ? grupos : (grupos?.groups || []);
+    const arrUsers = Array.isArray(users) ? users : (users?.users || []);
+    _usersFiltroCache = arrUsers
+      .filter(u => u.is_active !== 0)
+      .map(u => ({ id: u.id, name: u.name, group_id: u.group_id }));
 
-    // Se ha pref salva, aplica agora que os selects estao populados
-    _aplicarFiltrosPrefSeExiste();
+    const gSel = document.getElementById('grupoFilter');
+    if (gSel) {
+      gSel.innerHTML = '<option value="">Grupo</option>' +
+        _gruposFiltroCache.map(g => `<option value="${g.id}">${_escHtmlP(g.name)}</option>`).join('');
+    }
+    _popularResponsavelFiltro(null);
   } catch (e) {
-    console.warn('[TICKETS/FILTRO] erro ao carregar categorias:', e);
+    console.warn('[TICKETS/FILTRO] erro ao carregar grupos/users:', e);
   }
+  // Aplica pref salva (grupo/status/priority/cat/sub/responsavel)
+  _aplicarFiltrosPrefSeExiste();
+}
+
+function _popularResponsavelFiltro(grupoId) {
+  const sel = document.getElementById('responsavelFilter');
+  if (!sel || !_usersFiltroCache) return;
+  const atual = sel.value;
+  let lista = _usersFiltroCache;
+  if (grupoId) lista = lista.filter(u => String(u.group_id || '') === String(grupoId));
+  lista = [...lista].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  sel.innerHTML = '<option value="">Responsável</option>' +
+    lista.map(u => `<option value="${u.id}">${_escHtmlP(u.name)}</option>`).join('');
+  if (atual && lista.some(u => String(u.id) === atual)) sel.value = atual;
+}
+
+async function onGrupoFilterChange() {
+  const gid    = document.getElementById('grupoFilter')?.value || '';
+  const catSel = document.getElementById('categoriaFilter');
+  const subSel = document.getElementById('subcategoriaFilter');
+
+  if (catSel) { catSel.innerHTML = '<option value="">Categoria</option>';    catSel.disabled = !gid; }
+  if (subSel) { subSel.innerHTML = '<option value="">Subcategoria</option>'; subSel.disabled = true; }
+  _popularResponsavelFiltro(gid || null);
+
+  if (gid) {
+    try {
+      const r = await fetch(`${API_BASE}/api/categorias?group_id=${gid}`, { credentials:'include' });
+      if (r.ok) {
+        const cats = await r.json();
+        _categoriasFiltroCache = cats || [];
+        catSel.innerHTML = '<option value="">Categoria</option>' +
+          _categoriasFiltroCache.map(c =>
+            `<option value="${c.id}" data-subs='${JSON.stringify(c.subcategorias || [])}'>${_escHtmlP(c.nome)}</option>`
+          ).join('');
+      }
+    } catch (e) { console.warn('[TICKETS/FILTRO] erro cats:', e); }
+  }
+  applyFilters();
+}
+
+/**
+ * @deprecated Mantido apenas pro caso de alguem chamar externamente.
+ * A logica migrou pra _carregarFiltrosCascata + onGrupoFilterChange.
+ */
+async function _carregarCategoriasFiltro() {
+  return _carregarFiltrosCascata();
 }
 
 function onCategoriaFilterChange() {
@@ -1318,17 +1377,21 @@ function _filtrosAtuaisSnapshot() {
   return {
     status:          document.getElementById("statusFilter")?.value        || "",
     priority:        document.getElementById("priorityFilter")?.value      || "",
+    grupo_id:        document.getElementById("grupoFilter")?.value         || "",
+    responsavel_id:  document.getElementById("responsavelFilter")?.value   || "",
     categoria_id:    document.getElementById("categoriaFilter")?.value     || "",
     subcategoria_id: document.getElementById("subcategoriaFilter")?.value  || "",
   };
 }
 
 function _filtroVazio(f) {
-  return !f.status && !f.priority && !f.categoria_id && !f.subcategoria_id;
+  return !f.status && !f.priority && !f.grupo_id && !f.responsavel_id
+         && !f.categoria_id && !f.subcategoria_id;
 }
 
 function _filtroIguais(a, b) {
   return a.status === b.status && a.priority === b.priority &&
+         a.grupo_id === b.grupo_id && a.responsavel_id === b.responsavel_id &&
          a.categoria_id === b.categoria_id && a.subcategoria_id === b.subcategoria_id;
 }
 
@@ -1397,20 +1460,30 @@ function apagarFiltrosPref() {
   showSuccess('Preferência removida.');
 }
 
-function _aplicarFiltrosPrefSeExiste() {
+async function _aplicarFiltrosPrefSeExiste() {
   const pref = _lerPref();
   if (!pref) return;
 
   const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = String(val); };
 
-  set('statusFilter',   pref.status || '');
-  set('priorityFilter', pref.priority || '');
-  set('categoriaFilter', pref.categoria_id || '');
+  set('statusFilter',    pref.status || '');
+  set('priorityFilter',  pref.priority || '');
+  set('grupoFilter',     pref.grupo_id || '');
+
+  // Se pref tem grupo, dispara cascade pra popular categorias + filtrar responsavel
+  if (pref.grupo_id) {
+    await onGrupoFilterChange();
+    // onGrupoFilterChange ja chamou applyFilters — vamos aplicar valores
+    // dos filhos e re-aplicar
+  }
+
+  set('categoriaFilter',   pref.categoria_id || '');
+  set('responsavelFilter', pref.responsavel_id || '');
 
   // Popular subcategorias antes de aplicar valor da sub
   const catSel = document.getElementById('categoriaFilter');
   const subSel = document.getElementById('subcategoriaFilter');
-  if (catSel && subSel) {
+  if (catSel && subSel && pref.categoria_id) {
     const opt = catSel.options[catSel.selectedIndex];
     const subs = (opt && opt.dataset.subs) ? JSON.parse(opt.dataset.subs || '[]') : [];
     subSel.innerHTML = '<option value="">Subcategoria</option>' +
@@ -1420,8 +1493,7 @@ function _aplicarFiltrosPrefSeExiste() {
   }
 
   // Se ha algum filtro, abre o painel pra o user ver o que ta aplicado
-  const temFiltro = pref.status || pref.priority || pref.categoria_id || pref.subcategoria_id;
-  if (temFiltro) {
+  if (!_filtroVazio(pref)) {
     document.getElementById('advancedFilters')?.classList.remove('d-none');
   }
   applyFilters();

@@ -240,6 +240,11 @@
         <div class="advanced-filters d-none mb-3" id="advancedFilters">
           <div class="row g-2">
             <div class="col-md-3">
+              <select id="grupoFilter" class="form-select form-select-sm" onchange="onGrupoFilterChange()">
+                <option value="">Grupo</option>
+              </select>
+            </div>
+            <div class="col-md-3">
               <select id="statusFilter" class="form-select form-select-sm" onchange="applyFilters()">
                 <option value="">Status</option>
                 <option value="open">Abertos</option>
@@ -258,7 +263,12 @@
               </select>
             </div>
             <div class="col-md-3">
-              <select id="categoriaFilter" class="form-select form-select-sm" onchange="onCategoriaFilterChange()">
+              <select id="responsavelFilter" class="form-select form-select-sm" onchange="applyFilters()">
+                <option value="">Responsável</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select id="categoriaFilter" class="form-select form-select-sm" onchange="onCategoriaFilterChange()" disabled>
                 <option value="">Categoria</option>
               </select>
             </div>
@@ -1522,7 +1532,7 @@
        ======================================== -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-07-28"></script>
-  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-14scp"></script>
+  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-17cascade"></script>
 
 <script id="cpe-autofill-guard-v1">
 /* Bloqueia autofill do Chrome/Edge em inputs de busca.
