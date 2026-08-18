@@ -357,6 +357,44 @@ def listar_canais(request: Request):
                     "id": other_uid, "name": u.get("name"), "email": u.get("email")
                 }
                 c["nome"] = u.get("name") or f"Usuario #{other_uid}"
+
+        # 2026-08-18: preview da ultima mensagem (usado pela Home no chat.html
+        # pra listar DMs estilo WhatsApp). Pega SO 1 query — subquery
+        # correlacionada seria N+1. Usa GROUP BY MAX(id) e depois JOIN.
+        if canais:
+            todos_ids = [c["id"] for c in canais]
+            placeholders_all = ",".join(["%s"] * len(todos_ids))
+            cur.execute(
+                f"""
+                SELECT m.channel_id, m.content, m.criado_em, m.user_id
+                  FROM chat_messages m
+                  JOIN (
+                    SELECT channel_id, MAX(id) AS max_id
+                      FROM chat_messages
+                     WHERE deletado_em IS NULL
+                       AND channel_id IN ({placeholders_all})
+                     GROUP BY channel_id
+                  ) x ON x.channel_id = m.channel_id AND x.max_id = m.id
+                """,
+                todos_ids,
+            )
+            last_por_canal = {}
+            for r in cur.fetchall() or []:
+                # Trunca preview pra 80 chars
+                texto = (r["content"] or "").strip()
+                if len(texto) > 80:
+                    texto = texto[:80] + "..."
+                last_por_canal[r["channel_id"]] = {
+                    "text": texto,
+                    "at": r["criado_em"].isoformat() if r.get("criado_em") else None,
+                    "user_id": r["user_id"],
+                }
+            for c in canais:
+                info = last_por_canal.get(c["id"])
+                c["last_message"] = info["text"] if info else None
+                c["last_message_at"] = info["at"] if info else None
+                c["last_message_from"] = info["user_id"] if info else None
+
         return {"success": True, "channels": canais}
     finally:
         cur.close(); conn.close()
