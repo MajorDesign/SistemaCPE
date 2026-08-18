@@ -3004,6 +3004,14 @@ function onClPhotoSelected(angulo, input) {
    ============================================================ */
 const RET_INSPECTION_FILES = {};
 let RET_ADICIONAIS = [];
+/* 2026-08-18: set de angulos que JA tem foto de retorno gravada no banco
+   (populado por buildRetornoPhotoGrid a partir de retornoByAng). Usado por
+   handleRegistrarDevolucao pra nao exigir foto nova quando ja existe uma
+   valida enviada em tentativa anterior — bug reportado por Evandro Vieira
+   (checklist 39, 2026-08-18): todas as fotos ja tinham subido na 1a
+   tentativa, mas ao reabrir o modal o buffer JS zerou e a validacao
+   frontend disparava "faltam fotos" mesmo com o backend tendo tudo. */
+const RET_JA_ENVIADAS = new Set();
 
 async function buildRetornoPhotoGrid(vehicleId, existingChecklistPhotos = []) {
   const grid = document.getElementById('retPhotoGrid');
@@ -3013,10 +3021,13 @@ async function buildRetornoPhotoGrid(vehicleId, existingChecklistPhotos = []) {
   // Separar fotos ja existentes do checklist (por prefixo do angulo)
   const saidaByAng   = {};  // fotos da SAIDA (que o condutor tirou quando pegou o carro)
   const retornoByAng = {};  // fotos da DEVOLUCAO (caso o checklist tenha sido recusado e o condutor esta reenviando)
+  RET_JA_ENVIADAS.clear();
   for (const p of existingChecklistPhotos || []) {
     const ang = p.angulo || '';
     if (ang.startsWith('retorno_')) {
-      retornoByAng[ang.replace(/^retorno_/, '')] = p;
+      const chave = ang.replace(/^retorno_/, '');
+      retornoByAng[chave] = p;
+      RET_JA_ENVIADAS.add(chave);  // marca como ja gravada no backend
     } else if (!['problema','avaria_retorno'].includes(ang) && !ang.startsWith('arranhado_')) {
       saidaByAng[ang] = p;
     }
@@ -4241,7 +4252,13 @@ async function saveDevolver() {
   // Fotos obrigatórias na devolução — mesma lista da saída (frente, lateral,
   // para-choques, quatro portas, para-lama, painel com KM). Backend também
   // valida e retorna erro se faltar. UX aqui evita o request em vão.
-  const retMissing = REQUIRED_ANGLES.filter(k => !RET_INSPECTION_FILES[k]);
+  // 2026-08-18: considera tanto as fotos do buffer (que serao enviadas
+  // agora) quanto as ja gravadas no backend (RET_JA_ENVIADAS) — cobre o
+  // caso do condutor reabrir o modal apos tentativa parcial e nao tirar
+  // as fotos de novo (fix bug do checklist 39 / Evandro).
+  const retMissing = REQUIRED_ANGLES.filter(k =>
+    !RET_INSPECTION_FILES[k] && !RET_JA_ENVIADAS.has(k)
+  );
   if (retMissing.length) {
     const labels = retMissing
       .map(k => PHOTO_ANGLES.find(a => a.key === k)?.label || k)
@@ -4356,8 +4373,11 @@ async function saveDevolver() {
     if (!r.ok) {
       const label = PHOTO_ANGLES.find(a => a.key === angKey)?.label || angKey;
       retUploadErrors.push(`${label}: ${r.detail}`);
-    } else if (angKey === 'painel' && r.resp?.painel_alerta) {
-      painelAvisoOcr = r.resp.painel_alerta;
+    } else {
+      RET_JA_ENVIADAS.add(angKey);  // ja gravada no backend — evita re-exigir
+      if (angKey === 'painel' && r.resp?.painel_alerta) {
+        painelAvisoOcr = r.resp.painel_alerta;
+      }
     }
   }
   if (painelAvisoOcr) {

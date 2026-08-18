@@ -471,6 +471,24 @@ Mesmo padrão aplicado no fluxo de retorno (`RET_INSPECTION_FILES`).
 
 ---
 
+## Devolução acusava "faltam fotos" mesmo com todas gravadas (2026-08-18)
+
+**Sintoma:** condutor tenta finalizar devolução, upload de todas as 7 fotos completa (rows em `fleet_checklist_photos` com prefixo `retorno_`). Depois disso o PUT `/devolver` falha por outro motivo (ex: assinatura, KM). Ele fecha e reabre o modal — vê os previews das fotos já enviadas (`retornoByAng`), clica Registrar Devolução sem tirar foto de novo, e o sistema mostra "Faltam fotos da devolução: frente, lateral, ..." pintando todos os slots de vermelho.
+
+**Caso real:** checklist 39, Evandro Vieira (2026-08-18 17:19-17:25). Todas 7 fotos gravadas às 17:19-17:20 (ids 326-332), depois ele reabriu o modal e o front pediu tudo de novo.
+
+**Causa:** `handleRegistrarDevolucao` filtrava só o buffer JS `RET_INSPECTION_FILES` — que era zerado ao reabrir o modal em `openModalDevolucao`. O backend valida no banco e teria aceitado (via `_missing_checklist_angles`), mas o front bloqueava antes do PUT.
+
+**Fix aplicado:** novo `RET_JA_ENVIADAS` (Set global) populado por `buildRetornoPhotoGrid` a partir de `retornoByAng` (fotos já no banco). Filtro passou a ser:
+```js
+REQUIRED_ANGLES.filter(k => !RET_INSPECTION_FILES[k] && !RET_JA_ENVIADAS.has(k))
+```
+Também marca no set após upload OK, cobrindo tentativa dupla sem reabrir.
+
+**Se voltar a acontecer:** conferir se `buildRetornoPhotoGrid` está sendo chamado (ele popula `RET_JA_ENVIADAS`). Se sim, ver console: `RET_INSPECTION_FILES` + `RET_JA_ENVIADAS` juntos devem cobrir os 7 ângulos.
+
+---
+
 ## Desistir do próprio checklist (2026-08-18)
 
 Novo endpoint `DELETE /api/fleet/checklists/{id}` — condutor apaga próprio checklist antes da vistoria.
