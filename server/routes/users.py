@@ -138,9 +138,9 @@ async def create_user(
                     )
 
             # ✅ USAR NOW() PARA MYSQL
-            conn.execute(
+            result = conn.execute(
                 text("""
-                    INSERT INTO users 
+                    INSERT INTO users
                     (name, email, username, password_hash, role, group_id, is_active, created_at)
                     VALUES (:name, :email, :username, :password_hash, :role, :group_id, :is_active, NOW())
                 """),
@@ -154,6 +154,15 @@ async def create_user(
                     "is_active": 1
                 }
             )
+            new_user_id = result.lastrowid
+
+        # 2026-08-18: hook chat — adiciona no server CPE + canal do grupo.
+        # Silencioso: falha aqui NAO deve derrubar o create_user.
+        try:
+            from services.chat_bootstrap import sync_user
+            sync_user(new_user_id, group_id)
+        except Exception as e_chat:
+            print(f"[USERS/CREATE] hook chat falhou (ignorado): {e_chat}")
 
         print(f"[USERS/CREATE] ✓ Novo usuário criado: {email} (por: {current_user['id']} - {current_user['role']})")
         return {
@@ -633,6 +642,17 @@ async def update_user(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Usuário não encontrado"
                 )
+
+        # 2026-08-18: hook chat — se group_id mudou (ou nao existia mas
+        # agora ta setado), re-sincroniza. sync_user e idempotente:
+        # migra o user pro canal certo, remove dos canais antigos, garante
+        # membro do server. Silencioso.
+        if "group_id" in updates:
+            try:
+                from services.chat_bootstrap import sync_user
+                sync_user(user_id, updates.get("group_id"))
+            except Exception as e_chat:
+                print(f"[USERS/UPDATE] hook chat falhou (ignorado): {e_chat}")
 
         print(f"[USERS/UPDATE] ✓ Usuário atualizado: {user_id} (por: {current_user['id']} - {current_user['role']})")
         return {
