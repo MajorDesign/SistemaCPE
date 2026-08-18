@@ -408,21 +408,45 @@
       min-height: 0;
     }
     .chat-main-header {
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--chat-border);
-      display: flex; align-items: center; gap: 12px;
+      /* 2026-08-18: reproduz o header do Discord — borda sutil no bottom
+         + sombra pra dar profundidade (elevacao 1px). */
+      padding: 0 16px;
+      height: 48px;
+      min-height: 48px;
+      border-bottom: 1px solid #1F2023;
+      box-shadow: 0 1px 0 rgba(4,4,5,0.2),
+                  0 1.5px 0 rgba(6,6,7,0.05),
+                  0 2px 0 rgba(4,4,5,0.05);
+      display: flex; align-items: center; gap: 8px;
       background: var(--chat-bg-3);
+      position: relative;
+      z-index: 2;
+      flex-shrink: 0;
     }
     .chat-main-header .header-icon {
-      font-size: 1.2rem; color: var(--chat-muted);
+      font-size: 1.15rem; color: #80848E;
     }
     .chat-main-header h2 {
       margin: 0; font-size: 1rem; font-weight: 600;
+      color: #F2F3F5;
+      letter-spacing: -0.005em;
     }
     .chat-main-header .header-desc {
       font-size: 0.78rem; color: var(--chat-muted);
       padding-left: 12px; border-left: 1px solid var(--chat-border);
       margin-left: 4px;
+    }
+    /* Icone do servidor no header (quando estiver no modo servidor sem
+       canal aberto): reproduz o "pill" do Discord — circulo pequeno com
+       imagem ou iniciais em fundo neutro. */
+    .chat-main-header .header-server-icon {
+      width: 24px; height: 24px; border-radius: 50%;
+      object-fit: cover; flex-shrink: 0;
+    }
+    .chat-main-header .header-server-icon.fallback {
+      display: flex; align-items: center; justify-content: center;
+      background: linear-gradient(135deg, var(--chat-accent), var(--chat-accent-dim));
+      color: #1A1A1A; font-weight: 700; font-size: 0.72rem;
     }
     .chat-messages {
       flex: 1; overflow-y: auto;
@@ -2440,8 +2464,8 @@
       <!-- COLUNA 2: Mensagens -->
       <div class="chat-main">
         <div class="chat-main-header" id="chatMainHeader">
-          <i class="bi bi-chat-dots header-icon"></i>
-          <h2>Selecione um canal</h2>
+          <i class="bi bi-chat-dots-fill header-icon"></i>
+          <h2>Mensagens diretas</h2>
         </div>
         <div class="chat-messages" id="chatMessages">
           <div class="chat-empty">
@@ -3462,6 +3486,28 @@ function _titleCase(s) {
     (_, sep, ch) => sep + ch.toUpperCase()
   );
 }
+// 2026-08-18: header do topo da area central. Reproduz Discord — muda
+// entre "Mensagens diretas" (modo home, sem canal aberto) e
+// "<icone> <nome do servidor>" (modo server, sem canal aberto).
+// Quando abre um canal, o header e sobrescrito por abrirCanal().
+function _headerVazioContextoHtml() {
+  // Modo servidor: mostra pill + nome do servidor
+  if (_serverAtivo != null && _serverArvore?.server) {
+    const s = _serverArvore.server;
+    // s.icone pode ser URL ou emoji/texto — mesmo padrao do renderServersBar
+    const ehImg = s.icone && /^(https?:)?\/[^\s]+\.(jpe?g|png|webp|gif)(\?[^\s]*)?$/i.test(s.icone);
+    const iconeHtml = ehImg
+      ? `<img src="${_esc(s.icone)}" class="header-server-icon" alt="">`
+      : `<span class="header-server-icon fallback">${_esc(s.icone || _initials(s.nome))}</span>`;
+    return `${iconeHtml}<h2>${_esc(s.nome || 'Servidor')}</h2>`;
+  }
+  // Modo home / DMs
+  return `<i class="bi bi-chat-dots-fill header-icon"></i><h2>Mensagens diretas</h2>`;
+}
+function _aplicarHeaderVazio() {
+  const el = document.getElementById('chatMainHeader');
+  if (el) el.innerHTML = _headerVazioContextoHtml();
+}
 
 // Renderiza conteudo interno de um avatar: <img> se tiver avatar_url,
 // senao texto com iniciais. NAO inclui o container externo — caller
@@ -3555,6 +3601,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await carregarServers();
   await carregarCanais();
   await carregarUsuariosSistema();
+  // Header do topo comeca em "Mensagens diretas" (modo home)
+  _aplicarHeaderVazio();
   conectarWebSocket();
   // Processa convite via URL (?invite=CODE) — depois de carregar servers/canais
   _verificarInviteNaURL();
@@ -3663,6 +3711,8 @@ async function selecionarServer(serverId) {
   if (serverId === null) {
     _serverArvore = { server: null, categories: [], channels: [] };
     renderListaCanais();
+    // Se nao tem canal aberto, header vai pra "Mensagens diretas"
+    if (!_canalAtivo) _aplicarHeaderVazio();
     return;
   }
   // Carrega árvore do server (categorias + canais)
@@ -3680,6 +3730,8 @@ async function selecionarServer(serverId) {
     return;
   }
   renderListaCanais();
+  // Header do topo vira "<icone> <nome do servidor>" (se nao tem canal aberto)
+  if (!_canalAtivo) _aplicarHeaderVazio();
 }
 
 function _renderArvoreServer() {
@@ -4493,8 +4545,7 @@ async function excluirCanalCtx(channelId) {
     await api('DELETE', `/channels/${channelId}`);
     if (_canalAtivo && _canalAtivo.id === channelId) {
       _canalAtivo = null;
-      document.getElementById('chatMainHeader').innerHTML =
-        `<i class="bi bi-chat-dots header-icon"></i><h2>Selecione um canal</h2>`;
+      _aplicarHeaderVazio();
       document.getElementById('chatMessages').innerHTML =
         `<div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Canal excluído.</p></div>`;
       document.getElementById('chatInputArea').style.display = 'none';
@@ -4538,8 +4589,7 @@ async function sairCanalCtx(channelId) {
     await api('DELETE', `/channels/${channelId}/members/${_self.id}`);
     if (_canalAtivo?.id === channelId) {
       _canalAtivo = null;
-      document.getElementById('chatMainHeader').innerHTML =
-        '<i class="bi bi-chat-dots header-icon"></i><h2>Selecione um canal</h2>';
+      _aplicarHeaderVazio();
       document.getElementById('chatMessages').innerHTML =
         '<div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Você saiu do canal.</p></div>';
       document.getElementById('chatInputArea').style.display = 'none';
@@ -5793,8 +5843,7 @@ function conectarWebSocket() {
       // Voce foi removido. Se era o canal aberto, volta pra empty state
       if (_canalAtivo && _canalAtivo.id === data.channel_id) {
         _canalAtivo = null;
-        document.getElementById('chatMainHeader').innerHTML = `
-          <i class="bi bi-chat-dots header-icon"></i><h2>Selecione um canal</h2>`;
+        _aplicarHeaderVazio();
         document.getElementById('chatMessages').innerHTML = `
           <div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Você foi removido deste canal.</p></div>`;
         document.getElementById('chatInputArea').style.display = 'none';
@@ -6837,11 +6886,9 @@ async function sairDoCanalAtual() {
     _canais = _canais.filter(c => c.id !== _configCanalId);
     if (_canalAtivo?.id === _configCanalId) {
       _canalAtivo = null;
-      document.getElementById('chatMainHeader').innerHTML = `
-        <i class="bi bi-chat-dots header-icon"></i>
-        <h2>Selecione um canal</h2>`;
+      _aplicarHeaderVazio();
       document.getElementById('chatMessages').innerHTML = `
-        <div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Selecione um canal</p></div>`;
+        <div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Escolha um canal ou conversa direta para começar.</p></div>`;
       document.getElementById('chatInputArea').style.display = 'none';
     }
     renderListaCanais();
@@ -6859,11 +6906,9 @@ async function confirmarArquivarCanal() {
     await carregarCanais();
     if (_canalAtivo?.id === _configCanalId) {
       _canalAtivo = null;
-      document.getElementById('chatMainHeader').innerHTML = `
-        <i class="bi bi-chat-dots header-icon"></i>
-        <h2>Selecione um canal</h2>`;
+      _aplicarHeaderVazio();
       document.getElementById('chatMessages').innerHTML = `
-        <div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Selecione um canal</p></div>`;
+        <div class="chat-empty"><i class="bi bi-chat-dots"></i><p>Escolha um canal ou conversa direta para começar.</p></div>`;
       document.getElementById('chatInputArea').style.display = 'none';
     }
   } catch (e) {
