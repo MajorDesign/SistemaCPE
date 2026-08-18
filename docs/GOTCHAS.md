@@ -399,6 +399,56 @@ done
 
 ---
 
+## Ghost click após `input file capture=environment` fecha modal (2026-08-18)
+
+**Sintoma:** condutor abre o modal de checklist em `fleet.html` no celular, toca em "Fotografar", tira a foto, dá OK — e o modal fecha, voltando pra listagem. Toda foto que tira, o form some. Não acontece no desktop.
+
+**Reproduz em:** iOS Safari + Android Chrome (qualquer modal `.fleet-modal-overlay` que contém `<input type="file" capture="environment">`).
+
+**Causa raiz:** o browser mobile dispara um **click sintético** ("ghost click") no ponto onde o dedo estava quando o intent da câmera termina. Se esse click cai sobre o overlay do modal (`.fleet-modal-overlay`) — muito comum, porque o modal ocupa a tela inteira e o overlay preenche qualquer área vazia — o listener global de "click fora fecha" dispara e derruba o modal. O usuário perde o form inteiro do checklist e volta pra lista.
+
+Não tem `<form>` no arquivo. Não é submit implícito. Não é `page-guard.js`. É estritamente o ghost click no listener:
+
+```js
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('fleet-modal-overlay')) {
+    e.target.classList.remove('open');
+  }
+});
+```
+
+**Fix aplicado (commit deste dia):** guard temporal.
+1. Novo listener global captura `change` em qualquer `<input type="file">` e grava o timestamp em `_lastPhotoSelectedTs`.
+2. Listener de click-fora consulta esse timestamp: se aconteceu há menos de **800ms**, ignora o click (ghost). Se não, fecha o modal normalmente.
+
+```js
+let _lastPhotoSelectedTs = 0;
+document.addEventListener('change', e => {
+  if (e.target?.type === 'file') _lastPhotoSelectedTs = Date.now();
+}, true);
+
+document.addEventListener('click', e => {
+  if (e.target.classList.contains('fleet-modal-overlay')) {
+    if (Date.now() - _lastPhotoSelectedTs < 800) return; // ghost click
+    e.target.classList.remove('open');
+  }
+});
+```
+
+**Por que 800ms:** o ghost click chega tipicamente entre 100ms e 500ms depois do `change` do input. 800ms cobre com folga sem impedir o usuário de fechar o modal legitimamente (nenhum humano dá `change` + `click` em menos que isso conscientemente).
+
+**Se voltar a acontecer**, checar nessa ordem:
+1. O listener de `change` do input file continua no arquivo? (`_lastPhotoSelectedTs`)
+2. O `if (Date.now() - _lastPhotoSelectedTs < 800) return;` continua no listener de click? Algum refactor pode ter apagado.
+3. Novos modais `.fleet-modal-overlay` que contenham input file estão cobertos automaticamente (o guard é global). Se criaram outro tipo de overlay/modal fora dessa class, o listener não protege — precisa replicar o padrão.
+4. O intervalo 800ms é conservador — se algum browser novo demorar mais que isso, aumentar. Testar com iOS Safari + Android Chrome + WebView de app corporativo.
+
+**Como testar sem o celular:** difícil reproduzir no desktop porque desktop não tem intent de câmera. Testar em prod com um celular real. Um dev pode simular emulando `pointer:coarse` no Chrome DevTools + trigger manual `input.files = ...` + dispatch de click no overlay imediatamente depois — mas não é fiel ao bug real.
+
+**Aplica também em `web/pages/tickets.html`?** Não — o `ticketDetailModal` é Bootstrap com `data-bs-backdrop="static"` (nunca fecha por click-fora). O bug é específico do padrão custom `.fleet-modal-overlay` do fleet.html.
+
+---
+
 ## Chamados antigos: vocabulário de status diferente do sistema novo (2026-08-17)
 
 **Sintoma:** filtro por status na aba "Chamados antigos" de `tickets.html` retorna 0 pra qualquer opção que não seja "Resolvido". User seleciona "Aberto" ou "Em andamento" → tabela vazia.
