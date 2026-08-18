@@ -156,6 +156,17 @@ Ordem visual dos selects: **Grupo → Status → Responsável → SLA → Catego
 
 ---
 
+### Home do chat mostra apenas DMs com preview (2026-08-18)
+Ao clicar no ícone da casa (`_serverAtivo=null`) na sidebar de servers, a Home renderiza **apenas as mensagens diretas** — com avatar, nome, prévia da última mensagem (80 chars max), horário estilo WhatsApp (HH:MM hoje / "ontem" / dd/MM / dd/MM/yy), badge de não-lidas e reordena por atividade recente (msg mais nova em cima).
+
+Canais do sistema (`tipo='grupo_sistema'`), canais avulsos e canais de voz **não aparecem mais na Home** — só quando o user clica no ícone do server específico onde eles moram (padrão Discord). O server CPE TECNOLOGIA tem os canais de grupo do sistema.
+
+Backend `GET /api/chat/channels` agora retorna 3 campos extras em cada canal: `last_message`, `last_message_at`, `last_message_from`. Query com JOIN em MAX(id) por channel_id — sem N+1.
+
+Frontend atualiza preview in-memory ao receber `type='message'` via WS + re-renderiza a Home pra reordenar sem esperar próximo fetch.
+
+---
+
 ### Sincronizacao automatica de users/grupos com o server "CPE TECNOLOGIA" (2026-08-18)
 Todo user cadastrado no sistema entra automaticamente no server "CPE TECNOLOGIA" (`chat_servers` id definido em `CPE_CHAT_SERVER_ID`, default 1). Cada `cpe_grupo` tem 1 canal correspondente (`chat_channels.tipo='grupo_sistema'`, FK `grupo_id`, UNIQUE) dentro desse server, e o user vai automaticamente pro canal do grupo dele (`users.group_id`).
 

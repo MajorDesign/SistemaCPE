@@ -292,6 +292,51 @@
       color: #1A1A1A; display: flex; align-items: center; justify-content: center;
       font-weight: 700; font-size: 0.72rem; flex-shrink: 0;
     }
+    /* 2026-08-18: DM item Home estilo WhatsApp (avatar + nome/hora + preview/badge) */
+    .chat-dm-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: background 0.1s;
+      min-height: 56px;
+    }
+    .chat-dm-item:hover { background: #2A2A2A; }
+    .chat-dm-item.active {
+      background: #2F2F2F;
+      border-left-color: var(--chat-accent);
+    }
+    .chat-dm-item .chan-avatar {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--chat-accent), var(--chat-accent-dim));
+      color: #1A1A1A; display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.88rem; flex-shrink: 0;
+    }
+    .chat-dm-item .dm-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .chat-dm-item .dm-row-top,
+    .chat-dm-item .dm-row-bottom {
+      display: flex; align-items: center; gap: 8px;
+    }
+    .chat-dm-item .dm-name {
+      flex: 1; font-size: 0.9rem; font-weight: 500; color: var(--chat-text);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .chat-dm-item .dm-time {
+      font-size: 0.7rem; color: var(--chat-muted); flex-shrink: 0;
+    }
+    .chat-dm-item .dm-preview {
+      flex: 1; font-size: 0.78rem; color: var(--chat-muted);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .chat-dm-item.has-unread .dm-name { font-weight: 700; color: var(--chat-text); }
+    .chat-dm-item.has-unread .dm-preview { color: var(--chat-text); font-weight: 500; }
+    .chat-dm-item.has-unread .dm-time { color: var(--chat-accent); font-weight: 600; }
+    .chat-dm-item .unread-badge {
+      background: var(--chat-accent); color: #1A1A1A;
+      font-size: 0.68rem; font-weight: 700;
+      min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
     .chat-sidebar-footer {
       padding: 10px 14px;
       background: var(--chat-bg-1);
@@ -1606,6 +1651,21 @@
       background: linear-gradient(135deg, var(--chat-accent-dim), #FFD54A);
       color: #1A1A1A;
     }
+    /* DM item tema claro */
+    .chat-dm-item .chan-avatar {
+      background: linear-gradient(135deg, var(--chat-accent-dim), #FFD54A);
+      color: #1A1A1A;
+    }
+    .chat-dm-item .dm-name { color: #0F1419; }
+    .chat-dm-item .dm-preview,
+    .chat-dm-item .dm-time { color: #5C6370; }
+    .chat-dm-item:hover { background: #ECEAE0; }
+    .chat-dm-item.active {
+      background: #FFFFFF;
+      border-left-color: var(--chat-accent-dim);
+      box-shadow: inset 0 -1px 0 #ECEAE0;
+    }
+    .chat-dm-item.has-unread .dm-preview { color: #0F1419; }
 
     /* ── Sidebar footer (self card) ── */
     .chat-sidebar-footer {
@@ -5084,57 +5144,87 @@ function renderListaCanais() {
     return;
   }
 
-  // View "Home" — DMs + grupos + canais SOLTOS (server_id IS NULL)
-  const dms        = _canais.filter(c => c.tipo === 'dm');
-  const grupos     = _canais.filter(c => c.tipo === 'grupo_sistema');
-  const canaisText = _canais.filter(c => c.tipo === 'canal' && !c.server_id);
-  const canaisVoz  = _canais.filter(c => c.tipo === 'voz'   && !c.server_id);
+  // 2026-08-18: view "Home" agora mostra APENAS mensagens diretas com
+  // preview + horario (padrao WhatsApp). Canais grupo_sistema so
+  // aparecem quando o user clica no icone do server CPE TECNOLOGIA.
+  // Canais avulsos e de voz seguem visiveis no server especifico deles.
+  const dms = _canais
+    .filter(c => c.tipo === 'dm')
+    .sort((a, b) => {
+      // Ordena por atividade recente (last_message_at DESC).
+      // Sem last_message_at, cai por criado_em.
+      const ta = a.last_message_at || a.criado_em || '';
+      const tb = b.last_message_at || b.criado_em || '';
+      return tb.localeCompare(ta);
+    });
 
-  let html = '';
-
-  if (grupos.length) {
-    html += `<div class="chat-section-title">Canais do sistema</div>`;
-    html += grupos.map(c => _renderItem(c, `<i class="bi bi-hash chan-icon"></i>`)).join('');
-  }
-  const podeCriarCanal = ['RESPONSAVEL_GRUPO','ADMIN','TI','MANAGER'].includes(_self.role || '');
-  html += `<div class="chat-section-title">
-    Canais
-    ${podeCriarCanal
-      ? `<button onclick="abrirModalCriarCanal()" title="Criar novo canal"><i class="bi bi-plus-lg"></i></button>`
-      : ''}
-  </div>`;
-  if (canaisText.length) {
-    html += canaisText.map(c => _renderItem(c, `<i class="bi bi-hash chan-icon"></i>`)).join('');
-  } else {
-    html += `<div style="padding:6px 16px;color:var(--chat-muted);font-size:0.76rem">
-      ${podeCriarCanal ? 'Nenhum canal ainda. Clique em + acima pra criar.' : 'Você ainda não foi adicionado em nenhum canal.'}
-    </div>`;
-  }
-  // Canais de voz
-  if (canaisVoz.length || podeCriarCanal) {
-    html += `<div class="chat-section-title">Canais de voz</div>`;
-    if (canaisVoz.length) {
-      html += canaisVoz.map(c => _renderItemVoz(c)).join('');
-    } else if (podeCriarCanal) {
-      html += `<div style="padding:6px 16px;color:var(--chat-muted);font-size:0.76rem">
-        Crie um canal e marque "Canal de voz".</div>`;
-    }
-  }
-  // DMs
-  html += `<div class="chat-section-title">
+  let html = `<div class="chat-section-title">
     Mensagens diretas
     <button onclick="mostrarPainelNovaDM()" title="Nova DM"><i class="bi bi-plus-lg"></i></button>
   </div>`;
+
   if (dms.length) {
-    html += dms.map(c => {
-      const initials = _initials(c.nome);
-      return _renderItem(c, `<div class="chan-avatar">${_esc(initials)}</div>`);
-    }).join('');
+    html += dms.map(c => _renderItemDMPreview(c)).join('');
   } else {
-    html += `<div style="padding:8px 16px;color:var(--chat-muted);font-size:0.78rem">
-      Nenhuma DM ainda. Clique em + acima ou no usuário à direita.</div>`;
+    html += `<div style="padding:16px;color:var(--chat-muted);font-size:0.82rem;text-align:center">
+      <i class="bi bi-chat-heart" style="font-size:1.5rem;display:block;margin-bottom:6px;opacity:.5"></i>
+      Nenhuma conversa ainda.<br>
+      <span style="font-size:.72rem">Clique em + acima ou no usuário à direita pra iniciar.</span>
+    </div>`;
   }
   box.innerHTML = html;
+}
+
+/* Renderiza item DM com preview da ultima mensagem + horario.
+   Formato Discord/WhatsApp: avatar + [nome | horario ] / [preview | badge].  */
+function _renderItemDMPreview(c) {
+  const ativo = _canalAtivo && _canalAtivo.id === c.id ? 'active' : '';
+  const unread = _unread[c.id] || 0;
+  const cls = `chat-dm-item ${ativo} ${unread > 0 ? 'has-unread' : ''}`;
+  const initials = _initials(c.nome);
+  const badge = unread > 0
+    ? `<span class="unread-badge">${unread > 99 ? '99+' : unread}</span>`
+    : '';
+
+  const preview = c.last_message
+    ? (c.last_message_from === _self?.id ? 'Você: ' : '') + _esc(c.last_message)
+    : '<span style="opacity:.55;font-style:italic">Sem mensagens</span>';
+
+  const hora = c.last_message_at ? _fmtHoraDM(c.last_message_at) : '';
+
+  return `<div class="${cls}" onclick="abrirCanal(${c.id})"
+       oncontextmenu="event.preventDefault(); mostrarContextMenuCanal(event, ${c.id})">
+    <div class="chan-avatar">${_esc(initials)}</div>
+    <div class="dm-body">
+      <div class="dm-row-top">
+        <span class="dm-name">${_esc(c.nome || '#' + c.id)}</span>
+        <span class="dm-time">${_esc(hora)}</span>
+      </div>
+      <div class="dm-row-bottom">
+        <span class="dm-preview">${preview}</span>
+        ${badge}
+      </div>
+    </div>
+  </div>`;
+}
+
+/* Formato de horario tipo WhatsApp: HH:MM se hoje, "ontem" se ontem,
+   dd/MM se >48h, dd/MM/yy se >1 ano. */
+function _fmtHoraDM(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr.replace ? isoStr.replace(' ', 'T') : isoStr);
+  if (isNaN(d)) return '';
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) {
+    return d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  }
+  const y = new Date(now); y.setDate(y.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return 'ontem';
+  if (d.getFullYear() === now.getFullYear()) {
+    return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
+  }
+  return d.toLocaleDateString('pt-BR');
 }
 
 function _renderItem(c, iconHtml) {
@@ -5815,6 +5905,20 @@ function _onMessageRecebida(m) {
   const propria = m.author?.id === _self.id;
   const canalAberto = _canalAtivo && _canalAtivo.id === m.channel_id;
   const tabAtiva = !document.hidden;
+
+  // 2026-08-18: atualiza preview do canal in-memory pra a Home refletir
+  // sem esperar o proximo fetch. Corta pra 80 chars (mesmo do backend).
+  const canalIdx = _canais.findIndex(c => c.id === m.channel_id);
+  if (canalIdx >= 0) {
+    const t = (m.content || '').trim();
+    _canais[canalIdx].last_message = t.length > 80 ? t.slice(0, 80) + '...' : t;
+    _canais[canalIdx].last_message_at = m.criado_em || new Date().toISOString();
+    _canais[canalIdx].last_message_from = m.author?.id;
+    // Re-render pra reordenar por atividade (msg nova sobe pro topo).
+    // Sem estar em server (home): sempre renderiza. Com server: nao
+    // afeta (a lista mostra so o server).
+    if (_serverAtivo === null) renderListaCanais();
+  }
 
   if (canalAberto) {
     appendMsg(m);
