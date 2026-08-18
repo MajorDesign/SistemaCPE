@@ -7538,6 +7538,19 @@ async function _atualizarBtnPush() {
 window.addEventListener('load', () => {
   setTimeout(_atualizarBtnPush, 800);
 });
+
+/* 2026-08-18: bridge pra que scripts irmaos (mini call dock, futuros
+   plugins) consigam ler as vars do escopo do modulo. `let` no top-level
+   de <script> NAO vai automaticamente pra window, entao expomos via
+   getters. Ver GOTCHAS.md "UI da chamada some ao trocar de canal". */
+try {
+  Object.defineProperty(window, '_canais',              { get() { return _canais; }, configurable: true });
+  Object.defineProperty(window, '_canalAtivo',          { get() { return _canalAtivo; }, configurable: true });
+  Object.defineProperty(window, '_self',                { get() { return _self; }, configurable: true });
+  Object.defineProperty(window, '_voicePeersPorCanal',  { get() { return _voicePeersPorCanal; }, configurable: true });
+  window.abrirCanal      = abrirCanal;
+  window._chatApiCall    = api;   // usado pelo dock pra chamar /channels/{id}/voice/invite
+} catch (_) { /* redefine silencia — hot reload */ }
 </script>
 <script id="cpe-autofill-guard-v1">
 /* Bloqueia autofill do Chrome/Edge em inputs de busca.
@@ -7572,6 +7585,318 @@ window.addEventListener('load', () => {
       document.body || document.documentElement,
       { childList: true, subtree: true }
     );
+  }
+})();
+</script>
+
+<!-- ==============================================================
+     MINI DOCK DA CHAMADA (bug 2026-08-18: perder UI ao trocar canal)
+     Fica fixo no canto inferior direito enquanto ha chamada ativa
+     em canal DIFERENTE do que esta aberto agora. Clique em "Voltar"
+     traz o user pro canal da chamada. Mute/Convidar/Desligar duplicam
+     controles da voice-room principal.
+     ============================================================== -->
+<style>
+  #chatCallDock {
+    position: fixed; right: 20px; bottom: 20px; z-index: 9999;
+    background: #1E2124; color: #DCDDDE; border: 1px solid #40444B;
+    border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.35);
+    padding: 10px 14px; display: none;
+    min-width: 260px; font-family: 'DM Sans', system-ui, sans-serif;
+  }
+  #chatCallDock.open { display: flex; flex-direction: column; gap: 8px; }
+  #chatCallDock .cd-header { display: flex; align-items: center; gap: 10px; }
+  #chatCallDock .cd-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: #7289DA; color: #fff; display: flex; align-items: center;
+    justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0;
+  }
+  #chatCallDock .cd-info { min-width: 0; flex: 1; }
+  #chatCallDock .cd-name {
+    font-weight: 600; font-size: 13px; color: #FFF;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #chatCallDock .cd-sub {
+    font-size: 11px; color: #B9BBBE; display: flex; align-items: center; gap: 6px;
+  }
+  #chatCallDock .cd-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: #43B581; display: inline-block;
+    animation: cd-pulse 2s ease-in-out infinite;
+  }
+  @keyframes cd-pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+  #chatCallDock .cd-actions { display: flex; gap: 6px; }
+  #chatCallDock .cd-btn {
+    flex: 1; padding: 6px 8px; border: none; border-radius: 6px;
+    color: #FFF; font-size: 12px; font-weight: 500; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    transition: filter .15s;
+  }
+  #chatCallDock .cd-btn:hover { filter: brightness(1.15); }
+  #chatCallDock .cd-btn-voltar  { background: #4F545C; }
+  #chatCallDock .cd-btn-mute    { background: #4F545C; }
+  #chatCallDock .cd-btn-mute.on { background: #DC2626; }
+  #chatCallDock .cd-btn-add     { background: #7289DA; }
+  #chatCallDock .cd-btn-end     { background: #DC2626; }
+
+  /* Modal Convidar */
+  #inviteCallModal { display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,.55); z-index: 10000; align-items: center; justify-content: center; }
+  #inviteCallModal.open { display: flex; }
+  #inviteCallModal .ic-card {
+    background: var(--chat-bg-2, #2F3136); color: #DCDDDE;
+    border: 1px solid var(--chat-border, #40444B); border-radius: 10px;
+    width: 92%; max-width: 460px; max-height: 80vh;
+    display: flex; flex-direction: column;
+  }
+  #inviteCallModal .ic-header {
+    padding: 14px 18px; border-bottom: 1px solid var(--chat-border, #40444B);
+    display: flex; align-items: center; gap: 10px;
+  }
+  #inviteCallModal .ic-header h3 { margin: 0; font-size: 1rem; }
+  #inviteCallModal .ic-body { padding: 12px 18px; overflow-y: auto; flex: 1; }
+  #inviteCallModal .ic-user {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+    border-radius: 6px; cursor: pointer; margin-bottom: 4px;
+    transition: background .15s;
+  }
+  #inviteCallModal .ic-user:hover { background: var(--chat-bg-3, #3D4147); }
+  #inviteCallModal .ic-user.disabled { opacity: .4; cursor: not-allowed; }
+  #inviteCallModal .ic-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #7289DA; color: #fff; display: flex; align-items: center;
+    justify-content: center; font-weight: 700; font-size: 12px;
+  }
+  #inviteCallModal .ic-footer {
+    padding: 12px 18px; border-top: 1px solid var(--chat-border, #40444B);
+    display: flex; justify-content: flex-end;
+  }
+  [data-theme="light"] #chatCallDock,
+  :root:not([data-theme="dark"]) #chatCallDock {
+    background: #FFFFFF; color: #0F1419; border-color: #E5E7EB;
+  }
+  [data-theme="light"] #chatCallDock .cd-name,
+  :root:not([data-theme="dark"]) #chatCallDock .cd-name { color: #0F1419; }
+  [data-theme="light"] #chatCallDock .cd-sub,
+  :root:not([data-theme="dark"]) #chatCallDock .cd-sub { color: #5C6370; }
+</style>
+
+<div id="chatCallDock" aria-hidden="true">
+  <div class="cd-header">
+    <div class="cd-avatar" id="cdAvatar">?</div>
+    <div class="cd-info">
+      <div class="cd-name" id="cdName">Chamada</div>
+      <div class="cd-sub">
+        <span class="cd-dot"></span>
+        <span id="cdDuration">00:00</span>
+        <span id="cdPeersCount" style="margin-left:6px"></span>
+      </div>
+    </div>
+  </div>
+  <div class="cd-actions">
+    <button class="cd-btn cd-btn-voltar" onclick="cdVoltarChamada()" title="Voltar pra tela da chamada">
+      <i class="bi bi-arrow-return-left"></i> Voltar
+    </button>
+    <button class="cd-btn cd-btn-mute" id="cdBtnMute" onclick="cdToggleMic()" title="Mudo">
+      <i class="bi bi-mic-fill" id="cdMicIcon"></i>
+    </button>
+    <button class="cd-btn cd-btn-add" onclick="cdAbrirConvidar()" title="Convidar participante">
+      <i class="bi bi-person-plus-fill"></i>
+    </button>
+    <button class="cd-btn cd-btn-end" onclick="cdEncerrar()" title="Encerrar chamada">
+      <i class="bi bi-telephone-x-fill"></i>
+    </button>
+  </div>
+</div>
+
+<div id="inviteCallModal" aria-hidden="true" onclick="if(event.target===this) cdFecharConvidar()">
+  <div class="ic-card">
+    <div class="ic-header">
+      <i class="bi bi-person-plus-fill"></i>
+      <h3>Convidar pra chamada</h3>
+    </div>
+    <div class="ic-body" id="icBody">
+      <div style="text-align:center;color:#B9BBBE;padding:20px">Carregando usuários...</div>
+    </div>
+    <div class="ic-footer">
+      <button class="chat-btn chat-btn-secondary" onclick="cdFecharConvidar()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script id="cpe-call-dock-v1">
+/* Mini dock da chamada + convite pra sala. Ver GOTCHAS.md
+   ("UI da chamada some ao trocar de canal"). */
+(function () {
+  let _dockTimer = null;
+  let _dockStartMs = 0;
+
+  function _initials(name) {
+    if (!name) return '?';
+    const parts = String(name).trim().split(/\s+/).slice(0, 2);
+    return parts.map(p => p[0]?.toUpperCase() || '').join('') || '?';
+  }
+  function _fmtDuration(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const mm = String(Math.floor(s / 60)).padStart(2, '0');
+    const ss = String(s % 60).padStart(2, '0');
+    return `${mm}:${ss}`;
+  }
+  function _canalAtualId() {
+    return (window._canalAtivo && window._canalAtivo.id) || null;
+  }
+  function _peersDaSala() {
+    const st = window._voiceState || {};
+    if (!st.canalId) return [];
+    return (window._voicePeersPorCanal && window._voicePeersPorCanal[st.canalId]) || [];
+  }
+  function _nomeDoCanal(cid) {
+    const c = (window._canais || []).find(x => x.id === cid);
+    return c ? (c.nome || `Canal #${cid}`) : `Canal #${cid}`;
+  }
+  function _peerPrincipal() {
+    // Nome do 1o peer da sala (chamada 1-on-1: unico peer = destinatario)
+    const peers = _peersDaSala();
+    if (peers.length) return peers[0].name || `Usuario #${peers[0].user_id}`;
+    return _nomeDoCanal((window._voiceState || {}).canalId);
+  }
+
+  window._atualizarCallDock = function () {
+    const st = window._voiceState || {};
+    const dock = document.getElementById('chatCallDock');
+    if (!dock) return;
+    const emChamada = !!st.canalId;
+    const canalAberto = _canalAtualId();
+    const mesmoCanal = emChamada && canalAberto === st.canalId;
+
+    // Mostra APENAS quando ha chamada ativa E user esta em canal diferente
+    if (emChamada && !mesmoCanal) {
+      dock.classList.add('open');
+      dock.setAttribute('aria-hidden', 'false');
+      const nome = _peerPrincipal();
+      document.getElementById('cdAvatar').textContent = _initials(nome);
+      document.getElementById('cdName').textContent = nome;
+      const nPeers = _peersDaSala().length;
+      document.getElementById('cdPeersCount').textContent =
+        nPeers > 1 ? `· ${nPeers + 1} participantes` : '';
+      // Timer
+      if (!_dockTimer) {
+        _dockStartMs = window._callStartTs || Date.now();
+        _dockTimer = setInterval(() => {
+          const el = document.getElementById('cdDuration');
+          if (el) el.textContent = _fmtDuration(Date.now() - _dockStartMs);
+        }, 1000);
+      }
+      // Estado do mic
+      const btn = document.getElementById('cdBtnMute');
+      const icon = document.getElementById('cdMicIcon');
+      if (btn && icon) {
+        const muted = st.micOn === false;
+        btn.classList.toggle('on', muted);
+        icon.className = muted ? 'bi bi-mic-mute-fill' : 'bi bi-mic-fill';
+      }
+    } else {
+      dock.classList.remove('open');
+      dock.setAttribute('aria-hidden', 'true');
+      if (!emChamada && _dockTimer) {
+        clearInterval(_dockTimer); _dockTimer = null; _dockStartMs = 0;
+      }
+    }
+  };
+
+  window.cdVoltarChamada = function () {
+    const st = window._voiceState || {};
+    if (!st.canalId) return;
+    if (typeof window.abrirCanal === 'function') window.abrirCanal(st.canalId);
+  };
+  window.cdToggleMic = function () {
+    if (typeof window.voiceToggleMic === 'function') window.voiceToggleMic();
+    setTimeout(window._atualizarCallDock, 100);
+  };
+  window.cdEncerrar = function () {
+    if (typeof window.voiceSair === 'function') window.voiceSair();
+    setTimeout(window._atualizarCallDock, 100);
+  };
+
+  /* Convidar */
+  window.cdAbrirConvidar = async function () {
+    const st = window._voiceState || {};
+    if (!st.canalId) return;
+    const modal = document.getElementById('inviteCallModal');
+    const body  = document.getElementById('icBody');
+    modal.classList.add('open');
+    body.innerHTML = '<div style="text-align:center;color:#B9BBBE;padding:20px">Carregando usuários...</div>';
+    try {
+      // GET /api/users/ (nao vai por _chatApiCall porque esse prefixa /api/chat)
+      const tok = localStorage.getItem('cpe_token') || '';
+      const base = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : ('http://' + window.location.hostname + ':8000'));
+      const r = await fetch(base + '/api/users/', {
+        credentials: 'include',
+        headers: tok ? { 'X-Auth-Token': tok } : {},
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const usersRaw = await r.json();
+      const users = Array.isArray(usersRaw) ? usersRaw : (usersRaw?.users || []);
+      const meuId = window._self?.id;
+      const peersIds = new Set(_peersDaSala().map(p => p.user_id));
+      const lista = users
+        .filter(u => u.id !== meuId && u.is_active !== 0)
+        .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      if (!lista.length) {
+        body.innerHTML = '<div style="text-align:center;color:#B9BBBE;padding:20px">Nenhum usuário disponível.</div>';
+        return;
+      }
+      body.innerHTML = lista.map(u => {
+        const jaNaSala = peersIds.has(u.id);
+        const cls = jaNaSala ? 'ic-user disabled' : 'ic-user';
+        const onclick = jaNaSala ? '' : `onclick="cdConvidar(${u.id}, this)"`;
+        const sufixo = jaNaSala ? ' <small style="opacity:.7;margin-left:auto">(já na chamada)</small>' : '';
+        return `<div class="${cls}" ${onclick}>
+          <div class="ic-avatar">${_initials(u.name)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600">${(u.name||'').replace(/</g,'&lt;')}</div>
+            <div style="font-size:11px;opacity:.7">${(u.email||'').replace(/</g,'&lt;')}</div>
+          </div>${sufixo}
+        </div>`;
+      }).join('');
+    } catch (e) {
+      body.innerHTML = '<div style="color:#DC2626;padding:20px">Erro ao carregar: ' + (e.message || 'desconhecido') + '</div>';
+    }
+  };
+  window.cdFecharConvidar = function () {
+    document.getElementById('inviteCallModal')?.classList.remove('open');
+  };
+  window.cdConvidar = async function (userId, el) {
+    const st = window._voiceState || {};
+    if (!st.canalId) return;
+    if (el) { el.style.pointerEvents = 'none'; el.style.opacity = '.5'; }
+    try {
+      await window._chatApiCall('POST', `/channels/${st.canalId}/voice/invite`, { user_id: userId });
+      if (el) {
+        el.innerHTML = el.innerHTML.replace(
+          /<small[\s\S]*<\/small>$|$/,
+          '<small style="color:#43B581;margin-left:auto">✓ convite enviado</small>'
+        );
+      }
+    } catch (e) {
+      if (el) { el.style.pointerEvents = ''; el.style.opacity = '1'; }
+      alert('Erro ao convidar: ' + (e.message || 'falha'));
+    }
+  };
+
+  /* Hooks: revalidar dock quando o canal aberto muda, quando estado
+     de voz muda, quando lista de peers atualiza. */
+  document.addEventListener('DOMContentLoaded', () => {
+    setInterval(window._atualizarCallDock, 1500); // fallback safety
+  });
+  // Hooks explicitos ficam nos wrappers: abrirCanal / voiceEntrar /
+  // voiceSair sao patchados abaixo pra sempre chamar _atualizarCallDock.
+  const _origAbrirCanal = window.abrirCanal;
+  if (typeof _origAbrirCanal === 'function') {
+    window.abrirCanal = async function (id) {
+      const r = await _origAbrirCanal.apply(this, arguments);
+      window._atualizarCallDock();
+      return r;
+    };
   }
 })();
 </script>

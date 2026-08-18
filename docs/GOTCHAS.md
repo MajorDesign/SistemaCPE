@@ -449,6 +449,48 @@ document.addEventListener('click', e => {
 
 ---
 
+## UI da chamada de voz some ao trocar de canal (2026-08-18)
+
+**Sintoma:** você está em ligação com usuário A pelo chat, clica em outro canal (usuário B) pra responder mensagem — a UI da chamada desaparece. Áudio continua funcionando (você ouve, é ouvido), mas não tem como voltar a ver os botões (mute, encerrar, câmera, share). Voltar pra DM com A também não traz de volta (na verdade traz porque o `chatVoiceRoom` mora no canal aberto).
+
+**Causa:** o container `<div id="chatVoiceRoom">` da UI de voz vive **dentro do main-content** — é filho da área do canal atualmente aberto. Quando o usuário chama `abrirCanal(B)`, o main-content re-renderiza pra mostrar B, e o `chatVoiceRoom` fica escondido. O estado `window._voiceState.canalId = A` e as PeerConnections WebRTC continuam vivas — por isso o áudio não para — mas a interface não segue o usuário.
+
+**Fix aplicado (commit deste dia):** mini dock flutuante fixo (padrão Discord/Teams).
+- Nova `<div id="chatCallDock">` `position:fixed; bottom-right`, `display:none` por default
+- JS `window._atualizarCallDock()` decide mostrar/esconder:
+  - Mostra se `_voiceState.canalId != null` **e** `_canalAtivo.id != _voiceState.canalId`
+  - Esconde nos outros casos
+- Dock tem: foto/inicial do peer, duração (mm:ss), botões **Voltar** (chama `abrirCanal(_voiceState.canalId)`), **Mute** (toggle mic), **Convidar** (abre modal), **Desligar**
+- `abrirCanal` foi monkey-patched pra chamar `_atualizarCallDock()` no fim de cada troca
+- `setInterval(1500ms)` como fallback (garante consistência se algum caminho esqueceu de chamar o hook)
+
+**Bridge de escopo:** o dock mora em `<script>` separado após `</body>`. Como as vars principais do chat usam `let` no top-level do script principal, elas **não** vão pra `window` automaticamente. Foram expostas via `Object.defineProperty(window, '_canais', {get() { return _canais; }})` etc no fim do script principal.
+
+**Se voltar a acontecer:**
+1. Console: `window._voiceState.canalId` retorna número? Se `null`, a chamada não está ativa — outro bug (não é este).
+2. `window._canalAtivo?.id` retorna número? Se `undefined`, o bridge de escopo quebrou (getter apagado).
+3. `document.getElementById('chatCallDock')` existe? Se `null`, o HTML foi removido.
+4. Ver console pra erros no `_atualizarCallDock`.
+
+---
+
+## Convidar 3º participante numa chamada 1-on-1 (2026-08-18)
+
+Chamadas do chat usam a sala de voz do **canal DM entre os 2 users**. O 3º convidado não é membro do DM — se tentasse `voice_join`, backend bloqueava com 403 (`_usuario_pertence_ao_canal` = false).
+
+**Fix:** whitelist in-memory + endpoint `POST /api/chat/channels/{id}/voice/invite`:
+- `_voice_temp_invites: dict[int, set[int]]` em `routes/chat.py` (memória do processo — some se API reinicia; chamada cai junto de qualquer jeito)
+- `voice_invite` valida que o chamador tem sessão de voz aberta no canal (só quem tá na call pode convidar), grava `user_id_alvo` no set e dispara WS `call_invite` pro alvo com o `channel_id`
+- `voice_join` aceita se user é membro **OU** está no set de convidados temporários
+- `voice_leave` remove o user do set — grant é efêmero por sessão
+- WS broadcasts (`voice_join`, `voice_leave`) incluem os convidados no destino, senão o 3º não recebia notif dos outros peers
+
+**Fluxo:** chamador clica no botão "Convidar" no dock → modal lista users ativos → seleciona → POST invite → alvo recebe modal de chamada tocando → aceita → `voiceEntrar(channel_id)` → vira 3º peer, todo o mesh WebRTC funciona normal (N-peers).
+
+**Não persiste em DB** — refactor futuro pra tabela `chat_voice_temp_grants` se precisar auditoria/reinício resiliente. Por ora suficiente.
+
+---
+
 ## Chamados antigos: vocabulário de status diferente do sistema novo (2026-08-17)
 
 **Sintoma:** filtro por status na aba "Chamados antigos" de `tickets.html` retorna 0 pra qualquer opção que não seja "Resolvido". User seleciona "Aberto" ou "Em andamento" → tabela vazia.

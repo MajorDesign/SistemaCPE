@@ -2683,11 +2683,69 @@ class VoiceJoinBody(BaseModel):
     peer_id: str = Field(..., min_length=4, max_length=40)
 
 
+class VoiceInviteBody(BaseModel):
+    user_id: int = Field(..., gt=0, description="user_id do convidado")
+
+
+# 2026-08-18: whitelist in-memory de users autorizados a entrar em salas de
+# voz de canais em que NAO sao membros. Usado quando alguem em call 1-on-1
+# convida um 3o participante — o convidado nao pertence ao DM entre os
+# dois originais. Grant e efemero: some quando o convidado sai da sala,
+# ou quando a API reinicia (chamada cai junto de qualquer jeito).
+_voice_temp_invites: dict[int, set[int]] = {}
+
+
+@router.post("/channels/{channel_id}/voice/invite")
+async def voice_invite(channel_id: int, body: VoiceInviteBody, request: Request):
+    """Autoriza um user (nao-membro) a entrar na sala de voz deste canal.
+    Quem chama precisa estar com sessao de voz aberta no canal — ou seja,
+    ja esta na chamada e quer trazer alguem novo.
+
+    Efeitos:
+      1. Adiciona user_id em _voice_temp_invites[channel_id]
+      2. Envia WS call_invite pro alvo com channel_id e nome do chamador
+    """
+    user = _user_from_request(request)
+
+    # Chamador precisa ter sessao aberta no canal
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT 1 FROM chat_voice_sessions WHERE channel_id=%s AND user_id=%s LIMIT 1",
+            (channel_id, user["id"]),
+        )
+        if not cur.fetchone():
+            raise HTTPException(
+                status_code=403,
+                detail="Voce precisa estar na chamada pra convidar alguem",
+            )
+    finally:
+        cur.close(); conn.close()
+
+    if body.user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="Nao pode convidar a si mesmo")
+
+    _voice_temp_invites.setdefault(channel_id, set()).add(body.user_id)
+
+    # Dispara call_invite pro alvo (mesmo WS pattern das chamadas 1-on-1)
+    await manager.send_to_users([body.user_id], {
+        "type": "call_invite",
+        "from_user_id": user["id"],
+        "from_user_name": user.get("name") or f"Usuario #{user['id']}",
+        "channel_id": channel_id,
+        "group_call": True,  # sinaliza que ja tem outros na sala
+    })
+    return {"success": True}
+
+
 @router.post("/channels/{channel_id}/voice/join")
 async def voice_join(channel_id: int, body: VoiceJoinBody, request: Request):
     """Marca user como ativo na sala. Retorna outros peers + suas configs."""
     user = _user_from_request(request)
-    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+    # Aceita: membro do canal OU convidado temporario via voice/invite
+    convidado = user["id"] in _voice_temp_invites.get(channel_id, set())
+    if not convidado and not _usuario_pertence_ao_canal(user["id"], channel_id):
         raise HTTPException(status_code=403, detail="Voce nao e membro deste canal")
 
     conn = get_chat_db_or_404()
@@ -2716,9 +2774,11 @@ async def voice_join(channel_id: int, body: VoiceJoinBody, request: Request):
         u = users_map.get(p["user_id"], {})
         p["name"] = u.get("name") or f"Usuario #{p['user_id']}"
 
-    # Notifica todos os membros do canal (inclusive os ja na sala) que ele entrou
-    membros = _listar_membros_canal(channel_id)
-    await manager.send_to_users(membros, {
+    # Notifica MEMBROS do canal + convidados temporarios ainda na sala.
+    # Sem os convidados, o 3o participante nao veria o voice_join dos outros.
+    destinos = set(_listar_membros_canal(channel_id))
+    destinos.update(_voice_temp_invites.get(channel_id, set()))
+    await manager.send_to_users(list(destinos), {
         "type": "voice_join",
         "channel_id": channel_id,
         "user_id": user["id"],
@@ -2745,8 +2805,16 @@ async def voice_leave(channel_id: int, request: Request):
         restantes = cur.fetchone()[0]
     finally:
         cur.close(); conn.close()
-    membros = _listar_membros_canal(channel_id)
-    await manager.send_to_users(membros, {
+    # Se o user era convidado temporario, remove o grant (nao vira "membro
+    # oculto" pra sempre — grant so vale pra sessao atual).
+    if channel_id in _voice_temp_invites:
+        _voice_temp_invites[channel_id].discard(user["id"])
+        if not _voice_temp_invites[channel_id]:
+            _voice_temp_invites.pop(channel_id, None)
+    # WS: notifica MEMBROS do canal + qualquer convidado ainda na sala
+    destinos = set(_listar_membros_canal(channel_id))
+    destinos.update(_voice_temp_invites.get(channel_id, set()))
+    await manager.send_to_users(list(destinos), {
         "type": "voice_leave",
         "channel_id": channel_id,
         "user_id": user["id"],

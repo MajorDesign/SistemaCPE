@@ -211,6 +211,10 @@ Docs interativa (Swagger UI): `https://cpecontrol.cpetecnologia.com.br/api/docs`
 
 ## chat
 
+`POST /api/chat/channels/{channel_id}/voice/invite` body `{user_id}` — autoriza um user (não-membro do canal) a entrar na sala de voz. Chamador precisa ter sessão de voz aberta. Dispara `call_invite` WS pro alvo. Ver GOTCHAS ("Convidar 3º participante...").
+
+
+
 | Método | Path | Descrição |
 |---|---|---|
 | `GET` | `/api/chat/_debug/online` | Debug Online |
