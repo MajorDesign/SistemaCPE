@@ -304,53 +304,73 @@
       color: #1A1A1A; display: flex; align-items: center; justify-content: center;
       font-weight: 700; font-size: 0.72rem; flex-shrink: 0;
     }
-    /* 2026-08-18: DM item Home estilo WhatsApp (avatar + nome/hora + preview/badge) */
+    /* 2026-08-18 (v2): DM item Home estilo Discord — compacto, avatar
+       pequeno, fonte comedida. Discord usa items com ~42px de altura,
+       avatar 32px, nome 15-16px/500. */
     .chat-dm-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 10px 14px; cursor: pointer;
-      border-left: 3px solid transparent;
-      transition: background 0.1s;
-      min-height: 56px;
+      display: flex; align-items: center; gap: 12px;
+      padding: 4px 10px 4px 8px;
+      margin: 1px 8px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.06s;
+      min-height: 42px;
+      color: var(--chat-muted);
     }
-    .chat-dm-item:hover { background: #2A2A2A; }
+    .chat-dm-item:hover { background: #35373C; color: var(--chat-text); }
     .chat-dm-item.active {
-      background: #2F2F2F;
-      border-left-color: var(--chat-accent);
+      background: #404249; color: #FFFFFF;
     }
     .chat-dm-item .chan-avatar {
-      width: 38px; height: 38px; border-radius: 50%;
+      width: 32px; height: 32px; border-radius: 50%;
       background: linear-gradient(135deg, var(--chat-accent), var(--chat-accent-dim));
       color: #1A1A1A; display: flex; align-items: center; justify-content: center;
-      font-weight: 700; font-size: 0.88rem; flex-shrink: 0;
+      font-weight: 600; font-size: 0.78rem; flex-shrink: 0;
     }
-    .chat-dm-item .dm-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-    .chat-dm-item .dm-row-top,
+    .chat-dm-item .dm-body {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; gap: 0;
+      overflow: hidden;
+    }
+    .chat-dm-item .dm-row-top {
+      display: flex; align-items: baseline; gap: 6px;
+      line-height: 1.2;
+    }
     .chat-dm-item .dm-row-bottom {
-      display: flex; align-items: center; gap: 8px;
+      display: flex; align-items: center; gap: 6px;
+      line-height: 1.15; margin-top: 1px;
     }
     .chat-dm-item .dm-name {
-      flex: 1; font-size: 1rem; font-weight: 500; color: var(--chat-text);
+      flex: 1; font-size: 0.94rem; font-weight: 500;
+      color: var(--chat-text);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       letter-spacing: -0.005em;
     }
     .chat-dm-item .dm-time {
-      font-size: 0.72rem; font-weight: 500; color: var(--chat-muted); flex-shrink: 0;
+      font-size: 0.66rem; font-weight: 500;
+      color: var(--chat-muted); flex-shrink: 0;
+      opacity: 0.7;
     }
     .chat-dm-item .dm-preview {
-      flex: 1; font-size: 0.82rem; color: var(--chat-muted);
+      flex: 1; font-size: 0.75rem;
+      color: var(--chat-muted);
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       font-weight: 400;
+      opacity: 0.75;
     }
-    .chat-dm-item.has-unread .dm-name { font-weight: 700; color: var(--chat-text); }
-    .chat-dm-item.has-unread .dm-preview { color: var(--chat-text); font-weight: 500; }
-    .chat-dm-item.has-unread .dm-time { color: var(--chat-accent); font-weight: 600; }
+    .chat-dm-item.has-unread .dm-name { font-weight: 600; color: #FFFFFF; }
+    .chat-dm-item.has-unread .dm-preview { color: var(--chat-text); font-weight: 500; opacity: 1; }
+    .chat-dm-item.has-unread .dm-time { color: var(--chat-accent); font-weight: 600; opacity: 1; }
     .chat-dm-item .unread-badge {
-      background: var(--chat-accent); color: #1A1A1A;
-      font-size: 0.68rem; font-weight: 700;
-      min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+      background: #F23F42; color: #FFFFFF;
+      font-size: 0.7rem; font-weight: 700;
+      min-width: 16px; height: 16px; padding: 0 5px; border-radius: 8px;
       display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
+      flex-shrink: 0; line-height: 1;
     }
+    /* Se nao tem preview (sem mensagens), esconde a segunda linha
+       e centraliza verticalmente o nome no item. */
+    .chat-dm-item.no-preview .dm-row-bottom { display: none; }
     .chat-sidebar-footer {
       padding: 10px 14px;
       background: var(--chat-bg-1);
@@ -5209,16 +5229,16 @@ function renderListaCanais() {
 function _renderItemDMPreview(c) {
   const ativo = _canalAtivo && _canalAtivo.id === c.id ? 'active' : '';
   const unread = _unread[c.id] || 0;
-  const cls = `chat-dm-item ${ativo} ${unread > 0 ? 'has-unread' : ''}`;
+  const temMsg = !!c.last_message;
+  const cls = `chat-dm-item ${ativo} ${unread > 0 ? 'has-unread' : ''} ${temMsg ? '' : 'no-preview'}`;
   const initials = _initials(c.nome);
   const badge = unread > 0
     ? `<span class="unread-badge">${unread > 99 ? '99+' : unread}</span>`
     : '';
 
-  const preview = c.last_message
+  const preview = temMsg
     ? (c.last_message_from === _self?.id ? 'Você: ' : '') + _esc(c.last_message)
-    : '<span style="opacity:.55;font-style:italic">Sem mensagens</span>';
-
+    : '';
   const hora = c.last_message_at ? _fmtHoraDM(c.last_message_at) : '';
 
   return `<div class="${cls}" onclick="abrirCanal(${c.id})"
@@ -5227,12 +5247,12 @@ function _renderItemDMPreview(c) {
     <div class="dm-body">
       <div class="dm-row-top">
         <span class="dm-name">${_esc(c.nome || '#' + c.id)}</span>
-        <span class="dm-time">${_esc(hora)}</span>
+        ${hora ? `<span class="dm-time">${_esc(hora)}</span>` : ''}
       </div>
-      <div class="dm-row-bottom">
+      ${temMsg ? `<div class="dm-row-bottom">
         <span class="dm-preview">${preview}</span>
         ${badge}
-      </div>
+      </div>` : (badge ? `<div class="dm-row-bottom">${badge}</div>` : '')}
     </div>
   </div>`;
 }
