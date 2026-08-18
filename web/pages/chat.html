@@ -32,11 +32,13 @@
 
     body {
       margin: 0;
-      /* 2026-08-18: Inter no chat (estilo Discord). Fallback pra Noto Sans
-         (2o fallback oficial do Discord) e system stack. Aplica-se ao
-         chat.html todo — outras paginas nao carregam Inter, mantem DM Sans. */
-      font-family: 'Inter', 'Noto Sans', -apple-system, BlinkMacSystemFont,
-                   'Segoe UI', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      /* 2026-08-18 (v2): stack IDENTICO ao Discord real (extraido do
+         inspecionar do proprio Discord no browser). Se o user tiver
+         "gg sans" instalado localmente (extraido do Discord desktop) usa;
+         senao cai pra Inter (aproximacao publica) e depois Noto Sans. */
+      font-family: 'gg sans', 'ggsans', 'Inter', 'Noto Sans',
+                   -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                   'Helvetica Neue', Helvetica, Arial, sans-serif;
       font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';  /* Inter alt glyphs — mais parecido com gg sans */
       background: var(--chat-bg-3);
       color: var(--chat-text);
@@ -308,18 +310,18 @@
        pequeno, fonte comedida. Discord usa items com ~42px de altura,
        avatar 32px, nome 15-16px/500. */
     .chat-dm-item {
-      display: flex; align-items: center; gap: 12px;
-      padding: 4px 10px 4px 8px;
+      display: flex; align-items: center; gap: 8px;
+      padding: 0 8px;
       margin: 1px 8px;
       cursor: pointer;
       border-radius: 4px;
-      transition: background 0.06s;
-      min-height: 42px;
-      color: var(--chat-muted);
+      transition: background 0.06s, color 0.06s;
+      height: 42px;
+      color: #949BA4;  /* Discord --channels-default */
     }
-    .chat-dm-item:hover { background: #35373C; color: var(--chat-text); }
+    .chat-dm-item:hover { background: #35373C; color: #DBDEE1; }  /* Discord --interactive-hover */
     .chat-dm-item.active {
-      background: #404249; color: #FFFFFF;
+      background: #404249; color: #F2F3F5;  /* Discord --interactive-active */
     }
     .chat-dm-item .chan-avatar {
       width: 32px; height: 32px; border-radius: 50%;
@@ -341,26 +343,29 @@
       line-height: 1.15; margin-top: 1px;
     }
     .chat-dm-item .dm-name {
-      flex: 1; font-size: 0.94rem; font-weight: 500;
-      color: var(--chat-text);
+      flex: 1;
+      /* Discord real usa 16px/500 no nome do DM item (font: 16px "gg sans"). */
+      font-size: 16px; font-weight: 500;
+      color: inherit;  /* herda de .chat-dm-item pra transicionar no hover/active */
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      letter-spacing: -0.005em;
+      line-height: 1.25;
     }
     .chat-dm-item .dm-time {
-      font-size: 0.66rem; font-weight: 500;
-      color: var(--chat-muted); flex-shrink: 0;
+      font-size: 11px; font-weight: 500;
+      color: #949BA4; flex-shrink: 0;
       opacity: 0.7;
     }
     .chat-dm-item .dm-preview {
-      flex: 1; font-size: 0.75rem;
-      color: var(--chat-muted);
+      flex: 1;
+      /* Discord usa 12px na preview da segunda linha do DM item. */
+      font-size: 12px; font-weight: 400;
+      color: #949BA4;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-      font-weight: 400;
-      opacity: 0.75;
+      opacity: 0.9;
     }
-    .chat-dm-item.has-unread .dm-name { font-weight: 600; color: #FFFFFF; }
-    .chat-dm-item.has-unread .dm-preview { color: var(--chat-text); font-weight: 500; opacity: 1; }
-    .chat-dm-item.has-unread .dm-time { color: var(--chat-accent); font-weight: 600; opacity: 1; }
+    .chat-dm-item.has-unread .dm-name { font-weight: 600; color: #F2F3F5; }
+    .chat-dm-item.has-unread .dm-preview { color: #DBDEE1; font-weight: 500; opacity: 1; }
+    .chat-dm-item.has-unread .dm-time { color: #F2F3F5; font-weight: 600; opacity: 1; }
     .chat-dm-item .unread-badge {
       background: #F23F42; color: #FFFFFF;
       font-size: 0.7rem; font-weight: 700;
