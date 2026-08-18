@@ -342,6 +342,10 @@ Docs interativa (Swagger UI): `https://cpecontrol.cpetecnologia.com.br/api/docs`
 
 ## Fleet
 
+`DELETE /api/fleet/checklists/{id}` (2026-08-18) — condutor desiste do próprio checklist antes da vistoria. Apaga registros + fotos físicas. Status obrigatório `aguardando_vistoria`; gestor pode apagar em qualquer status. Reserva vinculada permanece ativa. Ver GOTCHAS.
+
+
+
 | Método | Path | Descrição |
 |---|---|---|
 | `GET` | `/api/fleet/checklists` | List Checklists |

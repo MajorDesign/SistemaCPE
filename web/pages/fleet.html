@@ -3456,6 +3456,35 @@ function _atualizarBotaoReenviar() {
     : 'Todas as fotos prontas — pode reenviar';
 }
 
+/* Condutor desiste do proprio checklist antes da vistoria (2026-08-18).
+   Apaga checklist + fotos. Reserva vinculada continua ativa. */
+async function desistirChecklist(checklistId) {
+  const ok = confirm(
+    'Desistir do checklist?\n\n' +
+    'Todas as fotos e informacoes que voce ja preencheu serao apagadas. ' +
+    'A reserva do veiculo continua ativa — voce pode refazer o checklist ' +
+    'quando quiser.\n\nEsta acao nao pode ser desfeita.'
+  );
+  if (!ok) return;
+  try {
+    const r = await fetch(`${API}/checklists/${checklistId}`, {
+      method: 'DELETE', credentials: 'include',
+      headers: { 'X-Auth-Token': _getAuthToken() },
+    });
+    if (!r.ok && r.status !== 204) {
+      const err = await r.json().catch(() => ({}));
+      showToast(err.detail || 'Erro ao desistir do checklist', 'error');
+      return;
+    }
+    showToast('Checklist apagado. Voce pode refazer quando quiser.', 'success');
+    closeModal('modalChecklistDetail');
+    loadChecklists();
+    if (typeof loadVehicles === 'function') loadVehicles();
+  } catch (e) {
+    showToast('Falha de rede: ' + e.message, 'error');
+  }
+}
+
 async function reenviarAposCorrigir() {
   const id = _CORR_STATE.checklistId;
   const res = await apiFetch(`/checklists/${id}/reenviar-saida`, {
@@ -3551,35 +3580,80 @@ async function saveChecklist() {
 
   // Upload fotos de inspeção (padrão + adicionais).
   // Backend rejeita foto duplicada (mesma imagem em outro ângulo) via hash SHA-256.
-  // Erros de upload são reportados pro condutor pra ele saber o que refazer.
+  //
+  // 2026-08-18: bug reportado — em conexao 4G/wifi ruim, upload
+  // sequencial as vezes falha em 1-2 fotos e o buffer era ZERADO
+  // no fim (deletava todas), forcando o condutor a tirar as 7 fotos
+  // de novo. Fix:
+  //   1. Retry 3x por foto com backoff 500ms/1500ms/4500ms
+  //   2. So deleta do buffer as fotos que subiram OK (as que falharam
+  //      ficam pra retentar)
+  //   3. Se sobrou pendente, abre AUTO o modal Corrigir/Adicionar
+  //      com as fotos pre-selecionadas — user so clica pra reenviar
+  //      naquele mesmo tile (fluxo que ja funcionava bem).
   const uploadErrors = [];
-  for (const angKey of Object.keys(CL_INSPECTION_FILES)) {
-    const file = CL_INSPECTION_FILES[angKey];
-    if (!file) continue;
+  const anguloOK = new Set();
+  async function _tentarUpload(angKey, file) {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('angulo', angKey);
-    try {
-      const upRes = await fetch(`${API}/checklists/${checklistId}/photos`, {
-        method: 'POST', credentials: 'include',
-        headers: { 'X-Auth-Token': token }, body: fd,
-      });
-      if (!upRes.ok) {
-        const err = await upRes.json().catch(() => ({}));
-        const label = PHOTO_ANGLES.find(a => a.key === angKey)?.label || angKey;
-        uploadErrors.push(`${label}: ${err.detail || upRes.status}`);
+    const backoff = [0, 500, 1500, 4500];  // 4 tentativas: imediata + 3 retries
+    for (let i = 0; i < backoff.length; i++) {
+      if (backoff[i]) await new Promise(r => setTimeout(r, backoff[i]));
+      try {
+        const upRes = await fetch(`${API}/checklists/${checklistId}/photos`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'X-Auth-Token': token }, body: fd,
+        });
+        if (upRes.ok) return { ok: true };
+        // 400 (formato invalido, duplicata) nao adianta retentar — falha final
+        if (upRes.status >= 400 && upRes.status < 500) {
+          const err = await upRes.json().catch(() => ({}));
+          return { ok: false, detail: err.detail || upRes.status };
+        }
+        // 5xx tenta de novo
+      } catch (e) {
+        // rede — retenta ate esgotar backoff
+        if (i === backoff.length - 1) return { ok: false, detail: 'falha de rede' };
       }
-    } catch (e) {
-      console.error('[FLEET UPLOAD]', e);
-      uploadErrors.push(`${angKey}: falha de rede`);
+    }
+    return { ok: false, detail: 'timeout apos retries' };
+  }
+  for (const angKey of Object.keys(CL_INSPECTION_FILES)) {
+    const file = CL_INSPECTION_FILES[angKey];
+    if (!file) continue;
+    const r = await _tentarUpload(angKey, file);
+    if (r.ok) {
+      anguloOK.add(angKey);
+    } else {
+      const label = PHOTO_ANGLES.find(a => a.key === angKey)?.label || angKey;
+      uploadErrors.push(`${label}: ${r.detail}`);
     }
   }
-  Object.keys(CL_INSPECTION_FILES).forEach(k => delete CL_INSPECTION_FILES[k]);
+  // So deleta as que subiram OK — as que falharam ficam pra retry
+  anguloOK.forEach(k => delete CL_INSPECTION_FILES[k]);
 
   if (uploadErrors.length) {
-    showToast('Algumas fotos falharam: ' + uploadErrors.join(' | '), 'error');
-    // Não bloqueia o fluxo — checklist já foi salvo. Vistoriador vai bloquear
-    // aprovação se faltar foto obrigatória (validação server-side).
+    showToast('Algumas fotos falharam. Abrindo tela pra reenviar so as pendentes...', 'error');
+    // Fallback UX: abre modal Corrigir/Adicionar com as fotos pendentes
+    // ja pre-selecionadas. Assim o user nao precisa tirar tudo de novo,
+    // so clicar em cada tile pendente e reenviar naquele fluxo (que
+    // ja e robusto com upload individual).
+    setTimeout(() => {
+      closeModal('modalChecklist');
+      abrirCorrigirFotos(checklistId);
+      // Pre-carrega as fotos pendentes nos inputs correspondentes
+      Object.keys(CL_INSPECTION_FILES).forEach(k => {
+        const input = document.getElementById(`corrFile_${k}`);
+        if (input && CL_INSPECTION_FILES[k]) {
+          const dt = new DataTransfer();
+          dt.items.add(CL_INSPECTION_FILES[k]);
+          input.files = dt.files;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    }, 500);
+    return;
   }
 
   // Upload foto do problema
@@ -3815,6 +3889,12 @@ async function viewChecklist(id) {
   if (c.status === 'aguardando_vistoria' &&
       (currentUser?.id === c.condutor_id || ['ADMIN','TI'].includes(currentUser?.role))) {
     footer.innerHTML += `<button class="btn-fleet btn-fleet-primary" style="background:#3B82F6;border-color:#3B82F6" onclick="abrirCorrigirFotos(${c.id})"><i class="bi bi-camera-fill"></i> Corrigir / adicionar fotos</button>`;
+    // Condutor pode desistir do proprio checklist (so aguardando_vistoria).
+    // Apaga tudo — checklist + fotos. Reserva vinculada continua ativa
+    // pra caso queira refazer.
+    if (currentUser?.id === c.condutor_id) {
+      footer.innerHTML += `<button class="btn-fleet" style="background:#FEE2E2;color:#7F1D1D;border:1px solid #FCA5A5" onclick="desistirChecklist(${c.id})"><i class="bi bi-x-circle"></i> Desistir do checklist</button>`;
+    }
   }
 
   if (c.status === 'aguardando_vistoria' && canInspectFleet() && currentUser?.id !== c.condutor_id) {
@@ -4243,31 +4323,41 @@ async function saveDevolver() {
   const retUploadToken = _getAuthToken();
   const retUploadErrors = [];
   let painelAvisoOcr = null; // alerta OCR do painel — mostra toast amarelo no final
-  for (const angKey of Object.keys(RET_INSPECTION_FILES)) {
-    const file = RET_INSPECTION_FILES[angKey];
-    if (!file) continue;
+  // 2026-08-18: retry 3x com backoff pra evitar retrabalho em rede ruim
+  async function _tentarUploadRet(angKey, file) {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('angulo', 'retorno_' + angKey);
-    try {
-      const upRes = await fetch(`${API}/checklists/${id}/photos`, {
-        method: 'POST', credentials: 'include',
-        headers: { 'X-Auth-Token': retUploadToken }, body: fd,
-      });
-      if (!upRes.ok) {
-        const err = await upRes.json().catch(() => ({}));
-        const label = PHOTO_ANGLES.find(a => a.key === angKey)?.label || angKey;
-        retUploadErrors.push(`${label}: ${err.detail || upRes.status}`);
-      } else if (angKey === 'painel') {
-        // Backend rodou OCR — se veio alerta, avisa condutor sem barrar
-        try {
-          const r = await upRes.json();
-          if (r && r.painel_alerta) painelAvisoOcr = r.painel_alerta;
-        } catch (_) {}
+    const backoff = [0, 500, 1500, 4500];
+    let ultimoErro = null;
+    for (let i = 0; i < backoff.length; i++) {
+      if (backoff[i]) await new Promise(r => setTimeout(r, backoff[i]));
+      try {
+        const upRes = await fetch(`${API}/checklists/${id}/photos`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'X-Auth-Token': retUploadToken }, body: fd,
+        });
+        if (upRes.ok) return { ok: true, resp: await upRes.json().catch(() => ({})) };
+        if (upRes.status >= 400 && upRes.status < 500) {
+          const err = await upRes.json().catch(() => ({}));
+          return { ok: false, detail: err.detail || upRes.status };
+        }
+        ultimoErro = 'HTTP ' + upRes.status;
+      } catch (e) {
+        ultimoErro = 'falha de rede';
       }
-    } catch (e) {
-      console.error('[FLEET RET UPLOAD]', e);
-      retUploadErrors.push(`${angKey}: falha de rede`);
+    }
+    return { ok: false, detail: ultimoErro || 'timeout' };
+  }
+  for (const angKey of Object.keys(RET_INSPECTION_FILES)) {
+    const file = RET_INSPECTION_FILES[angKey];
+    if (!file) continue;
+    const r = await _tentarUploadRet(angKey, file);
+    if (!r.ok) {
+      const label = PHOTO_ANGLES.find(a => a.key === angKey)?.label || angKey;
+      retUploadErrors.push(`${label}: ${r.detail}`);
+    } else if (angKey === 'painel' && r.resp?.painel_alerta) {
+      painelAvisoOcr = r.resp.painel_alerta;
     }
   }
   if (painelAvisoOcr) {
