@@ -449,6 +449,42 @@ document.addEventListener('click', e => {
 
 ---
 
+## Checklist de saída zerava fotos quando algum upload falhava (2026-08-18)
+
+**Sintoma:** condutor tira as 7 fotos no celular, aperta Enviar. Em 4G/wifi ruim, 1-2 fotos falhavam no upload. Sistema mostrava "algumas fotos falharam" e **limpava TODAS as fotos do buffer** — condutor precisava tirar as 7 de novo. Enquanto isso, no modal "Corrigir / adicionar fotos" (após vistoriador recusar) o upload funcionava bem porque é upload individual imediato.
+
+**Causa:** dois fluxos assimétricos.
+- `submitChecklist` (envio inicial): loop `for...of` sequencial + `Object.keys(CL_INSPECTION_FILES).forEach(k => delete ...)` incondicional no fim. Zerava até as que falharam.
+- `abrirCorrigirFotos` (após recusa): upload imediato ao selecionar cada foto, tile fica "Erro" e user retenta só aquela.
+
+**Fix aplicado:**
+1. Helper `_tentarUpload(angKey, file)` faz **4 tentativas** (imediata + 3 retries com backoff 500ms/1500ms/4500ms). Erros 4xx (formato inválido, duplicata) não retentam — sem sentido. 5xx e falhas de rede retentam.
+2. Só deleta do buffer as fotos que subiram OK. `anguloOK.forEach(k => delete CL_INSPECTION_FILES[k])`.
+3. Se sobrou alguma pendente, **abre AUTOMATICAMENTE o modal `Corrigir/Adicionar`** com as fotos pendentes pré-carregadas nos inputs correspondentes (via `DataTransfer` + `dispatchEvent('change')`). User só precisa clicar em cada tile pra reenviar naquele fluxo robusto.
+
+Mesmo padrão aplicado no fluxo de retorno (`RET_INSPECTION_FILES`).
+
+**Se voltar a acontecer:**
+1. Verificar console: `[FLEET UPLOAD]` mostra 4xx (falha permanente — não retenta) ou timeout?
+2. Se 4xx recorrente: pode ser bug de conteúdo (foto duplicada por hash, formato inválido). Ver `api-stdout.log` do CPEDC22 com `[FLEET UPLOAD 400]`.
+3. Se timeout persistente: rede do condutor está ruim demais pra 800KB de upload. Considerar redimensionar client-side antes de subir (não implementado).
+
+---
+
+## Desistir do próprio checklist (2026-08-18)
+
+Novo endpoint `DELETE /api/fleet/checklists/{id}` — condutor apaga próprio checklist antes da vistoria.
+
+**Regras:**
+- Autorizado: próprio condutor OU ADMIN/TI/MANAGER
+- Status obrigatório: `aguardando_vistoria`. Depois de vistoriado, só gestor apaga
+- Apaga registros (`fleet_checklists` + `fleet_checklist_photos` + `fleet_checklist_problems`) + arquivos físicos no disco (`os.remove` com tratamento de FileNotFoundError)
+- **Não mexe na reserva vinculada** — se tinha reserva aprovada, continua ativa e o condutor pode refazer o checklist quando quiser
+
+**Frontend:** botão vermelho "Desistir do checklist" no footer do modal detalhe, aparece só se `status='aguardando_vistoria'` E `currentUser.id === condutor_id`. Confirm dialog explica que reserva continua ativa.
+
+---
+
 ## UI da chamada de voz some ao trocar de canal (2026-08-18)
 
 **Sintoma:** você está em ligação com usuário A pelo chat, clica em outro canal (usuário B) pra responder mensagem — a UI da chamada desaparece. Áudio continua funcionando (você ouve, é ouvido), mas não tem como voltar a ver os botões (mute, encerrar, câmera, share). Voltar pra DM com A também não traz de volta (na verdade traz porque o `chatVoiceRoom` mora no canal aberto).

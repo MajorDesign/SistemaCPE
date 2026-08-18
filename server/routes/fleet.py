@@ -2,7 +2,7 @@
 Módulo de Frotas - Gestão de veículos, checklists e viagens/custos
 """
 
-from fastapi import APIRouter, HTTPException, status, Request, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, status, Request, UploadFile, File, Form, Response
 from fastapi.responses import JSONResponse
 from database import get_db_or_404, convert_datetime_to_string, convert_datetime_list
 import os
@@ -1324,6 +1324,88 @@ def reenviar_saida(checklist_id: int, request: Request):
         conn.commit()
         logger.info(f"[FLEET] Checklist {checklist_id} reenviado pra vistoria pelo user {user['id']}")
         return {"success": True, "message": "Checklist reenviado pra vistoria."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+
+@router.delete("/checklists/{checklist_id}", status_code=status.HTTP_204_NO_CONTENT)
+def desistir_checklist(checklist_id: int, request: Request):
+    """Condutor desiste do proprio checklist antes da vistoria.
+
+    Regras (2026-08-18):
+      - Autorizado: proprio condutor OU ADMIN/TI/MANAGER
+      - Status obrigatorio: 'aguardando_vistoria' (nao pode desistir
+        depois de vistoriado/em viagem/etc)
+      - Apaga: fotos fisicas do disco + fleet_checklist_photos +
+        fleet_checklist_problems + fleet_checklists
+      - NAO mexe na reserva vinculada — se tinha reserva aprovada, ela
+        continua ativa e o condutor pode refazer o checklist quando
+        quiser (ate a reserva expirar)
+    """
+    user = _get_user_role(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "SELECT id, condutor_id, status FROM fleet_checklists WHERE id=%s",
+            (checklist_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Checklist nao encontrado")
+
+        eh_gestor = _can_manage_fleet(user)
+        eh_dono   = row["condutor_id"] == user["id"]
+        if not eh_dono and not eh_gestor:
+            raise HTTPException(
+                status_code=403,
+                detail="Somente o condutor do checklist (ou ADMIN/TI/Frotas) pode desistir.",
+            )
+        if row["status"] != "aguardando_vistoria" and not eh_gestor:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Nao e possivel desistir: checklist ja esta '{row['status']}'. "
+                    "Somente antes da vistoria."
+                ),
+            )
+
+        # Coleta fotos pra apagar do disco
+        cursor.execute(
+            "SELECT foto_path FROM fleet_checklist_photos WHERE checklist_id=%s",
+            (checklist_id,),
+        )
+        fotos_paths = [r["foto_path"] for r in cursor.fetchall() or [] if r.get("foto_path")]
+
+        # Apaga registros (ordem por FK)
+        cursor.execute("DELETE FROM fleet_checklist_photos WHERE checklist_id=%s", (checklist_id,))
+        cursor.execute("DELETE FROM fleet_checklist_problems WHERE checklist_id=%s", (checklist_id,))
+        cursor.execute("DELETE FROM fleet_checklists WHERE id=%s", (checklist_id,))
+        conn.commit()
+
+        # Apaga arquivos fisicos (falhas silenciosas — DB ja limpo)
+        for p in fotos_paths:
+            fname = os.path.basename(p)
+            if not fname:
+                continue
+            try:
+                os.remove(os.path.join(UPLOAD_DIR, fname))
+            except FileNotFoundError:
+                pass
+            except OSError as e:
+                logger.warning(f"[FLEET DESISTIR] falha ao remover {fname}: {e}")
+
+        logger.info(
+            f"[FLEET] Checklist {checklist_id} desistido por user {user['id']} "
+            f"(condutor original {row['condutor_id']}, {len(fotos_paths)} fotos apagadas)"
+        )
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     except HTTPException:
         raise
     except Exception as e:
