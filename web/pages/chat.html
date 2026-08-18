@@ -344,9 +344,9 @@
     }
     .chat-dm-item .dm-name {
       flex: 1;
-      /* Discord real usa 16px/500 no nome do DM item (font: 16px "gg sans"). */
-      font-size: 16px; font-weight: 500;
-      color: inherit;  /* herda de .chat-dm-item pra transicionar no hover/active */
+      /* 2026-08-18 (v3): regra do usuario — 1rem, sem negrito, cor fixa. */
+      font-size: 1rem; font-weight: 400;
+      color: #96969D;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       line-height: 1.25;
     }
@@ -363,9 +363,11 @@
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       opacity: 0.9;
     }
-    .chat-dm-item.has-unread .dm-name { font-weight: 600; color: #F2F3F5; }
-    .chat-dm-item.has-unread .dm-preview { color: #DBDEE1; font-weight: 500; opacity: 1; }
-    .chat-dm-item.has-unread .dm-time { color: #F2F3F5; font-weight: 600; opacity: 1; }
+    /* 2026-08-18 (v3): regra sem-negrito — has-unread agora usa apenas
+       cor mais clara (nao muda peso). Diferenciacao vem do badge. */
+    .chat-dm-item.has-unread .dm-name { color: #F2F3F5; }
+    .chat-dm-item.has-unread .dm-preview { color: #DBDEE1; opacity: 1; }
+    .chat-dm-item.has-unread .dm-time { color: #F2F3F5; opacity: 1; }
     .chat-dm-item .unread-badge {
       background: #F23F42; color: #FFFFFF;
       font-size: 0.7rem; font-weight: 700;
@@ -391,7 +393,8 @@
     }
     .chat-self-info { flex: 1; min-width: 0; }
     .chat-self-name {
-      font-weight: 600; color: var(--chat-text);
+      font-weight: 400; color: #96969D;
+      font-size: 1rem;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .chat-conn-status { font-size: 0.7rem; color: var(--chat-muted); }
@@ -448,12 +451,13 @@
     .msg-content { flex: 1; min-width: 0; }
     .msg-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px; }
     /* 2026-08-18: tipografia estilo Discord — usa Inter (ver <head>).
-       Discord: nome 1rem/500, hora 0.75rem/500, body 1rem/400 line-height 1.375 */
+       Discord: nome 1rem/500, hora 0.75rem/500, body 1rem/400 line-height 1.375
+       2026-08-18 (v3): regra do usuario — TODO nome no chat sai em
+       cor #96969D, font-weight 400 (sem negrito), font-size 1rem. */
     .msg-author {
-      font-weight: 500;
-      color: var(--chat-text);
+      font-weight: 400;
+      color: #96969D;
       font-size: 1rem;
-      letter-spacing: -0.005em;
     }
     .msg-time {
       font-size: 0.75rem;
@@ -536,7 +540,11 @@
       background: #6B7280; border: 2px solid var(--chat-bg-2);
     }
     .member-item.online .member-avatar::after { background: var(--chat-online); }
-    .member-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .member-name {
+      flex: 1;
+      font-size: 1rem; font-weight: 400; color: #96969D;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
 
     /* Badge de nao lidas na lista de canais */
     .chat-channel-item .unread-badge {
@@ -1400,7 +1408,7 @@
     }
     .chat-user-row .info { flex: 1; min-width: 0; }
     .chat-user-row .name {
-      color: var(--chat-text); font-weight: 500;
+      color: #96969D; font-weight: 400; font-size: 1rem;
       overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
     .chat-user-row .email {
@@ -3443,6 +3451,17 @@ function _initials(name) {
   const parts = name.trim().split(/\s+/);
   return ((parts[0]?.[0] || '') + (parts[parts.length-1]?.[0] || '')).toUpperCase() || '?';
 }
+// 2026-08-18: regra global do chat — TODO nome de usuario deve ser
+// exibido em Title Case (primeira letra de cada palavra maiuscula,
+// resto minuscula). Nunca em CAPSLOCK, mesmo que venha assim do banco.
+// Usar em conjunto com _esc: _esc(_titleCase(nome)).
+function _titleCase(s) {
+  if (!s) return s;
+  return String(s).toLowerCase().replace(
+    /(^|[\s\-'.])(\p{L})/gu,
+    (_, sep, ch) => sep + ch.toUpperCase()
+  );
+}
 
 // Renderiza conteudo interno de um avatar: <img> se tiver avatar_url,
 // senao texto com iniciais. NAO inclui o container externo — caller
@@ -3507,7 +3526,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const av = document.getElementById('chatSelfAvatar');
   if (av) av.innerHTML = _esc(_initials(_self.name)) +
     '<span class="status-dot offline" id="chatSelfStatusDot"></span>';
-  document.getElementById('chatSelfName').textContent = _self.name || _self.email;
+  document.getElementById('chatSelfName').textContent = _titleCase(_self.name || _self.email);
   // Carrega status manual salvo no localStorage
   const statusSalvo = localStorage.getItem('cpe_chat_status') || 'online';
   _aplicarStatusVisual(statusSalvo);
@@ -3962,7 +3981,7 @@ function _renderMembrosServer() {
         ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
       </div>
       <div style="flex:1;min-width:0">
-        <div style="color:${corNome};font-weight:500">${_esc(m.name || m.email)}</div>
+        <div style="color:${corNome};font-weight:400;font-size:1rem">${_esc(_titleCase(m.name || m.email))}</div>
         <div style="font-size:0.74rem;color:var(--chat-muted)">${_esc(m.email || '')}</div>
         ${rolesBadges ? `<div style="margin-top:4px">${rolesBadges}</div>` : ''}
       </div>
@@ -4216,8 +4235,8 @@ function _renderCargoMembros() {
                   font-weight:700;overflow:hidden">
         ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
       </div>
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-        ${_esc(m.name || m.email)}
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:1rem;color:#96969D">
+        ${_esc(_titleCase(m.name || m.email))}
       </span>
       <button onclick="removerCargoDoUser(${m.user_id})"
               style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:1rem"
@@ -4271,7 +4290,7 @@ async function _filtrarMembrosPraCargo(q) {
                   font-weight:700;overflow:hidden">
         ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
       </div>
-      <span style="flex:1">${_esc(m.name || m.email)}</span>
+      <span style="flex:1;font-size:1rem;color:#96969D">${_esc(_titleCase(m.name || m.email))}</span>
       <i class="bi bi-plus-circle" style="color:var(--chat-accent)"></i>
     </div>
   `).join('');
@@ -5251,7 +5270,7 @@ function _renderItemDMPreview(c) {
     <div class="chan-avatar">${_esc(initials)}</div>
     <div class="dm-body">
       <div class="dm-row-top">
-        <span class="dm-name">${_esc(c.nome || '#' + c.id)}</span>
+        <span class="dm-name">${_esc(_titleCase(c.nome || '#' + c.id))}</span>
         ${hora ? `<span class="dm-time">${_esc(hora)}</span>` : ''}
       </div>
       ${temMsg ? `<div class="dm-row-bottom">
@@ -5323,9 +5342,9 @@ function _renderItemVoz(c) {
   // Lista mini de quem ta na sala
   if (peers.length) {
     html += peers.map(p => `
-      <div class="chat-voice-peer-row" title="${_esc(p.name)}${p.mic_on ? '' : ' (mutado)'}">
+      <div class="chat-voice-peer-row" title="${_esc(_titleCase(p.name))}${p.mic_on ? '' : ' (mutado)'}">
         <div class="chan-avatar" style="width:20px;height:20px;font-size:0.62rem">${_esc(_initials(p.name))}</div>
-        <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(p.name)}</span>
+        <span style="font-size:1rem;font-weight:400;color:#96969D;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(_titleCase(p.name))}</span>
         ${p.mic_on ? '<i class="bi bi-mic-fill" style="color:#10B981;font-size:0.75rem"></i>'
                    : '<i class="bi bi-mic-mute-fill" style="color:#EF4444;font-size:0.75rem"></i>'}
         ${p.cam_on ? '<i class="bi bi-camera-video-fill" style="color:var(--chat-accent);font-size:0.75rem"></i>' : ''}
@@ -5537,7 +5556,7 @@ function _msgHtml(m) {
     <div class="msg-content">
       ${replyBanner}
       <div class="msg-header">
-        <span class="msg-author">${_esc(m.author?.name || 'Usuário')}</span>
+        <span class="msg-author">${_esc(_titleCase(m.author?.name || 'Usuário'))}</span>
         <span class="msg-time">${_fmtHora(m.criado_em)}</span>
         ${editedTag}
         ${pinTag}
@@ -5903,7 +5922,7 @@ async function _renderMembrosDoCanal(c) {
           ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
         </div>
         <span class="member-name" onclick="abrirDM(${m.user_id})" style="cursor:pointer">
-          ${_esc(m.name || m.email)}
+          ${_esc(_titleCase(m.name || m.email))}
         </span>
         ${roleBadge} ${voiceIcon}
       </div>`;
@@ -5933,7 +5952,7 @@ function renderUsuariosSistema() {
                  style="cursor:pointer"
                  title="Iniciar DM com ${_esc(u.name)}">
       <div class="member-avatar" style="overflow:hidden">${_avatarConteudo(u)}</div>
-      <span class="member-name">${_esc(u.name || u.email)}</span>
+      <span class="member-name">${_esc(_titleCase(u.name || u.email))}</span>
     </div>`;
   }).join('');
 }
@@ -6071,7 +6090,7 @@ function iniciarFlashTitle(m) {
   if (_titleFlashInterval) return;
   let alt = false;
   _titleFlashInterval = setInterval(() => {
-    document.title = alt ? `💬 Nova mensagem — ${m.author?.name || ''}` : _baseTitleComUnread();
+    document.title = alt ? `💬 Nova mensagem — ${_titleCase(m.author?.name || '')}` : _baseTitleComUnread();
     alt = !alt;
   }, 1200);
 }
@@ -6101,8 +6120,8 @@ function mostrarNotifDesktop(m) {
   try {
     const canal = _canais.find(c => c.id === m.channel_id);
     const titulo = canal?.tipo === 'dm'
-      ? (m.author?.name || 'Nova mensagem')
-      : `${m.author?.name || 'Alguém'} em #${canal?.nome || 'canal'}`;
+      ? _titleCase(m.author?.name || 'Nova mensagem')
+      : `${_titleCase(m.author?.name || 'Alguém')} em #${canal?.nome || 'canal'}`;
     const preview = (m.content || '').slice(0, 140) ||
                     (m.attachments?.length ? '📷 Enviou uma imagem' : '');
     const n = new Notification(titulo, {
@@ -6453,7 +6472,7 @@ function _renderMentionPopover() {
          onmouseenter="_mentionState.selected=${i}; _renderMentionPopover()"
          onmousedown="event.preventDefault(); _mentionSelecionar(${i})">
       <div class="av" style="overflow:hidden">${_avatarConteudo(u)}</div>
-      <span>${_esc(u.name || u.email)}</span>
+      <span>${_esc(_titleCase(u.name || u.email))}</span>
     </div>`).join('');
   pop.innerHTML = html;
   pop.classList.add('open');
@@ -6563,7 +6582,7 @@ function _renderUserSelector(containerId, modo, excluirIds = new Set()) {
       <input type="checkbox" ${checked} onchange="_toggleUserSelected(${u.id}, '${modo}', this.checked)">
       <div class="av" style="overflow:hidden">${_avatarConteudo(u)}</div>
       <div class="info">
-        <div class="name">${_esc(u.name || u.email)}</div>
+        <div class="name">${_esc(_titleCase(u.name || u.email))}</div>
         <div class="email">${_esc(u.email || '')}</div>
       </div>
     </label>`;
@@ -6748,7 +6767,7 @@ function _renderMembrosConfig() {
         ${_avatarConteudo({ name: m.name, avatar_url: m.avatar_url })}
       </div>
       <div style="flex:1;min-width:0">
-        <div style="color:var(--chat-text);font-weight:500">${_esc(m.name || m.email)}</div>
+        <div style="color:#96969D;font-weight:400;font-size:1rem">${_esc(_titleCase(m.name || m.email))}</div>
         <div style="font-size:0.74rem;color:var(--chat-muted)">${_esc(m.email || '')}</div>
       </div>
       <span class="role-badge ${roleClass}">${m.role_no_canal}</span>
@@ -6989,7 +7008,7 @@ function _renderListaMsgsModal(msgs, query) {
   box.innerHTML = msgs.map(m => `
     <div class="chat-search-result" onclick="_pularParaMsg(${m.id})">
       <div class="meta">
-        <span class="author">${_esc(m.author?.name || 'Usuário')}</span>
+        <span class="author">${_esc(_titleCase(m.author?.name || 'Usuário'))}</span>
         <span>${_fmtHora(m.criado_em)}</span>
         ${m.pinned_at ? '<span style="color:var(--chat-accent)"><i class="bi bi-pin-angle-fill"></i></span>' : ''}
       </div>
@@ -7065,7 +7084,7 @@ function _mostrarCallModal({ direction, peerName, peerId }) {
   const sub     = document.getElementById('callSub');
   const btns    = document.getElementById('callButtons');
   av.textContent  = _initials(peerName);
-  name.textContent = peerName || `Usuário #${peerId}`;
+  name.textContent = _titleCase(peerName || `Usuário #${peerId}`);
   box.classList.toggle('incoming', direction === 'in');
   if (direction === 'in') {
     status.textContent = 'CHAMADA RECEBIDA';
@@ -7280,7 +7299,7 @@ function _onCallAccept(data) {
 function _onCallReject(data) {
   if (!_callState || _callState.direction !== 'out') return;
   if (_callState.peer.user_id !== data.from_user_id) return;
-  alert(`📵 ${_callState.peer.name || 'Usuário'} rejeitou a chamada.`);
+  alert(`📵 ${_titleCase(_callState.peer.name || 'Usuário')} rejeitou a chamada.`);
   _finalizarChamada();
 }
 
