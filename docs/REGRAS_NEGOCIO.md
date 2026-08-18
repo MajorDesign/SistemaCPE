@@ -156,6 +156,23 @@ Ordem visual dos selects: **Grupo → Status → Responsável → SLA → Catego
 
 ---
 
+### Sincronizacao automatica de users/grupos com o server "CPE TECNOLOGIA" (2026-08-18)
+Todo user cadastrado no sistema entra automaticamente no server "CPE TECNOLOGIA" (`chat_servers` id definido em `CPE_CHAT_SERVER_ID`, default 1). Cada `cpe_grupo` tem 1 canal correspondente (`chat_channels.tipo='grupo_sistema'`, FK `grupo_id`, UNIQUE) dentro desse server, e o user vai automaticamente pro canal do grupo dele (`users.group_id`).
+
+**Regras:**
+- Match fuzzy de categoria: nome do canal é slugficado, e busca-se categoria existente cujo nome normalizado (lower + sem acento) bata com o nome do grupo. Se bate → canal vai pra dentro da categoria. Senão → canal fica solto no topo do server (admin move manual depois se quiser).
+- Grupo sem users ativos ainda tem canal criado (pra futuro).
+- User sem `group_id` entra só no server, sem canal de grupo.
+- Ao alterar `group_id` de um user (PUT /api/users/{id}): user é removido do canal antigo e adicionado no novo. Hooks silenciosos — falha aqui NUNCA derruba a operação principal.
+- Ao criar grupo (POST /api/groups/): canal correspondente é criado auto.
+- Ao criar user (POST /api/users/): user entra no server + canal do grupo.
+
+**Popular retroativo:** rodar `python server/tools/sync_chat_grupos.py` (com `--dry-run` pra simular). Idempotente — pode rodar N vezes sem duplicar.
+
+Ver `services/chat_bootstrap.py` pros helpers e GOTCHAS pra troubleshoot.
+
+---
+
 ### Transferir grupo entre departamentos (2026-08-17)
 - `PUT /api/groups/{id}` agora aceita `department_id` opcional.
 - Backend valida existência do departamento antes de gravar.

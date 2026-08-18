@@ -120,6 +120,10 @@ Ordem alfabética.
 
 ## 💬 Chat + Meetings
 
+**Nota 2026-08-18**: `services/chat_bootstrap.py` sincroniza automaticamente users e grupos do sistema com o server "CPE TECNOLOGIA" (canal por grupo, membros por `users.group_id`). Ver `REGRAS_NEGOCIO.md` e script one-shot `server/tools/sync_chat_grupos.py`.
+
+
+
 **Propósito:** chat interno (Discord-like: servidores/canais/cargos) + reuniões WebRTC.
 
 **Arquivos:**

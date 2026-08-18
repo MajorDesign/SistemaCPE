@@ -1014,6 +1014,14 @@ async def create_group(group: GroupCreate, current_user: dict = Depends(get_curr
         new_group = cursor.fetchone()
         new_group = convert_datetime_to_string(new_group)
 
+        # 2026-08-18: hook chat — cria canal correspondente no server CPE
+        # TECNOLOGIA. Silencioso: falha aqui NAO derruba create_group.
+        try:
+            from services.chat_bootstrap import sync_grupo
+            sync_grupo(new_group_id, group.name, criador_user_id=current_user.get("id"))
+        except Exception as e_chat:
+            logger.warning(f"[GROUPS] hook chat falhou (ignorado): {e_chat}")
+
         logger.info("[GROUPS] ✅ SUCESSO!\n")
         return new_group
         
