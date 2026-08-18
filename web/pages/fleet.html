@@ -6276,9 +6276,24 @@ function getSigData(canvasId) {
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
+/* Guard mobile: iOS Safari e Android Chrome disparam um "ghost click"
+   sintetico no ponto onde o dedo estava quando o intent da camera
+   retorna (foto salva). Se esse click cai sobre o overlay do modal,
+   fecha o modal e o usuario perde o form do checklist — bug crônico
+   reportado em 2026-08-18. Ver docs/GOTCHAS.md ("Ghost click apos
+   input file capture=environment fecha modal").
+   Fix: registramos timestamp do change de qualquer <input type=file>
+   e o listener de click-fora ignora se aconteceu ha menos de 800ms. */
+let _lastPhotoSelectedTs = 0;
+document.addEventListener('change', e => {
+  if (e.target?.type === 'file') _lastPhotoSelectedTs = Date.now();
+}, true);
+
 // Fechar ao clicar fora
 document.addEventListener('click', e => {
   if (e.target.classList.contains('fleet-modal-overlay')) {
+    // Ghost-click pos-camera: ignora
+    if (Date.now() - _lastPhotoSelectedTs < 800) return;
     e.target.classList.remove('open');
   }
 });
