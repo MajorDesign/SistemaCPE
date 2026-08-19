@@ -3695,17 +3695,41 @@ def dismiss_reservation_notif(res_id: int, request: Request):
 
 @router.delete("/reservations/{res_id}")
 def cancel_reservation(res_id: int, request: Request):
-    user_id = _get_user_id(request)
+    """Cancela reserva (solicitante desistiu OU gestor cancelou).
+
+    Permissao: proprio solicitante OU gestor de frotas (ADMIN/TI/RESP Frotas).
+    Aceita apenas status 'pendente' ou 'aprovado' — reservas ja em uso
+    (checklist iniciado, em viagem etc.) exigem cancelar via checklist.
+    """
+    user = _get_user_role(request)
+    user_id = user["id"]
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT solicitante_id, status FROM fleet_reservations WHERE id=%s", (res_id,))
+        cursor.execute(
+            "SELECT solicitante_id, status FROM fleet_reservations WHERE id=%s",
+            (res_id,),
+        )
         r = cursor.fetchone()
         if not r:
             raise HTTPException(status_code=404, detail="Reserva nao encontrada")
+        if r["solicitante_id"] != user_id and not _can_manage_fleet(user):
+            raise HTTPException(
+                status_code=403,
+                detail="Somente o solicitante ou o Frotas pode cancelar esta reserva.",
+            )
         if r["status"] not in ("pendente", "aprovado"):
-            raise HTTPException(status_code=400, detail="Reserva nao pode ser cancelada")
-        cursor.execute("UPDATE fleet_reservations SET status='cancelado' WHERE id=%s", (res_id,))
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Reserva nao pode ser cancelada — status atual eh "
+                    f"'{r['status']}'. Se ja fez checklist, cancele pelo checklist."
+                ),
+            )
+        cursor.execute(
+            "UPDATE fleet_reservations SET status='cancelado' WHERE id=%s",
+            (res_id,),
+        )
         conn.commit()
         return {"success": True, "message": "Reserva cancelada."}
     except HTTPException:
