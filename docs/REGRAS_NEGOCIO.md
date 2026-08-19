@@ -30,6 +30,12 @@ Decisões que **não existem no código como constante óbvia** — vieram de co
 6. Ao devolver → checklist de devolução (também com fotos)
 7. Status vira `finalizado` OU `manutencao_solicitada` se marcou problemas
 
+### Desistir da reserva antes do checklist (2026-08-19)
+Banner "Checklist de saída pendente" tem 2 botões: **Fazer Checklist Agora** e **Desistir da reserva**. Segundo cancela a reserva (status `aprovado` → `cancelado`) e libera o veículo pra outra pessoa.
+- Endpoint: `DELETE /api/fleet/reservations/{id}`
+- Permissão: proprio solicitante OU gestor de frotas (ADMIN/TI/RESP Frotas)
+- Aceita status `pendente` ou `aprovado`. Depois de checklist iniciado (`aguardando_vistoria`, `em_viagem` etc.), tem que cancelar pelo checklist mesmo.
+
 ### Prazos automáticos (job scheduler)
 - **Pendente sem aprovação após horário início + janela 4h** → cancela + email condutor + email Resp Frotas
   - Motivo gravado: `EXPIRED_NO_APPROVAL::<nome do resp>`
