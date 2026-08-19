@@ -4885,14 +4885,19 @@ function renderCalendar() {
     const isPast = dateStr < hojeStr;
     const reservas = byDay[d] || [];
     const dots = reservas.map(r => '<span class="cal-dot '+r.status+'" title="'+r.placa+' '+r.horario_inicio+'-'+r.horario_fim+'"></span>').join('');
-    // Click único: abre Nova Reserva pré-preenchida; duplo click: detalhes do dia
-    // (só em dias com reservas). Dias passados ficam não-clicáveis.
-    const tipPast = isPast ? 'Não é possível reservar em datas passadas' : 'Clique para criar nova reserva' + (reservas.length ? ' • Duplo clique para ver as reservas deste dia' : '');
+    // 2026-08-19: click unico e inteligente — dia com reservas abre os
+    // detalhes (com botao cancelar); dia vazio abre Nova Reserva direto.
+    // Antes exigia duplo clique pra ver detalhes, UX ruim (ninguem sabia).
+    const dicaHoje = reservas.length
+      ? 'Clique para ver as ' + reservas.length + ' reserva' + (reservas.length!==1?'s':'') + ' deste dia'
+      : 'Clique para criar uma nova reserva';
+    const tipPast = isPast ? 'Não é possível reservar em datas passadas' : dicaHoje;
+    const acao = reservas.length
+      ? 'showDayDetail('+d+')'
+      : 'openReservationModal(\''+dateStr+'\')';
     const handlers = isPast
       ? ' style="cursor:not-allowed;opacity:.55" title="'+tipPast+'"'
-      : ' onclick="onCalCellClick(\''+dateStr+'\')"'
-        + (reservas.length ? ' ondblclick="onCalCellDblClick('+d+')"' : '')
-        + ' style="cursor:pointer" title="'+tipPast+'"';
+      : ' onclick="'+acao+'" style="cursor:pointer" title="'+tipPast+'"';
     html += '<div class="cal-cell'+(isToday?' today':'')+(isPast?' past':'')+'"'+handlers+'>'
       + '<div class="cal-day">'+d+'</div>'
       + (dots || '')
@@ -4912,7 +4917,18 @@ function showDayDetail(day) {
   const reservas = _calReservations.filter(r => _resCobreData(r, dateStr));
   const isAdmin = ['ADMIN','TI','RESPONSAVEL_GRUPO'].includes(currentUser?.role);
 
-  document.getElementById('modalDayDetailTitle').innerHTML = '<i class="bi bi-calendar-event"></i> Reservas — '+dd+'/'+mm+'/'+_calYear+' <span style="font-weight:400;font-size:13px;color:#6B7280">('+reservas.length+' reserva'+(reservas.length!==1?'s':'')+')</span>';
+  // Botao "Nova reserva neste dia" no header do modal — permite criar
+  // reserva num dia que ja tem outras (antes so o click no calendario
+  // fazia isso, o que agora abre este modal em vez de criar).
+  const isPastDay = dateStr < new Date().toISOString().split('T')[0];
+  const btnNova = isPastDay ? '' :
+    '<button class="btn-fleet btn-fleet-sm" style="background:#FBBF24;color:#1F2937;border:none;font-weight:700;margin-left:12px" '
+    + 'onclick="closeModal(\'modalDayDetail\'); openReservationModal(\''+dateStr+'\')">'
+    + '<i class="bi bi-plus-lg"></i> Nova reserva neste dia</button>';
+  document.getElementById('modalDayDetailTitle').innerHTML =
+    '<i class="bi bi-calendar-event"></i> Reservas — '+dd+'/'+mm+'/'+_calYear
+    + ' <span style="font-weight:400;font-size:13px;color:#6B7280">('+reservas.length+' reserva'+(reservas.length!==1?'s':'')+')</span>'
+    + btnNova;
 
   document.getElementById('modalDayDetailBody').innerHTML = reservas.length ? reservas.map(r => {
     const actions = [];
@@ -4978,22 +4994,6 @@ async function openReservationModal(prefillDate) {
   document.getElementById('resInicio').value = '08:00';
   document.getElementById('resFim').value = '18:00';
   openModal('modalReservation');
-}
-
-// ─── Click no calendário: abre Nova Reserva pré-preenchida com a data.
-//     Se o usuário fizer duplo clique num dia COM reservas, mostra os detalhes
-//     em vez de criar nova reserva (o timer cancela a abertura do modal).
-let _calClickTimer = null;
-function onCalCellClick(dateStr) {
-  if (_calClickTimer) return;
-  _calClickTimer = setTimeout(() => {
-    _calClickTimer = null;
-    openReservationModal(dateStr);
-  }, 230);
-}
-function onCalCellDblClick(day) {
-  if (_calClickTimer) { clearTimeout(_calClickTimer); _calClickTimer = null; }
-  showDayDetail(day);
 }
 
 async function saveReservation() {
