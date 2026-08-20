@@ -2087,13 +2087,13 @@ function _renderAttachGallery(anexos) {
               <img src="${url}" alt="${safeName}">
             </a>`;
         }
-        // Documento (PDF/Word/Excel/etc): card baixavel
+        // Documento (PDF/Word/Excel/etc): card baixavel (classe CSS
+        // attach-doc-link em tickets.css, sobrescreve o 80x80 padrao)
         const icon = _iconForMime(a.mime_type);
         const color = _colorForMime(a.mime_type);
         return `
-          <a href="${url}" target="_blank" rel="noopener"
-             title="Abrir/baixar ${safeName} (${sizeKB} KB)"
-             style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:6px;text-decoration:none;color:#111827;font-size:13px;font-weight:500;max-width:280px">
+          <a href="${url}" target="_blank" rel="noopener" class="attach-doc-link"
+             title="Abrir/baixar ${safeName} (${sizeKB} KB)">
             <i class="bi ${icon}" style="font-size:20px;color:${color};flex-shrink:0"></i>
             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</span>
             <span style="color:#6B7280;font-size:11px;flex-shrink:0">${sizeKB} KB</span>

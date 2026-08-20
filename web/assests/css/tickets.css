@@ -2114,14 +2114,35 @@
   padding: 1px 0;
 }
 
+/* 2026-08-19: preview de NAO-imagem (PDF/Word/Excel).
+   Sobrescreve tamanho fixo 72x72 de .attach-thumb — precisa ser maior
+   pra caber icone + nome do arquivo. */
+.attach-thumb.attach-doc {
+  width: auto !important;
+  min-width: 110px;
+  max-width: 160px;
+  height: auto !important;
+  overflow: visible !important;
+  cursor: default !important;
+}
+.attach-thumb.attach-doc .attach-size {
+  position: static;
+  background: transparent;
+  color: #6B7280;
+  font-size: 10px;
+  margin-top: 2px;
+}
+
 /* Thumbs no histórico (read-only) */
 .comment-attachments {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 8px;
+  align-items: flex-start;
 }
-.comment-attachments a {
+/* Imagem: quadrado 80x80 (comportamento original) */
+.comment-attachments > a:not(.attach-doc-link) {
   display: block;
   width: 80px;
   height: 80px;
@@ -2134,6 +2155,26 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+/* Documento no historico: card retangular com icone + nome + tamanho */
+.comment-attachments a.attach-doc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 6px;
+  text-decoration: none;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 500;
+  max-width: 280px;
+  transition: background 0.15s;
+}
+.comment-attachments a.attach-doc-link:hover {
+  background: #F3F4F6;
+  border-color: #9CA3AF;
 }
 
 /* =====================================================================
