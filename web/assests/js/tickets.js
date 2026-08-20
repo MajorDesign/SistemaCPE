@@ -241,8 +241,20 @@ let currentVista = 'todos';
 //   pendingAttachments.reply    → imagens para a resposta pública
 //   pendingAttachments.internal → imagens para o comentário interno
 const pendingAttachments = { create: [], reply: [], internal: [] };
-const ATTACH_MAX_BYTES   = 250 * 1024;
-const ATTACH_MIMES_OK    = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+// 2026-08-19: aumentado 250 KB -> 10 MB e aceita agora DOC/DOCX/XLS/XLSX/PDF
+// alem de imagens. Persistido em ticket_attachments (LONGBLOB) e vinculado
+// a interacao_id — todos aparecem no historico do chamado.
+const ATTACH_MAX_BYTES   = 10 * 1024 * 1024;  // 10 MB por arquivo
+const ATTACH_MIMES_OK    = [
+  // imagens
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  // documentos
+  'application/pdf',
+  'application/msword',                                                       // .doc
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',  // .docx
+  'application/vnd.ms-excel',                                                 // .xls
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',        // .xlsx
+];
 
 const API_BASE    = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`) + '/api';
 const API_TIMEOUT = 10000;
@@ -2054,7 +2066,10 @@ async function loadTicketComments(ticketId) {
   }).join("");
 }
 
-/** HTML de galeria de thumbs para anexos já gravados (clique abre o modal flutuante). */
+/** HTML de galeria de thumbs para anexos já gravados no histórico.
+ *  - Imagens: thumbnail clicável que abre viewer
+ *  - Docs/PDF: card com ícone + nome, click abre em nova aba pra download/visualização
+ */
 function _renderAttachGallery(anexos) {
   if (!anexos || !anexos.length) return '';
   const base = API_BASE; // já inclui /api
@@ -2062,11 +2077,26 @@ function _renderAttachGallery(anexos) {
     <div class="comment-attachments">
       ${anexos.map(a => {
         const url = `${base}/tickets/attachments/${a.id}`;
-        const safeName = (a.filename || 'imagem').replace(/"/g, '&quot;');
+        const safeName = (a.filename || 'arquivo').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+        const sizeKB = ((a.size_bytes || 0) / 1024).toFixed(0);
+        const isImg = (a.mime_type || '').startsWith('image/');
+        if (isImg) {
+          return `
+            <a href="${url}" onclick="event.preventDefault(); openImageViewer('${url}', '${safeName}');"
+               title="${safeName} (${sizeKB} KB)">
+              <img src="${url}" alt="${safeName}">
+            </a>`;
+        }
+        // Documento (PDF/Word/Excel/etc): card baixavel
+        const icon = _iconForMime(a.mime_type);
+        const color = _colorForMime(a.mime_type);
         return `
-          <a href="${url}" onclick="event.preventDefault(); openImageViewer('${url}', '${safeName}');"
-             title="${safeName} (${(a.size_bytes/1024).toFixed(0)} KB)">
-            <img src="${url}" alt="${safeName}">
+          <a href="${url}" target="_blank" rel="noopener"
+             title="Abrir/baixar ${safeName} (${sizeKB} KB)"
+             style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:6px;text-decoration:none;color:#111827;font-size:13px;font-weight:500;max-width:280px">
+            <i class="bi ${icon}" style="font-size:20px;color:${color};flex-shrink:0"></i>
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${safeName}</span>
+            <span style="color:#6B7280;font-size:11px;flex-shrink:0">${sizeKB} KB</span>
           </a>`;
       }).join('')}
     </div>
@@ -3692,12 +3722,27 @@ function _humanSize(bytes) {
 
 function _validateAttachFile(file) {
   if (!ATTACH_MIMES_OK.includes(file.type)) {
-    return `Tipo não permitido (${file.type || 'desconhecido'}). Use JPG/PNG/WEBP/GIF.`;
+    return `"${file.name}": tipo não permitido (${file.type || 'desconhecido'}). Use JPG, PNG, PDF, Word ou Excel.`;
   }
   if (file.size > ATTACH_MAX_BYTES) {
-    return `"${file.name}" tem ${_humanSize(file.size)} (limite 250 KB).`;
+    return `"${file.name}" tem ${_humanSize(file.size)} (limite 10 MB).`;
   }
   return null;
+}
+
+// 2026-08-19: helper — retorna ícone Bootstrap p/ tipos não-imagem
+function _iconForMime(mime) {
+  if (!mime) return 'bi-file-earmark';
+  if (mime === 'application/pdf') return 'bi-file-earmark-pdf-fill';
+  if (mime.includes('word') || mime.includes('wordprocessing')) return 'bi-file-earmark-word-fill';
+  if (mime.includes('excel') || mime.includes('spreadsheet')) return 'bi-file-earmark-excel-fill';
+  return 'bi-file-earmark';
+}
+function _colorForMime(mime) {
+  if (mime === 'application/pdf') return '#DC2626';
+  if (mime.includes('word') || mime.includes('wordprocessing')) return '#2563EB';
+  if (mime.includes('excel') || mime.includes('spreadsheet')) return '#16A34A';
+  return '#6B7280';
 }
 
 function _renderAttachPreview(slot, container) {
@@ -3708,16 +3753,29 @@ function _renderAttachPreview(slot, container) {
     return;
   }
   container.innerHTML = files.map((f, idx) => {
-    const safeName = (f.name || 'imagem').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+    const safeName = (f.name || 'arquivo').replace(/"/g, '&quot;').replace(/'/g, "\\'");
+    const isImg = (f.type || '').startsWith('image/');
+    if (isImg) {
+      return `
+        <div class="attach-thumb"
+             onclick="openImageViewer('${f._previewUrl}', '${safeName}')">
+          <img src="${f._previewUrl}" alt="${f.name}">
+          <button type="button" class="attach-remove" title="Remover"
+            onclick="event.stopPropagation(); removePendingAttach('${slot}', ${idx})">×</button>
+          <span class="attach-size">${_humanSize(f.size)}</span>
+        </div>`;
+    }
+    // Não-imagem: card com ícone + nome + tamanho
+    const icon = _iconForMime(f.type);
+    const color = _colorForMime(f.type);
     return `
-      <div class="attach-thumb"
-           onclick="openImageViewer('${f._previewUrl}', '${safeName}')">
-        <img src="${f._previewUrl}" alt="${f.name}">
+      <div class="attach-thumb attach-doc" style="display:flex;flex-direction:column;align-items:center;justify-content:center;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:6px;padding:10px 8px;min-width:110px;position:relative">
+        <i class="bi ${icon}" style="font-size:32px;color:${color}"></i>
+        <span style="font-size:11px;font-weight:600;color:#374151;margin-top:4px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${safeName}">${safeName}</span>
         <button type="button" class="attach-remove" title="Remover"
           onclick="event.stopPropagation(); removePendingAttach('${slot}', ${idx})">×</button>
         <span class="attach-size">${_humanSize(f.size)}</span>
-      </div>
-    `;
+      </div>`;
   }).join('');
 }
 
