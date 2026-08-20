@@ -3269,15 +3269,26 @@ async def criar_interacao(payload: InteracaoCriar):
 
 
 # =====================================================================
-# 📎 ANEXOS DE IMAGEM
+# 📎 ANEXOS
 # =====================================================================
 # Tabela: ticket_attachments (migration 032)
-#   - Aceita JPG/PNG/WEBP/GIF até 250 KB
+#   - Aceita imagens (JPG/PNG/WEBP/GIF) + documentos (PDF/Word/Excel)
+#   - Limite 10 MB por arquivo (aumentado 2026-08-19 — antes 250 KB)
 #   - Vincula ao ticket; opcionalmente a uma interação (resposta)
+#   - Historico completo: todos os anexos aparecem junto de cada resposta
 # =====================================================================
 
-ATTACH_MAX_BYTES   = 250 * 1024  # 250 KB
-ATTACH_MIME_VALIDOS = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+ATTACH_MAX_BYTES = 10 * 1024 * 1024  # 10 MB por arquivo
+ATTACH_MIME_VALIDOS = {
+    # imagens
+    "image/jpeg", "image/png", "image/webp", "image/gif",
+    # documentos
+    "application/pdf",
+    "application/msword",                                                        # .doc
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",   # .docx
+    "application/vnd.ms-excel",                                                  # .xls
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",         # .xlsx
+}
 
 
 @tickets_router.post("/{ticket_id}/attachments")
@@ -3288,8 +3299,8 @@ async def upload_attachment(
     file: UploadFile = File(...),
 ):
     """
-    Faz upload de uma imagem anexada ao ticket (ou a uma interação dele).
-    Limite: 250 KB. Tipos: jpeg/png/webp/gif.
+    Faz upload de um arquivo anexado ao ticket (ou a uma interação dele).
+    Limite: 10 MB. Tipos: imagens (JPG/PNG/WEBP/GIF) e documentos (PDF/Word/Excel).
     """
     log_inicio("upload_attachment", ticket_id=ticket_id, usuario_id=usuario_id, interacao_id=interacao_id)
 
@@ -3297,7 +3308,7 @@ async def upload_attachment(
     if file.content_type not in ATTACH_MIME_VALIDOS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Tipo não permitido: {file.content_type}. Use JPG, PNG, WEBP ou GIF."
+            detail=f"Tipo não permitido: {file.content_type}. Use JPG, PNG, PDF, Word ou Excel."
         )
 
     # ── Lê conteúdo e valida tamanho ──
@@ -3308,7 +3319,7 @@ async def upload_attachment(
     if tamanho > ATTACH_MAX_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Arquivo excede 250 KB (recebido {tamanho // 1024} KB)"
+            detail=f"Arquivo excede 10 MB (recebido {tamanho // 1024 // 1024} MB)"
         )
 
     conexao = get_db_or_404()

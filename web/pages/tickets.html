@@ -598,9 +598,9 @@
                     </div>
                     <div class="mb-2">
                       <label class="btn btn-outline-secondary btn-sm mb-0">
-                        <i class="bi bi-paperclip"></i> Anexar imagem (≤250 KB)
+                        <i class="bi bi-paperclip"></i> Anexar arquivos (JPG, PNG, PDF, Word, Excel — até 10 MB cada)
                         <input type="file" id="replyAttachInput" hidden multiple
-                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,.doc,.docx,.xls,.xlsx"
                           onchange="onReplyAttachChange(event, 'reply')">
                       </label>
                       <div id="replyAttachPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
@@ -626,9 +626,9 @@
                     </div>
                     <div class="mb-2">
                       <label class="btn btn-outline-secondary btn-sm mb-0">
-                        <i class="bi bi-paperclip"></i> Anexar imagem (≤250 KB)
+                        <i class="bi bi-paperclip"></i> Anexar arquivos (JPG, PNG, PDF, Word, Excel — até 10 MB cada)
                         <input type="file" id="internalAttachInput" hidden multiple
-                          accept="image/jpeg,image/png,image/webp,image/gif"
+                          accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,.doc,.docx,.xls,.xlsx"
                           onchange="onReplyAttachChange(event, 'internal')">
                       </label>
                       <div id="internalAttachPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
@@ -952,11 +952,12 @@
               <!-- ANEXOS (linha inteira) -->
               <div class="col-12">
                 <label class="form-label">
-                  <i class="bi bi-paperclip text-primary"></i> Anexar imagens
-                  <small class="text-muted">(opcional — JPG/PNG/WEBP/GIF até 250 KB cada)</small>
+                  <i class="bi bi-paperclip text-primary"></i> Anexar arquivos
+                  <small class="text-muted">(opcional — JPG, PNG, PDF, Word, Excel até 10 MB cada)</small>
                 </label>
                 <input type="file" class="form-control form-control-sm" id="ticketAttachInput"
-                  accept="image/jpeg,image/png,image/webp,image/gif" multiple
+                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.pdf,.doc,.docx,.xls,.xlsx"
+                  multiple
                   onchange="onTicketAttachChange(event)">
                 <div id="ticketAttachPreview" class="d-flex flex-wrap gap-2 mt-2"></div>
               </div>
