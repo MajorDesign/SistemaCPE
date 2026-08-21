@@ -631,7 +631,7 @@ def login(login_data: LoginRequest, response: Response, request: Request = None)
             )
 
         logger.info(f"[AUTH] ✅ Usuario encontrado: {user['name']} | Grupo: {user.get('group_name', 'Sem grupo')}")
-        logger.info("[AUTH] 🔐 Validando senha com bcrypt...")
+        logger.info("[AUTH] 🔐 Validando senha (bcrypt/argon2 via passlib)...")
 
         password_hash = user.get('password_hash')
         if not password_hash:
@@ -641,8 +641,14 @@ def login(login_data: LoginRequest, response: Response, request: Request = None)
                 detail="Email/username ou senha invalidos"
             )
 
+        # 2026-08-21: bug do reset — hash_password (utils) usa passlib com
+        # esquema PADRAO argon2, mas o login aqui usava bcrypt.checkpw direto.
+        # Quem resetava a senha ficava trancado (hash argon2, verify bcrypt
+        # sempre falhava). Trocado por verify_password (utils.py -> pwd_context
+        # com schemes=[argon2, bcrypt]) — aceita ambos.
+        from utils import verify_password as _verify_pwd
         try:
-            senha_valida = bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+            senha_valida = _verify_pwd(password, password_hash)
         except Exception as err:
             logger.error(f"[AUTH] ❌ Erro ao validar hash: {str(err)}")
             raise HTTPException(
@@ -1296,9 +1302,14 @@ async def create_user(user: UserCreate):
             if not cursor.fetchone():
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unidade nao encontrada")
 
-        logger.info("[USERS] 🔐 Gerando hash da senha com bcrypt...")
+        logger.info("[USERS] 🔐 Gerando hash da senha (argon2 via passlib)...")
         try:
-            password_hash = bcrypt.hashpw(user.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            # 2026-08-21: padronizado com hash_password (utils) — antes usava
+            # bcrypt direto, criando duas familias de hash no banco (bcrypt
+            # do cadastro, argon2 do reset). Login/verify agora usam passlib
+            # e aceitam ambos, mas cadastro novo sai em argon2.
+            from utils import hash_password as _hash_pwd
+            password_hash = _hash_pwd(user.password)
             logger.info("[USERS]   ✅ Hash gerado com sucesso")
         except Exception as hash_err:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao processar senha")
@@ -1500,12 +1511,14 @@ async def change_password(user_id: int, payload: PasswordChangeRequest, request:
 
         # Modo SELF: precisa confirmar a senha atual, A NAO SER que
         # esteja com flag must_change_password (acabou de ser resetado).
+        # 2026-08-21: usa verify_password (passlib argon2+bcrypt) — antes usava
+        # bcrypt.checkpw direto, que travava quem tinha hash argon2 (do reset).
+        from utils import verify_password as _verify_pwd, hash_password as _hash_pwd
         if is_self and not target.get("must_change_password"):
             if not payload.senha_atual:
                 raise HTTPException(status_code=400,
                                     detail="Informe a senha atual")
-            if not bcrypt.checkpw(payload.senha_atual.encode("utf-8"),
-                                  (target["password_hash"] or "").encode("utf-8")):
+            if not _verify_pwd(payload.senha_atual, target["password_hash"] or ""):
                 raise HTTPException(status_code=401, detail="Senha atual incorreta")
 
         # Decide nova flag must_change_password:
@@ -1516,8 +1529,9 @@ async def change_password(user_id: int, payload: PasswordChangeRequest, request:
         else:
             nova_flag = 1 if payload.forcar_troca else 0
 
-        novo_hash = bcrypt.hashpw(payload.senha_nova.encode("utf-8"),
-                                  bcrypt.gensalt()).decode("utf-8")
+        # Usa hash_password (argon2 via passlib) — mesmo esquema do reset,
+        # mantem consistencia. Login e mudanca de senha aceitam ambos.
+        novo_hash = _hash_pwd(payload.senha_nova)
         cursor.execute(
             "UPDATE users SET password_hash = %s, must_change_password = %s WHERE id = %s",
             (novo_hash, nova_flag, user_id))

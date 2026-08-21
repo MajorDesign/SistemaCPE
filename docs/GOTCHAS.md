@@ -4,6 +4,29 @@ Cada seção aqui foi um bug real que custou tempo. Lê antes de mexer em códig
 
 ---
 
+## Reset de senha "com sucesso" mas usuário não conseguia logar (2026-08-21)
+
+**Sintoma:** usuário pedia "esqueci minha senha", recebia email, definia senha nova, sistema mostrava "Senha redefinida com sucesso" — mas login com a nova senha continuava falhando. Log de reset dizia OK (`[AUTH/RESET] ✅ senha trocada user_id=X`). Usuários faziam 3-4 resets em minutos tentando resolver.
+
+**Causa:** duas famílias de hash coexistindo no banco.
+- `hash_password` em `utils.py` usa `pwd_context` (passlib) com `schemes=["argon2", "bcrypt"]` — o **primeiro** é o esquema padrão de HASH → reset gerava `$argon2id$...`
+- O endpoint `/auth/login` em `app.py` usava **`bcrypt.checkpw` direto** — só entende `$2b$...`; num hash argon2 lança exceção "Invalid salt", cai no `except`, retorna 401.
+- Users antigos com hash bcrypt continuavam logando OK. Quem resetasse virava hash argon2 → nunca mais logava → resetava de novo → loop.
+
+O mesmo bug afetava `PUT /users/{id}/password` (endpoint de trocar senha logado): usava `bcrypt.checkpw` pra validar a senha atual — travava quem já tinha argon2.
+
+**Fix aplicado (2026-08-21):**
+- `login` e `change_password` agora chamam `utils.verify_password()` — que usa `pwd_context.verify()` (passlib) e aceita ambos os schemes.
+- Cadastro de user novo trocado de `bcrypt.hashpw` pra `utils.hash_password` — padroniza tudo em argon2. Login/verify aceitam bcrypt histórico via passlib.
+- Users que já resetaram (hash argon2 no banco) passaram a conseguir logar retroativamente com a última senha que digitaram — sem precisar migração de dados.
+
+**Se voltar a acontecer:**
+- Grep `bcrypt.checkpw\|bcrypt.hashpw` em `server/` — não deve retornar nada em código executável.
+- Todo hash/verify de senha passa por `utils.hash_password` / `utils.verify_password`.
+- `pwd_context` fica em `security.py` e é a única autoridade sobre esquemas aceitos.
+
+---
+
 ## MySQL segfault (Application Error 1000)
 
 **Sintoma:** CPEControlAPI cai a cada 10-15min. Event Viewer mostra `Application Error 1000` com exit code `3221225477` (0xC0000005 ACCESS_VIOLATION).
