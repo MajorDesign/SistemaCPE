@@ -745,9 +745,10 @@ function checkUrlTicketId() {
 function setupEventListeners() {
   console.log("[TICKETS] 🔌 Configurando event listeners...");
 
+  // 2026-08-21: statusFilter foi removido (virou dropdown multi-check
+  // com onchange inline nos checkboxes). Sem listener automatico aqui.
   const elementos = {
     'searchInput':      'input',
-    'statusFilter':     'change',
     'priorityFilter':   'change',
     'ticketForm':       'submit',
     'assignForm':       'submit',
@@ -758,7 +759,6 @@ function setupEventListeners() {
 
   const handlers = {
     'searchInput':        applyFilters,
-    'statusFilter':       applyFilters,
     'priorityFilter':     applyFilters,
     'ticketForm':         handleFormSubmit,
     'assignForm':         submitAssign,
@@ -1216,9 +1216,46 @@ function mapaPriorityToCode(priority) {
 // 11. FILTROS
 // =========================================
 
+// 2026-08-21: status virou multi-select (dropdown com checkboxes).
+// Retorna lista de status marcados; array vazio = "todos".
+const _STATUS_LABEL = {
+  'open':        'Aberto',
+  'in-progress': 'Em Andamento',
+  'resolved':    'Resolvido',
+  'closed':      'Fechado',
+};
+function getStatusFilterValues() {
+  return Array.from(document.querySelectorAll('.status-filter-cb:checked'))
+              .map(cb => cb.value);
+}
+function setStatusFilterValues(vals) {
+  const set = new Set(Array.isArray(vals) ? vals : (vals ? [vals] : []));
+  document.querySelectorAll('.status-filter-cb').forEach(cb => {
+    cb.checked = set.has(cb.value);
+  });
+  updateStatusFilterLabel();
+}
+function updateStatusFilterLabel() {
+  const vals = getStatusFilterValues();
+  const btn = document.getElementById('statusFilterBtn');
+  if (!btn) return;
+  if (!vals.length)         btn.textContent = 'Status';
+  else if (vals.length <= 2) btn.textContent = vals.map(v => _STATUS_LABEL[v] || v).join(', ');
+  else                       btn.textContent = `${vals.length} status selecionados`;
+}
+function onStatusFilterChange() {
+  updateStatusFilterLabel();
+  applyFilters();
+}
+function clearStatusFilter() {
+  document.querySelectorAll('.status-filter-cb').forEach(cb => cb.checked = false);
+  updateStatusFilterLabel();
+  applyFilters();
+}
+
 function applyFilters() {
   const search    = document.getElementById("searchInput")?.value?.toLowerCase().trim() || "";
-  const status    = document.getElementById("statusFilter")?.value || "";
+  const statuses  = getStatusFilterValues();  // array (vazio = todos)
   const priority  = document.getElementById("priorityFilter")?.value || "";
   const grupoId   = document.getElementById("grupoFilter")?.value        || "";
   const respId    = document.getElementById("responsavelFilter")?.value  || "";
@@ -1234,7 +1271,7 @@ function applyFilters() {
 
   filteredTickets = tickets.filter(t =>
     matchVista(t) &&
-    (!status   || t.status   === status)   &&
+    (!statuses.length || statuses.includes(t.status)) &&
     (!priority || t.priority === priority) &&
     (!grupoId  || String(t.group_id)        === grupoId) &&
     (!respId   || String(t.assignedTo || '') === respId) &&
@@ -1254,11 +1291,14 @@ function applyFilters() {
 }
 
 function clearFilters() {
-  ['searchInput', 'statusFilter', 'priorityFilter', 'grupoFilter',
+  ['searchInput', 'priorityFilter', 'grupoFilter',
    'responsavelFilter', 'categoriaFilter', 'subcategoriaFilter'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
+  // Status agora e multi-select — desmarca todos os checkboxes
+  document.querySelectorAll('.status-filter-cb').forEach(cb => cb.checked = false);
+  updateStatusFilterLabel();
   const catSel = document.getElementById('categoriaFilter');
   const subSel = document.getElementById('subcategoriaFilter');
   if (catSel) { catSel.innerHTML = '<option value="">Categoria</option>'; catSel.disabled = true; }
@@ -1384,10 +1424,12 @@ function onCategoriaFilterChange() {
   applyFilters();
 }
 
-// Estado atual dos filtros como objeto simples
+// Estado atual dos filtros como objeto simples.
+// 2026-08-21: status virou array (multi-select) — persistido como lista
+// ordenada pra comparacao estavel entre snapshots.
 function _filtrosAtuaisSnapshot() {
   return {
-    status:          document.getElementById("statusFilter")?.value        || "",
+    status:          getStatusFilterValues().slice().sort(),
     priority:        document.getElementById("priorityFilter")?.value      || "",
     grupo_id:        document.getElementById("grupoFilter")?.value         || "",
     responsavel_id:  document.getElementById("responsavelFilter")?.value   || "",
@@ -1397,12 +1439,15 @@ function _filtrosAtuaisSnapshot() {
 }
 
 function _filtroVazio(f) {
-  return !f.status && !f.priority && !f.grupo_id && !f.responsavel_id
+  const noStatus = !f.status || (Array.isArray(f.status) ? f.status.length === 0 : false);
+  return noStatus && !f.priority && !f.grupo_id && !f.responsavel_id
          && !f.categoria_id && !f.subcategoria_id;
 }
 
 function _filtroIguais(a, b) {
-  return a.status === b.status && a.priority === b.priority &&
+  const aS = Array.isArray(a.status) ? a.status.join(',') : String(a.status || '');
+  const bS = Array.isArray(b.status) ? b.status.join(',') : String(b.status || '');
+  return aS === bS && a.priority === b.priority &&
          a.grupo_id === b.grupo_id && a.responsavel_id === b.responsavel_id &&
          a.categoria_id === b.categoria_id && a.subcategoria_id === b.subcategoria_id;
 }
@@ -1478,7 +1523,9 @@ async function _aplicarFiltrosPrefSeExiste() {
 
   const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = String(val); };
 
-  set('statusFilter',    pref.status || '');
+  // 2026-08-21: status virou multi-select — pref.status pode ser array (novo)
+  // ou string (formato antigo). setStatusFilterValues aceita ambos.
+  setStatusFilterValues(pref.status || []);
   set('priorityFilter',  pref.priority || '');
   set('grupoFilter',     pref.grupo_id || '');
 
