@@ -1705,9 +1705,23 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
             validar_usuario_existe(cursor, payload.responsavel_id)
             novo_responsavel_id = payload.responsavel_id
 
-        # Atualizar ticket: novo grupo, limpar responsável (a menos que admin atribua)
+        # Atualizar ticket: novo grupo, limpar responsável (a menos que admin
+        # atribua), e ZERAR categoria/subcategoria — cada grupo tem suas
+        # proprias categorias, a antiga nao faz sentido no novo grupo.
+        # 2026-08-21: fix — antes deixava categoria_id/subcategoria_id
+        # apontando pra categorias do grupo antigo. Isso fazia o ticket
+        # sumir do filtro cascade (categoria so aparece quando escolhe o
+        # grupo dono; se o ticket foi movido, nunca aparece) e travava
+        # exclusao da categoria antiga por ter "ticket vinculado" que ja
+        # nao pertencia mais ao grupo dela.
         cursor.execute(
-            "UPDATE tickets SET group_id = %s, responsavel_id = %s, updated_at = NOW() WHERE id = %s",
+            """UPDATE tickets
+                  SET group_id = %s,
+                      responsavel_id = %s,
+                      categoria_id = NULL,
+                      subcategoria_id = NULL,
+                      updated_at = NOW()
+                WHERE id = %s""",
             (payload.group_id, novo_responsavel_id, ticket_id)
         )
 
@@ -1715,7 +1729,9 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
         motivo_txt = f" — Motivo: {payload.motivo}" if payload.motivo else ""
         mensagem_interacao = (
             f"🔀 Ticket encaminhado para o grupo '{nome_grupo_destino}' "
-            f"por {nome_usuario}{motivo_txt}"
+            f"por {nome_usuario}{motivo_txt}. "
+            f"Categoria e subcategoria foram resetadas — o grupo destino "
+            f"pode recategorizar."
         )
         cursor.execute(
             """

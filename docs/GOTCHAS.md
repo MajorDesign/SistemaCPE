@@ -4,6 +4,24 @@ Cada seção aqui foi um bug real que custou tempo. Lê antes de mexer em códig
 
 ---
 
+## Encaminhar ticket deixava categoria órfã (2026-08-21)
+
+**Sintoma:** categoria não podia ser excluída ("tem chamado vinculado") mas o chamado não aparecia no filtro nem quando escolhia o grupo dono da categoria. Ticket sumia do sistema pra quem navegava pelos filtros.
+
+**Caso real:** ticket 21 (`FA0021N6T4`, "Alterar valor da cobrança..."). Rafael abriu no grupo Faturamento (id=5). No dia seguinte Vanessa Melo usou o botão **Encaminhar** e mandou pro Financeiro (id=4). Comportamento esperado do fluxo de encaminhamento.
+
+**Bug:** `POST /tickets/{id}/encaminhar` só atualizava `group_id` e `responsavel_id`. `categoria_id` e `subcategoria_id` continuavam apontando pras categorias do grupo antigo. Consequência dupla:
+1. Filtro cascade em tickets.html só mostra categorias do grupo selecionado. Se filtra grupo Financeiro, categoria de Faturamento nem aparece no dropdown. Se filtra grupo Faturamento, a categoria aparece mas o ticket não (`t.group_id=4=Financeiro`). Ticket ficava invisível.
+2. Backend contava "1 ticket vinculado" ao tentar excluir a categoria e bloqueava — o ticket ancorava categoria de grupo errado.
+
+3 tickets estavam no estado inconsistente na descoberta (id 5, 6 e 21). Migração one-shot no deploy zerou os 3.
+
+**Fix:** `UPDATE tickets ... categoria_id = NULL, subcategoria_id = NULL` também no encaminhamento. O grupo destino recategoriza depois. A mensagem da interação avisa "categoria e subcategoria foram resetadas".
+
+**Se voltar a acontecer:** qualquer bulk-update de `group_id` em `tickets` (ex: script de reorganização de grupos) precisa lembrar de zerar categoria/subcategoria junto. Query pra achar inconsistências: `SELECT t.id FROM tickets t JOIN categorias c ON c.id=t.categoria_id WHERE c.group_id <> t.group_id`.
+
+---
+
 ## Reset de senha "com sucesso" mas usuário não conseguia logar (2026-08-21)
 
 **Sintoma:** usuário pedia "esqueci minha senha", recebia email, definia senha nova, sistema mostrava "Senha redefinida com sucesso" — mas login com a nova senha continuava falhando. Log de reset dizia OK (`[AUTH/RESET] ✅ senha trocada user_id=X`). Usuários faziam 3-4 resets em minutos tentando resolver.
