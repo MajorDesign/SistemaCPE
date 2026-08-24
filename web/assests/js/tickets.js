@@ -3316,7 +3316,6 @@ function _abrirPopupAvaliacao(aval) {
   document.getElementById('avalStarInput').value          = '';
   document.getElementById('avalComentario').value         = '';
   document.getElementById('avalComentarioWrap').classList.add('d-none');
-  document.getElementById('avalComentarioObrig').classList.add('d-none');
   document.getElementById('avalErro').textContent         = '';
   document.getElementById('avalBtnEnviar').disabled       = true;
   _renderAvalStars(0);
@@ -3356,18 +3355,8 @@ function _hoverStars(n) {
 function _selecionarEstrela(n) {
   document.getElementById('avalStarInput').value = n;
   _renderAvalStars(n);
-
-  // Comentário obrigatório se < 4
-  const wrap  = document.getElementById('avalComentarioWrap');
-  const obrig = document.getElementById('avalComentarioObrig');
-  if (n < 4) {
-    wrap.classList.remove('d-none');
-    obrig.classList.remove('d-none');
-  } else {
-    wrap.classList.remove('d-none');
-    obrig.classList.add('d-none');
-  }
-
+  // 2026-08-24: comentario sempre obrigatorio — sem toggle dinamico.
+  document.getElementById('avalComentarioWrap').classList.remove('d-none');
   document.getElementById('avalBtnEnviar').disabled = false;
 }
 
@@ -3378,8 +3367,10 @@ async function submitAvaliacao() {
   const erroEl     = document.getElementById('avalErro');
 
   if (!estrelas) { erroEl.textContent = 'Selecione uma nota antes de enviar.'; return; }
-  if (estrelas < 4 && !comentario) {
-    erroEl.textContent = 'Comentário obrigatório para notas abaixo de 4 estrelas.';
+  // 2026-08-24: comentário agora e obrigatorio SEMPRE (antes era so <4/10).
+  // Ajuda a analise de qualidade: nota sozinha nao explica o motivo.
+  if (!comentario) {
+    erroEl.textContent = 'Comentário obrigatório. Explique brevemente sua avaliação.';
     document.getElementById('avalComentario').focus();
     return;
   }

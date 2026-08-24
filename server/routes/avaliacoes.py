@@ -30,16 +30,16 @@ ROLES_ADMIN = ("ADMIN", "TI", "MANAGER")
 class AvaliacaoSubmit(BaseModel):
     usuario_id: int = Field(..., gt=0)
     estrelas:   int = Field(..., ge=1, le=10)
-    comentario: Optional[str] = Field(None, max_length=2000)
+    # 2026-08-24: comentario obrigatorio SEMPRE (era so <4/10). Sem
+    # justificativa nao dava pra analisar por que a nota era baixa/alta.
+    comentario: str = Field(..., min_length=1, max_length=2000)
 
     @field_validator("comentario")
     @classmethod
-    def comentario_obrigatorio_abaixo_4(cls, v, info):
-        estrelas = info.data.get("estrelas")
-        if estrelas is not None and estrelas < 4:
-            if not v or not v.strip():
-                raise ValueError("Comentário obrigatório para avaliações abaixo de 4 estrelas.")
-        return v
+    def comentario_nao_vazio(cls, v, info):
+        if not v or not v.strip():
+            raise ValueError("Comentário obrigatório em toda avaliação.")
+        return v.strip()
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
