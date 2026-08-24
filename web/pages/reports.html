@@ -250,8 +250,10 @@
                   <tr>
                     <th onclick="rptOrdenar('numero')" style="cursor:pointer"># <i class="bi bi-arrow-down-up text-muted"></i></th>
                     <th>Assunto</th>
+                    <th onclick="rptOrdenar('categoria_nome')" style="cursor:pointer">Categoria <i class="bi bi-arrow-down-up text-muted"></i></th>
                     <th onclick="rptOrdenar('solicitante_nome')" style="cursor:pointer">Solicitante <i class="bi bi-arrow-down-up text-muted"></i></th>
                     <th onclick="rptOrdenar('responsavel_nome')" style="cursor:pointer">Responsável <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th onclick="rptOrdenar('prioridade_id')" style="cursor:pointer">Prioridade <i class="bi bi-arrow-down-up text-muted"></i></th>
                     <th onclick="rptOrdenar('status_id')" style="cursor:pointer">Status <i class="bi bi-arrow-down-up text-muted"></i></th>
                     <th>SLA Total</th>
                     <th>1ª Resposta</th>
@@ -551,6 +553,9 @@
   // ── Status helpers ────────────────────────────────────────────
   const STATUS_LABEL = { 1:'Aberto', 2:'Em Andamento', 3:'Aguardando', 4:'Resolvido', 5:'Fechado' };
   const STATUS_CLASS = { 1:'s-open', 2:'s-progress', 3:'s-waiting', 4:'s-resolved', 5:'s-closed' };
+  // 2026-08-24: labels + cores de prioridade — bate com badges de tickets.html
+  const PR_LABEL = { 1:'Baixa', 2:'Média', 3:'Alta', 4:'Urgente' };
+  const PR_COLOR = { 1:'#16a34a', 2:'#d97706', 3:'#dc2626', 4:'#7f1d1d' };
 
   function _esc(s) {
     return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -861,8 +866,8 @@
     const slaFiltro = document.getElementById('rptSlaFiltro').value;
 
     rptFiltrados = rptDados.filter(t => {
-      // Busca textual
-      const txt = [t.numero, t.assunto, t.solicitante_nome, t.responsavel_nome, STATUS_LABEL[t.status_id]]
+      // Busca textual — inclui categoria e prioridade (2026-08-24)
+      const txt = [t.numero, t.assunto, t.categoria_nome, t.solicitante_nome, t.responsavel_nome, PR_LABEL[t.prioridade_id], STATUS_LABEL[t.status_id]]
         .join(' ').toLowerCase();
       if (q && !txt.includes(q)) return false;
 
@@ -911,7 +916,7 @@
 
     if (!pagina.length) {
       document.getElementById('rptTbody').innerHTML =
-        '<tr><td colspan="8" class="text-center py-5 text-muted"><i class="bi bi-inbox" style="font-size:2rem;opacity:.3;display:block;margin-bottom:.5rem;"></i>Nenhum ticket encontrado.</td></tr>';
+        '<tr><td colspan="10" class="text-center py-5 text-muted"><i class="bi bi-inbox" style="font-size:2rem;opacity:.3;display:block;margin-bottom:.5rem;"></i>Nenhum ticket encontrado.</td></tr>';
       return;
     }
 
@@ -925,12 +930,26 @@
         ? `${_slaDot(pr === 'ok' ? 'ok' : pr === 'aguardando' ? 'aguardando' : 'estourado')}${pr === 'ok' ? 'No Prazo' : pr === 'aguardando' ? 'Aguardando' : 'Estourado'}<br><small class="text-muted">${_fmt_sla(t.sla_pr_minutos)}</small>`
         : '<span class="text-muted">—</span>';
 
+      // Categoria: truncate + tooltip (mesmo padrão do tickets.html)
+      const catNome = t.categoria_nome || '';
+      const catCell = catNome
+        ? `<span class="d-inline-block text-truncate" style="max-width:180px;color:#6B7280;cursor:help;" title="${_esc(catNome)}">${_esc(catNome)}</span>`
+        : '<span class="text-muted">—</span>';
+      // Prioridade: badge colorido
+      const prId = t.prioridade_id || 0;
+      const prLbl = PR_LABEL[prId] || '—';
+      const prCor = PR_COLOR[prId] || '#6b7280';
+      const prCell = prId
+        ? `<span class="badge" style="background:${prCor}1a;color:${prCor};border:1px solid ${prCor}44;font-weight:600;font-size:.7rem;padding:3px 8px;">${prLbl}</span>`
+        : '<span class="text-muted">—</span>';
       return `
         <tr>
           <td><a href="/SistemaCPE/web/pages/tickets.html?id=${t.id}" class="fw-semibold text-decoration-none" style="color:#6f42c1;">${_esc(t.numero||'#'+t.id)}</a></td>
           <td style="max-width:220px;"><span class="d-block text-truncate" title="${_esc(t.assunto)}">${_esc(t.assunto)}</span></td>
+          <td>${catCell}</td>
           <td>${_esc(t.solicitante_nome||'—')}</td>
           <td>${t.responsavel_nome ? _esc(t.responsavel_nome) : '<span class="text-muted fst-italic">Não atribuído</span>'}</td>
+          <td>${prCell}</td>
           <td><span class="badge-status ${STATUS_CLASS[t.status_id]||'s-open'}">${STATUS_LABEL[t.status_id]||'—'}</span></td>
           <td style="font-size:.78rem;">${slaText}</td>
           <td style="font-size:.78rem;">${prText}</td>
@@ -1466,12 +1485,14 @@
 
   // ── EXPORT CSV ────────────────────────────────────────────────
   function rptExportCSV() {
-    const cols  = ['Número','Assunto','Solicitante','Responsável','Status','SLA','1ª Resposta','Criado em'];
+    const cols  = ['Número','Assunto','Categoria','Solicitante','Responsável','Prioridade','Status','SLA','1ª Resposta','Criado em'];
     const rows  = rptFiltrados.map(t => [
       t.numero || t.id,
       `"${(t.assunto||'').replace(/"/g,'""')}"`,
+      `"${(t.categoria_nome||'').replace(/"/g,'""')}"`,
       t.solicitante_nome || '',
       t.responsavel_nome || '',
+      PR_LABEL[t.prioridade_id] || '',
       STATUS_LABEL[t.status_id] || '',
       _slaLabel(_classifSLA(t)),
       _classifPR(t) ? (_classifPR(t) === 'ok' ? 'No Prazo' : _classifPR(t) === 'aguardando' ? 'Aguardando' : 'Estourado') : '',
