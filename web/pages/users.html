@@ -889,7 +889,7 @@
   </style>
 
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
-  <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-06-03"></script>
+  <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-08-24-fetch-auth"></script>
   <script>pageGuard('USERS');</script>
 
 </head>
@@ -1610,6 +1610,9 @@
       console.log("[USERS/LOAD] Carregando usuarios...");
 
       try {
+        // 2026-08-24: page-guard.js agora intercepta window.fetch e injeta
+        // token + credentials automaticamente em toda chamada pra /api/*.
+        // Fetch pode continuar sem headers explicitos aqui.
         const response = await fetch(API_USERS_URL, {
           method: 'GET',
           headers: { 'Content-Type': 'application/json' }
@@ -1763,10 +1766,10 @@ function renderUsers(list = users) {
           <tr>
             <td>
               <div class="user-name-cell" style="display: flex; gap: 0.75rem; align-items: center;">
-                <div style="width: 36px; height: 36px; border-radius: 50%; background: #667eea; color: white; display: flex; align-items: center; justify-content: center; font-weight: 600;">
+                <div style="flex:0 0 36px;width:36px;height:36px;min-width:36px;border-radius:50%;background:#667eea;color:white;display:flex;align-items:center;justify-content:center;font-weight:600;">
                   ${nameFirstChar}
                 </div>
-                <span>${name}</span>
+                <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;">${name}</span>
               </div>
             </td>
             <td>${email}</td>

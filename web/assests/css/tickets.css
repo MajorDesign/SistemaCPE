@@ -120,30 +120,53 @@
   .table-responsive {
     margin-bottom: 0;
     border-radius: 0.375rem;
-    overflow: hidden;
+    /* 2026-08-24: era overflow:hidden — cortava as colunas do fim (SLA,
+       Data, Ações) sem oferecer scroll. Bootstrap padrão é overflow-x:auto
+       (com barra horizontal quando a tabela passa da largura). */
+    overflow-x: auto;
+    overflow-y: visible;
     border: 1px solid #dee2e6;
   }
   
   .table {
     margin-bottom: 0;
-    font-size: 0.95rem;
+    /* 2026-08-24: reduzido de 0.95rem pra 13px pra caber as 12 colunas
+       (adicionadas Grupo + Categoria) sem scroll horizontal. */
+    font-size: 13px;
   }
-  
+
   .table thead th {
     background-color: #f8f9fa;
     border-bottom: 2px solid #dee2e6;
     font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    font-size: 0.85rem;
-    padding: 0.75rem;
+    letter-spacing: 0.4px;
+    font-size: 11px;
+    padding: 0.55rem 0.5rem;
+    white-space: nowrap;
   }
-  
+
   .table tbody td {
-    padding: 0.75rem;
+    padding: 0.5rem 0.5rem;
     vertical-align: middle;
     border-bottom: 1px solid #dee2e6;
+    font-size: 13px;
   }
+
+  /* 2026-08-24: Categoria pode ter nomes longos ("FATURAMENTO - AJUSTE
+     VALOR DA FATURA"). Corta com ellipsis, mantém 1 linha, mostra nome
+     completo no tooltip (attribute title). max-width fixa evita que a
+     coluna estoure e empurre as demais. */
+  .table td.cat-cell { max-width: 180px; }
+  .table td.cat-cell .cat-truncate {
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #6B7280;
+    cursor: help;
+  }
+  .table td.cat-cell .cat-truncate:hover { color: #1F2937; }
   
   .table tbody tr {
     transition: background-color 0.2s ease;
@@ -2377,7 +2400,7 @@
   padding: 12px 14px;
 }
 .main-content .table tbody td {
-  padding: 12px 14px;
+  padding: 23px 5px;
   border-bottom: 1px solid #D8D5C8;
   color: #0F1419;
   vertical-align: middle;

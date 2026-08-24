@@ -1608,7 +1608,7 @@ function renderTable() {
     if (filtrosAtivos && totalSemFiltros > 0) {
       body.innerHTML = `
         <tr>
-          <td colspan="12" class="py-4">
+          <td colspan="11" class="py-4">
             <div class="text-center" style="max-width:520px;margin:0 auto">
               <i class="bi bi-funnel-fill" style="font-size:32px;color:#F59E0B;display:block;margin-bottom:8px"></i>
               <div style="font-weight:600;color:#111827;font-size:15px;margin-bottom:4px">
@@ -1626,7 +1626,7 @@ function renderTable() {
     } else {
       body.innerHTML = `
         <tr>
-          <td colspan="12" class="text-center text-muted py-4">
+          <td colspan="11" class="text-center text-muted py-4">
             <i class="bi bi-inbox"></i> Nenhum ticket encontrado
           </td>
         </tr>`;
@@ -1643,19 +1643,8 @@ function renderTable() {
     const initial = t.userName.charAt(0).toUpperCase() || "?";
     const checked = selectedTickets.has(t.id) ? 'checked' : '';
 
-    // 2026-08-24: Botao deletar — alinhado com backend:
-    // - Solicitante do ticket → pode
-    // - ADMIN/TI/MANAGER → pode
-    // - RESPONSAVEL_GRUPO → pode se ticket for do proprio grupo
-    const _u = getCurrentUser();
-    const _uid = _u.id || _u.usuario_id;
-    const podeDeletar =
-      admin ||
-      t.solicitante_id === _uid ||
-      (isResponsavelGrupo() && _u.group_id != null && Number(_u.group_id) === Number(t.group_id));
-    const btnDeletar  = podeDeletar
-      ? `<button class="btn btn-sm btn-danger" onclick="deleteTicketRow(${t.id})" title="Deletar"><i class="bi bi-trash"></i></button>`
-      : '';
+    // 2026-08-24: coluna Acoes removida da tabela. Delete continua
+    // disponivel dentro do modal de detalhe do ticket (botao "Deletar").
 
     return `
       <tr class="ticket-row ${checked ? 'table-active' : ''}" data-ticket-id="${t.id}">
@@ -1679,20 +1668,16 @@ function renderTable() {
             <i class="bi bi-people-fill" style="opacity:.6;margin-right:2px;"></i>${t.groupName || '—'}
           </span>
         </td>
-        <td onclick="openTicketDetail(${t.id})">
-          <small class="text-muted">${t.categoryName || '—'}</small>
+        <td onclick="openTicketDetail(${t.id})" class="cat-cell">
+          ${t.categoryName
+            ? `<div class="cat-truncate" title="${(t.categoryName||'').replace(/"/g,'&quot;')}">${t.categoryName}</div>`
+            : '<small class="text-muted">—</small>'}
         </td>
         <td>${getPriorityBadge(t.priority)}</td>
         <td>${getStatusBadge(t.status)}</td>
         <td><small>${t.assignedName !== "Não atribuído" ? t.assignedName : '-'}</small></td>
         <td>${getSLABadge(t.sla)}</td>
         <td><small>${t.createdAt}</small></td>
-        <td>
-          <button class="btn btn-sm btn-info" onclick="openTicketDetail(${t.id})" title="Visualizar">
-            <i class="bi bi-eye"></i>
-          </button>
-          ${btnDeletar}
-        </td>
       </tr>`;
   }).join("");
 
@@ -2323,9 +2308,14 @@ function getSLABadge(sla) {
              : c.cor === 'amarelo'  ? 'bi-clock-history'
              : c.cor === 'cinza'    ? 'bi-pause-circle'
              : 'bi-check-circle';
-  return `<span class="badge" style="background:${bg};color:${text};white-space:nowrap;" title="${c.label}">
-    <i class="bi ${icon}"></i> ${c.label}
-  </span>`;
+  // 2026-08-24: label compacto — remove prefixo "RESTAM " que enchia
+  // demais a coluna ("RESTAM 3.9D" -> "3.9D"). Tooltip mantem label
+  // completo. Badge menor (font 11px, padding compacto).
+  const labelCurto = String(c.label || '').replace(/^RESTAM\s+/i, '').trim() || c.label;
+  return `<span class="badge" style="background:${bg};color:${text};white-space:nowrap;`
+       + `font-size:11px;font-weight:600;padding:4px 7px;" title="${c.label}">`
+       + `<i class="bi ${icon}"></i> ${labelCurto}`
+       + `</span>`;
 }
 
 // =========================================
