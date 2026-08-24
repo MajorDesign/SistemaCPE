@@ -1583,12 +1583,45 @@ function renderTable() {
   );
 
   if (pageTickets.length === 0) {
-    body.innerHTML = `
-      <tr>
-        <td colspan="8" class="text-center text-muted py-4">
-          <i class="bi bi-inbox"></i> Nenhum ticket encontrado
-        </td>
-      </tr>`;
+    // 2026-08-24: quando lista vazia mas ha filtros ativos, checar se
+    // sem filtros haveria resultados. Se sim, mostrar card avisando
+    // que os filtros do topo estao escondendo tickets da vista atual.
+    // Motivacao: user com preferencia salva (ex: grupo=TI) troca pra aba
+    // "Para mim" e ve vazio, mesmo tendo tickets atribuidos em outros grupos.
+    const filtrosAtivos = !_filtroVazio(_filtrosAtuaisSnapshot());
+    const uidTmp = getCurrentUserId();
+    const totalSemFiltros = tickets.filter(t => {
+      if (currentVista === 'meus')     return t.solicitante_id === uidTmp;
+      if (currentVista === 'para_mim') return t.assignedTo === uidTmp;
+      return true;
+    }).length;
+
+    if (filtrosAtivos && totalSemFiltros > 0) {
+      body.innerHTML = `
+        <tr>
+          <td colspan="8" class="py-4">
+            <div class="text-center" style="max-width:520px;margin:0 auto">
+              <i class="bi bi-funnel-fill" style="font-size:32px;color:#F59E0B;display:block;margin-bottom:8px"></i>
+              <div style="font-weight:600;color:#111827;font-size:15px;margin-bottom:4px">
+                Nenhum ticket bate com os filtros aplicados
+              </div>
+              <div style="font-size:13px;color:#6B7280;margin-bottom:14px">
+                Sem os filtros, existem <strong>${totalSemFiltros}</strong> ticket${totalSemFiltros===1?'':'s'} nesta aba.
+              </div>
+              <button type="button" class="btn btn-sm btn-warning" onclick="clearFilters()">
+                <i class="bi bi-x-circle"></i> Limpar filtros e ver todos
+              </button>
+            </div>
+          </td>
+        </tr>`;
+    } else {
+      body.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center text-muted py-4">
+            <i class="bi bi-inbox"></i> Nenhum ticket encontrado
+          </td>
+        </tr>`;
+    }
     updatePagination();
     return;
   }
