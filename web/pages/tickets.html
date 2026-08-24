@@ -23,7 +23,7 @@
        ======================================== -->
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css?v=2026-08-24-td-pad23">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css?v=2026-08-24-aval-coment-obrig">
   
     <link rel="icon" type="image/svg+xml" href="/SistemaCPE/web/favicon.svg?v=2026-07-02b">
   <title>Tickets - CPE Control</title>
@@ -1266,12 +1266,11 @@
           <!-- Comentário (aparece ao selecionar estrelas) -->
           <div id="avalComentarioWrap" class="d-none">
             <label class="form-label fw-semibold small">
-              Comentário
-              <span id="avalComentarioObrig" class="text-danger d-none">*obrigatório</span>
-              <span class="text-muted fw-normal">(opcional para notas ≥ 4)</span>
+              Comentário <span class="text-danger">*</span>
+              <span class="text-muted fw-normal" style="font-size:.72rem;">(obrigatório)</span>
             </label>
             <textarea class="form-control form-control-sm" id="avalComentario"
-              rows="3" maxlength="2000"
+              rows="3" maxlength="2000" required
               placeholder="Descreva sua experiência com o atendimento..."></textarea>
           </div>
 
@@ -1561,7 +1560,7 @@
        ======================================== -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-07-28"></script>
-  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-24-td-pad23"></script>
+  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-24-aval-coment-obrig"></script>
 
 <script id="cpe-autofill-guard-v1">
 /* Bloqueia autofill do Chrome/Edge em inputs de busca.
