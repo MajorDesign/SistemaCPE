@@ -1158,6 +1158,8 @@ async function loadTickets() {
         email:           t.solicitante_email || "sem-email",
         groupName:       t.group_name        || "Sem setor",
         group_id:        t.group_id          || null,
+        // 2026-08-24: nome da categoria pra exibir na tabela
+        categoryName:    t.categoria_nome    || null,
         priority:        mapPriorityFromApi(t.prioridade_id),
         status:          mapStatusFromApi(t.status_id),
         status_id:       t.status_id,
@@ -1606,7 +1608,7 @@ function renderTable() {
     if (filtrosAtivos && totalSemFiltros > 0) {
       body.innerHTML = `
         <tr>
-          <td colspan="8" class="py-4">
+          <td colspan="12" class="py-4">
             <div class="text-center" style="max-width:520px;margin:0 auto">
               <i class="bi bi-funnel-fill" style="font-size:32px;color:#F59E0B;display:block;margin-bottom:8px"></i>
               <div style="font-weight:600;color:#111827;font-size:15px;margin-bottom:4px">
@@ -1624,7 +1626,7 @@ function renderTable() {
     } else {
       body.innerHTML = `
         <tr>
-          <td colspan="8" class="text-center text-muted py-4">
+          <td colspan="12" class="text-center text-muted py-4">
             <i class="bi bi-inbox"></i> Nenhum ticket encontrado
           </td>
         </tr>`;
@@ -1672,6 +1674,14 @@ function renderTable() {
           </div>
         </td>
         <td onclick="openTicketDetail(${t.id})">${t.title}</td>
+        <td onclick="openTicketDetail(${t.id})">
+          <span class="badge" style="background:#F1F5F9;color:#334155;font-weight:600;">
+            <i class="bi bi-people-fill" style="opacity:.6;margin-right:2px;"></i>${t.groupName || '—'}
+          </span>
+        </td>
+        <td onclick="openTicketDetail(${t.id})">
+          <small class="text-muted">${t.categoryName || '—'}</small>
+        </td>
         <td>${getPriorityBadge(t.priority)}</td>
         <td>${getStatusBadge(t.status)}</td>
         <td><small>${t.assignedName !== "Não atribuído" ? t.assignedName : '-'}</small></td>
