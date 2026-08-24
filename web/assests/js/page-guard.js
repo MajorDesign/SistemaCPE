@@ -94,12 +94,39 @@
     try { global.dispatchEvent(new CustomEvent('cpe:session-expired', { detail: { motivo } })); } catch {}
   }
 
+  // Helper interno pra ler o token com fallback de chaves legadas.
+  function _readTokenLocal() {
+    try {
+      return localStorage.getItem('cpe_token')
+          || sessionStorage.getItem('cpe_token')
+          || localStorage.getItem('token')
+          || sessionStorage.getItem('token')
+          || '';
+    } catch (_) { return ''; }
+  }
+
   // Patch window.fetch
+  // 2026-08-24: agora tambem INJETA auth (X-Auth-Token + Authorization Bearer)
+  // + credentials:'include' em toda chamada pra /api/*. Antes, paginas antigas
+  // que faziam fetch direto sem enviar token davam 401 em ambientes onde front
+  // e API sao origens diferentes (staging local: front porta 80, API porta 8001)
+  // — o cookie de sessao nao viaja entre origens. Agora funciona em qualquer
+  // ambiente sem precisar tocar em cada pagina.
   const _fOriginal = global.fetch.bind(global);
   global.fetch = async function (input, init) {
     const url = (typeof input === 'string') ? input : (input && input.url) ? input.url : String(input);
     if (_expirado && _ehRotaApi(url) && !_ehRotaIgnorada(url)) {
       return Promise.reject(new Error('Sessão expirada — chamada cancelada'));
+    }
+    // Injeta auth em rotas da API que ainda nao tem
+    if (_ehRotaApi(url) && !_ehRotaIgnorada(url)) {
+      const tk = _readTokenLocal();
+      init = init || {};
+      if (!('credentials' in init)) init.credentials = 'include';
+      const h = new Headers(init.headers || {});
+      if (tk && !h.has('X-Auth-Token')) h.set('X-Auth-Token', tk);
+      if (tk && !h.has('Authorization'))  h.set('Authorization', 'Bearer ' + tk);
+      init.headers = h;
     }
     const resp = await _fOriginal(input, init);
     if (resp.status === 401 && _ehRotaApi(url) && !_ehRotaIgnorada(url)) {

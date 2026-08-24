@@ -749,6 +749,9 @@ async def obter_tickets(
         if filtros:
             logger.info(f"    > {' AND '.join(filtros)}")
 
+        # 2026-08-24: adicionado JOIN em categorias/subcategorias — antes
+        # o front recebia categoria_nome=null e a coluna Categoria da
+        # tabela sempre aparecia "—".
         sql = f"""
             SELECT
                 t.*,
@@ -756,6 +759,8 @@ async def obter_tickets(
                 u.email AS solicitante_email,
                 r.name  AS responsavel_nome,
                 g.name  AS group_name,
+                cat.nome AS categoria_nome,
+                sub.nome AS subcategoria_nome,
                 ts.status        AS sla_status,
                 ts.sla_minutos   AS sla_minutos,
                 ts.sla_primeira_resposta_minutos AS sla_pr_minutos,
@@ -770,6 +775,8 @@ async def obter_tickets(
             LEFT JOIN users u            ON t.solicitante_id = u.id
             LEFT JOIN users r            ON t.responsavel_id = r.id
             LEFT JOIN `cpe_grupo` g      ON t.group_id = g.id
+            LEFT JOIN categorias cat     ON t.categoria_id = cat.id
+            LEFT JOIN subcategorias sub  ON t.subcategoria_id = sub.id
             LEFT JOIN ticket_sla ts      ON ts.ticket_id = t.id
             {where}
             ORDER BY t.created_at DESC
