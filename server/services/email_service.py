@@ -248,11 +248,16 @@ def _enviar_sync_bcc(
 # =====================================================================
 # Templates HTML — identidade CPE Control
 # 2026-08-24: redesign inspirado no email de agendamento.
-#   Paleta:  paper #FDF9EE  |  ink #1A1A1A  |  accent #FFC107
+#   Paleta:  paper #FFFFFF branco puro | ink #1A1A1A | accent #FFC107
 #   Hero:    bloco preto arredondado com logo CPE amarelo, eyebrow e titulo
-#   Corpo:   fundo creme claro, texto escuro, boxes com left-key panel
-#   Rodape:  helpline com pill de contato, assinatura CPE Tecnologia
-# Todos os emails do sistema usam este template — consistencia visual total.
+#   Corpo:   fundo branco puro, texto escuro, boxes com left-key panel amarelo
+#   Rodape:  cinza claro com pill de contato + assinatura + Desenvolvido por
+#
+# ANTI-DARK-MODE: Outlook/Apple Mail forcam dark mode automatico quando o
+# email tem muito branco — isso quebrava o design (amarelo virava marrom).
+# Meta tags color-scheme + supported-color-schemes + CSS `[data-ogsc]`
+# vazio desligam essa inversao automatica em Outlook.com, Outlook desktop
+# (versoes novas) e Apple Mail.
 # =====================================================================
 
 # Logo CPE — SVG inline (renderiza consistente em qualquer cliente de email).
@@ -267,17 +272,40 @@ _CPE_LOGO_SVG = (
 )
 
 _BASE_TEMPLATE = """<!DOCTYPE html>
-<html lang="pt-BR"><head><meta charset="UTF-8"><title>{title}</title></head>
-<body style="margin:0;padding:0;background:#F1EEE1;font-family:'Segoe UI',Roboto,Arial,sans-serif;color:#1F2937;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:28px 12px;background:#F1EEE1;">
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light only">
+  <meta name="supported-color-schemes" content="light">
+  <title>{title}</title>
+  <style>
+    /* Desliga inversao automatica de cor no Outlook.com / Outlook web app.
+       Sem essa regra o Outlook em dark mode transforma nossos amarelos em
+       marrom e brancos em cinza escuro. */
+    :root {{ color-scheme: light only; supported-color-schemes: light; }}
+    [data-ogsc] .cpe-force-light,
+    [data-ogsb] .cpe-force-light {{ background:#FFFFFF !important; color:#1F2937 !important; }}
+    [data-ogsc] .cpe-force-panel-yellow,
+    [data-ogsb] .cpe-force-panel-yellow {{ background:#FEF9E7 !important; color:#78551A !important; }}
+    [data-ogsc] .cpe-force-value,
+    [data-ogsb] .cpe-force-value {{ background:#FFFFFF !important; color:#1A1A1A !important; }}
+    [data-ogsc] .cpe-force-dark,
+    [data-ogsb] .cpe-force-dark {{ background:#1A1A1A !important; color:#FFFFFF !important; }}
+    [data-ogsc] .cpe-force-footer,
+    [data-ogsb] .cpe-force-footer {{ background:#F4F6F9 !important; color:#4B5563 !important; }}
+  </style>
+</head>
+<body style="margin:0;padding:0;background:#F4F6F9;font-family:'Segoe UI',Roboto,Arial,sans-serif;color:#1F2937;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:28px 12px;background:#F4F6F9;">
     <tr><td align="center">
-      <table role="presentation" width="620" cellpadding="0" cellspacing="0"
-             style="max-width:620px;background:#FDF9EE;border-radius:14px;overflow:hidden;
-                    box-shadow:0 6px 30px rgba(26,26,26,0.10);">
+      <table role="presentation" width="620" cellpadding="0" cellspacing="0" class="cpe-force-light"
+             style="max-width:620px;background:#FFFFFF;border-radius:14px;overflow:hidden;
+                    box-shadow:0 6px 20px rgba(0,0,0,0.08);">
 
         <!-- HERO -->
-        <tr><td style="padding:22px 22px 0 22px;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+        <tr><td style="padding:22px 22px 0 22px;background:#FFFFFF;" class="cpe-force-light">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="cpe-force-dark"
                  style="background:#1A1A1A;border-radius:12px;">
             <tr>
               <td style="padding:22px 26px;">
@@ -296,25 +324,25 @@ _BASE_TEMPLATE = """<!DOCTYPE html>
         </td></tr>
 
         <!-- BODY -->
-        <tr><td style="padding:24px 30px 28px 30px;font-size:14px;line-height:1.65;color:#1F2937;">
+        <tr><td class="cpe-force-light" style="padding:24px 30px 28px 30px;font-size:14px;line-height:1.65;color:#1F2937;background:#FFFFFF;">
           {body}
         </td></tr>
 
         <!-- FOOTER -->
-        <tr><td style="background:#F5F1E4;padding:20px 30px 22px 30px;
-                       border-top:1px solid #E7E1CE;text-align:center;">
+        <tr><td class="cpe-force-footer" style="background:#F4F6F9;padding:20px 30px 22px 30px;
+                       border-top:1px solid #E5E7EB;text-align:center;">
           <div style="font-size:13px;color:#4B5563;font-weight:600;margin-bottom:8px;">
             Por favor, não responda este e-mail.
           </div>
           <div style="font-size:12px;color:#6B7280;line-height:1.5;">
             Em caso de dúvidas, escreva para
-            <span style="display:inline-block;background:#FFF3C5;color:#1A1A1A;
+            <span style="display:inline-block;background:#FEF9E7;color:#1A1A1A;
                          padding:2px 10px;border-radius:12px;font-weight:600;
                          font-size:12px;margin-left:4px;">
               suporte@cpetecnologia.com.br
             </span>
           </div>
-          <div style="margin-top:14px;padding-top:12px;border-top:1px solid #E7E1CE;
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid #E5E7EB;
                       font-size:11px;color:#6B7280;">
             <strong style="color:#1A1A1A;">CPE&nbsp;Tecnologia</strong>
             <span style="color:#9CA3AF;"> · CPE Control · Suporte Técnico</span>
@@ -348,35 +376,43 @@ def _escape(s: str | None) -> str:
 
 
 def _info_box(label: str, valor: str) -> str:
-    """Row de info-table redesenhada: painel amarelo pastel na esquerda pra label
-    (efeito 'left-key panel' do print de agendamento), valor em preto forte."""
+    """Row da info-table: painel amarelo pastel MUITO CLARO na esquerda pro
+    label + fundo BRANCO PURO na direita pro valor. Reproduz o efeito
+    'left-key panel' do print de agendamento (nao usa creme escuro pra
+    nao virar marrom no dark mode automatico do Outlook)."""
     return (
         f'<tr>'
-        f'<td style="padding:12px 14px;background:#FFF3C5;color:#78551A;'
-        f'font-weight:600;font-size:13px;width:150px;'
-        f'border-bottom:1px solid #F3EAC8;">{_escape(label)}</td>'
-        f'<td style="padding:12px 18px;color:#1A1A1A;font-weight:600;font-size:14px;'
-        f'background:#FFFBEB;border-bottom:1px solid #F3EAC8;">{_escape(valor)}</td>'
+        f'<td class="cpe-force-panel-yellow" '
+        f'style="padding:14px 16px;background:#FEF9E7;color:#78551A;'
+        f'font-weight:500;font-size:13px;width:160px;'
+        f'border-bottom:1px solid #F1F3F6;">{_escape(label)}</td>'
+        f'<td class="cpe-force-value" '
+        f'style="padding:14px 18px;color:#1A1A1A;font-weight:700;font-size:14px;'
+        f'background:#FFFFFF;border-bottom:1px solid #F1F3F6;">{_escape(valor)}</td>'
         f'</tr>'
     )
 
 def _info_table(rows_html: str) -> str:
-    """Wrapper da tabela de info — bordas suaves + primeiro/ultimo row sem borda."""
+    """Wrapper da info-table: borda esquerda amarela sólida (padrao do
+    print) + bordas suaves + arredondada."""
     return (
         '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" '
-        'style="border-collapse:collapse;margin:16px 0 20px 0;'
-        'border:1px solid #F3EAC8;border-radius:10px;overflow:hidden;">'
+        'style="border-collapse:separate;border-spacing:0;margin:18px 0 22px 0;'
+        'border:1px solid #E5E7EB;border-left:4px solid #FFC107;border-radius:10px;'
+        'overflow:hidden;background:#FFFFFF;">'
         f'<tbody>{rows_html}</tbody></table>'
     )
 
 def _status_box(label: str, mensagem: str) -> str:
     """Bloco preto com label em amarelo — informacao critica destacada
-    (padrao do print de agendamento: 'Status: Aguardando confirmacao...')."""
+    (padrao do print de agendamento: 'Status: Aguardando confirmacao...').
+    Classe cpe-force-dark impede dark mode do Outlook de inverter o preto."""
     return (
-        '<div style="margin:18px 0;padding:16px 20px;background:#1A1A1A;'
+        '<div class="cpe-force-dark" '
+        'style="margin:18px 0;padding:16px 20px;background:#1A1A1A;'
         'border-radius:10px;color:#E5E7EB;font-size:13.5px;line-height:1.55;">'
         f'<span style="color:#FFC107;font-weight:700;">{_escape(label)}:</span> '
-        f'{_escape(mensagem)}'
+        f'<span style="color:#E5E7EB;">{_escape(mensagem)}</span>'
         '</div>'
     )
 
@@ -417,12 +453,14 @@ def _cta_button(texto: str, url: str, cor: str = 'accent') -> str:
     )
 
 def _quote_box(titulo: str, conteudo: str, cor: str = '#FFC107') -> str:
-    """Box de citacao (mensagem/descricao/solucao) com left-border colorida."""
+    """Box de citacao (mensagem/descricao/solucao) com left-border colorida.
+    Fundo branco puro pra nao virar marrom no dark mode automatico."""
     return (
-        f'<div style="margin:14px 0;padding:14px 18px;background:#FFFBEB;'
-        f'border-left:4px solid {cor};border-radius:8px;">'
+        f'<div class="cpe-force-value" '
+        f'style="margin:16px 0;padding:16px 18px;background:#FFFFFF;'
+        f'border:1px solid #F1F3F6;border-left:4px solid {cor};border-radius:8px;">'
         '<div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;'
-        f'color:#78551A;font-weight:700;margin-bottom:6px;">{_escape(titulo)}</div>'
+        f'color:#6B7280;font-weight:700;margin-bottom:8px;">{_escape(titulo)}</div>'
         '<div style="white-space:pre-wrap;color:#1F2937;font-size:14px;'
         f'line-height:1.55;">{_escape(conteudo) or "—"}</div>'
         '</div>'
@@ -1017,19 +1055,23 @@ def email_ticket_finalizado(
 
     # Bloco de avaliação — mesmo layout do print (heading + subtexto + CTA
     # amarela + micro-copy do prazo).
+    # Bloco de avaliação — fundo branco com destaque amarelo à esquerda
+    # (mesmo padrão da info-table), CTA preto sólido no centro.
     bloco_avaliacao = f"""
-        <div style="margin:22px 0 6px 0;padding:20px 22px;background:#FFF3C5;
-                    border:1px solid #F3EAC8;border-radius:12px;text-align:center;">
+        <div class="cpe-force-value"
+             style="margin:22px 0 6px 0;padding:24px 22px;background:#FFFFFF;
+                    border:1px solid #E5E7EB;border-left:4px solid #FFC107;
+                    border-radius:12px;text-align:center;">
           <div style="font-size:11px;letter-spacing:.15em;text-transform:uppercase;
-                      color:#78551A;font-weight:700;margin-bottom:6px;">
+                      color:#78551A;font-weight:700;margin-bottom:8px;">
             Avalie seu atendimento
           </div>
           <div style="font-size:18px;font-weight:700;color:#1A1A1A;
-                      line-height:1.3;margin-bottom:6px;">
+                      line-height:1.3;margin-bottom:8px;">
             Como foi o suporte que você recebeu?
           </div>
-          <div style="font-size:13px;color:#4B5563;line-height:1.5;
-                      max-width:420px;margin:0 auto 14px auto;">
+          <div style="font-size:13px;color:#4B5563;line-height:1.55;
+                      max-width:420px;margin:0 auto 16px auto;">
             Sua opinião ajuda a melhorar o suporte. A avaliação leva menos de
             <strong>30 segundos</strong>.
           </div>
@@ -1040,8 +1082,8 @@ def email_ticket_finalizado(
                     box-shadow:0 4px 14px rgba(26,26,26,.18);">
             ⭐ Avaliar atendimento
           </a>
-          <div style="font-size:11px;color:#78551A;margin-top:10px;">
-            Você tem <strong>7 dias</strong> pra avaliar.
+          <div style="font-size:11px;color:#6B7280;margin-top:12px;">
+            Você tem <strong style="color:#1A1A1A;">7 dias</strong> pra avaliar.
           </div>
         </div>
     """
