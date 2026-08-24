@@ -246,49 +246,85 @@ def _enviar_sync_bcc(
 
 
 # =====================================================================
-# Templates HTML — identidade CPE Control (#FFC107 amarelo / #1A1A1A preto)
+# Templates HTML — identidade CPE Control
+# 2026-08-24: redesign inspirado no email de agendamento.
+#   Paleta:  paper #FDF9EE  |  ink #1A1A1A  |  accent #FFC107
+#   Hero:    bloco preto arredondado com logo CPE amarelo, eyebrow e titulo
+#   Corpo:   fundo creme claro, texto escuro, boxes com left-key panel
+#   Rodape:  helpline com pill de contato, assinatura CPE Tecnologia
+# Todos os emails do sistema usam este template — consistencia visual total.
 # =====================================================================
+
+# Logo CPE — SVG inline (renderiza consistente em qualquer cliente de email).
+# Amarelo #FFC107 sobre preto arredondado.
+_CPE_LOGO_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="52" height="34" viewBox="0 0 52 34" '
+    'style="display:block">'
+    '<rect x="1" y="1" width="50" height="32" rx="6" fill="#FFC107" stroke="#1A1A1A" stroke-width="2"/>'
+    '<text x="26" y="22" text-anchor="middle" font-family="Segoe UI,Arial,sans-serif" '
+    'font-size="13" font-weight="900" fill="#1A1A1A" letter-spacing="0.5">CPE</text>'
+    '</svg>'
+)
 
 _BASE_TEMPLATE = """<!DOCTYPE html>
 <html lang="pt-BR"><head><meta charset="UTF-8"><title>{title}</title></head>
-<body style="margin:0;padding:0;background:#f5f5f7;font-family:Segoe UI,Roboto,Arial,sans-serif;color:#1f2937;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:24px 12px;">
+<body style="margin:0;padding:0;background:#F1EEE1;font-family:'Segoe UI',Roboto,Arial,sans-serif;color:#1F2937;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="padding:28px 12px;background:#F1EEE1;">
     <tr><td align="center">
-      <table role="presentation" width="600" cellpadding="0" cellspacing="0"
-             style="max-width:600px;background:#fff;border-radius:12px;overflow:hidden;
-                    box-shadow:0 4px 18px rgba(0,0,0,0.08);">
-        <tr>
-          <td style="background:linear-gradient(135deg,#FFC107 0%,#FFA500 100%);
-                     padding:22px 28px;color:#1A1A1A;
-                     border-bottom:4px solid #1A1A1A;">
-            <div style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;opacity:.75;">
-              {tag}
-            </div>
-            <div style="font-size:22px;font-weight:800;margin-top:4px;line-height:1.2;">
-              {title}
-            </div>
-          </td>
-        </tr>
-        <tr><td style="padding:26px 28px;font-size:14px;line-height:1.6;color:#1f2937;">
+      <table role="presentation" width="620" cellpadding="0" cellspacing="0"
+             style="max-width:620px;background:#FDF9EE;border-radius:14px;overflow:hidden;
+                    box-shadow:0 6px 30px rgba(26,26,26,0.10);">
+
+        <!-- HERO -->
+        <tr><td style="padding:22px 22px 0 22px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                 style="background:#1A1A1A;border-radius:12px;">
+            <tr>
+              <td style="padding:22px 26px;">
+                <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+                  <td style="padding-right:16px;vertical-align:middle;">""" + _CPE_LOGO_SVG + """</td>
+                  <td style="vertical-align:middle;">
+                    <div style="font-size:11px;letter-spacing:.15em;text-transform:uppercase;
+                                font-weight:700;color:#FFC107;line-height:1.1;">{tag}</div>
+                    <div style="font-size:22px;font-weight:700;color:#FFFFFF;
+                                line-height:1.25;margin-top:6px;">{title}</div>
+                  </td>
+                </tr></table>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- BODY -->
+        <tr><td style="padding:24px 30px 28px 30px;font-size:14px;line-height:1.65;color:#1F2937;">
           {body}
         </td></tr>
-        <tr>
-          <td style="padding:16px 28px;background:#1A1A1A;
-                     border-top:3px solid #FFC107;
-                     font-size:12px;color:#cbd5e1;text-align:center;">
-            <div style="margin-bottom:6px;">
-              <span style="color:#FFC107;font-weight:700;letter-spacing:.04em;">CPE&nbsp;CONTROL</span>
-              <span style="opacity:.6;"> · Sistema de Gerenciamento Inteligente</span>
-            </div>
-            <div style="font-size:11px;opacity:.7;">
-              E-mail automático — não responda a esta mensagem.
-            </div>
-            <div style="margin-top:10px;padding-top:10px;border-top:1px solid #2a2a2a;
-                        font-size:11px;color:#94a3b8;">
-              <i>Desenvolvido por</i> <strong style="color:#FFC107;">Jonathan Lopes</strong>
-            </div>
-          </td>
-        </tr>
+
+        <!-- FOOTER -->
+        <tr><td style="background:#F5F1E4;padding:20px 30px 22px 30px;
+                       border-top:1px solid #E7E1CE;text-align:center;">
+          <div style="font-size:13px;color:#4B5563;font-weight:600;margin-bottom:8px;">
+            Por favor, não responda este e-mail.
+          </div>
+          <div style="font-size:12px;color:#6B7280;line-height:1.5;">
+            Em caso de dúvidas, escreva para
+            <span style="display:inline-block;background:#FFF3C5;color:#1A1A1A;
+                         padding:2px 10px;border-radius:12px;font-weight:600;
+                         font-size:12px;margin-left:4px;">
+              suporte@cpetecnologia.com.br
+            </span>
+          </div>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid #E7E1CE;
+                      font-size:11px;color:#6B7280;">
+            <strong style="color:#1A1A1A;">CPE&nbsp;Tecnologia</strong>
+            <span style="color:#9CA3AF;"> · CPE Control · Suporte Técnico</span>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:#9CA3AF;">
+            Desenvolvido por
+            <strong style="color:#78551A;">Jonathan Lopes</strong>
+          </div>
+        </td></tr>
+
       </table>
     </td></tr>
   </table>
@@ -312,9 +348,84 @@ def _escape(s: str | None) -> str:
 
 
 def _info_box(label: str, valor: str) -> str:
+    """Row de info-table redesenhada: painel amarelo pastel na esquerda pra label
+    (efeito 'left-key panel' do print de agendamento), valor em preto forte."""
     return (
-        f'<tr><td style="padding:6px 0;color:#6b7280;width:120px;">{_escape(label)}</td>'
-        f'<td style="padding:6px 0;font-weight:600;">{_escape(valor)}</td></tr>'
+        f'<tr>'
+        f'<td style="padding:12px 14px;background:#FFF3C5;color:#78551A;'
+        f'font-weight:600;font-size:13px;width:150px;'
+        f'border-bottom:1px solid #F3EAC8;">{_escape(label)}</td>'
+        f'<td style="padding:12px 18px;color:#1A1A1A;font-weight:600;font-size:14px;'
+        f'background:#FFFBEB;border-bottom:1px solid #F3EAC8;">{_escape(valor)}</td>'
+        f'</tr>'
+    )
+
+def _info_table(rows_html: str) -> str:
+    """Wrapper da tabela de info — bordas suaves + primeiro/ultimo row sem borda."""
+    return (
+        '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" '
+        'style="border-collapse:collapse;margin:16px 0 20px 0;'
+        'border:1px solid #F3EAC8;border-radius:10px;overflow:hidden;">'
+        f'<tbody>{rows_html}</tbody></table>'
+    )
+
+def _status_box(label: str, mensagem: str) -> str:
+    """Bloco preto com label em amarelo — informacao critica destacada
+    (padrao do print de agendamento: 'Status: Aguardando confirmacao...')."""
+    return (
+        '<div style="margin:18px 0;padding:16px 20px;background:#1A1A1A;'
+        'border-radius:10px;color:#E5E7EB;font-size:13.5px;line-height:1.55;">'
+        f'<span style="color:#FFC107;font-weight:700;">{_escape(label)}:</span> '
+        f'{_escape(mensagem)}'
+        '</div>'
+    )
+
+def _callout(tipo: str, titulo: str, mensagem: str) -> str:
+    """Callout com variantes: 'info' (azul), 'success' (verde), 'warning'
+    (amarelo), 'danger' (vermelho). Usa cores pastel sobre fundo creme."""
+    palette = {
+        'info':    ('#DBEAFE', '#2563EB', '#1E3A8A'),
+        'success': ('#D1FAE5', '#059669', '#065F46'),
+        'warning': ('#FEF3C7', '#D97706', '#78350F'),
+        'danger':  ('#FEE2E2', '#DC2626', '#7F1D1D'),
+    }
+    bg, border, text = palette.get(tipo, palette['info'])
+    return (
+        f'<div style="margin:16px 0;padding:14px 18px;background:{bg};'
+        f'border-left:4px solid {border};border-radius:8px;color:{text};">'
+        f'<div style="font-weight:700;font-size:13px;margin-bottom:4px;'
+        'text-transform:uppercase;letter-spacing:.05em;">'
+        f'{_escape(titulo)}</div>'
+        f'<div style="font-size:13.5px;line-height:1.55;">{_escape(mensagem)}</div>'
+        '</div>'
+    )
+
+def _cta_button(texto: str, url: str, cor: str = 'accent') -> str:
+    """Botao CTA em pill — variante padrao amarela CPE, ou 'dark' pra secundario."""
+    if cor == 'dark':
+        bg, txt = '#1A1A1A', '#FFC107'
+    else:
+        bg, txt = '#FFC107', '#1A1A1A'
+    return (
+        '<p style="text-align:center;margin:22px 0 6px 0;">'
+        f'<a href="{_escape(url)}" '
+        f'style="display:inline-block;padding:13px 32px;background:{bg};'
+        f'color:{txt};font-weight:700;font-size:14px;text-decoration:none;'
+        'border-radius:10px;letter-spacing:.02em;'
+        'box-shadow:0 4px 14px rgba(26,26,26,.12);">'
+        f'{_escape(texto)}</a></p>'
+    )
+
+def _quote_box(titulo: str, conteudo: str, cor: str = '#FFC107') -> str:
+    """Box de citacao (mensagem/descricao/solucao) com left-border colorida."""
+    return (
+        f'<div style="margin:14px 0;padding:14px 18px;background:#FFFBEB;'
+        f'border-left:4px solid {cor};border-radius:8px;">'
+        '<div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;'
+        f'color:#78551A;font-weight:700;margin-bottom:6px;">{_escape(titulo)}</div>'
+        '<div style="white-space:pre-wrap;color:#1F2937;font-size:14px;'
+        f'line-height:1.55;">{_escape(conteudo) or "—"}</div>'
+        '</div>'
     )
 
 
@@ -328,31 +439,28 @@ def email_ticket_criado(
 ) -> tuple[str, str]:
     """Retorna (subject, html) para o e-mail de ticket criado."""
     subject = f"[Chamado {ticket_numero}] Recebemos sua solicitação"
+    rows = (
+        _info_box("Nº do chamado", ticket_numero)
+        + _info_box("Assunto", assunto)
+        + _info_box("Setor", grupo)
+        + _info_box("Prioridade", prioridade)
+    )
     body = f"""
-        <p>Olá <strong>{_escape(solicitante_nome)}</strong>,</p>
-        <p>Recebemos sua solicitação e ela já está registrada em nosso sistema.
-        Acompanhe abaixo os detalhes:</p>
+        <p style="margin:0 0 8px 0;">Olá <strong>{_escape(solicitante_nome)}</strong>,</p>
+        <p style="margin:0 0 4px 0;">Recebemos sua solicitação e ela já está registrada
+        em nosso sistema. Acompanhe abaixo os detalhes:</p>
 
-        <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
-          <tbody>
-            {_info_box("Nº do chamado", ticket_numero)}
-            {_info_box("Assunto", assunto)}
-            {_info_box("Setor", grupo)}
-            {_info_box("Prioridade", prioridade)}
-          </tbody>
-        </table>
+        {_info_table(rows)}
 
-        <div style="margin:14px 0;padding:12px 14px;background:#f9fafb;
-                    border-left:4px solid #667eea;border-radius:6px;">
-          <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">Descrição</div>
-          <div style="white-space:pre-wrap;">{_escape(descricao)}</div>
-        </div>
+        {_quote_box("Descrição", descricao)}
 
-        <p>Em breve um responsável atenderá seu chamado. Você pode acompanhar
-        o andamento no sistema.</p>
+        {_status_box("Status", "Aguardando atendimento. Em breve um responsável assumirá seu chamado. Você pode acompanhar o andamento no sistema.")}
+
+        <p style="margin:14px 0 0 0;font-size:13px;color:#6B7280;">
+        Obrigado por escolher a <strong style="color:#1A1A1A;">CPE Tecnologia</strong>!</p>
     """
-    html = _BASE_TEMPLATE.format(title="Seu chamado foi registrado", tag="Novo Chamado", body=body)
+    html = _BASE_TEMPLATE.format(title="Recebemos sua solicitação",
+                                  tag="Chamado aberto", body=body)
     return subject, html
 
 
@@ -363,21 +471,19 @@ def email_resposta_publica(
     """E-mail para o solicitante (ou responsável) quando há nova resposta pública."""
     subject = f"[Chamado {ticket_numero}] Nova resposta: {assunto}"
     body = f"""
-        <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
-        <p>O chamado <strong>{_escape(ticket_numero)}</strong> recebeu uma nova resposta de
-           <strong>{_escape(autor_nome)}</strong>:</p>
+        <p style="margin:0 0 8px 0;">Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
+        <p style="margin:0 0 4px 0;">O chamado <strong>{_escape(ticket_numero)}</strong>
+        recebeu uma nova resposta de <strong>{_escape(autor_nome)}</strong>.</p>
 
-        <div style="margin:14px 0;padding:14px 16px;background:#f9fafb;
-                    border-left:4px solid #667eea;border-radius:6px;">
-          <div style="font-size:12px;color:#6b7280;margin-bottom:6px;">
-            {_escape(autor_nome)} escreveu:
-          </div>
-          <div style="white-space:pre-wrap;">{_escape(mensagem)}</div>
-        </div>
+        {_quote_box(f"{autor_nome} escreveu", mensagem)}
 
-        <p>Acesse o sistema para visualizar o histórico completo do chamado e responder.</p>
+        {_status_box("Ação", "Acesse o sistema para ver o histórico completo do chamado e responder.")}
+
+        <p style="margin:14px 0 0 0;font-size:13px;color:#6B7280;">
+        Obrigado por escolher a <strong style="color:#1A1A1A;">CPE Tecnologia</strong>!</p>
     """
-    html = _BASE_TEMPLATE.format(title="Nova resposta no chamado", tag="Atualização", body=body)
+    html = _BASE_TEMPLATE.format(title="Sua conversa continua",
+                                  tag="Nova resposta", body=body)
     return subject, html
 
 
@@ -465,7 +571,7 @@ def _agenda_info_row(label: str, valor: str) -> str:
         return ""
     return (
         f'<tr>'
-        f'<td style="padding:8px 0;color:#6b7280;width:140px;vertical-align:top;">{_escape(label)}</td>'
+        f'<td style="padding:8px 0;color:#94A3B8;width:140px;vertical-align:top;">{_escape(label)}</td>'
         f'<td style="padding:8px 0;font-weight:600;color:#0f172a;">{_escape(valor)}</td>'
         f'</tr>'
     )
@@ -488,7 +594,7 @@ def email_agendamento_recebido(
 
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
                style="border-collapse:collapse;margin:18px 0;padding:14px 16px;
-                      background:#FFF8E1;border-left:4px solid #FFC107;border-radius:8px;">
+                      background:#3a2e0a;border-left:4px solid #FFC107;border-radius:8px;">
           <tbody>
             {_agenda_info_row("Curso/Servico", servico_nome)}
             {_agenda_info_row("Instrutor", instrutor or "")}
@@ -505,7 +611,7 @@ def email_agendamento_recebido(
           Voce recebera um novo e-mail assim que o agendamento for confirmado.
         </div>
 
-        <p style="color:#6b7280;font-size:13px;">
+        <p style="color:#94A3B8;font-size:13px;">
           Obrigado por escolher a CPE Tecnologia!
         </p>
     """
@@ -544,7 +650,7 @@ def email_agendamento_confirmado(
 
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
                style="border-collapse:collapse;margin:18px 0;padding:16px 18px;
-                      background:#ecfdf5;border-left:4px solid #10b981;border-radius:8px;">
+                      background:#0f2f24;border-left:4px solid #10b981;border-radius:8px;">
           <tbody>
             {_agenda_info_row("Curso/Servico", servico_nome)}
             {_agenda_info_row("Instrutor", instrutor or "")}
@@ -558,7 +664,7 @@ def email_agendamento_confirmado(
         </table>
 
         {f'''<div style="margin:16px 0;padding:12px 14px;background:#eff6ff;
-                    border-left:4px solid #3b82f6;border-radius:6px;font-size:13px;color:#1e3a8a;">
+                    border-left:4px solid #3b82f6;border-radius:6px;font-size:13px;color:#93C5FD;">
           <strong>Atendimento online:</strong> {local_extra}
         </div>''' if (modalidade == "online" and local_extra) else ''}
 
@@ -567,7 +673,7 @@ def email_agendamento_confirmado(
           o quanto antes para liberarmos o horario para outro cliente.
         </p>
 
-        <p style="color:#6b7280;font-size:13px;margin-top:18px;">
+        <p style="color:#94A3B8;font-size:13px;margin-top:18px;">
           Te esperamos! Equipe CPE Tecnologia.
         </p>
     """
@@ -593,9 +699,9 @@ def email_equipe_novo_agendamento(
     modal_label = "Online" if modalidade == "online" else "Presencial"
 
     obs_block = (
-        f'''<div style="margin:14px 0;padding:12px 14px;background:#f9fafb;
+        f'''<div style="margin:14px 0;padding:12px 14px;background:#111827;
                        border-left:4px solid #6b7280;border-radius:6px;">
-              <div style="font-size:12px;color:#6b7280;margin-bottom:4px;font-weight:600;">
+              <div style="font-size:12px;color:#94A3B8;margin-bottom:4px;font-weight:600;">
                 Observacao do cliente
               </div>
               <div style="white-space:pre-wrap;">{_escape(observacoes)}</div>
@@ -609,7 +715,7 @@ def email_equipe_novo_agendamento(
 
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
                style="border-collapse:collapse;margin:18px 0;padding:14px 16px;
-                      background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;">
+                      background:#3a2e0a;border-left:4px solid #f59e0b;border-radius:8px;">
           <tbody>
             {_agenda_info_row("Cliente", cliente_nome)}
             {_agenda_info_row("E-mail", cliente_email)}
@@ -624,7 +730,7 @@ def email_equipe_novo_agendamento(
 
         {obs_block}
 
-        <p style="margin-top:18px;font-size:13px;color:#6b7280;">
+        <p style="margin-top:18px;font-size:13px;color:#94A3B8;">
           Acesse <strong>Equipe de Suporte &rarr; Dashboard &rarr; Aguardando
           confirmacao</strong> para aprovar ou recusar.
         </p>
@@ -651,7 +757,7 @@ def email_ticket_para_grupo(
         do seu grupo. Qualquer pessoa do grupo pode assumi-lo no sistema.</p>
 
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #2D3138;border-radius:8px;">
           <tbody>
             {_info_box("Nº do chamado", ticket_numero)}
             {_info_box("Assunto", assunto)}
@@ -661,9 +767,9 @@ def email_ticket_para_grupo(
           </tbody>
         </table>
 
-        <div style="margin:14px 0;padding:12px 14px;background:#f9fafb;
+        <div style="margin:14px 0;padding:12px 14px;background:#111827;
                     border-left:4px solid #667eea;border-radius:6px;">
-          <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">Descrição</div>
+          <div style="font-size:12px;color:#94A3B8;margin-bottom:4px;">Descrição</div>
           <div style="white-space:pre-wrap;">{_escape(descricao)}</div>
         </div>
 
@@ -700,7 +806,7 @@ def email_ticket_atribuido(
         <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
         {msg}
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #2D3138;border-radius:8px;">
           <tbody>
             {_info_box("Nº do chamado", ticket_numero)}
             {_info_box("Assunto", assunto)}
@@ -724,7 +830,7 @@ def email_ticket_status_alterado(
         atualizado por <strong>{_escape(autor_nome)}</strong>.</p>
 
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #2D3138;border-radius:8px;">
           <tbody>
             {_info_box("Nº do chamado", ticket_numero)}
             {_info_box("Assunto", assunto)}
@@ -763,9 +869,9 @@ def email_ticket_encaminhado(
     motivo_html = ""
     if motivo:
         motivo_html = f"""
-            <div style="margin:14px 0;padding:12px 14px;background:#f9fafb;
+            <div style="margin:14px 0;padding:12px 14px;background:#111827;
                         border-left:4px solid #667eea;border-radius:6px;">
-              <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">Motivo</div>
+              <div style="font-size:12px;color:#94A3B8;margin-bottom:4px;">Motivo</div>
               <div style="white-space:pre-wrap;">{_escape(motivo)}</div>
             </div>
         """
@@ -773,7 +879,7 @@ def email_ticket_encaminhado(
         <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
         {msg}
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #2D3138;border-radius:8px;">
           <tbody>
             {_info_box("Nº do chamado", ticket_numero)}
             {_info_box("Assunto", assunto)}
@@ -796,9 +902,9 @@ def email_ticket_devolvido(
     motivo_html = ""
     if motivo:
         motivo_html = f"""
-            <div style="margin:14px 0;padding:12px 14px;background:#f9fafb;
+            <div style="margin:14px 0;padding:12px 14px;background:#111827;
                         border-left:4px solid #f59e0b;border-radius:6px;">
-              <div style="font-size:12px;color:#6b7280;margin-bottom:4px;">Motivo da devolução</div>
+              <div style="font-size:12px;color:#94A3B8;margin-bottom:4px;">Motivo da devolução</div>
               <div style="white-space:pre-wrap;">{_escape(motivo)}</div>
             </div>
         """
@@ -809,7 +915,7 @@ def email_ticket_devolvido(
         Qualquer pessoa do grupo pode assumi-lo novamente.</p>
 
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #2D3138;border-radius:8px;">
           <tbody>
             {_info_box("Nº do chamado", ticket_numero)}
             {_info_box("Assunto", assunto)}
@@ -844,7 +950,7 @@ def email_ticket_reaberto(
         <p>Olá <strong>{_escape(destinatario_nome)}</strong>,</p>
         {msg}
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #2D3138;border-radius:8px;">
           <tbody>
             {_info_box("Nº do chamado", ticket_numero)}
             {_info_box("Assunto", assunto)}
@@ -883,7 +989,7 @@ def email_ticket_comentario_interno(
         </div>
 
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #2D3138;border-radius:8px;">
           <tbody>
             {_info_box("Nº do chamado", ticket_numero)}
             {_info_box("Assunto", assunto)}
@@ -909,44 +1015,55 @@ def email_ticket_finalizado(
     if ticket_id:
         link_ticket += f"?ticket_id={ticket_id}"
 
-    body = f"""
-        <p>Olá <strong>{_escape(solicitante_nome)}</strong>,</p>
-        <p>Seu chamado <strong>{_escape(ticket_numero)}</strong> foi finalizado por
-           <strong>{_escape(finalizador_nome)}</strong>.</p>
-
-        <div style="margin:14px 0;padding:14px 16px;background:#ecfdf5;
-                    border-left:4px solid #10b981;border-radius:6px;">
-          <div style="font-size:12px;color:#065f46;margin-bottom:6px;font-weight:600;">
-            ✅ Solução aplicada
+    # Bloco de avaliação — mesmo layout do print (heading + subtexto + CTA
+    # amarela + micro-copy do prazo).
+    bloco_avaliacao = f"""
+        <div style="margin:22px 0 6px 0;padding:20px 22px;background:#FFF3C5;
+                    border:1px solid #F3EAC8;border-radius:12px;text-align:center;">
+          <div style="font-size:11px;letter-spacing:.15em;text-transform:uppercase;
+                      color:#78551A;font-weight:700;margin-bottom:6px;">
+            Avalie seu atendimento
           </div>
-          <div style="white-space:pre-wrap;">{_escape(solucao) or 'Sem detalhes adicionais.'}</div>
-        </div>
-
-        <div style="margin:20px 0;padding:16px 18px;background:#FEF9C3;
-                    border-left:4px solid #F59E0B;border-radius:6px;">
-          <div style="font-size:13.5px;color:#78350F;margin-bottom:10px;line-height:1.5;">
-            <strong>⭐ Como foi o atendimento?</strong><br>
-            Sua opinião ajuda a melhorar o suporte. A avaliação leva menos de 30 segundos.
+          <div style="font-size:18px;font-weight:700;color:#1A1A1A;
+                      line-height:1.3;margin-bottom:6px;">
+            Como foi o suporte que você recebeu?
           </div>
-          <p style="text-align:center;margin:0;">
-            <a href="{_escape(link_ticket)}"
-               style="display:inline-block;padding:12px 28px;background:#F59E0B;
-                      color:#1A1A1A;font-weight:700;font-size:14px;text-decoration:none;
-                      border-radius:8px;box-shadow:0 4px 12px rgba(245,158,11,.35);">
-              ⭐ Avaliar atendimento
-            </a>
-          </p>
-          <p style="font-size:11px;color:#92400E;text-align:center;margin-top:8px;margin-bottom:0;">
-            Você tem <strong>7 dias</strong> pra avaliar. Ao abrir o link o formulário aparece direto.
-          </p>
+          <div style="font-size:13px;color:#4B5563;line-height:1.5;
+                      max-width:420px;margin:0 auto 14px auto;">
+            Sua opinião ajuda a melhorar o suporte. A avaliação leva menos de
+            <strong>30 segundos</strong>.
+          </div>
+          <a href="{_escape(link_ticket)}"
+             style="display:inline-block;padding:13px 32px;background:#1A1A1A;
+                    color:#FFC107;font-weight:700;font-size:14px;text-decoration:none;
+                    border-radius:10px;letter-spacing:.02em;
+                    box-shadow:0 4px 14px rgba(26,26,26,.18);">
+            ⭐ Avaliar atendimento
+          </a>
+          <div style="font-size:11px;color:#78551A;margin-top:10px;">
+            Você tem <strong>7 dias</strong> pra avaliar.
+          </div>
         </div>
-
-        <p style="font-size:13px;color:#6B7280;">
-          Se o problema retornar ou se você não estiver satisfeito com a solução,
-          é possível <strong>reabrir o chamado</strong> no sistema (até 3 vezes, dentro de 2 meses).
-        </p>
     """
-    html = _BASE_TEMPLATE.format(title="Chamado finalizado", tag="Resolvido", body=body)
+
+    body = f"""
+        <p style="margin:0 0 8px 0;">Olá <strong>{_escape(solicitante_nome)}</strong>,</p>
+        <p style="margin:0 0 4px 0;">Seu chamado
+        <strong>{_escape(ticket_numero)}</strong> foi finalizado por
+        <strong>{_escape(finalizador_nome)}</strong>.</p>
+
+        {_quote_box("Solução aplicada", solucao or "Sem detalhes adicionais.", cor="#10B981")}
+
+        {_status_box("Precisa de mais alguma coisa?",
+                     "Se o problema retornar, é possível reabrir o chamado no sistema (até 3 vezes, dentro de 2 meses).")}
+
+        {bloco_avaliacao}
+
+        <p style="margin:16px 0 0 0;font-size:13px;color:#6B7280;text-align:center;">
+        Obrigado por escolher a <strong style="color:#1A1A1A;">CPE Tecnologia</strong>!</p>
+    """
+    html = _BASE_TEMPLATE.format(title="Concluímos seu atendimento",
+                                  tag="Chamado resolvido", body=body)
     return subject, html
 
 
@@ -978,7 +1095,7 @@ def email_cadastro_aprovado(
         {_info_box("Seu nome de usuário (login)", username)}
         {grupo_info}
 
-        <div style="margin:18px 0 6px;padding:14px 16px;background:#fffbeb;
+        <div style="margin:18px 0 6px;padding:14px 16px;background:#3a2e0a;
                     border-left:4px solid #F59E0B;border-radius:6px;font-size:13px;">
           <strong>🔐 Sua senha</strong> é a mesma que você cadastrou no formulário de
           primeiro acesso. Por segurança, ela não é enviada por e-mail.<br>
@@ -1128,7 +1245,7 @@ def email_lembrete_devolver_veiculo_1h(
         ({_escape(veiculo_placa)}) termina em <strong>1 hora</strong>
         ({_escape(data_fim)} às {_escape(horario_fim)}).</p>
 
-        <div style="margin:14px 0;padding:14px 16px;background:#fffbeb;
+        <div style="margin:14px 0;padding:14px 16px;background:#3a2e0a;
                     border-left:4px solid #f59e0b;border-radius:6px;font-size:13px;">
           <strong>📋 Não esqueça:</strong> ao chegar, procure o
           <strong>responsável de Frotas</strong> pra fazer a
@@ -1171,7 +1288,7 @@ def email_devolver_veiculo_vencido(
         <p>{alerta_texto}</p>
 
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #2D3138;border-radius:8px;">
           <tbody>
             {_info_box("Veículo", f"{veiculo_modelo} ({veiculo_placa})")}
             {_info_box("Reserva venceu em", f"{data_fim} às {horario_fim}")}
@@ -1210,7 +1327,7 @@ def email_escalada_atraso_veiculo(
         continua sem devolução/vistoria.</p>
 
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #2D3138;border-radius:8px;">
           <tbody>
             {_info_box("Veículo", f"{veiculo_modelo} ({veiculo_placa})")}
             {_info_box("Condutor", condutor_nome)}
@@ -1256,7 +1373,7 @@ def email_reserva_expirada_condutor(
         (<strong>{_escape(resp_frotas_nome)}</strong>).</p>
 
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #2D3138;border-radius:8px;">
           <tbody>
             {_info_box("Veículo", f"{veiculo_modelo} ({veiculo_placa})")}
             {_info_box("Destino", destino or "—")}
@@ -1296,7 +1413,7 @@ def email_reserva_expirada_responsavel(
         (atraso: <strong>{minutos_atraso} min</strong>).</p>
 
         <table role="presentation" cellpadding="0" cellspacing="0" width="100%"
-               style="border-collapse:collapse;margin:14px 0;border:1px solid #eef0f4;border-radius:8px;">
+               style="border-collapse:collapse;margin:14px 0;border:1px solid #2D3138;border-radius:8px;">
           <tbody>
             {_info_box("Condutor", condutor_nome)}
             {_info_box("Veículo", f"{veiculo_modelo} ({veiculo_placa})")}
@@ -1336,7 +1453,7 @@ def email_fleet_saida_recusada(
         <p>Olá <strong>{_escape(condutor_nome)}</strong>,</p>
         <p>A vistoria de saída do veículo
         <strong>{_escape(veiculo_modelo)}</strong> ({_escape(veiculo_placa)})
-        foi <span style="color:#DC2626;font-weight:600;">recusada</span>
+        foi <span style="color:#F87171;font-weight:600;">recusada</span>
         por <strong>{_escape(vistoriador_nome)}</strong>.</p>
 
         <div style="margin:16px 0;padding:14px 16px;background:#FEF2F2;
@@ -1398,7 +1515,7 @@ def email_fleet_retorno_recusado(
         <p>Olá <strong>{_escape(condutor_nome)}</strong>,</p>
         <p>A vistoria de devolução do veículo
         <strong>{_escape(veiculo_modelo)}</strong> ({_escape(veiculo_placa)})
-        foi <span style="color:#DC2626;font-weight:600;">recusada</span>
+        foi <span style="color:#F87171;font-weight:600;">recusada</span>
         por <strong>{_escape(vistoriador_nome)}</strong>.</p>
 
         <div style="margin:16px 0;padding:14px 16px;background:#FEF2F2;
