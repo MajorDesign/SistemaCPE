@@ -812,11 +812,22 @@ async function apiRequest(method, endpoint, body = null) {
     const response = await fetch(`${API_BASE}${endpoint}`, options);
     clearTimeout(timeoutId);
 
-    if ([401, 403].includes(response.status)) {
-      console.error('[API] ❌ Não autorizado (401/403)');
+    // 2026-08-24: separado 401 de 403.
+    // 401 = nao autenticado (token invalido/ausente/expirado) -> desloga
+    // 403 = autenticado mas sem permissao -> mostra erro sem deslogar.
+    // Bug anterior: tratava os dois igual, entao qualquer negacao de
+    // permissao (ex: USER tentando deletar ticket alheio) deslogava.
+    if (response.status === 401) {
+      console.error('[API] ❌ 401 nao autenticado — deslogando');
       localStorage.clear();
       showError('❌ Sessão expirada. Faça login novamente.');
       setTimeout(() => { window.location.href = '/SistemaCPE/web/login.html'; }, 2000);
+      return null;
+    }
+    if (response.status === 403) {
+      console.warn('[API] ⚠️ 403 sem permissao para este endpoint');
+      const err = await response.json().catch(() => ({}));
+      showError(`❌ ${err.detail || 'Você não tem permissão para esta ação'}`);
       return null;
     }
 
