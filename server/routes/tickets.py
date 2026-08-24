@@ -2811,12 +2811,24 @@ async def deletar_ticket(
     try:
         cursor = conexao.cursor(dictionary=True)
         ticket_db = validar_ticket_existe(cursor, ticket_id)
+        user_db = validar_usuario_existe(cursor, usuario_id)
 
-        role_atual = obter_role_usuario(cursor, usuario_id)
+        role_atual = user_db.get("role") or "USER"
+        grupo_atual = user_db.get("group_id")
+
+        # 2026-08-24: regras de permissao pra deletar:
+        # - Solicitante do ticket → sempre pode
+        # - ADMIN / TI / MANAGER → sempre pode
+        # - RESPONSAVEL_GRUPO → pode se o ticket for do PROPRIO grupo
+        # - USER → so o proprio ticket (cai na primeira regra)
         e_admin = role_atual in ROLES_ADMIN
-
-        # Usuário USER só pode deletar o próprio ticket
-        if not e_admin and ticket_db["solicitante_id"] != usuario_id:
+        e_solicitante = ticket_db["solicitante_id"] == usuario_id
+        e_resp_do_grupo = (
+            role_atual == "RESPONSAVEL_GRUPO"
+            and grupo_atual is not None
+            and grupo_atual == ticket_db.get("group_id")
+        )
+        if not (e_admin or e_solicitante or e_resp_do_grupo):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Você não tem permissão para deletar este ticket"

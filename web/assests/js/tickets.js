@@ -671,9 +671,16 @@ function applyDetailPermissions(ticket) {
     else                 modalBody.classList.remove('ticket-encerrado');
   }
 
-  // ── Botão "Deletar": apenas RESPONSAVEL_GRUPO ──
+  // ── Botão "Deletar": alinhado com backend (2026-08-24) ──
+  //   Solicitante OU ADMIN/TI/MANAGER OU RESPONSAVEL_GRUPO do mesmo grupo
   const btnDeletar = document.getElementById('btnDeletarTicket');
-  if (btnDeletar) btnDeletar.style.display = isResponsavelGrupo() ? '' : 'none';
+  if (btnDeletar) {
+    const _u = getCurrentUser();
+    const podeDeletar = admin
+      || isSolicitante
+      || (isResponsavelGrupo() && _u.group_id != null && Number(_u.group_id) === Number(ticket.group_id));
+    btnDeletar.style.display = podeDeletar ? '' : 'none';
+  }
 
   // ── Botão "Assumir": sem responsável + mesmo grupo + não encerrado ──
   const btnAssumir = document.getElementById('btnAssumirTicket');
@@ -1634,8 +1641,16 @@ function renderTable() {
     const initial = t.userName.charAt(0).toUpperCase() || "?";
     const checked = selectedTickets.has(t.id) ? 'checked' : '';
 
-    // ✅ Botão deletar na linha: apenas RESPONSAVEL_GRUPO pode deletar
-    const podeDeletar = isResponsavelGrupo();
+    // 2026-08-24: Botao deletar — alinhado com backend:
+    // - Solicitante do ticket → pode
+    // - ADMIN/TI/MANAGER → pode
+    // - RESPONSAVEL_GRUPO → pode se ticket for do proprio grupo
+    const _u = getCurrentUser();
+    const _uid = _u.id || _u.usuario_id;
+    const podeDeletar =
+      admin ||
+      t.solicitante_id === _uid ||
+      (isResponsavelGrupo() && _u.group_id != null && Number(_u.group_id) === Number(t.group_id));
     const btnDeletar  = podeDeletar
       ? `<button class="btn btn-sm btn-danger" onclick="deleteTicketRow(${t.id})" title="Deletar"><i class="bi bi-trash"></i></button>`
       : '';
