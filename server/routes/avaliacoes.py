@@ -23,6 +23,10 @@ logger = logging.getLogger(__name__)
 avaliacoes_router = APIRouter(prefix="/api/avaliacoes", tags=["Avaliações"])
 
 ROLES_ADMIN = ("ADMIN", "TI", "MANAGER")
+# 2026-08-25: Relatórios de tickets/avaliações — MANAGER e USER NÃO veem.
+# Visão executiva restrita a ADMIN/TI + RESPONSAVEL_GRUPO (só do próprio grupo).
+# Regra global documentada em docs/REGRAS_NEGOCIO.md.
+ROLES_REPORTS = ("ADMIN", "TI")
 
 
 # ─── Modelos ──────────────────────────────────────────────────────────────────
@@ -207,7 +211,9 @@ async def listar_avaliacoes(
         cursor = conn.cursor(dictionary=True)
         usuario = _usuario(cursor, usuario_id)
         role    = usuario.get("role") or "USER"
-        e_admin = role in ROLES_ADMIN
+        # 2026-08-25: usa ROLES_REPORTS (ADMIN/TI) — MANAGER NÃO tem visão
+        # executiva de relatórios. Regra em docs/REGRAS_NEGOCIO.md.
+        e_admin = role in ROLES_REPORTS
 
         if not e_admin and role != "RESPONSAVEL_GRUPO":
             raise HTTPException(status_code=403, detail="Acesso negado.")
@@ -303,7 +309,9 @@ async def resumo_avaliacoes(
         cursor = conn.cursor(dictionary=True)
         usuario = _usuario(cursor, usuario_id)
         role    = usuario.get("role") or "USER"
-        e_admin = role in ROLES_ADMIN
+        # 2026-08-25: usa ROLES_REPORTS (ADMIN/TI) — MANAGER NÃO tem visão
+        # executiva de relatórios. Regra em docs/REGRAS_NEGOCIO.md.
+        e_admin = role in ROLES_REPORTS
 
         if not e_admin and role != "RESPONSAVEL_GRUPO":
             raise HTTPException(status_code=403, detail="Acesso negado.")
@@ -385,7 +393,9 @@ async def avaliacoes_por_responsavel(
         cursor = conn.cursor(dictionary=True)
         usuario = _usuario(cursor, usuario_id)
         role    = usuario.get("role") or "USER"
-        e_admin = role in ROLES_ADMIN
+        # 2026-08-25: usa ROLES_REPORTS (ADMIN/TI) — MANAGER NÃO tem visão
+        # executiva de relatórios. Regra em docs/REGRAS_NEGOCIO.md.
+        e_admin = role in ROLES_REPORTS
 
         if not e_admin and role != "RESPONSAVEL_GRUPO":
             raise HTTPException(status_code=403, detail="Acesso negado.")

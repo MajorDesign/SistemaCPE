@@ -522,7 +522,7 @@
   <!-- SCRIPTS (mesma ordem que tickets.html) -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/api.js"></script>
-  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-07-28"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-08-25-reports-role"></script>
 
   <script>
   // ============================================================
@@ -542,7 +542,9 @@
     return res.json();
   }
 
-  const RPT_ROLES_OK = ['RESPONSAVEL_GRUPO', 'ADMIN', 'TI', 'MANAGER'];
+  // 2026-08-25: MANAGER removido. Regra em docs/REGRAS_NEGOCIO.md.
+  // Só RESPONSAVEL_GRUPO (vê próprio grupo) + ADMIN/TI (vê todos).
+  const RPT_ROLES_OK = ['RESPONSAVEL_GRUPO', 'ADMIN', 'TI'];
   const RPT_POR_PAGINA = 20;
 
   let rptDados       = [];   // todos os tickets carregados
