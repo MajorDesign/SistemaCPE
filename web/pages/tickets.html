@@ -23,7 +23,7 @@
        ======================================== -->
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css?v=2026-08-24-aval-coment-obrig">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css?v=2026-08-25-aval-popup-fix">
   
     <link rel="icon" type="image/svg+xml" href="/SistemaCPE/web/favicon.svg?v=2026-07-02b">
   <title>Tickets - CPE Control</title>
@@ -783,6 +783,25 @@
               </div>
 
               <!-- Reabrir — apenas o solicitante, quando resolvido -->
+              <!-- Avaliar chamado -->
+              <!-- Visível para: solicitante, quando ticket resolvido/fechado
+                   E ainda tem avaliação pendente (dentro do prazo de 7 dias).
+                   Substitui a dependência do popup automático de avaliação,
+                   que sumia se o usuário fechasse. -->
+              <div class="action-section" id="sectionAvaliarChamado" style="display:none;">
+                <div class="action-section-title" style="color:#F59E0B;">
+                  <i class="bi bi-star-fill"></i> Avaliar Atendimento
+                </div>
+                <div class="select-action">
+                  <p class="text-muted small mb-2">
+                    Deixe sua opinião sobre o suporte recebido. Leva menos de 30 segundos.
+                  </p>
+                  <button class="btn btn-warning w-100" id="btnAvaliarChamado" onclick="abrirAvaliacaoManual()">
+                    <i class="bi bi-star-fill"></i> Avaliar atendimento
+                  </button>
+                </div>
+              </div>
+
               <div class="action-section" id="sectionReabrirChamado" style="display:none;">
                 <div class="action-section-title" style="color:#d97706;">
                   <i class="bi bi-arrow-counterclockwise"></i> Reabrir Chamado
@@ -1560,7 +1579,7 @@
        ======================================== -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-07-28"></script>
-  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-24-aval-coment-obrig"></script>
+  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-25-aval-popup-fix"></script>
 
 <script id="cpe-autofill-guard-v1">
 /* Bloqueia autofill do Chrome/Edge em inputs de busca.

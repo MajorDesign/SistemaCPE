@@ -615,6 +615,25 @@ function applyDetailPermissions(ticket) {
   if (sectionFinalizar)
     sectionFinalizar.style.display = (isResponsavelDoTicket && !ticketEncerrado) ? '' : 'none';
 
+  // ── Seção "Avaliar Atendimento": solicitante, quando ticket resolvido
+  //    ou fechado. Checa se a avaliacao ainda esta pendente via API —
+  //    esconde se ja avaliou ou se o prazo (7 dias) expirou.
+  //    2026-08-25: substitui a dependencia do popup automatico que sumia
+  //    quando o user fechava. Agora ele pode voltar aqui a qualquer momento.
+  const sectionAvaliar = document.getElementById('sectionAvaliarChamado');
+  if (sectionAvaliar) {
+    if (isSolicitante && ticketEncerrado) {
+      // Otimista: mostra o botao e checa em background. Se nao pode
+      // avaliar (ja avaliou / expirou), esconde silenciosamente.
+      sectionAvaliar.style.display = '';
+      _checkAvaliacaoPendenteDoTicket(ticket.id).then(pode => {
+        if (!pode) sectionAvaliar.style.display = 'none';
+      });
+    } else {
+      sectionAvaliar.style.display = 'none';
+    }
+  }
+
   // ── Seção "Reabrir": solicitante OU admin, quando resolvido, até 3 vezes ──
   const sectionReabrir = document.getElementById('sectionReabrirChamado');
   if (sectionReabrir) {
@@ -1143,13 +1162,25 @@ async function loadTickets() {
     }
 
     console.log(`[TICKETS] 📤 Enviando usuario_id=${userId} para backend...`);
-    const data = await apiRequest('GET', `/tickets?usuario_id=${userId}`);
+    // 2026-08-25: busca tickets + avaliacoes pendentes em paralelo.
+    // Vou usar o Set de ticket_ids pendentes pra marcar cada linha da tabela
+    // com um botao amarelo pulsante "Avaliar" — pra o solicitante lembrar
+    // caso tenha fechado o popup automatico.
+    const [data, pendentesAval] = await Promise.all([
+      apiRequest('GET', `/tickets?usuario_id=${userId}`),
+      apiRequest('GET', `/avaliacoes/pendentes?usuario_id=${userId}`).catch(() => []),
+    ]);
+    const setPendAval = new Set(
+      (Array.isArray(pendentesAval) ? pendentesAval : [])
+        .map(p => Number(p.ticket_id))
+    );
 
     if (!data || !Array.isArray(data)) {
       console.warn('[TICKETS] ⚠️ Resposta inválida');
       tickets = [];
     } else {
       tickets = data.map(t => ({
+        precisaAvaliar:  setPendAval.has(Number(t.id)),
         id:              t.id,
         numero:          t.numero || `#${t.id}`,
         id_alfanumerica: t.id_alfanumerica || null,
@@ -1677,7 +1708,16 @@ function renderTable() {
         <td>${getStatusBadge(t.status)}</td>
         <td><small>${t.assignedName !== "Não atribuído" ? t.assignedName : '-'}</small></td>
         <td>${getSLABadge(t.sla)}</td>
-        <td><small>${t.createdAt}</small></td>
+        <td>
+          <small>${t.createdAt}</small>
+          ${t.precisaAvaliar ? `
+            <button type="button" class="btn btn-warning btn-sm mt-1 aval-pulse w-100"
+                    style="font-size:11px;padding:3px 8px;font-weight:700;"
+                    onclick="event.stopPropagation(); _abrirAvaliacaoDaTabela(${t.id})"
+                    title="Você ainda não avaliou este chamado">
+              <i class="bi bi-star-fill"></i> Avaliar
+            </button>` : ''}
+        </td>
       </tr>`;
   }).join("");
 
@@ -3291,16 +3331,73 @@ let _avaliacaoPendente = null; // ticket atual sendo avaliado
  * Verifica se há avaliações pendentes para o usuário logado.
  * Exibe popup para as que ainda não foram mostradas 2x.
  */
+// 2026-08-25: click direto no botao "Avaliar" da tabela — abre o popup
+// sem precisar abrir o modal de detalhe do ticket. Depois de avaliar,
+// recarrega a lista pra o botao sumir.
+async function _abrirAvaliacaoDaTabela(ticketId) {
+  const pendente = await _checkAvaliacaoPendenteDoTicket(ticketId);
+  if (!pendente) {
+    alert('Este chamado não pode mais ser avaliado — ou já foi avaliado, ou o prazo expirou.');
+    loadTickets();  // refresh pra o botao sumir da lista
+    return;
+  }
+  _abrirPopupAvaliacao(pendente);
+}
+
+// 2026-08-25: helper — checa se ha avaliacao pendente pra o ticket X.
+// Usado pelo botao "Avaliar" dentro do modal de detalhe do ticket, e
+// pra decidir se a secao sequer aparece. Retorna o objeto da pendente
+// (ou null se ja avaliou / expirou / nao existe).
+async function _checkAvaliacaoPendenteDoTicket(ticketId) {
+  const userId = getCurrentUserId();
+  if (!userId || !ticketId) return null;
+  try {
+    const pendentes = await apiRequest('GET', `/avaliacoes/pendentes?usuario_id=${userId}`);
+    if (!Array.isArray(pendentes)) return null;
+    return pendentes.find(p => Number(p.ticket_id) === Number(ticketId)) || null;
+  } catch (_) { return null; }
+}
+
+// 2026-08-25: abre o popup de avaliacao manualmente a partir do botao
+// dentro do detalhe do ticket. Reutiliza toda a logica do popup
+// automatico (_abrirPopupAvaliacao) — mesma UX, mesmas regras (comentario
+// obrigatorio, prazo 7 dias etc). Se o backend disser que ja foi avaliado
+// ou expirou, avisa o user e nao abre.
+async function abrirAvaliacaoManual() {
+  const ticket = viewingTicketId ? tickets.find(t => t.id === viewingTicketId) : null;
+  const ticketId = ticket?.id || viewingTicketId;
+  if (!ticketId) return;
+
+  const pendente = await _checkAvaliacaoPendenteDoTicket(ticketId);
+  if (!pendente) {
+    alert('Este chamado não pode mais ser avaliado — ou já foi avaliado, ou o prazo de 7 dias expirou.');
+    // Esconde a secao pra nao confundir de novo
+    const sec = document.getElementById('sectionAvaliarChamado');
+    if (sec) sec.style.display = 'none';
+    return;
+  }
+
+  // Fecha o modal de detalhe do ticket antes pra o popup nao ficar por baixo
+  bootstrap.Modal.getInstance(document.getElementById('ticketDetailModal'))?.hide();
+  setTimeout(() => _abrirPopupAvaliacao(pendente), 300);
+}
+
 async function verificarAvaliacoesPendentes() {
   const userId = getCurrentUserId();
   if (!userId) return;
 
   try {
     const pendentes = await apiRequest('GET', `/avaliacoes/pendentes?usuario_id=${userId}`);
-    if (!pendentes || pendentes.length === 0) return;
+    if (!Array.isArray(pendentes) || pendentes.length === 0) return;
+
+    // 2026-08-25: filtro popup_count<2 movido pra ca (era no backend).
+    // Backend agora retorna TODA pendente dentro do prazo — o botao
+    // "Avaliar" manual precisa achar mesmo apos o popup ter aparecido 2x.
+    const paraAutoPopup = pendentes.filter(p => (p.popup_count || 0) < 2);
+    if (paraAutoPopup.length === 0) return;
 
     // Mostra o primeiro da fila
-    _abrirPopupAvaliacao(pendentes[0]);
+    _abrirPopupAvaliacao(paraAutoPopup[0]);
   } catch (err) {
     console.warn('[AVAL] Erro ao verificar pendentes:', err);
   }
@@ -3390,6 +3487,8 @@ async function submitAvaliacao() {
     bootstrap.Modal.getInstance(document.getElementById('avaliacaoModal'))?.hide();
     showSuccess('✅ Avaliação enviada! Obrigado pelo seu feedback.');
     _avaliacaoPendente = null;
+    // 2026-08-25: recarrega a lista pra o botao "Avaliar" da linha sumir
+    loadTickets().catch(() => {});
   } catch (err) {
     erroEl.textContent = err?.detail || 'Erro ao enviar avaliação. Tente novamente.';
     btn.disabled = false;
