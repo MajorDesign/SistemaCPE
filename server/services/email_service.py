@@ -1110,6 +1110,96 @@ def email_ticket_finalizado(
 
 
 # =====================================================================
+# Lembrete: solicitante tem N avaliacoes pendentes (2026-08-25)
+# =====================================================================
+def email_lembrete_avaliacoes(
+    *, solicitante_nome: str, tickets: list[dict], link_sistema: str
+) -> tuple[str, str]:
+    """Email de lembrete agrupado — 1 email por user listando TODOS os
+    chamados dele que ainda estao aguardando avaliacao.
+
+    tickets: [{'numero': 'SUP-...', 'assunto': '...', 'expira_em': 'YYYY-...'}]
+    """
+    n = len(tickets)
+    plural = 's' if n > 1 else ''
+    subject = f"⏰ Você tem {n} chamado{plural} aguardando sua avaliação"
+
+    # Lista de tickets em cards clicaveis
+    lista_html = "".join(
+        f'''<div class="cpe-force-value"
+                style="margin:10px 0;padding:14px 18px;background:#FFFFFF;
+                       border:1px solid #E5E7EB;border-left:4px solid #FFC107;
+                       border-radius:8px;">
+              <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+                          color:#78551A;font-weight:700;">
+                {_escape(t.get("numero") or "")}
+              </div>
+              <div style="font-size:15px;color:#1A1A1A;font-weight:600;
+                          margin-top:4px;line-height:1.35;">
+                {_escape(t.get("assunto") or "—")}
+              </div>
+              <div style="font-size:12px;color:#6B7280;margin-top:6px;">
+                Avaliação disponível até
+                <strong style="color:#1A1A1A;">{_escape(str(t.get("expira_em") or "—"))}</strong>
+              </div>
+            </div>'''
+        for t in tickets
+    )
+
+    bloco_cta = f'''
+        <div class="cpe-force-value"
+             style="margin:22px 0 6px 0;padding:24px 22px;background:#FFFFFF;
+                    border:1px solid #E5E7EB;border-left:4px solid #FFC107;
+                    border-radius:12px;text-align:center;">
+          <div style="font-size:11px;letter-spacing:.15em;text-transform:uppercase;
+                      color:#78551A;font-weight:700;margin-bottom:8px;">
+            Avaliar Atendimento
+          </div>
+          <div style="font-size:18px;font-weight:700;color:#1A1A1A;
+                      line-height:1.3;margin-bottom:8px;">
+            Sua opinião ajuda a melhorar o suporte
+          </div>
+          <div style="font-size:13px;color:#4B5563;line-height:1.55;
+                      max-width:420px;margin:0 auto 16px auto;">
+            Cada avaliação leva menos de <strong>30 segundos</strong>.
+            Acesse os chamados pelo botão amarelo <strong>⭐ Avaliar</strong>
+            que aparece na tabela de tickets.
+          </div>
+          <a href="{_escape(link_sistema)}"
+             style="display:inline-block;padding:13px 32px;background:#1A1A1A;
+                    color:#FFC107;font-weight:700;font-size:14px;text-decoration:none;
+                    border-radius:10px;letter-spacing:.02em;
+                    box-shadow:0 4px 14px rgba(26,26,26,.18);">
+            ⭐ Abrir meus chamados
+          </a>
+        </div>
+    '''
+
+    body = f"""
+        <p style="margin:0 0 8px 0;">Olá <strong>{_escape(solicitante_nome)}</strong>,</p>
+        <p style="margin:0 0 4px 0;">Você tem <strong>{n} chamado{plural}
+        aguardando sua avaliação</strong>. Sua opinião é importante para
+        que a equipe possa entender o que está funcionando bem e o que
+        precisa melhorar.</p>
+
+        {lista_html}
+
+        {_status_box("Prazo", f"Você tem até 7 dias após a resolução de cada chamado para avaliar. Depois disso a avaliação expira e não pode mais ser feita.")}
+
+        {bloco_cta}
+
+        <p style="margin:16px 0 0 0;font-size:13px;color:#6B7280;text-align:center;">
+        Obrigado por escolher a <strong style="color:#1A1A1A;">CPE Tecnologia</strong>!</p>
+    """
+    html = _BASE_TEMPLATE.format(
+        title=f"{n} avaliação{plural.replace('s','ões') if plural else ''} pendente{plural}",
+        tag="Lembrete de avaliação",
+        body=body,
+    )
+    return subject, html
+
+
+# =====================================================================
 # Templates: Cadastro aprovado + Reset de senha
 # =====================================================================
 def email_cadastro_aprovado(
