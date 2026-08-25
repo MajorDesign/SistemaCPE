@@ -1166,8 +1166,11 @@ async function loadTickets() {
     // Vou usar o Set de ticket_ids pendentes pra marcar cada linha da tabela
     // com um botao amarelo pulsante "Avaliar" — pra o solicitante lembrar
     // caso tenha fechado o popup automatico.
+    // limite=500 pra pegar todos (backend default e so 25 — cortava listagem
+    // pra admin/manager e distorcia os KPIs "TOTAL/Abertos/Andamento/Resolvidos"
+    // que somam com base no que o front recebeu). 500 e o max aceito pelo backend.
     const [data, pendentesAval] = await Promise.all([
-      apiRequest('GET', `/tickets?usuario_id=${userId}`),
+      apiRequest('GET', `/tickets?usuario_id=${userId}&limite=500`),
       apiRequest('GET', `/avaliacoes/pendentes?usuario_id=${userId}`).catch(() => []),
     ]);
     const setPendAval = new Set(
