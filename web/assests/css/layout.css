@@ -1417,38 +1417,39 @@
   }
   .login-footer p { margin: 0.25rem 0; }
 
-  /* 2026-08-25 (v4): Shimmer portado do WPF SplashWindow.xaml do VideoWall.
-     Efeito: base cinza, faixa amarela estreita passa da direita pra esquerda
-     em 1.7s, pausa 1.5s, loop. Cores CPE: #5A5B62 base, #F2B705 nucleo
-     amarelo, #FFF3C4 realce claro. Range 100% <-> 0% (dentro do valido). */
+  /* 2026-08-25 (v5): Shimmer portado do WPF do VideoWall + faixa amarela
+     mais larga e glow reforcado pra ficar bem visivel no fundo branco. */
   .credit-shine {
-    display: inline-block;
-    font-weight: 700;
+    display: inline-block !important;
+    font-weight: 700 !important;
     color: #5A5B62; /* fallback */
     background-image: linear-gradient(
       90deg,
       #5A5B62 0%,
-      #5A5B62 42%,
-      #FFF3C4 49%,   /* realce claro */
+      #5A5B62 30%,
+      #FFD54A 42%,   /* amarelo mais forte na entrada */
+      #FFF3C4 48%,   /* realce claro */
       #F2B705 50%,   /* nucleo amarelo CPE */
-      #FFF3C4 51%,
-      #5A5B62 58%,
+      #FFF3C4 52%,
+      #FFD54A 58%,
+      #5A5B62 70%,
       #5A5B62 100%
-    );
-    background-size: 300% 100%;
-    background-repeat: no-repeat;
+    ) !important;
+    background-size: 200% 100% !important;
+    background-repeat: no-repeat !important;
     background-position: 100% 0;
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: credit-shine-anim 3.2s linear infinite;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    animation: credit-shine-anim 3.5s linear infinite !important;
+    /* Glow amarelo forte pra reforcar o feixe */
+    filter: drop-shadow(0 0 2px rgba(242, 183, 5, 0.6));
   }
   @keyframes credit-shine-anim {
-    /* 0-53% (1.7s): feixe atravessa da direita pra esquerda */
+    /* Ping-pong: faixa vai da esquerda pra direita e volta */
     0%   { background-position: 100% 0; }
-    53%  { background-position: 0% 0; }
-    /* 53-100% (1.5s): pausa antes de repetir */
-    100% { background-position: 0% 0; }
+    50%  { background-position: 0% 0; }
+    100% { background-position: 100% 0; }
   }
   @media (prefers-reduced-motion: reduce) {
     .credit-shine {
