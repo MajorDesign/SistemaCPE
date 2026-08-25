@@ -1417,41 +1417,39 @@
   }
   .login-footer p { margin: 0.25rem 0; }
 
-  /* 2026-08-25 (v2): Shimmer no nome "Jonathan Lopes". Refeito com feixe
-     mais destacado depois de user pedir efeito mais visivel. Gradient em
-     3 stops: preto forte -> amarelo brilhante -> preto forte. Feixe mais
-     largo (30% do gradient) e vai e volta com pausa nas pontas via
-     cubic-bezier — efeito de "luz passando e voltando" bem evidente. */
+  /* 2026-08-25 (v3): Shimmer no nome "Jonathan Lopes". BUG FIX real do v2:
+     `background-position: 150% / -50%` ficava FORA do range util (com
+     `background-size: 300%`, so 0-100% mostra o gradient). Resultado: feixe
+     amarelo nunca aparecia. Agora fica dentro do range e o pico amarelo
+     realmente atravessa o texto. */
   .credit-shine {
     display: inline-block;
     font-weight: 700;
-    color: #1A1A1A;
+    color: #1A1A1A; /* fallback pra navegadores sem background-clip:text */
     background-image: linear-gradient(
-      110deg,
+      95deg,
       #1A1A1A 0%,
-      #1A1A1A 35%,
-      #FFC107 47%,
-      #FFF3C5 50%,
-      #FFC107 53%,
-      #1A1A1A 65%,
+      #1A1A1A 40%,
+      #FFC107 46%,
+      #FFF59D 50%,   /* pico creme claro no centro do feixe */
+      #FFC107 54%,
+      #1A1A1A 60%,
       #1A1A1A 100%
     );
     background-size: 300% 100%;
     background-repeat: no-repeat;
-    background-position: 150% 0;
+    background-position: 100% 0;
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
-    animation: credit-shine-anim 3.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-    /* Sutil glow amarelo em volta pra reforçar o efeito */
-    filter: drop-shadow(0 0 0.5px rgba(255, 193, 7, 0.35));
+    animation: credit-shine-anim 3s ease-in-out infinite;
+    /* Glow amarelo em volta reforca o efeito */
+    filter: drop-shadow(0 0 1.5px rgba(255, 193, 7, 0.55));
   }
   @keyframes credit-shine-anim {
-    0%   { background-position: 150% 0; }   /* feixe fora à direita */
-    45%  { background-position: -50% 0; }   /* atravessou pra esquerda */
-    50%  { background-position: -50% 0; }   /* pausa */
-    95%  { background-position: 150% 0; }   /* volta pra direita */
-    100% { background-position: 150% 0; }   /* pausa antes de repetir */
+    0%   { background-position: 100% 0; }  /* feixe encostado a direita */
+    50%  { background-position: 0% 0; }    /* feixe encostado a esquerda */
+    100% { background-position: 100% 0; }  /* ping-pong */
   }
   @media (prefers-reduced-motion: reduce) {
     .credit-shine {
