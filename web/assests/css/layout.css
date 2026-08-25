@@ -1046,18 +1046,23 @@
     margin: 0;
     padding: 0;
     width: 100%;
-    height: 100vh;
-    overflow: hidden;
+    /* 2026-08-25: era height:100vh + overflow:hidden — em telas baixas
+       (notebook 720p com barra do browser) o card + rodape ficava CORTADO
+       e sem scroll: o topo da logo somia. Agora min-height + scroll natural. */
+    min-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     position: relative;
     background: transparent;
   }
-  
+
   html.login-page,
   body.login-page {
-    overflow: hidden;
+    /* mantido no eixo horizontal apenas — vertical scroll liberado */
+    overflow-x: hidden;
   }
   /* [FIM] Login Page */
   
@@ -1082,12 +1087,16 @@
   /* [INICIO] Login Wrapper */
   .login-wrapper {
     width: 100%;
-    height: 100%;
+    /* 2026-08-25: min-height em vez de height fixo — permite o card empurrar
+       o wrapper pra baixo qdo tela é pequena, ativando o scroll do body. */
+    min-height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 1rem;
+    padding: 1.5rem 1rem;
     z-index: 10;
+    box-sizing: border-box;
   }
   /* [FIM] Login Wrapper */
   
