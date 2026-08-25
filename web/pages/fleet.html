@@ -872,7 +872,7 @@
           </div>
           <div class="fleet-form-group">
             <label class="fleet-label">Funcionário Condutor <span class="req">*</span></label>
-            <select class="fleet-select" id="clCondutor">
+            <select class="fleet-select" id="clCondutor" onchange="onCondutorChange()">
               <option value="">Selecione o condutor...</option>
             </select>
           </div>
@@ -2883,6 +2883,16 @@ function openChecklistForm() {
   });
 }
 
+// 2026-08-24: re-executa a validacao de reserva quando o condutor muda,
+// caso o veiculo ja tenha sido escolhido. Cenario: user seleciona veiculo,
+// aparece "reservado por X", clica cancelar (sem trocar condutor). Depois
+// troca o condutor pro dono da reserva e escolhe o veiculo de novo — OK.
+// Sem esse handler, trocar o condutor DEPOIS do veiculo escapava do check.
+function onCondutorChange() {
+  const vSel = document.getElementById('clVehicle');
+  if (vSel && vSel.value) onVehicleSelect();
+}
+
 async function onVehicleSelect() {
   const id = parseInt(document.getElementById('clVehicle').value);
   const banner = document.getElementById('clManutAvisoBanner');
@@ -2911,6 +2921,28 @@ async function onVehicleSelect() {
     document.getElementById('clVehicle').value = '';
     document.getElementById('clKmSaida').value = '';
     return;
+  }
+  // 2026-08-24: bloqueio proativo — veiculo reservado por OUTRO condutor.
+  // Antes o backend so recusava no POST /checklists (depois do user tirar
+  // as 7 fotos). Mesma regra do fleet.py:1157 (backend continua sendo a
+  // defesa final).
+  if (vehSel?.reserva_ativa && vehSel.reserva_ativa_sol_id) {
+    const condutorId = Number(document.getElementById('clCondutor')?.value)
+                    || _pendingReservation?.solicitante_id
+                    || currentUser?.id;
+    if (Number(vehSel.reserva_ativa_sol_id) !== Number(condutorId)) {
+      const [nome, hi, hf, dest] = String(vehSel.reserva_ativa).split('|');
+      alert(
+        `⚠️ Este veículo está reservado por ${nome} das ${hi} às ${hf}` +
+        (dest ? ` (${dest})` : '') + `.\n\n` +
+        `Só o dono da reserva pode fazer o checklist neste horário.\n\n` +
+        `Se você está tirando checklist em NOME do dono, selecione a pessoa ` +
+        `correta em "Condutor" antes de escolher o veículo.`
+      );
+      document.getElementById('clVehicle').value = '';
+      document.getElementById('clKmSaida').value = '';
+      return;
+    }
   }
   // Aviso: veículo tem manutenção agendada (futura) — checklist permitido,
   // só uma ressalva visível pro condutor saber que vai voltar pra oficina.

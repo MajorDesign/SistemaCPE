@@ -297,6 +297,19 @@ def list_vehicles(request: Request, include_inativos: int = 0):
                       AND TIMESTAMP(COALESCE(r.data_fim, r.data_reserva), r.horario_fim) >= NOW()
                     ORDER BY r.data_reserva, r.horario_inicio LIMIT 1
                    ) AS reserva_ativa,
+                   -- 2026-08-24: solicitante_id da reserva ativa (separado do
+                   -- string acima). Usado pelo front pra bloquear a selecao
+                   -- do veiculo ANTES do checklist se o condutor selecionado
+                   -- nao e o dono da reserva — evita user tirar 7 fotos e so
+                   -- descobrir no submit que o backend recusa.
+                   (SELECT r.solicitante_id
+                    FROM fleet_reservations r
+                    WHERE r.vehicle_id = v.id AND r.status = 'aprovado'
+                      AND r.data_reserva <= CURDATE()
+                      AND COALESCE(r.data_fim, r.data_reserva) >= CURDATE()
+                      AND TIMESTAMP(COALESCE(r.data_fim, r.data_reserva), r.horario_fim) >= NOW()
+                    ORDER BY r.data_reserva, r.horario_inicio LIMIT 1
+                   ) AS reserva_ativa_sol_id,
                    (SELECT ck.id FROM fleet_checklists ck
                     WHERE ck.vehicle_id = v.id
                       AND ck.status NOT IN ('retornado','retornado_com_avaria','cancelado')
