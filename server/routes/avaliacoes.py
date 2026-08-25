@@ -95,8 +95,15 @@ async def avaliacoes_pendentes(usuario_id: int = Query(..., gt=0)):
     """
     Retorna avaliações pendentes do solicitante:
     - Não avaliado
-    - Não expirado
-    - popup_count < 2
+    - Não expirado (dentro do prazo de 7 dias)
+
+    2026-08-25: removido o filtro `popup_count < 2` daqui. Antes, quando
+    o popup automatico ja tinha sido exibido 2 vezes, o ticket sumia da
+    lista — e o botao "Avaliar" manual da tabela/modal (fluxo novo) nao
+    achava a pendente e mostrava "prazo expirou" mesmo dentro do prazo.
+    A regra do popup automatico continua valendo, mas agora aplicada no
+    FRONT (verificarAvaliacoesPendentes filtra por p.popup_count<2 antes
+    de abrir o popup). O campo popup_count continua no response.
     """
     conn = get_db_or_404()
     cursor = None
@@ -114,7 +121,6 @@ async def avaliacoes_pendentes(usuario_id: int = Query(..., gt=0)):
             WHERE a.solicitante_id = %s
               AND a.avaliado_em IS NULL
               AND a.expira_em > NOW()
-              AND a.popup_count < 2
             ORDER BY a.created_at DESC
             """,
             (usuario_id,)
