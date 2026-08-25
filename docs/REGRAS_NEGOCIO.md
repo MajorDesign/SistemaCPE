@@ -131,6 +131,30 @@ Banner "Checklist de saída pendente" tem 2 botões: **Fazer Checklist Agora** e
 - Ticket criado em categoria X é atendido pelo grupo dono
 - Ticket comum: USER vê os próprios; RESPONSAVEL_GRUPO vê do grupo; ADMIN/TI/MANAGER vê tudo
 
+<a id="relatorios-e-avaliacoes"></a>
+### Relatórios e Avaliações (2026-08-25)
+
+**Regra global** — decisão de gestão sobre visibilidade dos relatórios e feedback dos clientes internos.
+
+**Menu `/reports.html` — quem entra:**
+- **ADMIN, TI** — visão executiva completa. Veem tickets e avaliações de todos os grupos.
+- **RESPONSAVEL_GRUPO** — vê **apenas do próprio grupo** (`users.group_id`). Não enxerga notas nem comentários de outros setores.
+- **MANAGER e USER** — **NÃO** têm acesso. O item do menu não aparece; se acessarem a URL diretamente, o próprio `reports.html` bloqueia no init (`RPT_ROLES_OK`).
+
+**Endpoints de avaliação afetados** ([server/routes/avaliacoes.py](../server/routes/avaliacoes.py)):
+- `GET /api/avaliacoes` — listagem
+- `GET /api/avaliacoes/resumo` — KPIs (média, positivas/negativas, distribuição por estrela)
+- `GET /api/avaliacoes/por-responsavel` — ranking por atendente
+
+Todos os 3 exigem `role in ROLES_REPORTS` (ADMIN, TI) OU `role == 'RESPONSAVEL_GRUPO'`. Quando é RESPONSAVEL_GRUPO, filtro `a.group_id = users.group_id` é aplicado automaticamente — o front não consegue burlar (o filtro está no SQL do backend).
+
+**Constantes técnicas:**
+- `ROLES_ADMIN = ("ADMIN", "TI", "MANAGER")` — regra geral do sistema (MANAGER vê muita coisa)
+- `ROLES_REPORTS = ("ADMIN", "TI")` — **exceção para relatórios/avaliações** (MANAGER fica de fora explicitamente)
+
+**Se um dia MANAGER precisar ver relatórios** — mudar a constante `ROLES_REPORTS` no `avaliacoes.py` + o array `RPT_ROLES_OK` no `reports.html` + o `requiredRoles` do item de menu em `nav.js`. Os 3 pontos precisam ficar consistentes.
+
+
 ### Reabertura
 - Quem pode: ADMIN/TI/MANAGER + o próprio solicitante
 - Limites técnicos: até **3 reaberturas**, dentro de **2 meses** da última resolução, status `Resolvido`

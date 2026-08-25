@@ -46,7 +46,9 @@ const globalMenu = [
     ]
   },
   { path: "/SistemaCPE/web/pages/password-vault.html", label: "Cofre de Senhas", icon: "bi-shield-lock", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
-  { path: "/SistemaCPE/web/pages/reports.html", label: "Relatórios", icon: "bi-graph-up", requiredRoles: ["RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
+  // 2026-08-25: MANAGER removido do acesso ao menu de Relatórios.
+  // Regra em docs/REGRAS_NEGOCIO.md#relatorios-e-avaliacoes.
+  { path: "/SistemaCPE/web/pages/reports.html", label: "Relatórios", icon: "bi-graph-up", requiredRoles: ["RESPONSAVEL_GRUPO", "ADMIN", "TI"] },
   { path: "/SistemaCPE/web/pages/base_conhecimento.html", label: "Base de conhecimento", icon: "bi-book", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/contratos.html", label: "Contratos e Termos", icon: "bi-file-earmark-text", requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"] },
   { path: "/SistemaCPE/web/pages/settings.html", label: "Configurações", icon: "bi-gear", requiredRoles: ["ADMIN", "TI", "MANAGER"] },
