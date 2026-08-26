@@ -5269,7 +5269,7 @@ async function editMaintenance(id) {
 
   const data = await apiFetch('/maintenance');
   const r = data?.records?.find(x => x.id === id);
-  if (!r) return;
+  if (!r) { showToast('Registro nao encontrado — recarregue a lista', 'error'); return; }
 
   document.getElementById('maintId').value = r.id;
   document.getElementById('modalMaintTitle').textContent = `Editar — ${r.placa} — ${r.tipo}`;
@@ -5904,12 +5904,17 @@ function openTripModal(trip = null) {
 }
 
 async function editTrip(id) {
-  // Buscar via lista atual
-  const ano = document.getElementById('tripAno').value;
-  const mes = document.getElementById('tripMes').value;
-  const data = await apiFetch(`/trips?ano=${ano}&mes=${mes}`);
+  // Buscar via lista atual — monta URL igual loadTrips (mes vazio quebra 422 no FastAPI).
+  const ano     = document.getElementById('tripAno').value;
+  const mes     = document.getElementById('tripMes').value;
+  const unidade = document.getElementById('tripUnidade').value;
+  let url = `/trips?`;
+  if (ano)     url += `ano=${ano}&`;
+  if (mes)     url += `mes=${mes}&`;
+  if (unidade) url += `unidade=${encodeURIComponent(unidade)}`;
+  const data = await apiFetch(url);
   const t = data?.trips?.find(x => x.id === id);
-  if (!t) return;
+  if (!t) { showToast('Viagem nao encontrada — recarregue a lista', 'error'); return; }
 
   document.getElementById('tripId').value = t.id;
   document.getElementById('modalTripTitle').textContent = `Editar Viagem — ${t.placa}`;
