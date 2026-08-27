@@ -71,6 +71,32 @@ window.forceLogoutHardReset = async function () {
   window.location.replace('/SistemaCPE/web/login.html');
 };
 
+// 2026-08-27: Detector automatico de "sessao presa". Se o boot detecta
+// que HA cpe_impersonate_active mas o backend NAO reconhece mais o
+// cookie (401 em qualquer request auth-protected), ja limpa tudo e
+// vai pra login. Interceptador global de fetch — checa uma vez, dispara
+// forceLogoutHardReset se pegar 401 durante 3s apos boot.
+(function _detectStuckImpersonate() {
+  if (localStorage.getItem('cpe_impersonate_active') !== '1') return;
+  const orig = window.fetch;
+  let disparado = false;
+  const timer = setTimeout(() => { window.fetch = orig; }, 3000);
+  window.fetch = async function (...args) {
+    const res = await orig.apply(this, args);
+    if (!disparado && res.status === 401) {
+      const url = (typeof args[0] === 'string' ? args[0] : args[0]?.url) || '';
+      // ignora chamadas do proprio impersonate (evita loop)
+      if (!url.includes('/api/auth/')) {
+        disparado = true;
+        clearTimeout(timer);
+        console.warn('[IMP/DETECT] 401 durante modo suporte — sessao presa. Force logout.');
+        window.forceLogoutHardReset();
+      }
+    }
+    return res;
+  };
+})();
+
 // 2026-08-27: sair a prova de falhas. Ordem invertida — limpa TUDO
 // PRIMEIRO (sincrono), depois avisa o servidor. Se o fetch travar/
 // falhar, ainda assim o usuario volta pra sessao normal.
@@ -123,10 +149,12 @@ window.sairModoSuporte = async function () {
     endOk = r.ok;
   } catch (_) { /* segue mesmo assim */ }
 
-  // 6) Fallback duro: se /end falhou OU nao tinha token real, chama
-  //    hard-reset pra garantir apagar o cookie IMP no lado servidor.
-  //    Sem isso o cookie fica preso e o backend continua achando que
-  //    voce e o impersonated.
+  // 6) Fallback duro: se /end falhou (ex: token real expirou / cookie
+  //    IMP corrompido / rede) OU nao tinha token real, chama hard-reset
+  //    (apaga cookie no server) + LIMPA TUDO no client + redireciona
+  //    pra LOGIN. Nao vale a pena tentar voltar pro index — se o
+  //    /end falhou, muito provavelmente o token real ja expirou e
+  //    o admin ia cair em loop 401.
   if (!endOk || !realTok) {
     try {
       const ctrl2 = new AbortController();
@@ -137,16 +165,15 @@ window.sairModoSuporte = async function () {
         signal: ctrl2.signal
       });
     } catch (_) {}
-    // Se nao tinha token real, admin precisa logar de novo
-    if (!realTok) {
-      window.location.replace('/SistemaCPE/web/login.html');
-      return;
-    }
+    // Limpa TUDO — sessao morta, admin precisa relogar
+    try { localStorage.clear(); } catch(_) {}
+    try { sessionStorage.clear(); } catch(_) {}
+    window.location.replace('/SistemaCPE/web/login.html');
+    return;
   }
 
-  // 7) Recarrega — nao usa location.href='/index.html' (evita loop se
-  //    o token expirou e login redireciona antes do clear ter efeito).
-  //    location.replace garante que o guard nao veja o flag antigo.
+  // 7) /end respondeu ok — sessao do admin restaurada via cookie.
+  //    Recarrega no index.
   window.location.replace('/SistemaCPE/index.html');
 };
 
