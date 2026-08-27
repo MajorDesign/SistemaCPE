@@ -235,6 +235,45 @@
       display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
       gap: 16px;
     }
+
+    /* ---- Visao em pastas por setor (admin) ---- */
+    .kb-folder-list { display: flex; flex-direction: column; gap: 12px; }
+    .kb-folder {
+      background: var(--kb-card-bg);
+      border: 1px solid var(--kb-border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .kb-folder-head {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 18px;
+      cursor: pointer;
+      background: #FAFAFA;
+      border-bottom: 1px solid transparent;
+      transition: background .15s, border-color .15s;
+      user-select: none;
+    }
+    .kb-folder-head:hover { background: #F3F4F6; }
+    .kb-folder.open .kb-folder-head { border-bottom-color: var(--kb-border); }
+    .kb-folder-icon {
+      width: 40px; height: 40px; border-radius: 10px;
+      background: #FFF3C4; color: #92400E;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px; flex-shrink: 0;
+    }
+    .kb-folder-title { font-weight: 700; font-size: 1rem; color: var(--kb-dark); flex: 1; min-width: 0; }
+    .kb-folder-title small { display:block; font-weight: 400; font-size: .72rem; color: #6B7280; margin-top: 2px; }
+    .kb-folder-count {
+      background: #E5E7EB; color: #374151;
+      padding: 4px 10px; border-radius: 12px;
+      font-size: .78rem; font-weight: 600;
+    }
+    .kb-folder-body { display: none; padding: 14px 18px; }
+    .kb-folder.open .kb-folder-body { display: block; }
+    .kb-folder-body .kb-articles-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+    .kb-folder-chevron { color: #9CA3AF; transition: transform .2s; }
+    .kb-folder.open .kb-folder-chevron { transform: rotate(180deg); }
+    .kb-folder-empty { padding: 8px 4px; color: #9CA3AF; font-size: .85rem; font-style: italic; }
     .kb-article-card {
       background: var(--kb-card-bg); border: 1px solid var(--kb-border);
       border-radius: 12px; padding: 18px;
@@ -1003,6 +1042,18 @@
 
         <div class="kb-pills" id="catPills"></div>
 
+        <!-- Toggle de visualizacao (so ADMIN ve) -->
+        <div id="kbViewToggle" style="display:none;gap:6px;margin:6px 0 12px;justify-content:flex-end">
+          <button type="button" class="btn-kb btn-kb-secondary btn-kb-sm" id="btnViewFolders"
+                  onclick="mudarModoVisualizacao('folders')" title="Ver artigos agrupados por setor">
+            <i class="bi bi-folder2-open"></i> Por setor
+          </button>
+          <button type="button" class="btn-kb btn-kb-secondary btn-kb-sm" id="btnViewList"
+                  onclick="mudarModoVisualizacao('list')" title="Ver todos os artigos em lista">
+            <i class="bi bi-list-ul"></i> Lista
+          </button>
+        </div>
+
         <div class="kb-articles-grid" id="articlesGrid">
           <div class="kb-empty">Carregando...</div>
         </div>
@@ -1407,9 +1458,20 @@
   /* ============================================================
      Artigos (lista)
      ============================================================ */
+  // Modo de visualizacao da tela "Artigos" — 'list' ou 'folders' (so admin).
+  // Persistido em localStorage pra manter a preferencia.
+  let _viewMode = 'list';
+  try { _viewMode = localStorage.getItem('kb_view_mode') || 'list'; } catch(_) {}
+
   async function carregarArtigos() {
     const grid = document.getElementById('articlesGrid');
     grid.innerHTML = '<div class="kb-empty">Carregando...</div>';
+
+    // Mostra toggle so pra admin (ADMIN/TI/MANAGER)
+    const toggle = document.getElementById('kbViewToggle');
+    if (toggle) toggle.style.display = _isAdmin() ? 'flex' : 'none';
+    _atualizarBotoesView();
+
     try {
       const params = new URLSearchParams();
       const gid = document.getElementById('filterGroup').value;
@@ -1421,11 +1483,109 @@
       const path = '/articles' + (params.toString() ? '?' + params.toString() : '');
       const r = await api('GET', path);
       _articles = r.articles || [];
-      _renderArticles(_articles, 'articlesGrid');
+
+      if (_isAdmin() && _viewMode === 'folders') {
+        _renderArticlesByFolder(_articles, 'articlesGrid');
+      } else {
+        _renderArticles(_articles, 'articlesGrid');
+      }
       _renderCatPills();
     } catch (e) {
       grid.innerHTML = `<div class="kb-empty">Erro: ${_esc(e.message)}</div>`;
     }
+  }
+
+  function mudarModoVisualizacao(mode) {
+    _viewMode = (mode === 'folders') ? 'folders' : 'list';
+    try { localStorage.setItem('kb_view_mode', _viewMode); } catch(_) {}
+    _atualizarBotoesView();
+    // Renderiza denovo com os artigos ja em memoria (evita refetch)
+    if (_isAdmin() && _viewMode === 'folders') {
+      _renderArticlesByFolder(_articles, 'articlesGrid');
+    } else {
+      _renderArticles(_articles, 'articlesGrid');
+    }
+  }
+
+  function _atualizarBotoesView() {
+    const bF = document.getElementById('btnViewFolders');
+    const bL = document.getElementById('btnViewList');
+    if (!bF || !bL) return;
+    // "ativo" = fica com estilo primario; inativo = secondary
+    const setActive = (btn, active) => {
+      btn.classList.toggle('btn-kb-primary', active);
+      btn.classList.toggle('btn-kb-secondary', !active);
+    };
+    setActive(bF, _viewMode === 'folders');
+    setActive(bL, _viewMode !== 'folders');
+  }
+
+  /* Renderiza os artigos AGRUPADOS por setor (visao admin).
+     Cada pasta e um accordion — clique no header expande/recolhe. */
+  function _renderArticlesByFolder(list, gridId) {
+    const grid = document.getElementById(gridId);
+    if (!list.length) {
+      grid.innerHTML = `<div class="kb-empty">
+        <i class="bi bi-inbox"></i>
+        <p>Nenhum artigo encontrado</p>
+      </div>`;
+      return;
+    }
+    // Agrupa por group_id (com nome). Fallback: 'Sem setor'.
+    const buckets = new Map();
+    for (const a of list) {
+      const gid  = a.group_id || 0;
+      const name = a.group_name || 'Sem setor';
+      if (!buckets.has(gid)) buckets.set(gid, { gid, name, articles: [] });
+      buckets.get(gid).articles.push(a);
+    }
+    // Ordena setores por nome, com mais artigos primeiro em empate
+    const setores = [...buckets.values()].sort((x, y) => {
+      const d = y.articles.length - x.articles.length;
+      return d !== 0 ? d : (x.name || '').localeCompare(y.name || '');
+    });
+
+    // Abre a 1a pasta por default se so tiver 1 (evita cliques a toa)
+    const openFirstOnly = setores.length === 1;
+
+    grid.innerHTML = `<div class="kb-folder-list">` + setores.map((s, i) => {
+      const cards = s.articles.map(a => `
+        <div class="kb-article-card" onclick="event.stopPropagation();abrirArtigo(${a.id})">
+          <div class="kb-cat-icon">${_iconeCat(a.categoria)}</div>
+          <h4>${_esc(a.titulo)}</h4>
+          <div class="kb-art-resumo">${_esc(a.resumo || '')}</div>
+          <div class="kb-art-meta">
+            <span class="kb-art-cat-tag">${_labelCat(a.categoria)}</span>
+            ${!a.publicado ? '<span class="kb-art-draft"><i class="bi bi-pencil"></i> Rascunho</span>' : ''}
+          </div>
+          <div class="kb-art-meta" style="border:0;padding-top:6px">
+            <span><i class="bi bi-person"></i> ${_esc(a.autor_nome || '?')}</span>
+            <span><i class="bi bi-eye"></i> ${a.views || 0}</span>
+          </div>
+        </div>
+      `).join('');
+      const publicados = s.articles.filter(a => a.publicado).length;
+      const rascunhos  = s.articles.length - publicados;
+      const subLabel   = rascunhos
+        ? `${publicados} publicado${publicados===1?'':'s'} · ${rascunhos} rascunho${rascunhos===1?'':'s'}`
+        : `${publicados} artigo${publicados===1?'':'s'} publicado${publicados===1?'':'s'}`;
+      return `
+        <div class="kb-folder ${openFirstOnly ? 'open' : ''}" data-gid="${s.gid}">
+          <div class="kb-folder-head" onclick="this.parentElement.classList.toggle('open')">
+            <div class="kb-folder-icon"><i class="bi bi-folder2-open"></i></div>
+            <div class="kb-folder-title">
+              ${_esc(s.name)}
+              <small>${subLabel}</small>
+            </div>
+            <span class="kb-folder-count">${s.articles.length}</span>
+            <i class="bi bi-chevron-down kb-folder-chevron"></i>
+          </div>
+          <div class="kb-folder-body">
+            <div class="kb-articles-grid">${cards}</div>
+          </div>
+        </div>
+      `;
+    }).join('') + `</div>`;
   }
 
   function aplicarFiltros() { carregarArtigos(); }
