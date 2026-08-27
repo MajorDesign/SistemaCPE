@@ -304,15 +304,20 @@
   font-size: .8rem; color: var(--cpe-yellow-dark);
 }
 
-/* Ações: botões outline técnicos */
+/* Ações: botões outline técnicos.
+   2026-08-27: adicionado flex-wrap + min-width — com 4 botoes
+   (Membros/Editar/Categorias/Excluir) o ultimo era cortado em telas
+   estreitas. Agora quebra pra linha de baixo. */
 .main-content .group-actions {
   display: flex;
   gap: 6px;
   margin-top: 0;
+  flex-wrap: wrap;
 }
 
 .main-content .btn-group-action {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 80px;    /* garante largura minima pra caber "Membros" */
   padding: 8px 10px !important;
   border-radius: 3px !important;
   border: 1px solid var(--cpe-border) !important;
@@ -325,6 +330,7 @@
   cursor: pointer;
   transition: background .15s, color .15s, border-color .15s, transform .15s;
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  white-space: nowrap;
 }
 .main-content .btn-group-action:hover {
   background: var(--cpe-black) !important;
