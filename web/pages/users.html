@@ -1436,7 +1436,7 @@
   <!-- ================================================== -->
   
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-08-27-impersonate"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-08-27-impersonate-cookiefix"></script>
 
   <!-- ================================================== -->
   <!-- DADOS GLOBAIS -->
@@ -2462,6 +2462,7 @@ function renderUsers(list = users) {
         const tokAtual = localStorage.getItem('token') || localStorage.getItem('cpe_token') || '';
         const r = await fetch(base + '/api/auth/impersonate/' + userId, {
           method: 'POST',
+          credentials: 'include',   // aceita o Set-Cookie da resposta (troca cpe_session)
           headers: { 'X-Auth-Token': tokAtual, 'Content-Type': 'application/json' }
         });
         const data = await r.json();
