@@ -148,6 +148,17 @@ async def start_impersonate(target_id: int, request: Request,
     return resp
 
 
+@router.post("/impersonate/hard-reset")
+async def hard_reset_impersonate():
+    """Ultimo recurso — apaga o cookie cpe_session SEM validar auth.
+    Usado quando algo quebrou (cookie de impersonate ficou preso e /end
+    esta dando erro). Nao loga nada em audit porque nao ha certeza de
+    quem esta chamando. Frontend usa antes de redirecionar pra login."""
+    resp = JSONResponse({"success": True, "reset": True})
+    resp.delete_cookie(key=COOKIE_NAME, path="/")
+    return resp
+
+
 @router.post("/impersonate/end")
 async def end_impersonate(request: Request,
                            current_user: Dict[str, Any] = Depends(get_current_user)):
