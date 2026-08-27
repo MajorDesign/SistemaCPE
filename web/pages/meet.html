@@ -749,7 +749,14 @@ async function getIceServers() {
       const ice = (data && data.iceServers) || STUN_SERVERS;
       _ICE_CACHE.servers   = ice;
       _ICE_CACHE.expiresAt = Date.now() + 50 * 60 * 1000;
-      console.log(`[ICE] ${ice.length} server(s) carregados (source=${data?.source})`);
+      // Log DESTACADO — importante pra diagnostico. Se source=stun-fallback,
+      // guest em 4G/rede restritiva NAO vai escutar. Se source=cloudflare mas
+      // conexao ainda cai relay, e outra coisa.
+      const hasTurn = ice.some(s => (Array.isArray(s.urls) ? s.urls : [s.urls]).some(u => /^turns?:/.test(u || '')));
+      const style = (data?.source === 'cloudflare' || data?.source === 'cache')
+        ? 'background:#065F46;color:#fff;padding:2px 6px;border-radius:4px'
+        : 'background:#7F1D1D;color:#fff;padding:2px 6px;border-radius:4px';
+      console.log(`%c[ICE] source=${data?.source} servers=${ice.length} TURN=${hasTurn}`, style);
       return ice;
     } catch (e) {
       console.warn('[ICE] fetch falhou, usando STUN fallback:', e);
@@ -1503,6 +1510,11 @@ function _criarPeer(peerInfo, initiator) {
   // Usa cache pre-carregado em _entrarNaSala (TURN + STUN da CF, ou
   // fallback STUN se nao houver config no backend).
   const iceServers = _ICE_CACHE.servers || STUN_SERVERS;
+  const hasTurn = (iceServers || []).some(s => {
+    const urls = Array.isArray(s.urls) ? s.urls : [s.urls];
+    return urls.some(u => (u || '').startsWith('turn:') || (u || '').startsWith('turns:'));
+  });
+  console.log(`[MEET/RTC] criando peer ${peerInfo.peer_id.slice(0,8)} — ${iceServers.length} ICE server(s), TURN=${hasTurn ? 'SIM' : 'NAO'}`);
   const pc = new RTCPeerConnection({ iceServers });
   const entry = {
     peer_id: peerInfo.peer_id,
@@ -1532,8 +1544,36 @@ function _criarPeer(peerInfo, initiator) {
     }
   };
   pc.ontrack = (ev) => _onRemoteTrack(peerInfo.peer_id, ev);
+  pc.oniceconnectionstatechange = () => {
+    console.log(`[MEET/RTC] peer ${peerInfo.peer_id.slice(0,8)} iceState=${pc.iceConnectionState}`);
+  };
   pc.onconnectionstatechange = () => {
-    if (['failed','closed','disconnected'].includes(pc.connectionState)) {
+    const st = pc.connectionState;
+    console.log(`[MEET/RTC] peer ${peerInfo.peer_id.slice(0,8)} state=${st}`);
+    // Quando conecta, mostra qual candidate pair foi escolhido — HOST/SRFLX/RELAY
+    // (RELAY = via TURN; SRFLX = P2P via STUN; HOST = LAN direta)
+    if (st === 'connected') {
+      pc.getStats(null).then(stats => {
+        let pair = null, local = null, remote = null;
+        stats.forEach(r => {
+          if (r.type === 'candidate-pair' && r.state === 'succeeded' && r.nominated) pair = r;
+        });
+        if (pair) {
+          stats.forEach(r => {
+            if (r.id === pair.localCandidateId)  local  = r;
+            if (r.id === pair.remoteCandidateId) remote = r;
+          });
+          const via = (remote?.candidateType === 'relay' || local?.candidateType === 'relay') ? '🟢 TURN (relay)'
+                    : (remote?.candidateType === 'srflx' || local?.candidateType === 'srflx') ? '🟡 P2P via STUN'
+                    : (remote?.candidateType === 'host'  || local?.candidateType === 'host')  ? '🔵 LAN direta'
+                    : `via ${remote?.candidateType || '?'}`;
+          console.log(`[MEET/RTC] peer ${peerInfo.peer_id.slice(0,8)} CONECTADO ${via}`,
+                       { local: local?.candidateType, remote: remote?.candidateType,
+                         localProtocol: local?.protocol, remoteProtocol: remote?.protocol });
+        }
+      }).catch(() => {});
+    }
+    if (['failed','closed','disconnected'].includes(st)) {
       // Mantem peer registrado mas marca visualmente; cleanup definitivo
       // vem via meeting_participant_left
     }
