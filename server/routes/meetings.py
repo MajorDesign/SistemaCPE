@@ -416,6 +416,25 @@ def _count_participantes_dentro(cursor, meeting_id: int) -> int:
     return int(row[0]) if row else 0
 
 
+@router.get("/limits")
+def meeting_limits():
+    """Retorna limites configurados de reuniao pra o frontend exibir
+    warnings/bloqueios claros. Sem auth: e info publica de UX."""
+    max_p = _max_participants()
+    # Warning suave 3 slots antes do MAX (ou na metade se MAX for pequeno).
+    warn = max(2, max_p - 3)
+    return {
+        "max_participants": max_p,
+        "warn_threshold": warn,
+        "reason": (
+            "Reunioes usam WebRTC mesh (todos-com-todos), que degrada em "
+            "qualidade e uso de CPU/banda acima de ~5 pessoas. Acima de "
+            f"{max_p} participantes, novas entradas sao bloqueadas para "
+            "proteger o audio/video de quem ja esta na sala."
+        ),
+    }
+
+
 @router.get("/turn-credentials")
 async def get_turn_credentials():
     """Retorna {iceServers:[...]} pra ser usado no RTCPeerConnection do cliente.
@@ -1008,10 +1027,13 @@ async def request_entry(code: str, body: RequestEntryBody, request: Request):
             max_p = _max_participants()
             atual = _count_participantes_dentro(cur, m["id"])
             if atual >= max_p:
+                # 409 (Conflict) e o status certo pra "recurso lotado" —
+                # nao e 403 (permissao). Front trata como mensagem clara.
                 raise HTTPException(
-                    status_code=403,
-                    detail=f"Reunião lotada ({atual}/{max_p}). Aguarde "
-                           f"alguém sair pra entrar.",
+                    status_code=409,
+                    detail=f"Sala cheia: {atual} de {max_p} participantes. "
+                           f"Aguarde alguem sair para entrar, ou fale com "
+                           f"o organizador pra abrir uma sala nova.",
                 )
         cur.execute("""
             INSERT INTO chat_meeting_participants
