@@ -74,12 +74,19 @@ def login(request: Request, data: dict):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Usuário inativo")
 
         token = make_session_token(user["id"])
+
+        # Fase 2 multi-grupo: carrega grupos do user pro payload
+        from security import _load_user_groups
+        _groups = _load_user_groups(user["id"])
+
         response = JSONResponse({
             "success": True,
             "id": user["id"],
             "name": user["name"],
             "email": user["email"],
             "role": user["role"],
+            "group_id": user.get("group_id"),           # primario (retrocompat)
+            "groups": _groups,                          # todos + role_in_grp
             # Flag setada quando admin reseta a senha. Frontend usa pra
             # forcar o user a trocar antes de continuar.
             "must_change_password": bool(user.get("must_change_password")),
@@ -167,6 +174,9 @@ async def me(request: Request):
 
         print(f"[AUTH/ME] ✓ Usuário obtido: {user['name']}\n")
 
+        from security import _load_user_groups
+        _groups = _load_user_groups(user["id"])
+
         return {
             "success": True,
             "user": {
@@ -176,6 +186,7 @@ async def me(request: Request):
                 "role": user["role"],
                 "department_id": user.get("department_id"),
                 "group_id": user.get("group_id"),
+                "groups": _groups,                       # Fase 2 multi-grupo
             }
         }
 

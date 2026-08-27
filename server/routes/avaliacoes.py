@@ -64,6 +64,59 @@ def _usuario(cursor, uid):
     return u
 
 
+def _resp_group_ids(cursor, uid: int) -> list:
+    """
+    Multi-grupo (Fase 2): retorna lista de group_ids em que o user e
+    RESPONSAVEL_GRUPO. Fallback pra users.group_id se user_groups vazio.
+    """
+    cursor.execute(
+        "SELECT group_id FROM user_groups "
+        "WHERE user_id = %s AND role_in_grp = 'RESPONSAVEL_GRUPO'",
+        (uid,),
+    )
+    rows = cursor.fetchall() or []
+    if rows:
+        return [r["group_id"] for r in rows]
+    # fallback
+    cursor.execute("SELECT role, group_id FROM users WHERE id = %s", (uid,))
+    u = cursor.fetchone()
+    if u and u.get("role") == "RESPONSAVEL_GRUPO" and u.get("group_id"):
+        return [u["group_id"]]
+    return []
+
+
+def _aplica_filtro_grupo_avaliacoes(cursor, usuario, grupo_id_query):
+    """
+    Constroi (fragmento_where, params) para o filtro por grupo em avaliacoes.
+
+    - ADMIN/TI     -> filtra por grupo_id_query se informado, senao nao filtra
+    - RESPONSAVEL  -> filtra por seus resp_group_ids. Se grupo_id_query dado
+                      E ele responde por esse grupo, filtra so por ele;
+                      se dado e ele NAO responde, 403.
+    - Nenhum       -> 403
+
+    Retorna (fragmentos: list, params: list). Chamador injeta em WHERE.
+    """
+    role = (usuario.get("role") or "USER").upper()
+    if role in ROLES_REPORTS:
+        if grupo_id_query:
+            return (["a.group_id = %s"], [grupo_id_query])
+        return ([], [])
+
+    resp_gids = _resp_group_ids(cursor, usuario["id"])
+    if not resp_gids:
+        raise HTTPException(status_code=403, detail="Acesso negado.")
+
+    if grupo_id_query:
+        if grupo_id_query not in resp_gids:
+            raise HTTPException(status_code=403,
+                                detail="Voce nao responde por este grupo.")
+        return (["a.group_id = %s"], [grupo_id_query])
+
+    ph = ",".join(["%s"] * len(resp_gids))
+    return ([f"a.group_id IN ({ph})"], list(resp_gids))
+
+
 # ─── POST /api/avaliacoes/popup-visto/{ticket_id} ─────────────────────────────
 @avaliacoes_router.post("/popup-visto/{ticket_id}", status_code=200)
 async def registrar_popup_visto(ticket_id: int, usuario_id: int = Query(..., gt=0)):
@@ -210,24 +263,12 @@ async def listar_avaliacoes(
     try:
         cursor = conn.cursor(dictionary=True)
         usuario = _usuario(cursor, usuario_id)
-        role    = usuario.get("role") or "USER"
-        # 2026-08-25: usa ROLES_REPORTS (ADMIN/TI) — MANAGER NÃO tem visão
-        # executiva de relatórios. Regra em docs/REGRAS_NEGOCIO.md.
-        e_admin = role in ROLES_REPORTS
-
-        if not e_admin and role != "RESPONSAVEL_GRUPO":
-            raise HTTPException(status_code=403, detail="Acesso negado.")
-
-        filtros = []
-        params  = []
-
-        # RESPONSAVEL_GRUPO: só vê o próprio grupo
-        if not e_admin:
-            filtros.append("a.group_id = %s")
-            params.append(usuario.get("group_id"))
-        elif grupo_id:
-            filtros.append("a.group_id = %s")
-            params.append(grupo_id)
+        # Multi-grupo (Fase 2): filtra por group_ids em que ele e RESPONSAVEL
+        # (ou por qualquer grupo se ADMIN/TI). MANAGER continua fora do escopo
+        # de relatorios (REGRA em docs/REGRAS_NEGOCIO.md).
+        _f_g, _p_g = _aplica_filtro_grupo_avaliacoes(cursor, usuario, grupo_id)
+        filtros = list(_f_g)
+        params  = list(_p_g)
 
         if data_inicio:
             filtros.append("a.created_at >= %s")
@@ -308,23 +349,9 @@ async def resumo_avaliacoes(
     try:
         cursor = conn.cursor(dictionary=True)
         usuario = _usuario(cursor, usuario_id)
-        role    = usuario.get("role") or "USER"
-        # 2026-08-25: usa ROLES_REPORTS (ADMIN/TI) — MANAGER NÃO tem visão
-        # executiva de relatórios. Regra em docs/REGRAS_NEGOCIO.md.
-        e_admin = role in ROLES_REPORTS
-
-        if not e_admin and role != "RESPONSAVEL_GRUPO":
-            raise HTTPException(status_code=403, detail="Acesso negado.")
-
-        filtros = ["a.avaliado_em IS NOT NULL"]
-        params  = []
-
-        if not e_admin:
-            filtros.append("a.group_id = %s")
-            params.append(usuario.get("group_id"))
-        elif grupo_id:
-            filtros.append("a.group_id = %s")
-            params.append(grupo_id)
+        _f_g, _p_g = _aplica_filtro_grupo_avaliacoes(cursor, usuario, grupo_id)
+        filtros = ["a.avaliado_em IS NOT NULL"] + list(_f_g)
+        params  = list(_p_g)
 
         where = "WHERE " + " AND ".join(filtros)
 
@@ -392,23 +419,10 @@ async def avaliacoes_por_responsavel(
     try:
         cursor = conn.cursor(dictionary=True)
         usuario = _usuario(cursor, usuario_id)
-        role    = usuario.get("role") or "USER"
-        # 2026-08-25: usa ROLES_REPORTS (ADMIN/TI) — MANAGER NÃO tem visão
-        # executiva de relatórios. Regra em docs/REGRAS_NEGOCIO.md.
-        e_admin = role in ROLES_REPORTS
-
-        if not e_admin and role != "RESPONSAVEL_GRUPO":
-            raise HTTPException(status_code=403, detail="Acesso negado.")
-
-        filtros = ["a.avaliado_em IS NOT NULL", "a.responsavel_id IS NOT NULL"]
-        params  = []
-
-        if not e_admin:
-            filtros.append("a.group_id = %s")
-            params.append(usuario.get("group_id"))
-        elif grupo_id:
-            filtros.append("a.group_id = %s")
-            params.append(grupo_id)
+        _f_g, _p_g = _aplica_filtro_grupo_avaliacoes(cursor, usuario, grupo_id)
+        filtros = ["a.avaliado_em IS NOT NULL",
+                   "a.responsavel_id IS NOT NULL"] + list(_f_g)
+        params  = list(_p_g)
 
         if data_inicio:
             filtros.append("a.avaliado_em >= %s")

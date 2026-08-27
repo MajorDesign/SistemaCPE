@@ -1189,6 +1189,48 @@
               </div>
             </section>
 
+            <!-- ─── SEÇÃO 02b — GRUPOS ADICIONAIS (só ADMIN vê) ─── -->
+            <section class="form-section" id="extraGroupsSection" style="display:none;">
+              <div class="form-section-head">
+                <span class="form-section-num">02b</span>
+                <h6 class="form-section-title">Grupos adicionais</h6>
+                <span class="form-section-sub">Apenas admin master pode alterar</span>
+              </div>
+              <div class="row g-3">
+                <div class="col-12">
+                  <div class="help-text" style="margin-bottom:8px;">
+                    <i class="bi bi-info-circle"></i>
+                    O grupo acima é o <strong>primário</strong>. Aqui você adiciona grupos <strong>extras</strong>: o usuário passa a ver chamados, categorias e relatórios de todos eles, com o papel definido em cada grupo.
+                  </div>
+                  <div id="extraGroupsList" style="margin-bottom:10px;">
+                    <!-- populado dinamicamente por renderExtraGroups() -->
+                  </div>
+                  <div class="row g-2 align-items-end" id="addExtraGroupRow">
+                    <div class="col-md-6">
+                      <label class="form-label" for="extraGroupSelect">
+                        <i class="bi bi-plus-circle"></i> Adicionar grupo extra
+                      </label>
+                      <select class="form-select" id="extraGroupSelect">
+                        <option value="">-- selecione um grupo --</option>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label" for="extraGroupRole">Papel neste grupo</label>
+                      <select class="form-select" id="extraGroupRole">
+                        <option value="USER">👤 Usuário Comum</option>
+                        <option value="RESPONSAVEL_GRUPO">👨‍💼 Responsável do Grupo</option>
+                      </select>
+                    </div>
+                    <div class="col-md-2">
+                      <button type="button" class="btn btn-primary w-100" id="btnAddExtraGroup">
+                        <i class="bi bi-plus-lg"></i> Adicionar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
             <!-- ─── SEÇÃO 03 — ACESSO E SEGURANÇA ─── -->
             <section class="form-section">
               <div class="form-section-head">
@@ -1635,7 +1677,29 @@
         }));
 
         console.log("[USERS/LOAD] " + users.length + " usuario(s) carregado(s)");
-        
+
+        // Fase 2 multi-grupo: enriquece cada user com groups[] (agregado)
+        try {
+          const _api = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '');
+          const ugResp = await fetch(_api + '/api/user-groups/all', {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Auth-Token': localStorage.getItem('token') || localStorage.getItem('cpe_token') || ''
+            }
+          });
+          if (ugResp.ok) {
+            const ugData = await ugResp.json();
+            const byUser = ugData?.items || {};
+            users.forEach(u => { u.groups = byUser[u.id] || []; });
+            console.log("[USERS/LOAD] multi-grupo enriquecido");
+          } else {
+            console.warn("[USERS/LOAD] agregado user-groups nao disponivel:", ugResp.status);
+          }
+        } catch (e) {
+          console.warn("[USERS/LOAD] falha ao enriquecer grupos:", e);
+        }
+
         renderUsers(filterUsers());
         updateStatistics();
       } catch (err) {
@@ -1680,7 +1744,12 @@
 
       const groupFilter = document.getElementById("groupFilter")?.value || "";
       if (groupFilter) {
-        filtered = filtered.filter(u => u.group_id === parseInt(groupFilter));
+        const gid = parseInt(groupFilter);
+        // Fase 2: filtra por QUALQUER grupo do user (primario ou extra)
+        filtered = filtered.filter(u =>
+          u.group_id === gid ||
+          (Array.isArray(u.groups) && u.groups.some(g => g.group_id === gid))
+        );
       }
 
       const searchTerm = document.getElementById("searchInput")?.value?.toLowerCase() || "";
@@ -1776,9 +1845,21 @@ function renderUsers(list = users) {
             <td><code style="background: #f3f4f6; padding: 4px 8px; border-radius: 4px;">${username}</code></td>
             <td>
               <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-start;">
-                ${user.group_id
-                  ? `<span style="background: #e0e7ff; color: #3730a3; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;"><i class="bi bi-folder"></i> ${groupName}</span>`
-                  : `<span style="color: #9ca3af; font-size: 0.85rem;"><i class="bi bi-dash-circle"></i> Sem Grupo</span>`
+                ${(user.groups && user.groups.length)
+                  ? user.groups.map(g => {
+                      const isResp = g.role_in_grp === 'RESPONSAVEL_GRUPO';
+                      const bg = g.is_primary ? '#FEF3C7' : '#e0e7ff';
+                      const fg = g.is_primary ? '#92400E' : '#3730a3';
+                      const roleIco = isResp ? '👨‍💼' : '👤';
+                      const primary = g.is_primary ? ' <span style="font-size:.65rem;font-weight:700;">★</span>' : '';
+                      return `<span title="${isResp ? 'Responsavel' : 'Usuario'} neste grupo${g.is_primary ? ' (primario)' : ''}"
+                        style="background:${bg};color:${fg};padding:4px 8px;border-radius:4px;font-size:.85rem;">
+                        <i class="bi bi-folder"></i> ${escapeHtml(g.group_name)} ${roleIco}${primary}
+                      </span>`;
+                    }).join('')
+                  : (user.group_id
+                    ? `<span style="background:#e0e7ff;color:#3730a3;padding:4px 8px;border-radius:4px;font-size:.85rem;"><i class="bi bi-folder"></i> ${groupName}</span>`
+                    : `<span style="color:#9ca3af;font-size:.85rem;"><i class="bi bi-dash-circle"></i> Sem Grupo</span>`)
                 }
                 ${user.unit_id
                   ? `<span style="background:#cffafe;color:#0e7490;padding:2px 6px;border-radius:4px;font-size:.72rem;"><i class="bi bi-geo-alt"></i> ${escapeHtml(user.unit_nome || getUnitName(user.unit_id) || ('Unidade #' + user.unit_id))}</span>`
@@ -1878,10 +1959,178 @@ function renderUsers(list = users) {
 
       document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Atualizar Usuario';
 
+      // Multi-grupo (fase 1) — só ADMIN gerencia grupos extras
+      if (typeof loadExtraGroups === 'function') loadExtraGroups(userId);
+
       hideModalError();
     }
   </script>
   <!-- [FIM] editUser() -->
+
+  <!-- ================================================== -->
+  <!-- MULTI-GRUPO (Fase 1 PLANO_MULTIGRUPO.md)             -->
+  <!-- Só ADMIN global pode adicionar/remover/mudar role    -->
+  <!-- Grupo primário continua sendo o #inputGroup          -->
+  <!-- ================================================== -->
+  <script>
+    (function () {
+      const _me = JSON.parse(localStorage.getItem('user') || '{}');
+      const IS_ADMIN = (_me.role || '').toUpperCase() === 'ADMIN';
+
+      // API_BASE_URL vem de config.js (dominio publico = '', dev = http://host:8000).
+      // Usar SEMPRE — url relativa passa pelo Apache e nao encontra a rota.
+      const _API = () => (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '');
+      function _ugUrl(path) { return _API() + '/api/user-groups' + path; }
+
+      function _authHeaders() {
+        return {
+          'X-Auth-Token': localStorage.getItem('token') || localStorage.getItem('cpe_token') || '',
+          'Content-Type': 'application/json'
+        };
+      }
+
+      function _roleLabel(r) {
+        return r === 'RESPONSAVEL_GRUPO' ? '👨‍💼 Responsável' : '👤 Usuário';
+      }
+
+      window.loadExtraGroups = async function (userId) {
+        const sec = document.getElementById('extraGroupsSection');
+        if (!sec) return;
+        if (!IS_ADMIN) { sec.style.display = 'none'; return; }
+        sec.style.display = '';
+
+        try {
+          const r = await fetch(_ugUrl('/' + userId), { headers: _authHeaders() });
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          const data = await r.json();
+          _renderExtraGroups(userId, data.groups || []);
+          _populateExtraGroupSelect(data.groups || []);
+        } catch (e) {
+          console.error('[MULTIGRUPO/LOAD]', e);
+          document.getElementById('extraGroupsList').innerHTML =
+            '<div class="text-danger small">Erro ao carregar grupos: ' + e.message + '</div>';
+        }
+      };
+
+      function _renderExtraGroups(userId, groups) {
+        const box = document.getElementById('extraGroupsList');
+        if (!groups.length) {
+          box.innerHTML = '<div class="text-muted small"><i class="bi bi-info-circle"></i> Nenhum grupo vinculado.</div>';
+          return;
+        }
+        box.innerHTML = groups.map(g => `
+          <div class="d-flex align-items-center justify-content-between p-2 mb-2"
+               style="border:1px solid #E5E7EB;border-radius:8px;background:${g.is_primary ? '#FFF9E6' : '#FAFAFA'};">
+            <div>
+              <strong>${_escape(g.group_name)}</strong>
+              ${g.is_primary ? '<span class="badge bg-warning text-dark ms-2">PRIMÁRIO</span>' : ''}
+              <div class="small text-muted">
+                ${g.department_name ? `<i class="bi bi-diagram-3"></i> Depto <strong>${_escape(g.department_name)}</strong> · ` : ''}${_roleLabel(g.role_in_grp)}
+              </div>
+            </div>
+            <div class="d-flex gap-1">
+              <select class="form-select form-select-sm" style="width:auto;"
+                      onchange="changeGroupRole(${userId}, ${g.group_id}, this.value)">
+                <option value="USER"${g.role_in_grp==='USER'?' selected':''}>👤 Usuário</option>
+                <option value="RESPONSAVEL_GRUPO"${g.role_in_grp==='RESPONSAVEL_GRUPO'?' selected':''}>👨‍💼 Responsável</option>
+              </select>
+              ${!g.is_primary ? `
+                <button type="button" class="btn btn-sm btn-outline-warning"
+                        title="Marcar como primário"
+                        onclick="setPrimaryGroup(${userId}, ${g.group_id})">
+                  <i class="bi bi-star-fill"></i>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger"
+                        title="Remover deste grupo"
+                        onclick="removeUserGroup(${userId}, ${g.group_id})">
+                  <i class="bi bi-x-lg"></i>
+                </button>` : `
+                <button type="button" class="btn btn-sm btn-outline-secondary" disabled
+                        title="Grupo primário não pode ser removido diretamente. Marque outro como primário antes.">
+                  <i class="bi bi-lock"></i>
+                </button>`}
+            </div>
+          </div>
+        `).join('');
+      }
+
+      function _populateExtraGroupSelect(currentGroups) {
+        const sel = document.getElementById('extraGroupSelect');
+        if (!sel) return;
+        const usedIds = new Set(currentGroups.map(g => g.group_id));
+        // reusa a lista `groups` global (populada pelo carregamento de grupos)
+        const all = (typeof groups !== 'undefined' && Array.isArray(groups)) ? groups : [];
+        sel.innerHTML = '<option value="">-- selecione um grupo --</option>' +
+          all.filter(g => !usedIds.has(g.id))
+             .map(g => `<option value="${g.id}">${_escape(g.name)}</option>`).join('');
+      }
+
+      window.addExtraGroupHandler = async function () {
+        if (!selectedUserId) { alert('Salve o usuário primeiro.'); return; }
+        const gid = parseInt(document.getElementById('extraGroupSelect').value || 0);
+        const role = document.getElementById('extraGroupRole').value || 'USER';
+        if (!gid) return;
+        try {
+          const r = await fetch(_ugUrl('/' + selectedUserId), {
+            method: 'POST', headers: _authHeaders(),
+            body: JSON.stringify({ group_id: gid, role_in_grp: role, is_primary: false })
+          });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.detail || 'Erro HTTP ' + r.status);
+          await loadExtraGroups(selectedUserId);
+        } catch (e) { alert('Erro: ' + e.message); }
+      };
+
+      window.setPrimaryGroup = async function (userId, gid) {
+        try {
+          const r = await fetch(_ugUrl(`/${userId}/${gid}`), {
+            method: 'PATCH', headers: _authHeaders(),
+            body: JSON.stringify({ is_primary: true })
+          });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.detail || 'HTTP ' + r.status);
+          await loadExtraGroups(userId);
+        } catch (e) { alert('Erro: ' + e.message); }
+      };
+
+      window.changeGroupRole = async function (userId, gid, newRole) {
+        try {
+          const r = await fetch(_ugUrl(`/${userId}/${gid}`), {
+            method: 'PATCH', headers: _authHeaders(),
+            body: JSON.stringify({ role_in_grp: newRole })
+          });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.detail || 'HTTP ' + r.status);
+          await loadExtraGroups(userId);
+        } catch (e) { alert('Erro: ' + e.message); }
+      };
+
+      window.removeUserGroup = async function (userId, gid) {
+        if (!confirm('Remover este usuário deste grupo?')) return;
+        try {
+          const r = await fetch(_ugUrl(`/${userId}/${gid}`), {
+            method: 'DELETE', headers: _authHeaders()
+          });
+          const data = await r.json();
+          if (!r.ok) throw new Error(data.detail || 'HTTP ' + r.status);
+          await loadExtraGroups(userId);
+        } catch (e) { alert('Erro: ' + e.message); }
+      };
+
+      function _escape(s) {
+        return String(s || '').replace(/[&<>"']/g, m => ({
+          '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[m]));
+      }
+
+      // Bind do botão "Adicionar" — após DOM pronto
+      document.addEventListener('DOMContentLoaded', () => {
+        const btn = document.getElementById('btnAddExtraGroup');
+        if (btn) btn.addEventListener('click', addExtraGroupHandler);
+      });
+    })();
+  </script>
+  <!-- [FIM] Multi-grupo -->
 
   <!-- ================================================== -->
   <!-- FUNCAO: resetModal() -->
@@ -1891,17 +2140,21 @@ function renderUsers(list = users) {
     function resetModal() {
       if (!selectedUserId) {
         console.log("[USERS/MODAL] Resetando modal para novo usuario");
-        
+
         document.getElementById("userModalLabel").innerHTML = '<i class="bi bi-person-plus"></i> <span id="userModalTitleText">Novo Usuário</span> <span class="modal-eyebrow">CPE / USUÁRIOS</span>';
         document.getElementById("addUserForm").reset();
         document.getElementById("submitBtn").innerHTML = '<i class="bi bi-check-lg"></i> Criar Usuario';
-        
+
         document.getElementById("passwordField").style.display = 'block';
         document.getElementById("inputPassword").required = true;
         const _reqCol = document.getElementById("passwordRequirementsCol");
         if (_reqCol) _reqCol.style.display = 'block';
+
+        // Multi-grupo: seção só aparece na EDIÇÃO (novo user ainda não tem ID)
+        const _extraSec = document.getElementById("extraGroupsSection");
+        if (_extraSec) _extraSec.style.display = 'none';
       }
-      
+
       hideModalError();
     }
   </script>

@@ -217,6 +217,11 @@ def get_current_user(request: Request) -> Dict[str, Any]:
 
     print(f"[AUTH/DEPENDENCY] OK usuario autenticado: {user['name']} (Role: {user.get('role')})")
 
+    # Multi-grupo (Fase 2 PLANO_MULTIGRUPO.md):
+    # Carrega TODOS os grupos do user com o papel em cada um.
+    # `group_id` continua sendo o primario (retrocompat).
+    groups = _load_user_groups(user["id"])
+
     return {
         "id": user["id"],
         "name": user["name"],
@@ -224,4 +229,31 @@ def get_current_user(request: Request) -> Dict[str, Any]:
         "role": user["role"],
         "department_id": user.get("department_id"),
         "group_id": user.get("group_id"),
+        "groups": groups,                                              # list[dict]
+        "group_ids": [g["group_id"] for g in groups],                  # list[int]
+        "responsavel_group_ids": [g["group_id"] for g in groups
+                                  if g["role_in_grp"] == "RESPONSAVEL_GRUPO"],
     }
+
+
+def _load_user_groups(user_id: int) -> list:
+    """
+    Retorna a lista de grupos do usuario com role em cada um.
+    Fallback: se user_groups estiver vazio pra esse user (edge case
+    de migracao incompleta), sintetiza a partir de users.group_id.
+    """
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(text("""
+                SELECT ug.group_id, ug.role_in_grp,
+                       (ug.is_primary = 1) AS is_primary,
+                       g.name AS group_name
+                  FROM user_groups ug
+                  JOIN cpe_grupo g ON g.id = ug.group_id
+                 WHERE ug.user_id = :uid
+                 ORDER BY ug.is_primary DESC, g.name ASC
+            """), {"uid": user_id}).mappings().all()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[AUTH/GROUPS] erro ao carregar user_groups({user_id}): {e}")
+        return []

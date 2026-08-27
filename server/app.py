@@ -107,6 +107,7 @@ class UserResponse(BaseModel):
     role: str
     group_id: Optional[int] = None
     group_name: Optional[str] = None   # nome do grupo/setor do usuário
+    groups: Optional[list] = None      # Fase 2 multi-grupo: lista de {group_id, group_name, role_in_grp, is_primary}
     unit_id: Optional[int] = None
     unit_nome: Optional[str] = None    # nome da unidade física (ex.: CPE Belo Horizonte)
     cpf: Optional[str] = None          # CPF (11 dígitos, sem máscara) — usado em termos
@@ -681,9 +682,17 @@ def login(login_data: LoginRequest, response: Response, request: Request = None)
 
         logger.info("[AUTH] 📦 Construindo resposta...")
         
+        # Fase 2 multi-grupo: carregar todos os grupos do user
+        try:
+            from security import _load_user_groups
+            user["groups"] = _load_user_groups(user["id"])
+        except Exception as _e:
+            logger.warning(f"[AUTH] falha ao carregar user_groups: {_e}")
+            user["groups"] = []
+
         try:
             user_response = UserResponse(**user)
-            logger.info(f"[AUTH] ✅ UserResponse criado | group_name: {user_response.group_name}")
+            logger.info(f"[AUTH] ✅ UserResponse criado | group_name: {user_response.group_name} | groups_count: {len(user_response.groups or [])}")
         except Exception as validation_err:
             logger.error(f"[AUTH] ❌ ERRO DE VALIDACAO: {str(validation_err)}")
             raise
@@ -1793,6 +1802,14 @@ def reset_password(body: _ResetBody, request: Request):
 app.include_router(auth_router)
 app.include_router(groups_router)
 app.include_router(users_router)
+
+# Multi-grupo por usuario (Fase 1 PLANO_MULTIGRUPO.md)
+try:
+    from routes.user_groups import router as user_groups_router
+    app.include_router(user_groups_router)
+    logger.info("✅ Router de Multi-Grupo registrado: /api/user-groups")
+except Exception as e:
+    logger.error(f"⚠️ Falha ao registrar router de multi-grupo: {e}")
 
 logger.info("✅ Routers internos registrados com sucesso!")
 logger.info("   - Router de Autenticacao: /api/auth")
