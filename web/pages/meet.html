@@ -638,6 +638,8 @@
   </header>
   <div class="meet-body" id="body">
     <div class="meet-stage">
+      <!-- Aviso de capacidade da sala (mesh P2P). Populado por _atualizarCapacityBanner(). -->
+      <div id="capacityBanner" style="display:none;margin:8px 12px 0;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:500;line-height:1.4"></div>
       <div class="peers-grid" id="grid"></div>
     </div>
     <aside class="meet-pending" id="pendingPanel" style="display:none">
@@ -1082,11 +1084,12 @@ async function pedirEntrada(guestName) {
       _entrarNaSala();
     }
   } catch (e) {
-    // Mensagem amigavel pra reuniao lotada (HTTP 403 do bloqueio
+    // Mensagem amigavel pra reuniao lotada (HTTP 409 do bloqueio
     // MAX_MEETING_PARTICIPANTS). Demais erros usam fallback generico.
     const msg = String(e.message || '');
-    if (msg.includes('lotada') || msg.includes('limite máximo') || msg.includes('limite maximo')) {
-      alert('🚫 ' + msg);
+    const lotada = /Sala cheia|lotada|limite m[aá]ximo/i.test(msg);
+    if (lotada) {
+      alert('🚫 Sala lotada\n\n' + msg + '\n\nMotivo tecnico: usamos mesh P2P (todos-com-todos), que exige limite pra proteger a qualidade do audio/video.');
     } else {
       alert('Erro: ' + msg);
     }
@@ -1769,10 +1772,68 @@ async function sairSala() {
   location.href = '/SistemaCPE/index.html';
 }
 
+/* ============ UI: capacidade da sala (mesh P2P) ============ */
+// Cache de limites (buscado 1 vez do backend /api/meetings/limits).
+const _CAPACITY = { max: 8, warn: 5, reason: '' };
+let _capacityLoaded = false;
+async function _loadCapacityLimits() {
+  if (_capacityLoaded) return;
+  try {
+    const r = await fetch(`${API_BASE}/api/meetings/limits`);
+    if (r.ok) {
+      const d = await r.json();
+      _CAPACITY.max    = d.max_participants || 8;
+      _CAPACITY.warn   = d.warn_threshold   || Math.max(2, _CAPACITY.max - 3);
+      _CAPACITY.reason = d.reason           || '';
+    }
+  } catch (_) {}
+  _capacityLoaded = true;
+}
+function _atualizarCapacityBanner() {
+  const el = document.getElementById('capacityBanner');
+  if (!el) return;
+  const total = (_state.peers?.size || 0) + 1;  // + eu mesmo
+  const max   = _CAPACITY.max;
+  const warn  = _CAPACITY.warn;
+  const restam = max - total;
+
+  if (total >= max) {
+    // sala LOTADA — mostra alerta pra dono/todos: novas entradas serao bloqueadas
+    el.style.background = '#7F1D1D';
+    el.style.color      = '#FEF2F2';
+    el.style.border     = '1px solid #B91C1C';
+    el.innerHTML = `<i class="bi bi-exclamation-octagon-fill"></i> ` +
+      `<strong>Sala cheia (${total}/${max}):</strong> novas entradas serao bloqueadas. ` +
+      `Reunioes usam mesh P2P — aumentar demais estraga o audio/video de todo mundo.`;
+    el.style.display = '';
+  } else if (total >= max - 1) {
+    // 1 vaga
+    el.style.background = '#7C2D12';
+    el.style.color      = '#FFF7ED';
+    el.style.border     = '1px solid #C2410C';
+    el.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i> ` +
+      `<strong>${restam} vaga restante</strong> (${total}/${max}). Apos isso, novas entradas sao bloqueadas.`;
+    el.style.display = '';
+  } else if (total >= warn) {
+    // amarelo: qualidade pode cair
+    el.style.background = '#78350F';
+    el.style.color      = '#FEF3C7';
+    el.style.border     = '1px solid #B45309';
+    el.innerHTML = `<i class="bi bi-info-circle-fill"></i> ` +
+      `<strong>${total} participantes:</strong> a qualidade do audio/video pode cair acima disso ` +
+      `(usamos mesh P2P). Maximo ${max}.`;
+    el.style.display = '';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
 /* ============ UI: grid de peers ============ */
 function _renderGrid() {
   const grid = document.getElementById('grid');
   if (!grid) return;
+  // Atualiza banner de capacidade (chamado toda vez que peers mudam)
+  _loadCapacityLimits().then(_atualizarCapacityBanner);
   const peers = [...(_state.peers || new Map()).values()];
   const cards = [];
 
