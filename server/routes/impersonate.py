@@ -121,9 +121,12 @@ async def start_impersonate(target_id: int, request: Request,
         ip=client_ip,
     )
 
-    # IMPORTANTE: get_current_user prefere COOKIE sobre header. Precisamos
-    # substituir o cookie cpe_session pelo token de impersonate, senao a
-    # sessao continua identificada como admin (bug 2026-08-27).
+    # 2026-08-27: NAO seta cookie mais. Alguns browsers/proxies (via
+    # Cloudflare tunnel) nao substituem cookie existente na hora, e o
+    # backend ficava vendo o admin ao inves do IMP. Solucao: apaga o
+    # cookie do admin (evita conflito) — o frontend usa X-Auth-Token
+    # com o token IMP que retornamos aqui, injetado automaticamente
+    # pelo page-guard.js em toda chamada /api/*.
     resp = JSONResponse({
         "success":       True,
         "token":         token,
@@ -135,16 +138,9 @@ async def start_impersonate(target_id: int, request: Request,
         },
         "expires_in":    IMPERSONATE_TTL_SECONDS,
         "warning":       "Modo suporte esta READ-ONLY. Qualquer POST/PUT/DELETE sera bloqueado.",
+        "use_header_auth": True,
     })
-    resp.set_cookie(
-        key=COOKIE_NAME,
-        value=token,
-        httponly=True,
-        secure=False,
-        samesite="lax",
-        max_age=IMPERSONATE_TTL_SECONDS,
-        path="/",
-    )
+    resp.delete_cookie(key=COOKIE_NAME, path="/", httponly=True, samesite="lax")
     return resp
 
 
