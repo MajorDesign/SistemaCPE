@@ -67,20 +67,28 @@ def _log_audit(user_id: int, action: str, target_user_id: int,
 async def start_impersonate(target_id: int, request: Request,
                              current_user: Dict[str, Any] = Depends(get_current_user)):
     """Inicia sessao de suporte. Retorna token temporario (60min, read-only)."""
-    role = (current_user.get("role") or "").upper()
+    # Se ja esta em modo suporte, o "real user" que precisa ser ADMIN
+    # e o impersonator (nao o impersonated). Isso permite ao admin
+    # TROCAR de user sem sair antes.
+    imp_by = current_user.get("impersonated_by")
+    if imp_by:
+        real_user = get_user_by_id(imp_by)
+        if (not real_user or real_user.get("is_active") != 1
+                or (real_user.get("role") or "").upper() != "ADMIN"):
+            raise HTTPException(status_code=403,
+                                 detail="Sessao de suporte invalida. Faca login novamente.")
+        real_user_id = imp_by
+        real_user_name = real_user.get("name") or f"user#{imp_by}"
+    else:
+        role = (current_user.get("role") or "").upper()
+        if role != "ADMIN":
+            raise HTTPException(status_code=403,
+                                 detail="Apenas ADMIN pode entrar em modo suporte.")
+        real_user_id = current_user["id"]
+        real_user_name = current_user["name"]
 
-    # Guard 1: so ADMIN inicia (mesmo se ja for impersonate, o real user
-    # que conta pra ADMIN — get_current_user retorna dados do impersonated).
-    # Aqui usamos o impersonated_by pra impedir "impersonate encadeado".
-    if current_user.get("impersonated_by"):
-        raise HTTPException(status_code=400,
-                             detail="Voce ja esta em modo suporte. Saia primeiro.")
-    if role != "ADMIN":
-        raise HTTPException(status_code=403,
-                             detail="Apenas ADMIN pode entrar em modo suporte.")
-
-    # Guard 2: nao pode ser voce mesmo
-    if target_id == current_user["id"]:
+    # Guard: nao pode ser o proprio admin
+    if target_id == real_user_id:
         raise HTTPException(status_code=400,
                              detail="Voce nao precisa impersonar voce mesmo.")
 
@@ -95,7 +103,7 @@ async def start_impersonate(target_id: int, request: Request,
         raise HTTPException(status_code=403,
                              detail="Nao e possivel entrar como outro ADMIN.")
 
-    token = make_impersonation_token(current_user["id"], target_id)
+    token = make_impersonation_token(real_user_id, target_id)
 
     # Audit
     client_ip = request.client.host if request.client else None
@@ -103,10 +111,13 @@ async def start_impersonate(target_id: int, request: Request,
     if fwd:
         client_ip = fwd.split(",")[0].strip()
     _log_audit(
-        user_id=current_user["id"],
+        user_id=real_user_id,
         action="impersonate_start",
         target_user_id=target_id,
-        description=f"{current_user['name']} iniciou modo suporte como {target['name']} ({target['email']})",
+        description=(
+            f"{real_user_name} iniciou modo suporte como {target['name']} ({target['email']})"
+            + (" (troca)" if imp_by else "")
+        ),
         ip=client_ip,
     )
 
