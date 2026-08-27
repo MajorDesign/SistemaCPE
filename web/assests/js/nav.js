@@ -47,17 +47,22 @@ console.log("[NAV.JS] 🔧 Script carregando...");
 
 window.sairModoSuporte = async function () {
   try {
-    const base = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
-    const tok  = localStorage.getItem('token') || localStorage.getItem('cpe_token') || '';
-    // Best-effort: avisa o servidor pra logar o end (permitido pela allowlist)
+    const base    = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+    const tok     = localStorage.getItem('token') || localStorage.getItem('cpe_token') || '';
+    const realTok = localStorage.getItem('cpe_token_real') || '';
+    // Servidor recebe o token real via X-Real-Auth-Token pra restaurar
+    // o cookie cpe_session — sem isso o admin teria que logar de novo.
     try {
       await fetch(base + '/api/auth/impersonate/end', {
         method: 'POST',
-        headers: { 'X-Auth-Token': tok }
+        credentials: 'include',
+        headers: {
+          'X-Auth-Token':      tok,
+          'X-Real-Auth-Token': realTok
+        }
       });
     } catch (_) {}
-    // Restaura token e user reais
-    const realTok  = localStorage.getItem('cpe_token_real');
+    // Restaura token e user reais no localStorage
     const realUser = localStorage.getItem('cpe_user_real');
     if (realTok)  { localStorage.setItem('token', realTok); localStorage.setItem('cpe_token', realTok); }
     if (realUser) { localStorage.setItem('user', realUser); localStorage.setItem('cpe_user', realUser); }

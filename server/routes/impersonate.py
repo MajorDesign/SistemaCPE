@@ -25,6 +25,7 @@ from typing import Any, Dict
 
 from database import engine
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from security import (
     get_current_user,
     get_user_by_id,
@@ -32,6 +33,7 @@ from security import (
     IMPERSONATE_TTL_SECONDS,
 )
 from sqlalchemy import text
+from config import COOKIE_NAME
 
 router = APIRouter(prefix="/api/auth", tags=["Auth-Impersonate"])
 
@@ -108,39 +110,82 @@ async def start_impersonate(target_id: int, request: Request,
         ip=client_ip,
     )
 
-    return {
-        "success":         True,
-        "token":           token,
+    # IMPORTANTE: get_current_user prefere COOKIE sobre header. Precisamos
+    # substituir o cookie cpe_session pelo token de impersonate, senao a
+    # sessao continua identificada como admin (bug 2026-08-27).
+    resp = JSONResponse({
+        "success":       True,
+        "token":         token,
         "impersonated": {
             "id":    target["id"],
             "name":  target["name"],
             "email": target["email"],
             "role":  target["role"],
         },
-        "expires_in":      IMPERSONATE_TTL_SECONDS,
-        "warning":         "Modo suporte esta READ-ONLY. Qualquer POST/PUT/DELETE sera bloqueado.",
-    }
+        "expires_in":    IMPERSONATE_TTL_SECONDS,
+        "warning":       "Modo suporte esta READ-ONLY. Qualquer POST/PUT/DELETE sera bloqueado.",
+    })
+    resp.set_cookie(
+        key=COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=IMPERSONATE_TTL_SECONDS,
+        path="/",
+    )
+    return resp
 
 
 @router.post("/impersonate/end")
 async def end_impersonate(request: Request,
                            current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Encerra a sessao de suporte no lado servidor (audit).
-    O frontend descarta o token e volta pro token real que guardou."""
-    if not current_user.get("impersonated_by"):
-        return {"success": True, "message": "Nao estava em modo suporte."}
-    imp_id = current_user["impersonated_by"]
-    imp_name = current_user.get("impersonated_by_name") or f"user#{imp_id}"
+    """Encerra a sessao de suporte. Restaura o cookie cpe_session pro
+    token real do admin — o frontend envia via header X-Real-Auth-Token
+    (o token que guardou em cpe_token_real). Se nao enviar, so limpa o
+    cookie e o admin precisa logar de novo."""
+    imp_by = current_user.get("impersonated_by")
 
     client_ip = request.client.host if request.client else None
     fwd = request.headers.get("x-forwarded-for", "")
     if fwd:
         client_ip = fwd.split(",")[0].strip()
-    _log_audit(
-        user_id=imp_id,
-        action="impersonate_end",
-        target_user_id=current_user["id"],
-        description=f"{imp_name} encerrou modo suporte (era {current_user['name']})",
-        ip=client_ip,
-    )
-    return {"success": True, "message": "Modo suporte encerrado."}
+
+    if imp_by:
+        _log_audit(
+            user_id=imp_by,
+            action="impersonate_end",
+            target_user_id=current_user["id"],
+            description=(
+                f"{current_user.get('impersonated_by_name') or f'user#{imp_by}'} "
+                f"encerrou modo suporte (era {current_user['name']})"
+            ),
+            ip=client_ip,
+        )
+
+    real_token = (request.headers.get("X-Real-Auth-Token")
+                  or request.headers.get("x-real-auth-token")
+                  or "").strip()
+
+    resp = JSONResponse({
+        "success": True,
+        "message": "Modo suporte encerrado." if imp_by else "Nao estava em modo suporte.",
+        "restored": bool(real_token),
+    })
+    if real_token:
+        # Restaura o cookie da sessao original do admin
+        from config import SESSION_MAX_AGE_SECONDS
+        resp.set_cookie(
+            key=COOKIE_NAME,
+            value=real_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=SESSION_MAX_AGE_SECONDS,
+            path="/",
+        )
+    else:
+        # Sem token real: apaga o cookie de impersonate (admin vai precisar
+        # logar de novo)
+        resp.delete_cookie(key=COOKIE_NAME, path="/")
+    return resp
