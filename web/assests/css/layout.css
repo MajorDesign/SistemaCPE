@@ -1473,8 +1473,11 @@
     }
   }
   
+  /* 2026-08-27: BUG — antes tinha `margin: 0` aqui, sobrescrevendo o
+     `margin: .25rem 0` da regra acima. Resultado: linhas do rodape
+     grudavam ("Esqueci minha senha" ficava sobreposto ao "© 2026 CPE").
+     Mantido so o font-weight pra nao perder o refino visual. */
   .login-footer p {
-    margin: 0;
     font-weight: 500;
   }
   /* [FIM] Login Footer */
