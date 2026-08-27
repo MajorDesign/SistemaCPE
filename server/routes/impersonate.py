@@ -155,7 +155,9 @@ async def hard_reset_impersonate():
     esta dando erro). Nao loga nada em audit porque nao ha certeza de
     quem esta chamando. Frontend usa antes de redirecionar pra login."""
     resp = JSONResponse({"success": True, "reset": True})
-    resp.delete_cookie(key=COOKIE_NAME, path="/")
+    # Atributos EXATOS do set_cookie original — sem isso alguns browsers
+    # nao reconhecem o delete e mantem o cookie no ar.
+    resp.delete_cookie(key=COOKIE_NAME, path="/", httponly=True, samesite="lax")
     return resp
 
 
@@ -189,25 +191,18 @@ async def end_impersonate(request: Request,
                   or request.headers.get("x-real-auth-token")
                   or "").strip()
 
+    # 2026-08-27: SEMPRE apaga o cookie IMP. Nao seta cookie novo com o
+    # real_token — em alguns setups, o browser nao substitui o cookie
+    # existente na hora e o get_current_user continua vendo o IMP.
+    # O frontend passa a se autenticar via HEADER X-Auth-Token (o
+    # page-guard.js injeta automaticamente do localStorage.cpe_token).
+    # Como cookie esta ausente, get_current_user cai no header — que
+    # ja foi restaurado pelo frontend pra realTok antes de chamar /end.
     resp = JSONResponse({
         "success": True,
         "message": "Modo suporte encerrado." if imp_by else "Nao estava em modo suporte.",
-        "restored": bool(real_token),
+        "cookie_cleared": True,
+        "use_header_auth": True,
     })
-    if real_token:
-        # Restaura o cookie da sessao original do admin
-        from config import SESSION_MAX_AGE_SECONDS
-        resp.set_cookie(
-            key=COOKIE_NAME,
-            value=real_token,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            max_age=SESSION_MAX_AGE_SECONDS,
-            path="/",
-        )
-    else:
-        # Sem token real: apaga o cookie de impersonate (admin vai precisar
-        # logar de novo)
-        resp.delete_cookie(key=COOKIE_NAME, path="/")
+    resp.delete_cookie(key=COOKIE_NAME, path="/", httponly=True, samesite="lax")
     return resp
