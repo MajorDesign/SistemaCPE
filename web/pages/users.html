@@ -1436,7 +1436,7 @@
   <!-- ================================================== -->
   
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-08-25-reports-role"></script>
+  <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-08-27-impersonate"></script>
 
   <!-- ================================================== -->
   <!-- DADOS GLOBAIS -->
@@ -1883,6 +1883,18 @@ function renderUsers(list = users) {
               <button class="btn btn-sm btn-outline-warning" onclick="abrirResetSenha(${user.id}, '${escapeHtml(user.name)}')" title="Resetar senha">
                 <i class="bi bi-key"></i> Senha
               </button>
+              ${(() => {
+                // Modo suporte (2026-08-27): so ADMIN ve; nao permite pra outros admins nem pra si mesmo
+                const _me = JSON.parse(localStorage.getItem('user') || localStorage.getItem('cpe_user') || '{}');
+                const meRole = (_me.role || '').toUpperCase();
+                const targetRole = (user.role || '').toUpperCase();
+                if (meRole !== 'ADMIN') return '';
+                if (user.id === _me.id) return '';
+                if (targetRole === 'ADMIN') return '';
+                return `<button class="btn btn-sm btn-outline-secondary" onclick="iniciarModoSuporte(${user.id}, '${escapeHtml(user.name)}')" title="Ver o sistema como este usuário (modo suporte read-only)">
+                  <i class="bi bi-eye-fill"></i> Suporte
+                </button>`;
+              })()}
               <button class="btn btn-sm btn-outline-danger" onclick="deleteUser(${user.id}, '${escapeHtml(user.name)}');" title="Deletar">
                 <i class="bi bi-trash"></i> Deletar
               </button>
@@ -2430,6 +2442,53 @@ function renderUsers(list = users) {
   <!-- ================================================== -->
   <!-- [INICIO] deleteUser() -->
   <script>
+    // ============================================================
+    // MODO SUPORTE (impersonate) — 2026-08-27
+    // ADMIN entra "vendo como" outro user pra diagnostico read-only.
+    // Guarda o token real em localStorage.cpe_token_real e substitui
+    // o token ativo pelo token de impersonate.
+    // ============================================================
+    async function iniciarModoSuporte(userId, userName) {
+      if (!confirm(
+        'Entrar em MODO SUPORTE como "' + userName + '"?\n\n' +
+        '• Você verá o sistema exatamente como este usuário vê.\n' +
+        '• A sessão é READ-ONLY: você não pode criar/editar/excluir.\n' +
+        '• A ação fica registrada em audit_logs.\n' +
+        '• Duração máxima 60 minutos.\n\n' +
+        'Você pode sair a qualquer momento clicando no banner que aparece no topo.'
+      )) return;
+      try {
+        const base = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+        const tokAtual = localStorage.getItem('token') || localStorage.getItem('cpe_token') || '';
+        const r = await fetch(base + '/api/auth/impersonate/' + userId, {
+          method: 'POST',
+          headers: { 'X-Auth-Token': tokAtual, 'Content-Type': 'application/json' }
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || ('HTTP ' + r.status));
+
+        // Guarda o token REAL pra restaurar depois (dois nomes usados no sistema)
+        localStorage.setItem('cpe_token_real', tokAtual);
+        localStorage.setItem('cpe_user_real', JSON.stringify(
+          JSON.parse(localStorage.getItem('user') || localStorage.getItem('cpe_user') || '{}')
+        ));
+
+        // Substitui pelo token de impersonate
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('cpe_token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.impersonated));
+        localStorage.setItem('cpe_user', JSON.stringify(data.impersonated));
+        // Flag pra banner detectar
+        localStorage.setItem('cpe_impersonate_active', '1');
+        localStorage.setItem('cpe_impersonate_target_name', data.impersonated.name || userName);
+
+        alert('Modo suporte ativo. A pagina vai recarregar.');
+        window.location.href = '/SistemaCPE/index.html';
+      } catch (e) {
+        alert('Erro ao iniciar modo suporte: ' + e.message);
+      }
+    }
+
     function deleteUser(userId, userName) {
       console.log("[USERS/DELETE] Deletando usuario: " + userId);
 

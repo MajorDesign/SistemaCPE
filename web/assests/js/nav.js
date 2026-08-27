@@ -3,6 +3,78 @@
 console.log("[NAV.JS] 🔧 Script carregando...");
 
 /* =========================================
+   BANNER GLOBAL — MODO SUPORTE (impersonate)
+   Adicionado 2026-08-27. Aparece em TODAS as paginas se localStorage
+   cpe_impersonate_active == '1'. Botao "Sair" restaura o token real.
+   ========================================= */
+(function _impersonateBanner() {
+  try {
+    if (localStorage.getItem('cpe_impersonate_active') !== '1') return;
+    const targetName = localStorage.getItem('cpe_impersonate_target_name') || 'usuário';
+    const realUserStr = localStorage.getItem('cpe_user_real');
+    let realName = 'você';
+    try { realName = (JSON.parse(realUserStr || '{}')).name || realName; } catch (_) {}
+
+    const html = `
+      <div id="cpe-impersonate-banner"
+           style="position:fixed;top:0;left:0;right:0;z-index:99999;
+                  background:linear-gradient(90deg,#B91C1C 0%,#DC2626 100%);
+                  color:#fff;padding:8px 14px;font-family:'DM Sans',system-ui,sans-serif;
+                  font-size:13px;font-weight:600;display:flex;align-items:center;
+                  gap:12px;box-shadow:0 2px 8px rgba(0,0,0,.25);letter-spacing:.01em">
+        <i class="bi bi-eye-fill" style="font-size:16px"></i>
+        <span style="flex:1">
+          MODO SUPORTE — Você está vendo o sistema como
+          <strong>${escapeHtml(targetName)}</strong>
+          <span style="opacity:.8;font-weight:400"> (a sessão é READ-ONLY; qualquer edição é bloqueada)</span>
+        </span>
+        <button type="button" onclick="window.sairModoSuporte()"
+                style="background:#fff;color:#B91C1C;border:none;border-radius:6px;
+                       padding:5px 12px;font-weight:700;cursor:pointer;font-size:12px">
+          <i class="bi bi-box-arrow-right"></i> Sair do modo suporte
+        </button>
+      </div>
+      <style>body { padding-top: 40px !important; }</style>
+    `;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = html;
+    document.body.appendChild(wrap.firstElementChild);
+    document.body.appendChild(wrap.lastElementChild); // style tag
+  } catch (e) {
+    console.warn('[NAV/IMPERSONATE] falha no banner:', e);
+  }
+})();
+
+window.sairModoSuporte = async function () {
+  try {
+    const base = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+    const tok  = localStorage.getItem('token') || localStorage.getItem('cpe_token') || '';
+    // Best-effort: avisa o servidor pra logar o end (permitido pela allowlist)
+    try {
+      await fetch(base + '/api/auth/impersonate/end', {
+        method: 'POST',
+        headers: { 'X-Auth-Token': tok }
+      });
+    } catch (_) {}
+    // Restaura token e user reais
+    const realTok  = localStorage.getItem('cpe_token_real');
+    const realUser = localStorage.getItem('cpe_user_real');
+    if (realTok)  { localStorage.setItem('token', realTok); localStorage.setItem('cpe_token', realTok); }
+    if (realUser) { localStorage.setItem('user', realUser); localStorage.setItem('cpe_user', realUser); }
+    // Limpa flags de impersonate
+    localStorage.removeItem('cpe_impersonate_active');
+    localStorage.removeItem('cpe_impersonate_target_name');
+    localStorage.removeItem('cpe_token_real');
+    localStorage.removeItem('cpe_user_real');
+    // Recarrega pra tudo voltar ao normal
+    window.location.href = '/SistemaCPE/index.html';
+  } catch (e) {
+    alert('Erro ao sair: ' + e.message + '\nRecarregue a pagina manualmente.');
+  }
+};
+
+
+/* =========================================
    FUNÇÃO DE ESCAPE HTML
    ========================================= */
 
