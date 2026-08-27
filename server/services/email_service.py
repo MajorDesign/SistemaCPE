@@ -286,10 +286,12 @@ _BASE_TEMPLATE = """<!DOCTYPE html>
     :root {{ color-scheme: light only; supported-color-schemes: light; }}
     [data-ogsc] .cpe-force-light,
     [data-ogsb] .cpe-force-light {{ background:#FFFFFF !important; color:#1F2937 !important; }}
+    /* 2026-08-27: label da info-table agora e cinza, nao mais amarelo pastel.
+       Nome da classe mantido pra compat com quem ja usa. */
     [data-ogsc] .cpe-force-panel-yellow,
-    [data-ogsb] .cpe-force-panel-yellow {{ background:#FEF9E7 !important; color:#78551A !important; }}
+    [data-ogsb] .cpe-force-panel-yellow {{ background:#F3F4F6 !important; color:#4B5563 !important; }}
     [data-ogsc] .cpe-force-value,
-    [data-ogsb] .cpe-force-value {{ background:#FFFFFF !important; color:#1A1A1A !important; }}
+    [data-ogsb] .cpe-force-value {{ background:#FFFFFF !important; color:#111827 !important; }}
     [data-ogsc] .cpe-force-dark,
     [data-ogsb] .cpe-force-dark {{ background:#1A1A1A !important; color:#FFFFFF !important; }}
     [data-ogsc] .cpe-force-footer,
@@ -303,14 +305,18 @@ _BASE_TEMPLATE = """<!DOCTYPE html>
              style="max-width:620px;background:#FFFFFF;border-radius:14px;overflow:hidden;
                     box-shadow:0 6px 20px rgba(0,0,0,0.08);">
 
-        <!-- HERO -->
+        <!-- HERO — logo real (PNG publico) sobre fundo preto CPE + ruler amarelo -->
         <tr><td style="padding:22px 22px 0 22px;background:#FFFFFF;" class="cpe-force-light">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="cpe-force-dark"
-                 style="background:#1A1A1A;border-radius:12px;">
+                 style="background:#1A1A1A;border-radius:12px;border-bottom:3px solid #FFC107;">
             <tr>
               <td style="padding:22px 26px;">
-                <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-                  <td style="padding-right:16px;vertical-align:middle;">""" + _CPE_LOGO_SVG + """</td>
+                <table role="presentation" cellpadding="0" cellspacing="0" width="100%"><tr>
+                  <td style="padding-right:18px;vertical-align:middle;width:74px;">
+                    <img src="https://cpecontrol.cpetecnologia.com.br/SistemaCPE/web/assests/images/logocpe.png"
+                         alt="CPE Tecnologia" width="64" height="64"
+                         style="display:block;width:64px;height:64px;border-radius:8px;background:#FFFFFF;padding:6px;">
+                  </td>
                   <td style="vertical-align:middle;">
                     <div style="font-size:11px;letter-spacing:.15em;text-transform:uppercase;
                                 font-weight:700;color:#FFC107;line-height:1.1;">{tag}</div>
@@ -376,19 +382,20 @@ def _escape(s: str | None) -> str:
 
 
 def _info_box(label: str, valor: str) -> str:
-    """Row da info-table: painel amarelo pastel MUITO CLARO na esquerda pro
-    label + fundo BRANCO PURO na direita pro valor. Reproduz o efeito
-    'left-key panel' do print de agendamento (nao usa creme escuro pra
-    nao virar marrom no dark mode automatico do Outlook)."""
+    """Row da info-table (2026-08-27 — revisao pra legibilidade):
+    Label a esquerda em cinza-medio sobre cinza-claro; valor a direita em
+    preto negrito sobre branco. Alto contraste, funciona em qualquer modo
+    (Outlook light/dark, Carbonio, Gmail). Sem amarelo pastel."""
     return (
         f'<tr>'
         f'<td class="cpe-force-panel-yellow" '
-        f'style="padding:14px 16px;background:#FEF9E7;color:#78551A;'
-        f'font-weight:500;font-size:13px;width:160px;'
-        f'border-bottom:1px solid #F1F3F6;">{_escape(label)}</td>'
+        f'style="padding:12px 16px;background:#F3F4F6;color:#4B5563;'
+        f'font-weight:600;font-size:12px;letter-spacing:.02em;'
+        f'text-transform:uppercase;width:150px;'
+        f'border-bottom:1px solid #E5E7EB;">{_escape(label)}</td>'
         f'<td class="cpe-force-value" '
-        f'style="padding:14px 18px;color:#1A1A1A;font-weight:700;font-size:14px;'
-        f'background:#FFFFFF;border-bottom:1px solid #F1F3F6;">{_escape(valor)}</td>'
+        f'style="padding:12px 18px;color:#111827;font-weight:700;font-size:14px;'
+        f'background:#FFFFFF;border-bottom:1px solid #E5E7EB;">{_escape(valor)}</td>'
         f'</tr>'
     )
 
@@ -805,10 +812,17 @@ def email_ticket_para_grupo(
           </tbody>
         </table>
 
-        <div style="margin:14px 0;padding:12px 14px;background:#111827;
-                    border-left:4px solid #667eea;border-radius:6px;">
-          <div style="font-size:12px;color:#94A3B8;margin-bottom:4px;">Descrição</div>
-          <div style="white-space:pre-wrap;">{_escape(descricao)}</div>
+        <div class="cpe-force-value"
+             style="margin:14px 0;padding:14px 16px;background:#F3F4F6;
+                    border-left:4px solid #FFC107;border-radius:6px;
+                    border:1px solid #E5E7EB;">
+          <div style="font-size:11px;color:#4B5563;font-weight:700;
+                      letter-spacing:.05em;text-transform:uppercase;
+                      margin-bottom:6px;">Descrição</div>
+          <div style="white-space:pre-wrap;color:#111827;font-size:14px;
+                      line-height:1.55;font-family:'Segoe UI',Roboto,Arial,sans-serif;">
+            {_escape(descricao)}
+          </div>
         </div>
 
         <p>Após alguém do grupo assumir o chamado, apenas o responsável
