@@ -893,14 +893,22 @@ async def get_groups(scope: str = "managed",
                 "SELECT id, department_id, name, description, created_at "
                 "FROM `cpe_grupo` ORDER BY created_at DESC"
             )
-        elif current_user.get("group_id"):
-            cursor.execute(
-                "SELECT id, department_id, name, description, created_at "
-                "FROM `cpe_grupo` WHERE id = %s",
-                (current_user["group_id"],),
-            )
         else:
-            return []
+            # Multi-grupo (Fase 2 PLANO_MULTIGRUPO): retorna TODOS os grupos
+            # onde o user participa (nao apenas users.group_id primario).
+            # Antes so retornava 1 grupo — bug reportado pela Giselle 2026-08-27
+            # (era RESPONSAVEL em 2 grupos e so via 1 em /groups.html).
+            gids = current_user.get("group_ids") or []
+            if not gids and current_user.get("group_id"):
+                gids = [current_user["group_id"]]  # fallback
+            if not gids:
+                return []
+            ph = ",".join(["%s"] * len(gids))
+            cursor.execute(
+                f"SELECT id, department_id, name, description, created_at "
+                f"FROM `cpe_grupo` WHERE id IN ({ph}) ORDER BY name ASC",
+                tuple(gids),
+            )
         groups = convert_datetime_list(cursor.fetchall())
         logger.info(f"[GROUPS] user={current_user['id']} role={role} scope={scope} -> {len(groups)} grupo(s)")
         return groups or []
