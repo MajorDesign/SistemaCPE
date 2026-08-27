@@ -304,6 +304,63 @@ async def pna_preflight_middleware(request: Request, call_next):
 
 logger.info("✅ PNA (Private Network Access) middleware ativo")
 
+
+# =========================================================================
+# IMPERSONATE READ-ONLY GUARD (2026-08-27)
+# =========================================================================
+# Modo Suporte: ADMIN entra "vendo como" outro user. Toda escrita
+# (POST/PUT/PATCH/DELETE) e bloqueada — o objetivo e SO ver o que o user
+# ve, nao agir como ele. Excecoes permitidas:
+#   - /api/auth/impersonate/end (encerra a sessao)
+#   - /api/auth/logout
+#   - OPTIONS/HEAD/GET (leitura)
+# WebSockets tambem sao bloqueadas (podem ser usadas pra escrita indireta,
+# ex: chat).
+_IMP_WRITE_ALLOWLIST = {
+    "/api/auth/impersonate/end",
+    "/api/auth/logout",
+}
+
+@app.middleware("http")
+async def impersonate_readonly_guard(request: Request, call_next):
+    method = request.method.upper()
+    if method in ("GET", "HEAD", "OPTIONS"):
+        return await call_next(request)
+    path = request.url.path
+    if path in _IMP_WRITE_ALLOWLIST:
+        return await call_next(request)
+
+    # Se tem token de impersonate, bloqueia
+    token = (
+        request.cookies.get("cpe_session")
+        or request.headers.get("X-Auth-Token")
+        or request.headers.get("x-auth-token")
+        or ""
+    )
+    if not token:
+        auth_hdr = request.headers.get("Authorization") or request.headers.get("authorization") or ""
+        if auth_hdr.lower().startswith("bearer "):
+            token = auth_hdr[7:].strip()
+
+    if token:
+        try:
+            from security import parse_session_token_full
+            parsed = parse_session_token_full(token)
+            if parsed and parsed.get("impersonated_by"):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "detail": "Modo suporte e READ-ONLY. Saia do modo suporte para agir.",
+                        "impersonate_readonly": True,
+                    },
+                )
+        except Exception:
+            pass  # deixa passar; se token invalido, a rota devolve 401
+
+    return await call_next(request)
+
+logger.info("✅ Impersonate read-only guard ativo")
+
 # =========================================
 # 8.1 MIDDLEWARE: Defesas contra abuso/DDoS de aplicação
 # =========================================
@@ -1810,6 +1867,14 @@ try:
     logger.info("✅ Router de Multi-Grupo registrado: /api/user-groups")
 except Exception as e:
     logger.error(f"⚠️ Falha ao registrar router de multi-grupo: {e}")
+
+# Modo Suporte / Impersonate (2026-08-27) — ADMIN entra "como" outro user
+try:
+    from routes.impersonate import router as impersonate_router
+    app.include_router(impersonate_router)
+    logger.info("✅ Router de Impersonate registrado: /api/auth/impersonate/*")
+except Exception as e:
+    logger.error(f"⚠️ Falha ao registrar router de impersonate: {e}")
 
 logger.info("✅ Routers internos registrados com sucesso!")
 logger.info("   - Router de Autenticacao: /api/auth")

@@ -44,18 +44,48 @@ def make_session_token(user_id: int) -> str:
     return token
 
 
+# 2026-08-27: IMPERSONATE (modo suporte) — token especial usado quando um
+# ADMIN entra "como" outro usuario pra diagnostico. Formato:
+#   IMP-<realId>-<targetId>.<ts>.<rnd>.<sig>
+# Parse continua funcionando pra tokens normais (compat). TTL 60min.
+IMPERSONATE_TTL_SECONDS = 60 * 60
+_IMP_PREFIX = "IMP-"
+
+
+def make_impersonation_token(real_user_id: int, target_user_id: int) -> str:
+    """Gera token de impersonate (SO chamado por endpoint que ja validou
+    que real_user_id e ADMIN)."""
+    ts  = str(int(time.time()))
+    rnd = secrets.token_hex(16)
+    head = f"{_IMP_PREFIX}{real_user_id}-{target_user_id}"
+    payload = f"{head}.{ts}.{rnd}"
+    sig = _sign(payload)
+    return f"{payload}.{sig}"
+
+
 def parse_session_token(token: str) -> Optional[int]:
     """
-    Parse de um token de sessão
-    Retorna user_id se válido, None caso contrário
+    Parse de token de sessao. Retorna o user_id "efetivo":
+      - Token normal: retorna o user_id
+      - Token de impersonate: retorna o TARGET (impersonated) user_id
+        (o real_user_id fica dispoinvel via parse_session_token_full).
+    Retorna None se invalido/expirado.
     """
+    d = parse_session_token_full(token)
+    return d["user_id"] if d else None
+
+
+def parse_session_token_full(token: str) -> Optional[Dict[str, Any]]:
+    """Parse completo. Retorna dict:
+      {user_id: int, impersonated_by: Optional[int]}
+    ou None se invalido/expirado."""
     try:
         parts = token.split(".")
         if len(parts) != 4:
             return None
 
-        user_id, ts, rnd, sig = parts
-        payload = f"{user_id}.{ts}.{rnd}"
+        head, ts, rnd, sig = parts
+        payload = f"{head}.{ts}.{rnd}"
 
         expected_sig = _sign(payload)
         if not hmac.compare_digest(expected_sig, sig):
@@ -63,10 +93,25 @@ def parse_session_token(token: str) -> Optional[int]:
 
         ts_i = int(ts)
         age = int(time.time()) - ts_i
+
+        # Impersonate ou sessao normal?
+        if head.startswith(_IMP_PREFIX):
+            # IMP-<real>-<target>
+            try:
+                _, ids = head.split("-", 1)  # <real>-<target>
+                real_id_str, target_id_str = ids.split("-", 1)
+                real_id = int(real_id_str)
+                target_id = int(target_id_str)
+            except (ValueError, IndexError):
+                return None
+            if age > IMPERSONATE_TTL_SECONDS:
+                return None
+            return {"user_id": target_id, "impersonated_by": real_id}
+
+        # sessao normal
         if age > SESSION_MAX_AGE_SECONDS:
             return None
-
-        return int(user_id)
+        return {"user_id": int(head), "impersonated_by": None}
 
     except Exception:
         return None
@@ -199,13 +244,15 @@ def get_current_user(request: Request) -> Dict[str, Any]:
             detail="Nao autenticado. Por favor, faca login."
         )
 
-    user_id = parse_session_token(token)
-    if not user_id:
+    parsed = parse_session_token_full(token)
+    if not parsed:
         print("[AUTH/DEPENDENCY] FALHA: token invalido")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sessao invalida ou expirada."
         )
+    user_id       = parsed["user_id"]
+    impersonator  = parsed.get("impersonated_by")
 
     user = get_user_by_id(user_id)
     if not user or user.get("is_active") != 1:
@@ -215,7 +262,22 @@ def get_current_user(request: Request) -> Dict[str, Any]:
             detail="Sessao invalida."
         )
 
-    print(f"[AUTH/DEPENDENCY] OK usuario autenticado: {user['name']} (Role: {user.get('role')})")
+    # Se e impersonate: valida que o real user ainda existe, esta ativo, e
+    # continua sendo ADMIN. Se algum criterio quebrou (real user foi
+    # despromovido/desativado), invalida a sessao.
+    imp_user = None
+    if impersonator is not None:
+        imp_user = get_user_by_id(impersonator)
+        if not imp_user or imp_user.get("is_active") != 1 \
+           or (imp_user.get("role") or "").upper() != "ADMIN":
+            print(f"[AUTH/DEPENDENCY] FALHA: impersonator {impersonator} nao e mais ADMIN valido")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sessao de suporte invalida."
+            )
+        print(f"[AUTH/DEPENDENCY] IMPERSONATE: {imp_user['name']} vendo como {user['name']}")
+    else:
+        print(f"[AUTH/DEPENDENCY] OK usuario autenticado: {user['name']} (Role: {user.get('role')})")
 
     # Multi-grupo (Fase 2 PLANO_MULTIGRUPO.md):
     # Carrega TODOS os grupos do user com o papel em cada um.
@@ -233,6 +295,10 @@ def get_current_user(request: Request) -> Dict[str, Any]:
         "group_ids": [g["group_id"] for g in groups],                  # list[int]
         "responsavel_group_ids": [g["group_id"] for g in groups
                                   if g["role_in_grp"] == "RESPONSAVEL_GRUPO"],
+        # 2026-08-27 modo suporte: quando setado, request e read-only
+        # (middleware bloqueia POST/PUT/PATCH/DELETE fora da whitelist).
+        "impersonated_by":      impersonator,
+        "impersonated_by_name": imp_user["name"] if imp_user else None,
     }
 
 
