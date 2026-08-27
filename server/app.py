@@ -320,10 +320,12 @@ _IMP_WRITE_ALLOWLIST = {
     "/api/auth/impersonate/end",
     "/api/auth/logout",
 }
-# Qualquer POST em /api/auth/impersonate/* (start, end, futuros) tambem
-# e permitido — a propria rota valida se pode ou nao. Cobre o caso do
-# admin querer trocar de user impersonado sem sair antes.
-_IMP_WRITE_ALLOWLIST_PREFIX = "/api/auth/impersonate/"
+# Qualquer POST em /api/auth/* (login, logout, forgot-password, reset,
+# impersonate/*, etc) tambem passa — nada em auth deve ser bloqueado
+# por modo suporte (senao user preso no cookie IMP nao consegue nem
+# logar de novo). 2026-08-27: bug reportado — sem essa whitelist o
+# proprio POST /api/auth/login era 403.
+_IMP_WRITE_ALLOWLIST_PREFIX = "/api/auth/"
 
 @app.middleware("http")
 async def impersonate_readonly_guard(request: Request, call_next):
