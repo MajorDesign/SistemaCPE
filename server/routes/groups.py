@@ -71,14 +71,21 @@ async def list_groups(
                       FROM `cpe_grupo`
                      ORDER BY name ASC
                 """)).mappings().all()
-            elif user_group_id:
-                rows = conn.execute(text("""
-                    SELECT id, name, description, is_active, created_at
-                      FROM `cpe_grupo`
-                     WHERE id = :gid
-                """), {"gid": user_group_id}).mappings().all()
             else:
-                rows = []
+                # Multi-grupo (Fase 2): user ve TODOS os grupos onde participa
+                # (RESPONSAVEL ou USER), nao so users.group_id.
+                gids = current_user.get("group_ids") or []
+                if not gids and user_group_id:
+                    gids = [user_group_id]  # fallback pra user sem user_groups migrado
+                if not gids:
+                    rows = []
+                else:
+                    ph = ",".join([f":g{i}" for i in range(len(gids))])
+                    params = {f"g{i}": g for i, g in enumerate(gids)}
+                    rows = conn.execute(text(
+                        f"SELECT id, name, description, is_active, created_at "
+                        f"  FROM `cpe_grupo` WHERE id IN ({ph}) ORDER BY name ASC"
+                    ), params).mappings().all()
 
         groups = [dict(g) for g in rows]
         print(f"[GROUPS/LIST] ✓ {len(groups)} grupos retornados (role={role})")

@@ -488,52 +488,77 @@ def _pendencias_user(cursor, user_id: int) -> list[dict]:
 
 
 def _kpis_resp_grupo(cursor, user_id: int, group_id: Optional[int]) -> list[dict]:
-    """Gerencial — focado no grupo que o usuário coordena."""
+    """Gerencial — focado nos grupos que o usuário coordena.
+
+    Multi-grupo (Fase 2): usa TODOS os grupos onde ele e RESPONSAVEL_GRUPO
+    em user_groups (nao so users.group_id).
+    """
     out = []
 
-    # 1) Tickets do meu grupo abertos
-    if group_id:
-        cursor.execute("""
+    # Fase 2: descobre TODOS os grupos onde ele responde
+    cursor.execute(
+        "SELECT group_id FROM user_groups "
+        "WHERE user_id = %s AND role_in_grp = 'RESPONSAVEL_GRUPO'",
+        (user_id,),
+    )
+    resp_gids = [r["group_id"] for r in (cursor.fetchall() or [])]
+    if not resp_gids and group_id:
+        resp_gids = [group_id]  # fallback
+
+    def _in_ph(lst):
+        """Retorna ('(%s,%s,...)', tuple) pra IN clause."""
+        if not lst:
+            return None, None
+        return "(" + ",".join(["%s"] * len(lst)) + ")", tuple(lst)
+
+    ph, params = _in_ph(resp_gids)
+
+    # 1) Tickets do meu grupo abertos (SOMA dos grupos onde responde)
+    if ph:
+        cursor.execute(f"""
             SELECT COUNT(*) AS total FROM tickets
-             WHERE group_id = %s
+             WHERE group_id IN {ph}
                AND status_id NOT IN (4, 5)
-        """, (group_id,))
+        """, params)
         n = (cursor.fetchone() or {}).get("total", 0)
     else:
         n = 0
-    out.append(_kpi("Tickets do meu grupo", n,
+    label_suffix = "meu grupo" if len(resp_gids) <= 1 else f"meus {len(resp_gids)} grupos"
+    out.append(_kpi(f"Tickets do {label_suffix}", n,
                     "abertos", "bi-ticket-detailed",
                     "warning" if n > 5 else "default",
                     "/SistemaCPE/web/pages/tickets.html"))
 
-    # 2) Membros do grupo ativos
-    if group_id:
-        cursor.execute("""
-            SELECT COUNT(*) AS total FROM users
-             WHERE group_id = %s AND is_active = 1
-        """, (group_id,))
+    # 2) Membros dos grupos ativos (soma sem duplicar user que esta em varios)
+    if ph:
+        cursor.execute(f"""
+            SELECT COUNT(DISTINCT ug.user_id) AS total
+              FROM user_groups ug
+              JOIN users u ON u.id = ug.user_id
+             WHERE ug.group_id IN {ph} AND u.is_active = 1
+        """, params)
         n = (cursor.fetchone() or {}).get("total", 0)
     else:
         n = 0
-    out.append(_kpi("Membros do meu grupo", n,
+    out.append(_kpi(f"Membros do {label_suffix}", n,
                     "ativos", "bi-people-fill", "info",
                     "/SistemaCPE/web/pages/users.html"))
 
-    # 3) Tarefas atrasadas do grupo (prazo passou e não foi concluída)
-    if _existe_tabela(cursor, "tarefas_task") and group_id:
-        cursor.execute("""
+    # 3) Tarefas atrasadas dos grupos
+    if _existe_tabela(cursor, "tarefas_task") and ph:
+        cursor.execute(f"""
             SELECT COUNT(*) AS total
               FROM tarefas_task
-             WHERE group_id = %s
+             WHERE group_id IN {ph}
                AND concluida_em IS NULL
                AND prazo IS NOT NULL
                AND prazo < NOW()
-        """, (group_id,))
+        """, params)
         n = (cursor.fetchone() or {}).get("total", 0)
     else:
         n = 0
     out.append(_kpi("Tarefas atrasadas", n,
-                    "do meu grupo", "bi-clock-history",
+                    f"do {label_suffix}", "bi-clock-history",
                     "danger" if n > 0 else "success",
                     "/SistemaCPE/web/pages/tasks.html"))
 
@@ -557,17 +582,27 @@ def _kpis_resp_grupo(cursor, user_id: int, group_id: Optional[int]) -> list[dict
 def _pendencias_resp_grupo(cursor, user_id: int, group_id: Optional[int]) -> list[dict]:
     out = []
 
-    if not group_id:
+    # Fase 2: agrega pendencias de TODOS os grupos onde ele responde
+    cursor.execute(
+        "SELECT group_id FROM user_groups "
+        "WHERE user_id = %s AND role_in_grp = 'RESPONSAVEL_GRUPO'",
+        (user_id,),
+    )
+    resp_gids = [r["group_id"] for r in (cursor.fetchall() or [])]
+    if not resp_gids and group_id:
+        resp_gids = [group_id]
+    if not resp_gids:
         return out
+    ph = "(" + ",".join(["%s"] * len(resp_gids)) + ")"
 
-    # Tickets do grupo sem responsável (status Aberto=1 ou Em Andamento=2)
-    cursor.execute("""
+    # Tickets dos grupos sem responsável (status Aberto=1 ou Em Andamento=2)
+    cursor.execute(f"""
         SELECT id, assunto FROM tickets
-         WHERE group_id = %s
+         WHERE group_id IN {ph}
            AND responsavel_id IS NULL
            AND status_id IN (1, 2)
          ORDER BY created_at ASC LIMIT 5
-    """, (group_id,))
+    """, tuple(resp_gids))
     for t in cursor.fetchall():
         out.append(_pend(
             "ticket_sem_dono",
@@ -593,8 +628,9 @@ def _pendencias_resp_grupo(cursor, user_id: int, group_id: Optional[int]) -> lis
                 "bi-person-plus-fill",
             ))
 
-    # Se for grupo Frotas (id=13): checklists aguardando vistoria
-    if group_id == 13 and _existe_tabela(cursor, "fleet_checklists"):
+    # Se for RESPONSAVEL do grupo Frotas (id=13, entre os grupos dele):
+    # checklists aguardando vistoria
+    if 13 in resp_gids and _existe_tabela(cursor, "fleet_checklists"):
         cursor.execute("""
             SELECT c.id, v.placa
               FROM fleet_checklists c
