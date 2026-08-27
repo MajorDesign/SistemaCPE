@@ -703,7 +703,24 @@
     if (!sel) return;
     try {
       const data = await apiRequest('GET', '/groups?scope=all');
-      _rptGruposCache = Array.isArray(data) ? data : (data?.groups || []);
+      let todos = Array.isArray(data) ? data : (data?.groups || []);
+
+      // Fase 2 multi-grupo: RESPONSAVEL_GRUPO so ve grupos onde responde.
+      const me = JSON.parse(localStorage.getItem('user') || '{}');
+      if ((me.role || '').toUpperCase() === 'RESPONSAVEL_GRUPO' && me.id) {
+        try {
+          const ug = await apiRequest('GET', `/user-groups/${me.id}`);
+          const respIds = new Set((ug?.groups || [])
+            .filter(g => g.role_in_grp === 'RESPONSAVEL_GRUPO')
+            .map(g => g.group_id));
+          todos = todos.filter(g => respIds.has(g.id));
+        } catch (err) {
+          console.warn('[RPT] fallback: usando so grupo primario', err);
+          todos = me.group_id ? todos.filter(g => g.id === me.group_id) : [];
+        }
+      }
+
+      _rptGruposCache = todos;
       sel.innerHTML = '<option value="">Todos</option>' +
         _rptGruposCache.map(g => `<option value="${g.id}">${_esc(g.name)}</option>`).join('');
     } catch (e) {

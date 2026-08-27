@@ -116,7 +116,8 @@ def _verificar_permissao(cursor, usuario_id: int, group_id: int = None):
     Verifica se o usuário pode gerenciar categorias do grupo informado.
 
     - ADMIN/TI                          → pode em qualquer grupo
-    - RESPONSAVEL_GRUPO                 → só se users.group_id == group_id
+    - RESPONSAVEL_GRUPO (em algum grupo) → pode em qualquer grupo onde
+      seja RESPONSAVEL_GRUPO segundo user_groups (multi-grupo, Fase 2)
     - Exceção MANAGE_CATEGORIES         → pode em qualquer grupo
     - Demais                            → 403
 
@@ -132,18 +133,20 @@ def _verificar_permissao(cursor, usuario_id: int, group_id: int = None):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuário não encontrado")
 
     role = user["role"]
-    user_group_id = user.get("group_id")
 
     if role in ROLES_ESCRITA:
         return  # ADMIN/TI: tudo
 
-    if role == "RESPONSAVEL_GRUPO":
-        if group_id is not None and user_group_id == group_id:
-            return  # Responsável agindo no próprio grupo
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Você só pode gerenciar categorias do seu próprio grupo."
+    # Multi-grupo (Fase 2): user pode ser RESPONSAVEL em varios grupos
+    if group_id is not None:
+        cursor.execute(
+            "SELECT 1 FROM user_groups "
+            "WHERE user_id = %s AND group_id = %s AND role_in_grp = 'RESPONSAVEL_GRUPO' "
+            "LIMIT 1",
+            (usuario_id, group_id),
         )
+        if cursor.fetchone():
+            return  # e responsavel deste grupo especifico
 
     # Exceção individual MANAGE_CATEGORIES — escopo global
     cursor.execute(

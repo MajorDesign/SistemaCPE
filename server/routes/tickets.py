@@ -640,72 +640,103 @@ async def obter_tickets(
     try:
         cursor = conexao.cursor(dictionary=True)
         
-        # ✅ STEP 1: Obter role e group_id do usuário logado
+        # ✅ STEP 1: Obter role e grupos do usuário logado
+        # 2026-08-26 (Fase 2 PLANO_MULTIGRUPO): antes usava so users.group_id.
+        # Agora carrega user_groups pra saber TODOS os grupos + role em cada.
         logger.info(f"  ▶️ Validando acesso do usuário #{usuario_id}...")
         usuario = validar_usuario_existe(cursor, usuario_id)
         role_usuario = usuario.get("role") or "USER"
-        group_id_usuario = usuario.get("group_id")
-        
-        logger.info(f"  ✓ Usuário encontrado: role={role_usuario}, group_id={group_id_usuario}")
-        
+
+        cursor.execute(
+            "SELECT group_id, role_in_grp FROM user_groups WHERE user_id = %s",
+            (usuario_id,),
+        )
+        ug_rows = cursor.fetchall() or []
+        resp_group_ids = [r["group_id"] for r in ug_rows if r["role_in_grp"] == "RESPONSAVEL_GRUPO"]
+        usr_group_ids  = [r["group_id"] for r in ug_rows if r["role_in_grp"] == "USER"]
+
+        # Fallback: se user_groups estiver vazio pra esse user (edge case),
+        # sintetiza a partir de users.group_id + role global.
+        if not ug_rows and usuario.get("group_id"):
+            if role_usuario == "RESPONSAVEL_GRUPO":
+                resp_group_ids = [usuario["group_id"]]
+            else:
+                usr_group_ids  = [usuario["group_id"]]
+
+        logger.info(f"  ✓ role={role_usuario} resp_groups={resp_group_ids} usr_groups={usr_group_ids}")
+
         filtros, params = [], []
 
         # ✅ STEP 2: Filtro de ACESSO baseado em ROLE
         if role_usuario in ROLES_ADMIN:  # ADMIN, TI, MANAGER
             logger.info(f"  ✓ Usuário é {role_usuario} — pode ver TODOS os tickets")
-            # Admin vê tudo
-       # Linhas 440-450
-
-        elif role_usuario == "RESPONSAVEL_GRUPO":
-            # 08/04/2026 14:36 - Ask cpp - BUG FIX: Validar group_id preenchido
-            if not group_id_usuario:
+            # Admin vê tudo — sem filtro
+        else:
+            # Multi-grupo: monta OR entre:
+            #   (a) sempre ve os proprios tickets (solicitante_id = ele)
+            #   (b) nos grupos onde e RESPONSAVEL: ve tudo do grupo +
+            #       tickets abertos por membros desses grupos
+            #   (c) nos grupos onde e USER: ve os tickets do grupo
+            if not resp_group_ids and not usr_group_ids:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Usuário RESPONSAVEL_GRUPO sem grupo atribuído no sistema"
+                    detail="Usuário sem grupo atribuído no sistema."
                 )
-            # RESPONSAVEL_GRUPO vê:
-            # 1. Tickets direcionados ao seu grupo (t.group_id = seu grupo)
-            # 2. Tickets abertos por QUALQUER membro do seu grupo (solicitante.group_id = seu grupo)
-            logger.info(f"  ✓ Usuário é RESPONSAVEL_GRUPO — vê tickets do grupo #{group_id_usuario} + tickets abertos por membros do grupo")
-            filtros.append(
-                "(t.group_id = %s OR t.solicitante_id IN "
-                "(SELECT id FROM users WHERE group_id = %s AND is_active = 1))"
-            )
-            params.append(group_id_usuario)
-            params.append(group_id_usuario)
-        else:  # USER
-            logger.info(f"  ✓ Usuário é USER — pode ver tickets do seu grupo OU seus próprios tickets")
-            # 08/04/2026 14:35 - Ask cpp - BUG FIX: User sempre vê seu próprio ticket
-            filtros.append("(t.group_id = %s OR t.solicitante_id = %s)")
-            params.append(group_id_usuario)
-            params.append(usuario_id)  # Permitir visualizar ticket que ele criou
+
+            or_parts, or_params = ["t.solicitante_id = %s"], [usuario_id]
+
+            if resp_group_ids:
+                ph = ",".join(["%s"] * len(resp_group_ids))
+                or_parts.append(f"t.group_id IN ({ph})")
+                or_params.extend(resp_group_ids)
+                # tickets abertos por membros dos grupos onde ele responde
+                or_parts.append(
+                    f"t.solicitante_id IN ("
+                    f"  SELECT DISTINCT ug2.user_id"
+                    f"    FROM user_groups ug2 JOIN users u2 ON u2.id=ug2.user_id"
+                    f"   WHERE ug2.group_id IN ({ph}) AND u2.is_active = 1"
+                    f")"
+                )
+                or_params.extend(resp_group_ids)
+
+            if usr_group_ids:
+                ph2 = ",".join(["%s"] * len(usr_group_ids))
+                or_parts.append(f"t.group_id IN ({ph2})")
+                or_params.extend(usr_group_ids)
+
+            filtros.append("(" + " OR ".join(or_parts) + ")")
+            params.extend(or_params)
 
             # 2026-08-14: restricao por categoria configurada pelo responsavel
-            # do grupo (migration 089). Se o USER tem 1+ linhas em
-            # ticket_membro_categorias, filtra pra so ver tickets que caem
-            # em alguma categoria/subcategoria liberada dele — mais os
-            # proprios (solicitante_id = ele mesmo). Se nao tem nenhuma
-            # linha, mantem o comportamento default (ve tudo do grupo).
-            cursor.execute(
-                "SELECT COUNT(*) AS n FROM ticket_membro_categorias WHERE user_id = %s",
-                (usuario_id,),
-            )
-            tem_restricao = (cursor.fetchone() or {}).get("n", 0) or 0
-            if tem_restricao:
-                logger.info(f"  ✓ USER #{usuario_id} tem {tem_restricao} restricao(oes) de categoria — aplicando filtro extra")
-                filtros.append(
-                    "(t.solicitante_id = %s"
-                    " OR EXISTS ("
-                    "   SELECT 1 FROM ticket_membro_categorias mc"
-                    "    WHERE mc.user_id = %s"
-                    "      AND ("
-                    "        (mc.subcategoria_id IS NULL AND mc.categoria_id = t.categoria_id)"
-                    "        OR (mc.subcategoria_id IS NOT NULL AND mc.subcategoria_id = t.subcategoria_id)"
-                    "      )"
-                    "))"
+            # do grupo (migration 089). Aplicavel apenas quando o user e
+            # USER em algum grupo — RESPONSAVEL_GRUPO nao e restringido.
+            # Se o USER tem 1+ linhas em ticket_membro_categorias, adiciona
+            # filtro extra: nos grupos onde ele e USER (mesmos usr_group_ids),
+            # so pode ver tickets nas categorias liberadas.
+            if usr_group_ids:
+                cursor.execute(
+                    "SELECT COUNT(*) AS n FROM ticket_membro_categorias WHERE user_id = %s",
+                    (usuario_id,),
                 )
-                params.append(usuario_id)
-                params.append(usuario_id)
+                tem_restricao = (cursor.fetchone() or {}).get("n", 0) or 0
+                if tem_restricao:
+                    ph3 = ",".join(["%s"] * len(usr_group_ids))
+                    logger.info(f"  ✓ USER #{usuario_id} tem {tem_restricao} restricao(oes) — aplicando filtro extra")
+                    filtros.append(
+                        "(t.solicitante_id = %s"
+                        " OR t.group_id NOT IN (" + ph3 + ")"        # so restringe nos grupos onde e USER
+                        " OR EXISTS ("
+                        "   SELECT 1 FROM ticket_membro_categorias mc"
+                        "    WHERE mc.user_id = %s"
+                        "      AND ("
+                        "        (mc.subcategoria_id IS NULL AND mc.categoria_id = t.categoria_id)"
+                        "        OR (mc.subcategoria_id IS NOT NULL AND mc.subcategoria_id = t.subcategoria_id)"
+                        "      )"
+                        "))"
+                    )
+                    params.append(usuario_id)
+                    params.extend(usr_group_ids)
+                    params.append(usuario_id)
 
         # ✅ STEP 3: Aplicar filtros adicionais do frontend
         if grupo_id:

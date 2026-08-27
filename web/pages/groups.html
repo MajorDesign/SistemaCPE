@@ -522,6 +522,9 @@
             </div>
 
             <div class="group-actions">
+              <button class="btn-group-action" style="background:#0d6efd;color:#fff;" onclick="abrirMembrosGrupo(${group.id}, '${group.name.replace(/'/g, "\\'")}', event)">
+                <i class="bi bi-people"></i> Membros
+              </button>
               ${podeEditarGrupo(group) ? `
               <button class="btn-group-action" onclick="editGroup(${group.id}, event)">
                 <i class="bi bi-pencil"></i> Editar
@@ -2045,6 +2048,127 @@
       document.getElementById('catModalAlert').classList.add('d-none');
       setTimeout(() => el.classList.add('d-none'), 3000);
     }
+  </script>
+
+  <!-- ================================================================
+       MULTI-GRUPO — Modal "Membros do grupo" (Fase 1)
+       ================================================================ -->
+  <div class="modal fade" id="membrosGrupoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">
+            <i class="bi bi-people-fill"></i>
+            Membros de <span id="membrosGrupoNome"></span>
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div id="membrosGrupoLoading" class="text-center py-4">
+            <div class="spinner-border text-primary" role="status"></div>
+            <div class="mt-2 text-muted small">Carregando membros...</div>
+          </div>
+          <div id="membrosGrupoContent" style="display:none;">
+            <div class="alert alert-info small">
+              <i class="bi bi-info-circle"></i>
+              Membros com <strong>papel neste grupo</strong>. O papel é independente do grupo:
+              um usuário pode ser Responsável aqui e Usuário Comum em outro grupo.
+              Para alterar, use a página <a href="/SistemaCPE/web/pages/users.html">Usuários</a>.
+            </div>
+            <table class="table table-sm table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>Nome</th>
+                  <th>Email</th>
+                  <th>Papel neste grupo</th>
+                  <th>Grupo primário?</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="membrosGrupoTbody"></tbody>
+            </table>
+            <div id="membrosGrupoEmpty" class="text-center text-muted py-3" style="display:none;">
+              <i class="bi bi-inbox"></i> Nenhum membro neste grupo.
+            </div>
+          </div>
+          <div id="membrosGrupoError" class="alert alert-danger" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      function _authHeaders() {
+        return {
+          'X-Auth-Token': localStorage.getItem('token') || localStorage.getItem('cpe_token') || '',
+        };
+      }
+
+      function _escape(s) {
+        return String(s || '').replace(/[&<>"']/g, m => ({
+          '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+        }[m]));
+      }
+
+      function _roleBadge(r) {
+        if (r === 'RESPONSAVEL_GRUPO') {
+          return '<span class="badge bg-warning text-dark">👨‍💼 Responsável</span>';
+        }
+        return '<span class="badge bg-secondary">👤 Usuário</span>';
+      }
+
+      window.abrirMembrosGrupo = async function (groupId, groupName, evt) {
+        if (evt) evt.stopPropagation();
+        document.getElementById('membrosGrupoNome').textContent = groupName;
+        document.getElementById('membrosGrupoContent').style.display = 'none';
+        document.getElementById('membrosGrupoError').style.display = 'none';
+        document.getElementById('membrosGrupoLoading').style.display = '';
+
+        const modal = new bootstrap.Modal(document.getElementById('membrosGrupoModal'));
+        modal.show();
+
+        try {
+          const _api = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : '');
+          const r = await fetch(_api + '/api/user-groups/by-group/' + groupId, { headers: _authHeaders() });
+          if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.detail || 'HTTP ' + r.status);
+          }
+          const data = await r.json();
+          const members = data.members || [];
+          const tbody = document.getElementById('membrosGrupoTbody');
+          const empty = document.getElementById('membrosGrupoEmpty');
+          if (members.length === 0) {
+            tbody.innerHTML = '';
+            empty.style.display = '';
+          } else {
+            empty.style.display = 'none';
+            tbody.innerHTML = members.map(m => `
+              <tr${m.is_active ? '' : ' style="opacity:.5;"'}>
+                <td>${_escape(m.name)}</td>
+                <td class="small text-muted">${_escape(m.email)}</td>
+                <td>${_roleBadge(m.role_in_grp)}</td>
+                <td>${m.is_primary
+                  ? '<span class="badge bg-warning text-dark">PRIMÁRIO</span>'
+                  : '<span class="text-muted small">grupo extra</span>'}</td>
+                <td>${m.is_active
+                  ? '<span class="badge bg-success">Ativo</span>'
+                  : '<span class="badge bg-secondary">Inativo</span>'}</td>
+              </tr>
+            `).join('');
+          }
+          document.getElementById('membrosGrupoLoading').style.display = 'none';
+          document.getElementById('membrosGrupoContent').style.display = '';
+        } catch (e) {
+          console.error('[MEMBROS/LOAD]', e);
+          document.getElementById('membrosGrupoLoading').style.display = 'none';
+          const err = document.getElementById('membrosGrupoError');
+          err.textContent = 'Erro ao carregar membros: ' + e.message;
+          err.style.display = '';
+        }
+      };
+    })();
   </script>
 
 </body>
