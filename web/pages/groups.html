@@ -296,11 +296,37 @@
     // So ADMIN pode criar/excluir grupo.
     function podeCriarGrupo()    { return getCurrentUserRole() === 'ADMIN'; }
     function podeExcluirGrupo()  { return getCurrentUserRole() === 'ADMIN'; }
-    // ADMIN/TI/MANAGER editam qualquer; RESPONSAVEL_GRUPO edita o proprio.
+
+    // Multi-grupo (Fase 2): carrega TODOS os grupos onde o user e
+    // RESPONSAVEL_GRUPO. Antes usava so users.group_id (primario) e a
+    // Giselle so via 1 grupo mesmo sendo responsavel em 2.
+    let _myResponsavelGroupIds = [];
+    async function _carregarMeusGruposResponsavel() {
+      const uid = getCurrentUserId();
+      if (!uid) return;
+      try {
+        const token = localStorage.getItem('token') || localStorage.getItem('cpe_token') || '';
+        const r = await fetch(`${API_BASE.replace(/\/$/,'')}/user-groups/${uid}`, {
+          headers: { 'X-Auth-Token': token }
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        _myResponsavelGroupIds = (d.groups || [])
+          .filter(g => g.role_in_grp === 'RESPONSAVEL_GRUPO')
+          .map(g => g.group_id);
+      } catch (e) {
+        console.warn('[GROUPS] falha /user-groups — fallback pro grupo primario:', e);
+        const gid = getCurrentUserGroupId();
+        _myResponsavelGroupIds = (gid && getCurrentUserRole() === 'RESPONSAVEL_GRUPO') ? [gid] : [];
+      }
+    }
+
+    // ADMIN/TI/MANAGER editam qualquer; RESPONSAVEL_GRUPO edita QUALQUER
+    // grupo onde e responsavel (multi-grupo Fase 2).
     function podeEditarGrupo(group) {
       if (_isGestor()) return true;
       if (getCurrentUserRole() === 'RESPONSAVEL_GRUPO'
-          && getCurrentUserGroupId() === group.id) return true;
+          && _myResponsavelGroupIds.includes(group.id)) return true;
       return false;
     }
 
@@ -342,10 +368,18 @@
     }
 
     // Decide se o botão "Categorias" deve aparecer no card de um grupo específico.
+    // Fase 2 multi-grupo: RESPONSAVEL_GRUPO pode em QUALQUER grupo onde ele responde,
+    // nao so no _catGroupId primario.
     function podeGerenciarCategoriasDo(group) {
       if (!_podeGerenciarCat) return false;
       if (_catScope === 'all') return true;
-      if (_catScope === 'own') return group?.id === _catGroupId;
+      if (_catScope === 'own') {
+        // Prefere lista multi-grupo (mais recente) sobre o campo antigo _catGroupId
+        if (_myResponsavelGroupIds.length) {
+          return _myResponsavelGroupIds.includes(group?.id);
+        }
+        return group?.id === _catGroupId;
+      }
       return false;
     }
 
@@ -393,6 +427,8 @@
         // ===== Aplicar gates de UI por role (nao-admin nao ve "Novo Grupo") =====
         aplicarGatesRole();
 
+        // ===== Multi-grupo Fase 2: carrega grupos onde e RESPONSAVEL =====
+        await _carregarMeusGruposResponsavel();
         // ===== Resolver permissão de categorias e carregar grupos =====
         await resolverPermissaoCategorias();
         await loadGroups();
