@@ -353,6 +353,9 @@
             <i class="bi bi-hourglass-split"></i> Verificando status...
           </div>
 
+          <!-- Bloco consumo real (populado por _recarregarConsumoTurn) — oculto se sem config -->
+          <div id="turnUsageBox" style="display:none;padding:14px 16px;border-radius:8px;background:#FAFAFA;border:1px solid #E5E7EB;margin:12px 0"></div>
+
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px">
             <div style="padding:12px;border:1px solid #E5E7EB;border-radius:8px">
               <div style="font-size:11px;color:#6B7280;font-weight:600;letter-spacing:.5px;text-transform:uppercase">Franquia gratuita</div>
@@ -376,7 +379,7 @@
                class="cfg-btn cfg-btn-primary" style="text-decoration:none">
               <i class="bi bi-box-arrow-up-right"></i> Ver consumo no Cloudflare
             </a>
-            <button type="button" class="cfg-btn cfg-btn-secondary" onclick="_recarregarStatusTurn()">
+            <button type="button" class="cfg-btn cfg-btn-secondary" onclick="_recarregarStatusTurn(); _recarregarConsumoTurn();">
               <i class="bi bi-arrow-clockwise"></i> Atualizar status
             </button>
           </div>
@@ -435,6 +438,7 @@
         const nav = document.getElementById('navItemSistema');
         if (nav) nav.style.display = '';
         _recarregarStatusTurn();
+        _recarregarConsumoTurn();
         _carregarLimitesReuniao();
       }
     } catch (err) {
@@ -445,6 +449,99 @@
   // ============================================================
   // PAINEL SISTEMA — TURN + reunioes (so ADMIN)
   // ============================================================
+  // ------------------------------------------------------------------
+  // Consumo real TURN (via /api/meetings/turn-usage)
+  // ------------------------------------------------------------------
+  async function _recarregarConsumoTurn() {
+    const box = document.getElementById('turnUsageBox');
+    if (!box) return;
+    box.style.display = '';
+    box.innerHTML = '<i class="bi bi-hourglass-split"></i> Carregando consumo do mes...';
+
+    try {
+      const base = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+      const r = await fetch(`${base}/api/meetings/turn-usage`, {
+        headers: {
+          'X-Auth-Token': localStorage.getItem('token') || localStorage.getItem('cpe_token') || ''
+        }
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+
+      if (!d.available) {
+        // Sem env vars — esconde bloco sem alarmar
+        box.style.display = 'none';
+        console.info('[TURN/USAGE] indisponivel:', d.reason);
+        return;
+      }
+
+      const usedGb  = d.total_gb || 0;
+      const freeGb  = d.free_gb || 1000;
+      const pctUsed = Math.min(100, d.pct_used || 0);
+      const pctMonth = d.pct_month_elapsed || 0;
+
+      // Cor da barra: verde <70%, amarelo 70-90%, vermelho >=90%
+      const barColor = pctUsed >= 90 ? '#DC2626' : (pctUsed >= 70 ? '#D97706' : '#16A34A');
+
+      // Sparkline dos ultimos 7 dias (ou os que tiverem dados)
+      const ultimosDias = (d.days || []).slice(-7);
+      const maxBytes = Math.max(1, ...ultimosDias.map(x => x.bytes || 0));
+      const spark = ultimosDias.length
+        ? ultimosDias.map(x => {
+            const h = Math.max(3, Math.round(((x.bytes || 0) / maxBytes) * 32));
+            const gb = ((x.bytes || 0) / (1024**3)).toFixed(2);
+            return `<div title="${x.date}: ${gb} GB" style="flex:1;background:${barColor};height:${h}px;border-radius:2px;min-width:14px;opacity:${(x.bytes||0)?1:0.15}"></div>`;
+          }).join('')
+        : '';
+
+      box.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">
+          <div>
+            <div style="font-size:11px;color:#6B7280;font-weight:600;letter-spacing:.5px;text-transform:uppercase">Consumo este mês</div>
+            <div style="font-size:24px;font-weight:700;color:#111827;margin-top:2px">
+              ${usedGb.toFixed(2)} GB
+              <span style="font-size:14px;font-weight:500;color:#6B7280">de ${freeGb} GB gratuitos</span>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:11px;color:#6B7280;font-weight:600;letter-spacing:.5px;text-transform:uppercase">% mês decorrido</div>
+            <div style="font-size:18px;font-weight:600;color:#374151">${pctMonth}%</div>
+            <div style="font-size:11px;color:#6B7280">dia ${d.day_of_month}/${d.days_in_month}</div>
+          </div>
+        </div>
+
+        <div style="background:#E5E7EB;border-radius:6px;height:12px;overflow:hidden;position:relative">
+          <div style="width:${pctUsed}%;background:${barColor};height:100%;transition:width .4s ease"></div>
+          <!-- marca visual do "esperado pra esta altura do mes" -->
+          <div title="Esperado: ${pctMonth}% (proporcional ao mês decorrido)"
+               style="position:absolute;top:-2px;bottom:-2px;left:${pctMonth}%;width:2px;background:rgba(0,0,0,.35)"></div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:#6B7280;margin-top:6px">
+          <span>${pctUsed.toFixed(2)}% da franquia</span>
+          <span>${(freeGb - usedGb).toFixed(1)} GB restantes${pctUsed > pctMonth + 10 ? ' — <strong style="color:#D97706">acima do proporcional</strong>' : ''}</span>
+        </div>
+
+        ${ultimosDias.length ? `
+        <div style="margin-top:14px">
+          <div style="font-size:11px;color:#6B7280;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:6px">Últimos ${ultimosDias.length} dia(s)</div>
+          <div style="display:flex;gap:3px;align-items:flex-end;height:36px">${spark}</div>
+        </div>` : `
+        <div style="margin-top:10px;font-size:12px;color:#6B7280;font-style:italic">
+          <i class="bi bi-info-circle"></i> Nenhuma reunião passou pelo TURN ainda este mês (P2P direto está resolvendo tudo — é o esperado).
+        </div>`}
+
+        <div style="margin-top:10px;font-size:11px;color:#9CA3AF">
+          Atualizado em ${new Date(d.fetched_at).toLocaleString('pt-BR')}${d.cached ? ' <em>(cache 15min)</em>' : ''}
+        </div>
+      `;
+    } catch (e) {
+      box.style.background = '#FEF3C7';
+      box.style.borderColor = '#F59E0B';
+      box.innerHTML = `<i class="bi bi-exclamation-triangle"></i> Consumo indisponível: ${e.message}`;
+    }
+  }
+
   async function _recarregarStatusTurn() {
     const box = document.getElementById('turnStatusBox');
     if (!box) return;

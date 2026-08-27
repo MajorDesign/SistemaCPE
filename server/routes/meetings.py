@@ -416,6 +416,131 @@ def _count_participantes_dentro(cursor, meeting_id: int) -> int:
     return int(row[0]) if row else 0
 
 
+# ---------------------------------------------------------------------
+# Cloudflare Analytics — consumo TURN do mes corrente
+# Usa GraphQL callsTurnUsageAdaptiveGroups (dimensao date, sum egress+ingress).
+# Cache 15 min pra evitar rate-limit da CF. Requer CLOUDFLARE_ACCOUNT_ID +
+# CLOUDFLARE_ANALYTICS_TOKEN no .env — sem essas vars, endpoint retorna
+# {available: false} e o frontend esconde o bloco de consumo.
+# ---------------------------------------------------------------------
+
+_TURN_USAGE_CACHE: dict = {"data": None, "expires_at": 0.0}
+_TURN_USAGE_FREE_GB = 1000  # franquia mensal (grava aqui pra facilitar tuning)
+
+
+def _fetch_cloudflare_turn_usage() -> Optional[dict]:
+    """Chama Cloudflare GraphQL Analytics API. Retorna dict pronto pro
+    frontend, ou None se falhou/sem config."""
+    acct  = (os.getenv("CLOUDFLARE_ACCOUNT_ID") or "").strip()
+    token = (os.getenv("CLOUDFLARE_ANALYTICS_TOKEN") or "").strip()
+    if not acct or not token:
+        return None
+
+    # Janela: dia 1 do mes atual ate hoje (UTC).
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    since = now.replace(day=1).strftime("%Y-%m-%d")
+    until = now.strftime("%Y-%m-%d")
+    days_month_total = (now.replace(month=now.month % 12 + 1, day=1) - timedelta(days=1)).day \
+                       if now.month != 12 else 31
+    day_of_month = now.day
+
+    query = (
+        "query ($tag: string!, $since: Date!, $until: Date!) { "
+        "  viewer { "
+        "    accounts(filter: {accountTag: $tag}) { "
+        "      callsTurnUsageAdaptiveGroups("
+        "        limit: 500, filter: {date_geq: $since, date_leq: $until}, "
+        "        orderBy: [date_ASC]"
+        "      ) { "
+        "        dimensions { date } "
+        "        sum { egressBytes ingressBytes } "
+        "      } "
+        "    } "
+        "  } "
+        "}"
+    )
+    try:
+        import requests as _requests
+        r = _requests.post(
+            "https://api.cloudflare.com/client/v4/graphql",
+            headers={"Authorization": f"Bearer {token}",
+                     "Content-Type": "application/json"},
+            json={"query": query,
+                  "variables": {"tag": acct, "since": since, "until": until}},
+            timeout=10,
+        )
+        if r.status_code != 200:
+            logger.warning(f"[TURN/USAGE] CF HTTP {r.status_code}: {r.text[:200]}")
+            return None
+        payload = r.json()
+        if payload.get("errors"):
+            logger.warning(f"[TURN/USAGE] GraphQL erro: {payload['errors']}")
+            return None
+        buckets = (payload.get("data", {}).get("viewer", {})
+                   .get("accounts", [{}])[0]
+                   .get("callsTurnUsageAdaptiveGroups", []) or [])
+    except Exception as e:
+        logger.warning(f"[TURN/USAGE] erro consultando CF: {e}")
+        return None
+
+    days: list = []
+    total_bytes = 0
+    for b in buckets:
+        s = b.get("sum", {}) or {}
+        egress  = int(s.get("egressBytes") or 0)
+        ingress = int(s.get("ingressBytes") or 0)
+        total   = egress + ingress
+        total_bytes += total
+        d = (b.get("dimensions") or {}).get("date")
+        if d:
+            days.append({"date": d, "bytes": total,
+                          "egress": egress, "ingress": ingress})
+
+    gb = total_bytes / (1024 ** 3)
+    pct = round((gb / _TURN_USAGE_FREE_GB) * 100, 2) if _TURN_USAGE_FREE_GB else 0.0
+    return {
+        "available":     True,
+        "month_start":   since,
+        "month_end":     until,
+        "day_of_month":  day_of_month,
+        "days_in_month": days_month_total,
+        "pct_month_elapsed": round((day_of_month / days_month_total) * 100, 1),
+        "total_gb":      round(gb, 4),
+        "total_bytes":   total_bytes,
+        "free_gb":       _TURN_USAGE_FREE_GB,
+        "pct_used":      pct,
+        "days":          days,
+        "fetched_at":    now.isoformat(),
+    }
+
+
+@router.get("/turn-usage")
+def get_turn_usage(request: Request):
+    """Retorna consumo TURN do mes corrente (so ADMIN). Cache 15 min."""
+    user = _exigir_user(request)  # so autenticado
+    role = (user.get("role") or "").upper()
+    if role != "ADMIN":
+        raise HTTPException(status_code=403,
+                            detail="Apenas ADMIN pode ver consumo do TURN.")
+
+    now = _time.time()
+    if _TURN_USAGE_CACHE["data"] and now < _TURN_USAGE_CACHE["expires_at"]:
+        cached = dict(_TURN_USAGE_CACHE["data"])
+        cached["cached"] = True
+        return cached
+
+    data = _fetch_cloudflare_turn_usage()
+    if data is None:
+        # sem config, sem quebrar UI
+        return {"available": False,
+                "reason": "CLOUDFLARE_ACCOUNT_ID/ANALYTICS_TOKEN nao configurados"}
+    _TURN_USAGE_CACHE["data"] = data
+    _TURN_USAGE_CACHE["expires_at"] = now + 15 * 60  # 15 min
+    data["cached"] = False
+    return data
+
+
 @router.get("/limits")
 def meeting_limits():
     """Retorna limites configurados de reuniao pra o frontend exibir
