@@ -45,37 +45,60 @@ console.log("[NAV.JS] 🔧 Script carregando...");
   }
 })();
 
+// 2026-08-27: sair a prova de falhas. Ordem invertida — limpa TUDO
+// PRIMEIRO (sincrono), depois avisa o servidor. Se o fetch travar/
+// falhar, ainda assim o usuario volta pra sessao normal.
 window.sairModoSuporte = async function () {
-  try {
-    const base    = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
-    const tok     = localStorage.getItem('token') || localStorage.getItem('cpe_token') || '';
-    const realTok = localStorage.getItem('cpe_token_real') || '';
-    // Servidor recebe o token real via X-Real-Auth-Token pra restaurar
-    // o cookie cpe_session — sem isso o admin teria que logar de novo.
-    try {
-      await fetch(base + '/api/auth/impersonate/end', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'X-Auth-Token':      tok,
-          'X-Real-Auth-Token': realTok
-        }
-      });
-    } catch (_) {}
-    // Restaura token e user reais no localStorage
-    const realUser = localStorage.getItem('cpe_user_real');
-    if (realTok)  { localStorage.setItem('token', realTok); localStorage.setItem('cpe_token', realTok); }
-    if (realUser) { localStorage.setItem('user', realUser); localStorage.setItem('cpe_user', realUser); }
-    // Limpa flags de impersonate
-    localStorage.removeItem('cpe_impersonate_active');
-    localStorage.removeItem('cpe_impersonate_target_name');
-    localStorage.removeItem('cpe_token_real');
-    localStorage.removeItem('cpe_user_real');
-    // Recarrega pra tudo voltar ao normal
-    window.location.href = '/SistemaCPE/index.html';
-  } catch (e) {
-    alert('Erro ao sair: ' + e.message + '\nRecarregue a pagina manualmente.');
+  // 1) Guarda o que precisa ANTES de limpar
+  const base     = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+  const tokImp   = localStorage.getItem('token') || localStorage.getItem('cpe_token') || '';
+  const realTok  = localStorage.getItem('cpe_token_real') || '';
+  const realUser = localStorage.getItem('cpe_user_real');
+
+  // 2) Restaura token/user reais (sincrono, primeiro) — se realTok
+  //    esta vazio, admin vai precisar logar de novo, mas o modo suporte
+  //    ja fica desativado.
+  if (realTok) {
+    localStorage.setItem('token', realTok);
+    localStorage.setItem('cpe_token', realTok);
   }
+  if (realUser) {
+    localStorage.setItem('user', realUser);
+    localStorage.setItem('cpe_user', realUser);
+  }
+
+  // 3) Limpa flags de impersonate
+  localStorage.removeItem('cpe_impersonate_active');
+  localStorage.removeItem('cpe_impersonate_target_name');
+  localStorage.removeItem('cpe_token_real');
+  localStorage.removeItem('cpe_user_real');
+
+  // 4) Best-effort: apaga cookie de impersonate pelo lado client
+  //    (o cookie e HttpOnly, entao document.cookie NAO consegue apagar;
+  //    so o /impersonate/end no backend consegue via set/delete_cookie.
+  //    Se a chamada abaixo falhar, o cookie fica ate o TTL de 60min).
+
+  // 5) Avisa o servidor pra fazer o set_cookie de volta com o token real.
+  //    Timeout curto pra nao travar a UI se a rede estiver ruim.
+  try {
+    const ctrl = new AbortController();
+    const timeoutId = setTimeout(() => ctrl.abort(), 3000);
+    await fetch(base + '/api/auth/impersonate/end', {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'X-Auth-Token':      tokImp,
+        'X-Real-Auth-Token': realTok
+      },
+      signal: ctrl.signal
+    });
+    clearTimeout(timeoutId);
+  } catch (_) { /* segue mesmo assim */ }
+
+  // 6) Recarrega — nao usa location.href='/index.html' (evita loop se
+  //    o token expirou e login redireciona antes do clear ter efeito).
+  //    location.reload garante que o guard nao veja o flag antigo.
+  window.location.replace('/SistemaCPE/index.html');
 };
 
 
