@@ -1106,17 +1106,26 @@
     width: 100%;
     max-width: 450px;
     /* 2026-08-25 (v2): padding vertical fluido via clamp — encolhe em telas
-       baixas sem quebrar o design em telas grandes.
-       vertical: 1rem@700px --> 3rem@1080px+ */
+       baixas sem quebrar o design em telas grandes. */
     padding: clamp(1rem, 3vh, 3rem) clamp(1.25rem, 4vw, 2rem);
     animation: slideUpLogin 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    /* Ajuda o card a nunca ultrapassar a viewport disponivel */
-    max-height: calc(100dvh - 2rem);
-    overflow: hidden;
+    /* 2026-08-27: overflow: hidden estava cortando/sobrepondo o rodape
+       em viewports medias. Trocado por overflow-y: auto — scrollbar
+       fina aparece so quando o conteudo excede, sem quebrar layout. */
+    max-height: calc(100dvh - 1rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: #E5E7EB transparent;
     display: flex;
     flex-direction: column;
+  }
+  .login-container::-webkit-scrollbar { width: 6px; }
+  .login-container::-webkit-scrollbar-track { background: transparent; }
+  .login-container::-webkit-scrollbar-thumb {
+    background: #E5E7EB; border-radius: 3px;
   }
   /* [FIM] Login Container */
   
@@ -1408,14 +1417,15 @@
     text-align: center;
     color: #9ca3af;
     font-size: clamp(0.7rem, 1.4vh, 0.8rem);
-    /* 2026-08-25 (v2): margens fluidas — encolhe em telas baixas */
-    margin-top: clamp(0.75rem, 2.5vh, 2rem);
-    padding-top: clamp(0.75rem, 2vh, 1.5rem);
+    /* 2026-08-27: piso solido de espaco pra nao colar no form acima
+       (bug do "Esqueci minha senha" grudando no "© 2026 CPE"). */
+    margin-top: max(1rem, clamp(0.75rem, 2.5vh, 2rem));
+    padding-top: max(1rem, clamp(0.75rem, 2vh, 1.5rem));
     border-top: 1px solid #e5e7eb;
     animation: fadeInUpLogin 0.8s ease-out 0.2s both;
     flex-shrink: 0;
   }
-  .login-footer p { margin: 0.25rem 0; }
+  .login-footer p { margin: 0.25rem 0; line-height: 1.5; }
 
   /* 2026-08-25 (v6): Shimmer suave em toda a frase "Desenvolvido por
      Jonathan Lopes". Cores mais discretas, faixa mais estreita, glow
