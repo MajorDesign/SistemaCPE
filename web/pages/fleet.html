@@ -2818,6 +2818,64 @@ async function liberarVeiculo(vehicleId) {
   loadVehicles();
 }
 
+/* ============================================================
+   REDIMENSIONAMENTO DE FOTOS (2026-08-27) — fix OOM em aparelhos antigos
+   ============================================================
+   Bug reportado: crash "insuficiencia de memoria" em UM telefone
+   especifico ao fazer checklist. Diagnostico: cameras modernas geram
+   JPEGs de 8-25 MB (12 MP+). O codigo guardava o File original +
+   base64 (readAsDataURL) + <img decodificado (~50MB na GPU) para
+   cada foto. Com 7 fotos obrigatorias, aparelho basico estourava.
+
+   Fix: passa toda foto por canvas -> reduz pra maxDim (default 1600px
+   lado maior) reencoda JPEG q=0.85. Foto de 10MB vira ~350KB. Sem
+   perda pratica pra avaliar avaria (ainda muito detalhe). Zero
+   mudanca no backend.
+
+   Uso:
+     const smaller = await _resizeImageForUpload(input.files[0]);
+     // smaller e um File — mesma interface, muito menor.
+   ============================================================ */
+async function _resizeImageForUpload(file, opts = {}) {
+  const maxDim  = opts.maxDim  || 1600;
+  const quality = opts.quality || 0.85;
+  // Nao processa se nao for imagem ou ja for pequena (<800KB): retorna original
+  if (!file || !file.type?.startsWith('image/')) return file;
+  if (file.size < 800 * 1024) return file;
+
+  try {
+    // createImageBitmap e mais leve que new Image() + drawImage — nao
+    // decodifica pra CSS pixels e libera memoria antes do canvas.
+    const bmp = await createImageBitmap(file);
+    let { width: w, height: h } = bmp;
+    const biggest = Math.max(w, h);
+    if (biggest > maxDim) {
+      const scale = maxDim / biggest;
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width  = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bmp, 0, 0, w, h);
+    bmp.close?.();                     // libera bitmap imediatamente
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob=null')), 'image/jpeg', quality);
+    });
+    // libera canvas: dropar dimensoes for Safari/WebKit
+    canvas.width = 0; canvas.height = 0;
+    // Retorna como File pra manter interface (FormData.append aceita ambos, mas alguns handlers checam .name)
+    const outName = (file.name || 'foto.jpg').replace(/\.(heic|heif|png|webp|bmp)$/i, '.jpg');
+    return new File([blob], outName, { type: 'image/jpeg', lastModified: Date.now() });
+  } catch (e) {
+    // Fallback: se qualquer coisa falhar, retorna arquivo original.
+    // Preferivel enviar arquivo grande do que quebrar o fluxo.
+    console.warn('[FLEET/RESIZE] falhou, mandando original:', e);
+    return file;
+  }
+}
+
 /* Armazena arquivos de fotos da inspeção antes do save (angulo → File) */
 const CL_INSPECTION_FILES = {};
 
@@ -3037,19 +3095,22 @@ function _clPhotoItem({ key, label, icon, refSrc, extra }) {
   `;
 }
 
-function onClPhotoSelected(angulo, input) {
+async function onClPhotoSelected(angulo, input) {
   if (!input.files?.[0]) return;
-  CL_INSPECTION_FILES[angulo] = input.files[0];
-  const reader = new FileReader();
-  reader.onload = e => {
-    const zone = document.getElementById(`clZone_${angulo}`);
-    if (zone) {
-      zone.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">`;
-      zone.style.border = '';
-      zone.style.background = '';
-    }
-  };
-  reader.readAsDataURL(input.files[0]);
+  const zone = document.getElementById(`clZone_${angulo}`);
+  if (zone) zone.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#6B7280;font-size:12px"><i class="bi bi-hourglass-split"></i> processando...</div>';
+
+  // Fase OOM-fix: redimensiona ANTES de guardar (7 fotos x 10MB estourava aparelho basico)
+  const smaller = await _resizeImageForUpload(input.files[0]);
+  CL_INSPECTION_FILES[angulo] = smaller;
+
+  // Preview via URL.createObjectURL (nao carrega base64 na memoria)
+  if (zone) {
+    const url = URL.createObjectURL(smaller);
+    zone.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:4px" onload="URL.revokeObjectURL(this.src)">`;
+    zone.style.border = '';
+    zone.style.background = '';
+  }
 }
 
 /* ============================================================
@@ -3170,19 +3231,20 @@ function _retPhotoItem({ key, label, icon, compareSrc, compareLabel, retornoSrc,
   `;
 }
 
-function onRetInspPhotoSelected(angulo, input) {
+async function onRetInspPhotoSelected(angulo, input) {
   if (!input.files?.[0]) return;
-  RET_INSPECTION_FILES[angulo] = input.files[0];
-  const reader = new FileReader();
-  reader.onload = e => {
-    const zone = document.getElementById(`retZone_${angulo}`);
-    if (zone) {
-      zone.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">`;
-      zone.style.border = '';
-      zone.style.background = '';
-    }
-  };
-  reader.readAsDataURL(input.files[0]);
+  const zone = document.getElementById(`retZone_${angulo}`);
+  if (zone) zone.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#6B7280;font-size:12px"><i class="bi bi-hourglass-split"></i> processando...</div>';
+
+  const smaller = await _resizeImageForUpload(input.files[0]);
+  RET_INSPECTION_FILES[angulo] = smaller;
+
+  if (zone) {
+    const url = URL.createObjectURL(smaller);
+    zone.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:4px" onload="URL.revokeObjectURL(this.src)">`;
+    zone.style.border = '';
+    zone.style.background = '';
+  }
 }
 
 /* ============================================================
@@ -4275,14 +4337,17 @@ function toggleRetProblem(elOrInput) {
   }
 }
 
-function onRetProblemPhotoSelected(input) {
-  const file = input.files[0];
-  if (!file) return;
-  _retProblemPhotoFile = file;
+async function onRetProblemPhotoSelected(input) {
+  const raw = input.files[0];
+  if (!raw) return;
   const box = document.getElementById('retProblemPhotoBox');
   box.style.border = '2px dashed #FCA5A5';
+  box.innerHTML = '<i class="bi bi-hourglass-split" style="font-size:24px;color:#FCA5A5"></i><span style="font-size:11px;color:#FCA5A5;margin-top:6px">processando...</span>';
+
+  const file = await _resizeImageForUpload(raw);
+  _retProblemPhotoFile = file;
   const url = URL.createObjectURL(file);
-  box.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">
+  box.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onload="URL.revokeObjectURL(this.src)">
     <button onclick="event.stopPropagation();clearRetProblemPhoto()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">&times;</button>`;
 }
 
@@ -6271,15 +6336,17 @@ function onHotspotClick(bpId, hotspotId) {
   _activeBlueprintId = bpId;
   const inputId = bpId === 'retScratchBlueprint' ? 'retScratchPhotoInput' : 'scratchPhotoInput';
   const input = document.getElementById(inputId);
-  input.onchange = function() {
-    const file = this.files[0];
-    if (!file) return;
+  input.onchange = async function() {
+    const raw = this.files[0];
+    if (!raw) return;
+    this.value = '';
+    // Redimensiona antes (fix OOM em aparelhos com camera pesada)
+    const file = await _resizeImageForUpload(raw);
     const url = URL.createObjectURL(file);
     if (!_blueprintData[bpId]) _blueprintData[bpId] = {};
     _blueprintData[bpId][hotspotId] = { photo: file, photoUrl: url };
     // Re-render
     buildBlueprint(bpId, false);
-    this.value = '';
   };
   input.click();
 }
@@ -6323,14 +6390,17 @@ function markScratchZones(containerId, zonesStr) {
   } catch(e) {}
 }
 
-function onProblemPhotoSelected(input) {
-  const file = input.files[0];
-  if (!file) return;
-  _clProblemPhotoFile = file;
+async function onProblemPhotoSelected(input) {
+  const raw = input.files[0];
+  if (!raw) return;
   const box = document.getElementById('problemPhotoPreviewBox');
   box.style.border = '2px dashed #FCA5A5'; // reset borda de erro
+  box.innerHTML = '<i class="bi bi-hourglass-split" style="font-size:24px;color:#FCA5A5"></i><span style="font-size:11px;color:#FCA5A5;margin-top:6px">processando...</span>';
+
+  const file = await _resizeImageForUpload(raw);
+  _clProblemPhotoFile = file;
   const url = URL.createObjectURL(file);
-  box.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">
+  box.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:8px" onload="URL.revokeObjectURL(this.src)">
     <button onclick="event.stopPropagation();clearProblemPhoto()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center">&times;</button>`;
 }
 
