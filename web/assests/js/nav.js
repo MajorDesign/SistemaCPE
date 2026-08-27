@@ -33,6 +33,12 @@ console.log("[NAV.JS] 🔧 Script carregando...");
                        padding:5px 12px;font-weight:700;cursor:pointer;font-size:12px">
           <i class="bi bi-box-arrow-right"></i> Sair do modo suporte
         </button>
+        <button type="button" onclick="if(confirm('Fazer LOGOUT total? Você vai precisar logar novamente.')) window.forceLogoutHardReset()"
+                title="Ultimo recurso — se o botao Sair nao esta funcionando"
+                style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);
+                       border-radius:6px;padding:5px 10px;font-weight:600;cursor:pointer;font-size:11px">
+          <i class="bi bi-lightning"></i> Forçar logout
+        </button>
       </div>
       <style>body { padding-top: 40px !important; }</style>
     `;
@@ -44,6 +50,26 @@ console.log("[NAV.JS] 🔧 Script carregando...");
     console.warn('[NAV/IMPERSONATE] falha no banner:', e);
   }
 })();
+
+// 2026-08-27: Force logout total — usado como ultimo recurso quando
+// o modo suporte fica "preso" (cookie IMP quebrado). Limpa tudo +
+// chama hard-reset backend (que apaga o cookie sem exigir auth) +
+// redireciona pra login.
+window.forceLogoutHardReset = async function () {
+  const base = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+  try { localStorage.clear(); } catch(_) {}
+  try { sessionStorage.clear(); } catch(_) {}
+  try {
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), 3000);
+    await fetch(base + '/api/auth/impersonate/hard-reset', {
+      method: 'POST',
+      credentials: 'include',
+      signal: ctrl.signal
+    });
+  } catch(_) {}
+  window.location.replace('/SistemaCPE/web/login.html');
+};
 
 // 2026-08-27: sair a prova de falhas. Ordem invertida — limpa TUDO
 // PRIMEIRO (sincrono), depois avisa o servidor. Se o fetch travar/
@@ -80,10 +106,11 @@ window.sairModoSuporte = async function () {
 
   // 5) Avisa o servidor pra fazer o set_cookie de volta com o token real.
   //    Timeout curto pra nao travar a UI se a rede estiver ruim.
+  let endOk = false;
   try {
     const ctrl = new AbortController();
     const timeoutId = setTimeout(() => ctrl.abort(), 3000);
-    await fetch(base + '/api/auth/impersonate/end', {
+    const r = await fetch(base + '/api/auth/impersonate/end', {
       method: 'POST',
       credentials: 'include',
       headers: {
@@ -93,11 +120,33 @@ window.sairModoSuporte = async function () {
       signal: ctrl.signal
     });
     clearTimeout(timeoutId);
+    endOk = r.ok;
   } catch (_) { /* segue mesmo assim */ }
 
-  // 6) Recarrega — nao usa location.href='/index.html' (evita loop se
+  // 6) Fallback duro: se /end falhou OU nao tinha token real, chama
+  //    hard-reset pra garantir apagar o cookie IMP no lado servidor.
+  //    Sem isso o cookie fica preso e o backend continua achando que
+  //    voce e o impersonated.
+  if (!endOk || !realTok) {
+    try {
+      const ctrl2 = new AbortController();
+      setTimeout(() => ctrl2.abort(), 2500);
+      await fetch(base + '/api/auth/impersonate/hard-reset', {
+        method: 'POST',
+        credentials: 'include',
+        signal: ctrl2.signal
+      });
+    } catch (_) {}
+    // Se nao tinha token real, admin precisa logar de novo
+    if (!realTok) {
+      window.location.replace('/SistemaCPE/web/login.html');
+      return;
+    }
+  }
+
+  // 7) Recarrega — nao usa location.href='/index.html' (evita loop se
   //    o token expirou e login redireciona antes do clear ter efeito).
-  //    location.reload garante que o guard nao veja o flag antigo.
+  //    location.replace garante que o guard nao veja o flag antigo.
   window.location.replace('/SistemaCPE/index.html');
 };
 
