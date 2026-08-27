@@ -320,6 +320,10 @@ _IMP_WRITE_ALLOWLIST = {
     "/api/auth/impersonate/end",
     "/api/auth/logout",
 }
+# Qualquer POST em /api/auth/impersonate/* (start, end, futuros) tambem
+# e permitido — a propria rota valida se pode ou nao. Cobre o caso do
+# admin querer trocar de user impersonado sem sair antes.
+_IMP_WRITE_ALLOWLIST_PREFIX = "/api/auth/impersonate/"
 
 @app.middleware("http")
 async def impersonate_readonly_guard(request: Request, call_next):
@@ -327,7 +331,7 @@ async def impersonate_readonly_guard(request: Request, call_next):
     if method in ("GET", "HEAD", "OPTIONS"):
         return await call_next(request)
     path = request.url.path
-    if path in _IMP_WRITE_ALLOWLIST:
+    if path in _IMP_WRITE_ALLOWLIST or path.startswith(_IMP_WRITE_ALLOWLIST_PREFIX):
         return await call_next(request)
 
     # Se tem token de impersonate, bloqueia
