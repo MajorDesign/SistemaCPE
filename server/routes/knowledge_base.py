@@ -1,10 +1,16 @@
 """
 Base de Conhecimento (KB) — artigos por SETOR.
 
-Permissoes:
-- USER comum: ve artigos publicados do PROPRIO setor (users.group_id).
-- RESPONSAVEL_GRUPO: ve + cria + edita + deleta artigos do proprio setor.
-- ADMIN/TI/MANAGER: ve + gerencia artigos de QUALQUER setor.
+Permissoes (2026-08-27 — multi-grupo Fase 2 + USER pode criar):
+- USER comum: ve artigos publicados dos SEUS grupos (user_groups). Pode
+  CRIAR artigos, mas apenas em grupos onde participa. So o autor OU o
+  responsavel do grupo OU ADMIN pode editar/deletar depois.
+- RESPONSAVEL_GRUPO: ve + gerencia artigos de todos os grupos onde e
+  responsavel.
+- ADMIN/TI/MANAGER: ve + gerencia artigos de QUALQUER grupo.
+
+Isolamento: user NUNCA ve artigo de grupo em que nao participa (mesmo
+com URL direta — /articles/{id} valida via _pode_ver_grupo).
 
 Conteudo em markdown (renderizado no frontend via marked.js).
 """
@@ -31,7 +37,9 @@ _CATEGORIAS = ("procedimento", "tutorial", "troubleshooting",
                "faq", "politica", "onboarding", "outros")
 _CRITICIDADES = ("baixa", "media", "alta", "critica")
 _ROLES_GERENCIA = ("ADMIN", "TI", "MANAGER")
-_ROLES_CRIAR    = ("RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER")
+# 2026-08-27: USER agora pode criar tambem (so em grupos que participa).
+# Autor OU responsavel do grupo OU admin ainda controla edicao/exclusao.
+_ROLES_CRIAR    = ("USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER")
 
 
 # ----------------------------- Helpers -----------------------------
@@ -52,17 +60,59 @@ def _eh_admin_global(user: dict) -> bool:
     return user.get("role") in _ROLES_GERENCIA
 
 
+def _load_user_groups(user_id: int) -> list:
+    """Retorna [{group_id, role_in_grp}] de user_groups (Fase 2 multi-grupo).
+    Fallback pra users.group_id se a tabela estiver vazia pra esse user."""
+    conn = get_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute(
+            "SELECT group_id, role_in_grp FROM user_groups WHERE user_id = %s",
+            (user_id,),
+        )
+        rows = cur.fetchall() or []
+        if rows:
+            return rows
+        # Fallback pra users.group_id (users que nao migraram por algum motivo)
+        cur.execute("SELECT role, group_id FROM users WHERE id = %s", (user_id,))
+        u = cur.fetchone()
+        if u and u.get("group_id"):
+            return [{"group_id": u["group_id"], "role_in_grp": u.get("role") or "USER"}]
+        return []
+    finally:
+        cur.close(); conn.close()
+
+
+def _user_group_ids(user: dict) -> list:
+    """Ids de todos os grupos onde o user participa."""
+    return [g["group_id"] for g in _load_user_groups(user["id"])]
+
+
+def _user_resp_group_ids(user: dict) -> list:
+    """Ids dos grupos onde o user e RESPONSAVEL_GRUPO."""
+    return [g["group_id"] for g in _load_user_groups(user["id"])
+            if g["role_in_grp"] == "RESPONSAVEL_GRUPO"]
+
+
 def _pode_gerenciar_grupo(user: dict, group_id: int) -> bool:
+    """Pode gerenciar (criar/editar/deletar em nome do grupo, sem ser autor)?"""
     if _eh_admin_global(user):
         return True
-    # RESPONSAVEL_GRUPO ou USER do mesmo grupo? So o RESPONSAVEL pode gerenciar.
-    return (user.get("role") == "RESPONSAVEL_GRUPO" and user.get("group_id") == group_id)
+    return group_id in _user_resp_group_ids(user)
+
+
+def _pode_criar_no_grupo(user: dict, group_id: int) -> bool:
+    """Pode criar um novo artigo neste grupo? (USER + RESPONSAVEL + ADMIN)"""
+    if _eh_admin_global(user):
+        return True
+    return group_id in _user_group_ids(user)
 
 
 def _pode_ver_grupo(user: dict, group_id: int) -> bool:
+    """Pode LER artigos deste grupo?"""
     if _eh_admin_global(user):
         return True
-    return user.get("group_id") == group_id
+    return group_id in _user_group_ids(user)
 
 
 # ----------------------------- Models -----------------------------
@@ -102,7 +152,7 @@ class HelpfulBody(BaseModel):
 @router.get("/groups")
 def listar_grupos_disponiveis(request: Request):
     """Lista grupos que o user pode VER/ESCOLHER pra filtrar.
-    Admin global: todos. USER/RESPONSAVEL: so o proprio."""
+    Admin global: todos. Multi-grupo (Fase 2): TODOS os grupos onde participa."""
     user = _user_from_request(request)
     conn = get_db_or_404()
     cur = conn.cursor(dictionary=True)
@@ -115,14 +165,17 @@ def listar_grupos_disponiveis(request: Request):
                 ORDER BY g.name
             """)
         else:
-            if not user.get("group_id"):
+            gids = _user_group_ids(user)
+            if not gids:
                 return {"success": True, "groups": []}
-            cur.execute("""
+            ph = ",".join(["%s"] * len(gids))
+            cur.execute(f"""
                 SELECT g.id, g.name, d.name AS department_name
                 FROM cpe_grupo g
                 LEFT JOIN departments d ON d.id = g.department_id
-                WHERE g.id = %s
-            """, (user["group_id"],))
+                WHERE g.id IN ({ph})
+                ORDER BY g.name
+            """, tuple(gids))
         return {"success": True, "groups": cur.fetchall()}
     finally:
         cur.close(); conn.close()
@@ -152,13 +205,27 @@ def listar_artigos(request: Request,
             WHERE 1=1
         """]
         params: list = []
-        # Escopo: admin global ve tudo; senao so o proprio grupo.
-        if not _eh_admin_global(user):
-            sql.append("AND a.group_id = %s")
-            params.append(user.get("group_id") or 0)
-        elif group_id:
-            sql.append("AND a.group_id = %s")
-            params.append(group_id)
+        # Escopo: admin global ve tudo; senao ISOLA por grupos que participa.
+        # (Multi-grupo Fase 2: filtro IN em vez de = so no primario.)
+        if _eh_admin_global(user):
+            if group_id:
+                sql.append("AND a.group_id = %s")
+                params.append(group_id)
+        else:
+            gids = _user_group_ids(user)
+            if not gids:
+                return {"success": True, "articles": []}
+            if group_id:
+                # user pediu grupo especifico — so devolve se ele participa
+                if group_id not in gids:
+                    raise HTTPException(status_code=403,
+                                        detail="Voce nao participa deste setor.")
+                sql.append("AND a.group_id = %s")
+                params.append(group_id)
+            else:
+                ph = ",".join(["%s"] * len(gids))
+                sql.append(f"AND a.group_id IN ({ph})")
+                params.extend(gids)
         # Rascunhos so do autor (a menos que admin)
         if only_my_drafts:
             sql.append("AND a.publicado = 0 AND a.autor_id = %s")
@@ -184,14 +251,34 @@ def listar_artigos(request: Request,
 
 @router.get("/stats")
 def stats(request: Request, group_id: Optional[int] = Query(None)):
-    """Estatisticas leves: total, por categoria, views totais, etc."""
+    """Estatisticas leves: total, por categoria, views totais, etc.
+    Multi-grupo (Fase 2): agrega TODOS os grupos onde o user participa,
+    salvo `group_id` explicito no query e permitido."""
     user = _user_from_request(request)
-    target_gid = group_id if (group_id and _eh_admin_global(user)) else user.get("group_id")
     conn = get_db_or_404()
     cur = conn.cursor(dictionary=True)
     try:
-        where = "" if (_eh_admin_global(user) and not group_id) else "WHERE group_id = %s"
-        args = () if (_eh_admin_global(user) and not group_id) else (target_gid or 0,)
+        # Monta WHERE conforme escopo
+        if _eh_admin_global(user):
+            if group_id:
+                where = "WHERE group_id = %s"; args = (group_id,)
+            else:
+                where = ""; args = ()
+        else:
+            gids = _user_group_ids(user)
+            if not gids:
+                return {"success": True,
+                        "stats": {"total": 0, "publicados": 0, "rascunhos": 0,
+                                  "total_views": 0, "total_helpful": 0, "total_unhelpful": 0},
+                        "por_categoria": []}
+            if group_id:
+                if group_id not in gids:
+                    raise HTTPException(status_code=403, detail="Voce nao participa deste setor.")
+                where = "WHERE group_id = %s"; args = (group_id,)
+            else:
+                ph = ",".join(["%s"] * len(gids))
+                where = f"WHERE group_id IN ({ph})"
+                args = tuple(gids)
         cur.execute(f"""
             SELECT
                 COUNT(*) AS total,
@@ -248,9 +335,10 @@ def detalhar_artigo(article_id: int, request: Request):
 def criar_artigo(body: ArticleCreate, request: Request):
     user = _user_from_request(request)
     if user.get("role") not in _ROLES_CRIAR:
-        raise HTTPException(status_code=403, detail="So Responsavel de Grupo, Admin, TI ou Manager podem criar artigos")
-    if not _pode_gerenciar_grupo(user, body.group_id):
-        raise HTTPException(status_code=403, detail="Sem permissao pra criar no setor selecionado")
+        raise HTTPException(status_code=403, detail="Sem permissao pra criar artigos")
+    if not _pode_criar_no_grupo(user, body.group_id):
+        raise HTTPException(status_code=403,
+                             detail="Voce nao participa deste setor — nao pode criar artigo aqui.")
     if body.categoria not in _CATEGORIAS:
         raise HTTPException(status_code=400, detail=f"Categoria invalida (use uma de: {', '.join(_CATEGORIAS)})")
     if body.criticidade not in _CRITICIDADES:
