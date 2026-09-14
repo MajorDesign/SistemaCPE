@@ -298,3 +298,27 @@ tools/inventory_agent/cpe_agent.log
 
 # Notas de design locais (do skill /frontend-design)
 .design-notes-*.md
+
+# ============================================================
+# CPE Control — Lixo local que ja apareceu commit por engano
+# ============================================================
+# Distros do desktop app (auto-update Cloudflare Tunnel serve daqui) —
+# artefatos de build, nao codigo.
+/desktop-updates/
+
+# Backups manuais criados antes de editar em prod (padrao *.bak_YYYYMMDD_HHMMSS,
+# *.bkp_YYYY-MM-DD_descricao)
+*.bak
+*.bak_*
+*.bkp
+*.bkp_*
+
+# Logs do server (alem do padrao *.log ja acima — pega .err, .out tambem)
+server/logs/*
+!server/logs/.gitkeep
+
+# Rascunhos de favicon (pasta local, nao usada em prod)
+web/favicon-opcoes/
+
+# Scripts de teste soltos que ficam no server
+server/test_*.py
