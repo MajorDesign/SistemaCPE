@@ -11,7 +11,7 @@
        APENAS no escopo do chat (.chat-shell). Resto do sistema mantem DM Sans. -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css?v=2026-08-27-footer-fix2">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css?v=2026-09-03-login-height">
 
   <style>
     :root {
@@ -5132,7 +5132,10 @@ async function gerarReuniao() {
       throw new Error(err.detail || `HTTP ${res.status}`);
     }
     const r = await res.json();
-    _reuniaoUrl  = `${window.location.origin}${r.url_path}`;
+    // Prioriza public_url do backend (usa PUBLIC_BASE_URL — dominio do tunel).
+    // Se acessarmos o chat por localhost/LAN, window.location.origin geraria
+    // link que so funciona internamente. Fallback mantido pra compat.
+    _reuniaoUrl  = r.public_url || `${window.location.origin}${r.url_path}`;
     _reuniaoCode = r.codigo;
     document.getElementById('reuniaoLinkOut').value = _reuniaoUrl;
     document.getElementById('reuniaoFormBox').style.display = 'none';

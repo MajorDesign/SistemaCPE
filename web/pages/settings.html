@@ -432,9 +432,10 @@
       verificarCarbonio();
       carregarModulos();
 
-      // Painel "Sistema" — so ADMIN ve
+      // Painel "Sistema" — ADMIN e RESPONSAVEL_GRUPO veem
+      // (dono do grupo precisa acompanhar quota TURN do time).
       const roleAtual = (currentUser?.role || '').toUpperCase();
-      if (roleAtual === 'ADMIN') {
+      if (roleAtual === 'ADMIN' || roleAtual === 'RESPONSAVEL_GRUPO') {
         const nav = document.getElementById('navItemSistema');
         if (nav) nav.style.display = '';
         _recarregarStatusTurn();
