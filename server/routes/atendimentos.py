@@ -8,7 +8,7 @@ e horario, preenche os dados e cria um agendamento que entra como
 'pendente' ate a equipe confirmar.
 """
 
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, Query, Request, UploadFile, File, Form
 from database import get_db_or_404, convert_datetime_list
 from datetime import datetime, date, timedelta, time as _time
 from typing import Optional
@@ -176,6 +176,43 @@ def _pode_aceitar_agendamento(user: dict, cursor, agendamento_id: int) -> bool:
 
 # Alias retro-compat: mantem chamadas existentes (vao ser trocadas abaixo).
 _exigir_suporte = _exigir_admin_suporte
+
+
+# ============================================================
+# DELEGACAO POR AGENDA (2026-09-02)
+# Admin pode autorizar user X a operar agenda Y sem virar admin.
+# Delegado herda direito de: editar dados da agenda, criar/editar
+# agendamentos e bloquear/desbloquear horarios DESSA agenda apenas.
+# ============================================================
+
+def _e_delegado_agenda(cursor, user_id: int, agenda_id: int) -> bool:
+    """True se o user esta em atend_agenda_delegados dessa agenda."""
+    try:
+        cursor.execute(
+            "SELECT 1 FROM atend_agenda_delegados "
+            "WHERE agenda_id=%s AND user_id=%s LIMIT 1",
+            (agenda_id, user_id),
+        )
+        return cursor.fetchone() is not None
+    except Exception:
+        # Tabela pode nao existir em ambiente pre-migration 092
+        return False
+
+
+def _exigir_operar_agenda(request: Request, cursor, agenda_id: int) -> dict:
+    """Passa se: nivel admin global OU delegado explicito desta agenda.
+    view/op puros (sem delegacao) sao bloqueados aqui.
+    Retorna o user dict (mesmo contrato de _exigir_*).
+    """
+    user = _get_user(request)
+    nivel = _calc_nivel_suporte(user)
+    if nivel == "admin":
+        return user
+    if _e_delegado_agenda(cursor, user["id"], agenda_id):
+        return user
+    _403("op")
+    # unreachable
+    return user
 
 
 # ============================================================
@@ -1435,6 +1472,7 @@ def criar_agenda(request: Request, data: dict):
     instrutor_id = int(instrutor_id_raw) if instrutor_id_raw else None
     oferece_pres = 1 if data.get("oferece_presencial", 1) else 0
     oferece_onl  = 1 if data.get("oferece_online", 1) else 0
+    oferece_dr   = 1 if data.get("oferece_drones", 0) else 0
     if not oferece_pres and not oferece_onl:
         raise HTTPException(
             status_code=400,
@@ -1469,11 +1507,12 @@ def criar_agenda(request: Request, data: dict):
         cursor.execute("""
             INSERT INTO atend_agendas
                 (nome, unidade_id, instrutor_id, slug, oferece_presencial, oferece_online,
-                 tipo, descricao, instrucoes, cor, slot_duracao_min, ativo, created_by)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
+                 oferece_drones, tipo, descricao, instrucoes, cor, slot_duracao_min,
+                 ativo, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s)
         """, (
             nome, data.get("unidade_id") or None, instrutor_id, slug,
-            oferece_pres, oferece_onl,
+            oferece_pres, oferece_onl, oferece_dr,
             tipo,
             (data.get("descricao") or "").strip() or None,
             (data.get("instrucoes") or "").strip() or None,
@@ -1501,7 +1540,6 @@ def criar_agenda(request: Request, data: dict):
 
 @router.put("/agendas/{agenda_id}")
 def atualizar_agenda(agenda_id: int, request: Request, data: dict):
-    _exigir_suporte(request)
     nome = (data.get("nome") or "").strip()
     if not nome:
         raise HTTPException(status_code=400, detail="Nome da agenda e obrigatorio")
@@ -1511,6 +1549,7 @@ def atualizar_agenda(agenda_id: int, request: Request, data: dict):
     tipo = data.get("tipo") if data.get("tipo") in ("fisica", "online") else None
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
+    _exigir_operar_agenda(request, cursor, agenda_id)
     try:
         atual = _agenda_ou_404(cursor, agenda_id)
         cursor.execute("SELECT id FROM atend_agendas WHERE nome=%s AND id!=%s", (nome, agenda_id))
@@ -1555,6 +1594,7 @@ def atualizar_agenda(agenda_id: int, request: Request, data: dict):
 
         oferece_pres = 1 if data.get("oferece_presencial", atual.get("oferece_presencial", 1)) else 0
         oferece_onl  = 1 if data.get("oferece_online", atual.get("oferece_online", 1)) else 0
+        oferece_dr   = 1 if data.get("oferece_drones", atual.get("oferece_drones", 0)) else 0
         if not oferece_pres and not oferece_onl:
             raise HTTPException(
                 status_code=400,
@@ -1564,13 +1604,13 @@ def atualizar_agenda(agenda_id: int, request: Request, data: dict):
         cursor.execute("""
             UPDATE atend_agendas
                SET nome=%s, unidade_id=%s, instrutor_id=%s, slug=%s,
-                   oferece_presencial=%s, oferece_online=%s,
+                   oferece_presencial=%s, oferece_online=%s, oferece_drones=%s,
                    tipo=%s, descricao=%s, instrucoes=%s, cor=%s,
                    slot_duracao_min=%s, ativo=%s
              WHERE id=%s
         """, (
             nome, data.get("unidade_id") or None, instrutor_id, slug,
-            oferece_pres, oferece_onl,
+            oferece_pres, oferece_onl, oferece_dr,
             tipo or atual["tipo"],
             (data.get("descricao") or "").strip() or None,
             (data.get("instrucoes") or "").strip() or None,
@@ -1834,6 +1874,8 @@ def _equipamento_com_vinculos(cursor, eqs: list) -> list:
         return eqs
     ids = [e["id"] for e in eqs]
     placeholders = ",".join(["%s"] * len(ids))
+    # 2026-09-04: incluir agenda_nome pra tooltip no front (agrupamento
+    # de vinculos identicos por unidade).
     cursor.execute(f"""
         SELECT v.equipamento_id, v.entidade, v.entidade_id,
                CASE WHEN v.entidade='servico'
@@ -1841,7 +1883,14 @@ def _equipamento_com_vinculos(cursor, eqs: list) -> list:
                     ELSE (SELECT nome FROM atend_treinamentos WHERE id=v.entidade_id) END AS nome,
                CASE WHEN v.entidade='servico'
                     THEN (SELECT agenda_id FROM atend_servicos     WHERE id=v.entidade_id)
-                    ELSE (SELECT agenda_id FROM atend_treinamentos WHERE id=v.entidade_id) END AS agenda_id
+                    ELSE (SELECT agenda_id FROM atend_treinamentos WHERE id=v.entidade_id) END AS agenda_id,
+               CASE WHEN v.entidade='servico'
+                    THEN (SELECT a.nome FROM atend_servicos s
+                          JOIN atend_agendas a ON a.id = s.agenda_id
+                          WHERE s.id = v.entidade_id)
+                    ELSE (SELECT a.nome FROM atend_treinamentos t
+                          JOIN atend_agendas a ON a.id = t.agenda_id
+                          WHERE t.id = v.entidade_id) END AS agenda_nome
         FROM atend_equipamento_vinculos v
         WHERE v.equipamento_id IN ({placeholders})
     """, ids)
@@ -1850,6 +1899,7 @@ def _equipamento_com_vinculos(cursor, eqs: list) -> list:
         vinculos_por_eq.setdefault(v["equipamento_id"], []).append({
             "entidade": v["entidade"], "entidade_id": v["entidade_id"],
             "nome": v["nome"], "agenda_id": v["agenda_id"],
+            "agenda_nome": v.get("agenda_nome"),
         })
 
     # Foto principal (primeira por ordem, em empate menor id) — miniatura na tabela
@@ -2345,7 +2395,6 @@ def listar_horarios(agenda_id: int, request: Request):
 
 @router.put("/agendas/{agenda_id}/horarios")
 def salvar_horarios(agenda_id: int, request: Request, data: dict):
-    _exigir_suporte(request)
     faixas = data.get("horarios")
     if not isinstance(faixas, list):
         raise HTTPException(status_code=400, detail="Lista de horarios invalida")
@@ -2353,6 +2402,7 @@ def salvar_horarios(agenda_id: int, request: Request, data: dict):
     cursor = conn.cursor(dictionary=True)
     try:
         _agenda_ou_404(cursor, agenda_id)
+        _exigir_operar_agenda(request, cursor, agenda_id)
         limpas = []
         for f in faixas:
             try:
@@ -2415,9 +2465,16 @@ def listar_agendamentos(agenda_id: int, request: Request, inicio: str, fim: str)
     try:
         _agenda_ou_404(cursor, agenda_id)
         ags = _row_agendamentos(cursor, agenda_id, dt_ini, dt_fim)
+        # 2026-09-02: JOIN users pra devolver quem bloqueou — modal de detalhe
+        # do bloqueio no calendario precisa exibir motivo + autor.
         cursor.execute("""
-            SELECT * FROM atend_bloqueios
-            WHERE agenda_id=%s AND inicio < %s AND fim >= %s ORDER BY inicio
+            SELECT b.id, b.agenda_id, b.inicio, b.fim, b.motivo,
+                   b.created_by, b.created_at,
+                   u.name AS created_by_nome
+              FROM atend_bloqueios b
+         LEFT JOIN users u ON u.id = b.created_by
+             WHERE b.agenda_id = %s AND b.inicio < %s AND b.fim >= %s
+             ORDER BY b.inicio
         """, (agenda_id, datetime.combine(dt_fim + timedelta(days=1), _time()),
               datetime.combine(dt_ini, _time())))
         bloqueios = convert_datetime_list(cursor.fetchall())
@@ -2470,7 +2527,6 @@ def _gravar_agendamento(cursor, agenda_id, dados, origem, created_by):
 @router.post("/agendamentos")
 def criar_agendamento(request: Request, data: dict):
     """Agendamento criado pela equipe (parte interna)."""
-    user = _exigir_op_suporte(request)
     agenda_id = data.get("agenda_id")
     if not agenda_id:
         raise HTTPException(status_code=400, detail="agenda_id e obrigatorio")
@@ -2483,6 +2539,10 @@ def criar_agendamento(request: Request, data: dict):
     cursor = conn.cursor(dictionary=True)
     try:
         _agenda_ou_404(cursor, agenda_id)
+        # Admin global de suporte OU delegado desta agenda especifica.
+        # Antes era _exigir_op_suporte (todo grupo Suporte podia criar em
+        # qualquer agenda) — agora usuario delegado tambem pode.
+        user = _exigir_operar_agenda(request, cursor, agenda_id)
         servico_id = data.get("servico_id") or None
         treinamento_id = data.get("treinamento_id") or None
         drone_id = data.get("drone_id") or None
@@ -2541,7 +2601,6 @@ def criar_agendamento(request: Request, data: dict):
 
 @router.put("/agendamentos/{agendamento_id}")
 def atualizar_agendamento(agendamento_id: int, request: Request, data: dict):
-    user = _exigir_op_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -2550,13 +2609,19 @@ def atualizar_agendamento(agendamento_id: int, request: Request, data: dict):
         if not atual:
             raise HTTPException(status_code=404, detail="Agendamento nao encontrado")
 
-        # 2026-08-05: USER do Suporte só pode alterar agendamentos da própria
-        # agenda. Admin/TI/Responsável Suporte continuam podendo tudo.
-        if not _pode_aceitar_agendamento(user, cursor, agendamento_id):
-            raise HTTPException(
-                status_code=403,
-                detail="Voce so pode alterar agendamentos da sua propria agenda.",
-            )
+        # Delegado da agenda desse agendamento passa direto. Caso contrario,
+        # exige op_suporte + regra USER-so-propria-agenda ja existente.
+        user = _get_user(request)
+        if not _e_delegado_agenda(cursor, user["id"], atual["agenda_id"]):
+            if _calc_nivel_suporte(user) not in ("admin", "op"):
+                _403("op")
+            # 2026-08-05: USER do Suporte só pode alterar agendamentos da própria
+            # agenda. Admin/TI/Responsável Suporte continuam podendo tudo.
+            if not _pode_aceitar_agendamento(user, cursor, agendamento_id):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Voce so pode alterar agendamentos da sua propria agenda.",
+                )
 
         titulo = (data.get("titulo") or atual["titulo"] or "").strip()
         if not titulo:
@@ -2623,13 +2688,14 @@ def atualizar_agendamento(agendamento_id: int, request: Request, data: dict):
 
 @router.delete("/agendamentos/{agendamento_id}")
 def excluir_agendamento(agendamento_id: int, request: Request):
-    _exigir_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT id FROM atend_agendamentos WHERE id=%s", (agendamento_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT id, agenda_id FROM atend_agendamentos WHERE id=%s", (agendamento_id,))
+        row = cursor.fetchone()
+        if not row:
             raise HTTPException(status_code=404, detail="Agendamento nao encontrado")
+        _exigir_operar_agenda(request, cursor, row["agenda_id"])
         cursor.execute("DELETE FROM atend_agendamentos WHERE id=%s", (agendamento_id,))
         conn.commit()
         return {"success": True}
@@ -2644,7 +2710,6 @@ def excluir_agendamento(agendamento_id: int, request: Request):
 
 @router.post("/bloqueios")
 def criar_bloqueio(request: Request, data: dict):
-    user = _exigir_suporte(request)
     agenda_id = data.get("agenda_id")
     if not agenda_id:
         raise HTTPException(status_code=400, detail="agenda_id e obrigatorio")
@@ -2656,6 +2721,7 @@ def criar_bloqueio(request: Request, data: dict):
     cursor = conn.cursor(dictionary=True)
     try:
         _agenda_ou_404(cursor, agenda_id)
+        user = _exigir_operar_agenda(request, cursor, agenda_id)
         cursor.execute("""
             INSERT INTO atend_bloqueios (agenda_id, inicio, fim, motivo, created_by)
             VALUES (%s, %s, %s, %s, %s)
@@ -2670,19 +2736,179 @@ def criar_bloqueio(request: Request, data: dict):
 
 @router.delete("/bloqueios/{bloqueio_id}")
 def excluir_bloqueio(bloqueio_id: int, request: Request):
-    _exigir_suporte(request)
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT id FROM atend_bloqueios WHERE id=%s", (bloqueio_id,))
-        if not cursor.fetchone():
+        cursor.execute("SELECT id, agenda_id FROM atend_bloqueios WHERE id=%s", (bloqueio_id,))
+        row = cursor.fetchone()
+        if not row:
             raise HTTPException(status_code=404, detail="Bloqueio nao encontrado")
+        _exigir_operar_agenda(request, cursor, row["agenda_id"])
         cursor.execute("DELETE FROM atend_bloqueios WHERE id=%s", (bloqueio_id,))
         conn.commit()
         return {"success": True}
     finally:
         cursor.close()
         conn.close()
+
+
+# ============================================================
+# DELEGADOS DE AGENDA (CRUD) — quem pode operar cada agenda
+# So admin de suporte pode gerenciar essa lista.
+# ============================================================
+
+@router.get("/agendas/{agenda_id}/delegados/candidatos")
+def listar_candidatos_delegado(agenda_id: int, request: Request,
+                                q: Optional[str] = Query(None)):
+    """Retorna usuarios ativos que AINDA nao sao delegados desta agenda —
+    ja resolve group_name pra evitar N+1 no frontend. Aceita filtro por
+    q (nome ou email). Ordenado por nome.
+
+    Regra de visibilidade (2026-09-03):
+    - ADMIN/TI globais: veem todos.
+    - RESPONSAVEL_GRUPO (ex: Aline Suporte): so ve pessoas do MESMO grupo
+      dela (via users.group_id legacy OU user_groups multi-grupo). Isso
+      impede que gestor de suporte delegue acesso a alguem de outra area.
+    """
+    user = _exigir_admin_suporte(request)
+    role = (user.get("role") or "").upper()
+    req_group_id = user.get("group_id")
+
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _agenda_ou_404(cursor, agenda_id)
+        # 2026-09-10 fix: ordem dos params tem que casar com a ordem dos
+        # %s no SQL final. O SQL renderiza [agenda_id, {filtro_grupo},
+        # {filtro_q}], entao GRUPO precisa vir antes de Q na lista de
+        # params. Antes estavam invertidos — quando role=RESPONSAVEL_GRUPO
+        # com termo de busca, o group_id caia no LIKE do nome (nunca
+        # batia) e o termo caia no u.group_id (int != string). Resultado:
+        # zero candidatos pra Aline/etc, so admin passava (pula grupo).
+        params = [agenda_id]
+
+        # Restricao por grupo pra RESPONSAVEL_GRUPO — nao aplica pra ADMIN/TI.
+        filtro_grupo = ""
+        if role == "RESPONSAVEL_GRUPO" and req_group_id:
+            filtro_grupo = """
+              AND (
+                u.group_id = %s
+                OR u.id IN (SELECT user_id FROM user_groups WHERE group_id = %s)
+              )
+            """
+            params.extend([req_group_id, req_group_id])
+
+        filtro_q = ""
+        if q and q.strip():
+            filtro_q = " AND (u.name LIKE %s OR u.email LIKE %s) "
+            termo = f"%{q.strip()}%"
+            params.extend([termo, termo])
+
+        cursor.execute(f"""
+            SELECT u.id, u.name, u.email, u.role,
+                   u.group_id, g.name AS group_name
+              FROM users u
+         LEFT JOIN cpe_grupo g ON g.id = u.group_id
+             WHERE u.is_active = 1
+               AND u.id NOT IN (SELECT user_id FROM atend_agenda_delegados
+                                WHERE agenda_id = %s)
+               {filtro_grupo}
+               {filtro_q}
+             ORDER BY u.name
+             LIMIT 200
+        """, params)
+        return {"success": True, "usuarios": cursor.fetchall()}
+    finally:
+        cursor.close(); conn.close()
+
+
+@router.get("/agendas/{agenda_id}/delegados")
+def listar_delegados(agenda_id: int, request: Request):
+    """Lista usuarios com delegacao ativa nesta agenda. Retorna
+    [{user_id, name, email, granted_at, granted_by_name}]."""
+    _exigir_admin_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _agenda_ou_404(cursor, agenda_id)
+        cursor.execute("""
+            SELECT d.user_id, u.name, u.email,
+                   d.granted_at, gb.name AS granted_by_name
+              FROM atend_agenda_delegados d
+              JOIN users u ON u.id = d.user_id
+         LEFT JOIN users gb ON gb.id = d.granted_by
+             WHERE d.agenda_id = %s
+             ORDER BY u.name
+        """, (agenda_id,))
+        return {"success": True, "delegados": convert_datetime_list(cursor.fetchall())}
+    finally:
+        cursor.close(); conn.close()
+
+
+@router.post("/agendas/{agenda_id}/delegados")
+def adicionar_delegado(agenda_id: int, request: Request, data: dict):
+    """Concede delegacao. Body: {user_id: int}. Idempotente.
+    2026-09-03: RESPONSAVEL_GRUPO so pode delegar pra usuarios do MESMO
+    grupo (mesma restricao que /candidatos aplica visualmente)."""
+    admin = _exigir_admin_suporte(request)
+    user_id = data.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id e obrigatorio")
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        _agenda_ou_404(cursor, agenda_id)
+        cursor.execute("SELECT id, is_active, group_id FROM users WHERE id=%s", (user_id,))
+        u = cursor.fetchone()
+        if not u:
+            raise HTTPException(status_code=404, detail="Usuario nao encontrado")
+        if not u.get("is_active"):
+            raise HTTPException(status_code=400, detail="Usuario inativo")
+
+        # Restricao de grupo pra RESPONSAVEL_GRUPO — mesma logica de /candidatos.
+        role = (admin.get("role") or "").upper()
+        req_gid = admin.get("group_id")
+        if role == "RESPONSAVEL_GRUPO" and req_gid:
+            # user tem que estar no MESMO grupo (legacy users.group_id OU user_groups)
+            mesmo_grupo = (u.get("group_id") == req_gid)
+            if not mesmo_grupo:
+                cursor.execute(
+                    "SELECT 1 FROM user_groups WHERE user_id=%s AND group_id=%s LIMIT 1",
+                    (user_id, req_gid),
+                )
+                mesmo_grupo = cursor.fetchone() is not None
+            if not mesmo_grupo:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Voce so pode delegar acesso a usuarios do seu grupo.",
+                )
+
+        cursor.execute("""
+            INSERT INTO atend_agenda_delegados (agenda_id, user_id, granted_by)
+                 VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE granted_by = VALUES(granted_by)
+        """, (agenda_id, user_id, admin["id"]))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cursor.close(); conn.close()
+
+
+@router.delete("/agendas/{agenda_id}/delegados/{user_id}")
+def remover_delegado(agenda_id: int, user_id: int, request: Request):
+    """Revoga delegacao."""
+    _exigir_admin_suporte(request)
+    conn = get_db_or_404()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            "DELETE FROM atend_agenda_delegados WHERE agenda_id=%s AND user_id=%s",
+            (agenda_id, user_id),
+        )
+        conn.commit()
+        return {"success": True, "removed": cursor.rowcount}
+    finally:
+        cursor.close(); conn.close()
 
 
 # ============================================================
