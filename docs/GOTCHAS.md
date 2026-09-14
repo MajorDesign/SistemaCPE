@@ -4,6 +4,21 @@ Cada seção aqui foi um bug real que custou tempo. Lê antes de mexer em códig
 
 ---
 
+## Dashboard "Online agora" ≠ Chat "Ativo agora" — não é bug (2026-08-24)
+
+**Sintoma:** Gestor abre a dashboard, KPI mostra "15 online agora"; abre o chat, coluna lateral direita mostra "7 ativos agora". Diferença consistente. Parece bug.
+
+**Não é bug — são duas medidas diferentes:**
+
+- **Dashboard "Online agora"** ([server/app.py:453](../server/app.py) middleware `track_last_seen`): conta qualquer user que fez UMA request HTTP nos últimos 5 min. Inclui abas em background com polling de notificações, users vendo tickets/fleet/etc. Definição ampla de "está usando o sistema".
+- **Chat "Ativo agora"** ([server/routes/chat.py](../server/routes/chat.py) manager de WebSockets): conta só users com WebSocket do chat conectado ativo. Só quem tem a página `/chat.html` aberta.
+
+**Ambos estão corretos pro contexto próprio.** A diferença é o gap dos users que estão usando o sistema mas não estão com o chat aberto.
+
+**Se voltar a ser questionado:** explique a diferença acima antes de "corrigir". Já foi discutido com o gestor em 2026-08-24 — decisão foi manter como está.
+
+---
+
 ## Encaminhar ticket deixava categoria órfã (2026-08-21)
 
 **Sintoma:** categoria não podia ser excluída ("tem chamado vinculado") mas o chamado não aparecia no filtro nem quando escolhia o grupo dono da categoria. Ticket sumia do sistema pra quem navegava pelos filtros.

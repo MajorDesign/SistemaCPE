@@ -22,8 +22,8 @@
        ESTILOS GLOBAIS
        ======================================== -->
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css?v=2026-08-27-footer-fix2">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css?v=2026-08-25-limit500">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css?v=2026-09-03-login-height">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css?v=2026-09-04-escopo-tabelas">
   
     <link rel="icon" type="image/svg+xml" href="/SistemaCPE/web/favicon.svg?v=2026-07-02b">
   <title>Tickets - CPE Control</title>
@@ -115,7 +115,10 @@
           <div class="search-filters">
             <div class="input-group input-group-sm">
               <span class="input-group-text"><i class="bi bi-search"></i></span>
-              <input type="text" id="searchInput" class="form-control" placeholder="Buscar..." autocomplete="off" data-lpignore="true" data-1p-ignore="true">
+              <input type="text" id="searchInput" class="form-control"
+                     placeholder="Buscar por ID (FA0231N6T7), título, solicitante ou e-mail…"
+                     autocomplete="off" data-lpignore="true" data-1p-ignore="true"
+                     title="Digite o ID completo ou parcial (ex: FA0231, 231), título, nome do solicitante ou e-mail">
             </div>
             <button class="btn btn-outline-secondary btn-sm" onclick="toggleAdvancedFilters()">
               <i class="bi bi-funnel"></i> Filtros
@@ -198,7 +201,11 @@
             </div>
           </div>
 
-          <div class="table-responsive">
+          <!-- 2026-09-04: id="tabelaChamadosAntigos" isola do CSS da tabela
+               principal (id="tabelaTicketsAtuais"). Antes o table-layout:fixed
+               + ellipsis globais aplicavam nas duas e faziam badge de status
+               sobrepor a categoria aqui. -->
+          <div class="table-responsive" id="tabelaChamadosAntigos">
             <table class="table table-sm table-hover align-middle">
               <thead>
                 <tr>
@@ -420,26 +427,44 @@
           </div><!-- /dashboard-sla-content -->
         </div><!-- /dashboard-sla-container -->
 
+        <!-- 2026-09-04: hint sutil quando esta escondendo encerrados por padrão -->
+        <div id="ticketsFiltroAtivoHint"
+             class="alert alert-info py-2 px-3 mb-2 small d-flex align-items-center gap-2"
+             style="border-left:3px solid #0dcaf0;background:#e7f7fb;color:#055160;">
+          <i class="bi bi-info-circle"></i>
+          <span class="flex-grow-1">
+            Mostrando apenas chamados <strong>ativos</strong> (Aberto, Em Andamento, Aguardando).
+          </span>
+          <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none"
+                  onclick="showResolvedFilter()"
+                  style="color:#055160;font-weight:600;">
+            <i class="bi bi-funnel"></i> Ver resolvidos/fechados
+          </button>
+        </div>
+
         <!-- ========================================
-             TABLE
+             TABLE — chamados atuais
+             id="tabelaTicketsAtuais" escopa o CSS de table-layout:fixed,
+             ellipsis e badge-clamp aqui SOMENTE. Nao afeta a tabela de
+             chamados antigos (id="tabelaChamadosAntigos" acima).
              ======================================== -->
-        <div class="table-responsive">
+        <div class="table-responsive" id="tabelaTicketsAtuais">
           <table class="table table-sm table-hover align-middle">
             <thead>
               <tr>
-                <th style="width:40px;">
+                <th style="width:32px;">
                   <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
                 </th>
                 <th style="width:90px;">ID</th>
-                <th style="min-width:140px;">Usuário</th>
-                <th style="min-width:200px;">Título</th>
-                <th style="width:120px;">Grupo</th>
-                <th style="min-width:120px;">Categoria</th>
-                <th style="width:90px;">Prioridade</th>
-                <th style="width:110px;">Status</th>
-                <th style="min-width:120px;">Atribuído a</th>
-                <th style="width:110px;"><i class="bi bi-stopwatch"></i> SLA</th>
-                <th style="width:100px;">Data</th>
+                <th style="width:11%;">Usuário</th>
+                <th style="width:20%;">Título</th>
+                <th style="width:90px;">Grupo</th>
+                <th style="width:11%;">Categoria</th>
+                <th style="width:80px;">Prioridade</th>
+                <th style="width:100px;">Status</th>
+                <th style="width:11%;">Atribuído a</th>
+                <th style="width:96px;"><i class="bi bi-stopwatch"></i> SLA</th>
+                <th style="width:82px;">Data</th>
               </tr>
             </thead>
             <tbody id="ticketsBody">
@@ -1117,6 +1142,29 @@
             <select class="form-select" id="forwardGroupSelect">
               <option value="">Selecione o grupo...</option>
             </select>
+            <small class="text-muted" id="forwardMesmoGrupoHint" style="display:none;">
+              Escolhendo o próprio grupo do ticket: informe uma <strong>categoria diferente</strong> abaixo para recategorizar.
+            </small>
+          </div>
+
+          <!-- Categoria (opcional pra grupo diferente, OBRIGATORIA pra mesmo grupo) -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-folder"></i> Categoria <span id="forwardCatReq" class="text-danger" style="display:none;">*</span>
+            </label>
+            <select class="form-select" id="forwardCategoriaSelect" disabled>
+              <option value="">— sem categoria (deixar em branco no destino) —</option>
+            </select>
+          </div>
+
+          <!-- Subcategoria (segue a categoria) -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">
+              <i class="bi bi-diagram-2"></i> Subcategoria
+            </label>
+            <select class="form-select" id="forwardSubcategoriaSelect" disabled>
+              <option value="">— nenhuma —</option>
+            </select>
           </div>
 
           <!-- Responsável (apenas admin) -->
@@ -1579,7 +1627,7 @@
        ======================================== -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-08-27-imp-detect"></script>
-  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-08-25-limit500"></script>
+  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-09-04-sla-labels"></script>
 
 <script id="cpe-autofill-guard-v1">
 /* Bloqueia autofill do Chrome/Edge em inputs de busca.

@@ -14,8 +14,20 @@ from sqlalchemy import create_engine
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
-# Engine SQLAlchemy (usado por security.py e rotas que precisam de SQLAlchemy)
-_database_url = os.getenv("DATABASE_URL", "mysql+pymysql://root:@127.0.0.1:3306/cpe_plus")
+# Engine SQLAlchemy (usado por security.py e rotas que precisam de SQLAlchemy).
+# 2026-09-03: SEMPRE recomputa a URL a partir dos componentes MYSQL_* atuais.
+# Antes usava os.getenv("DATABASE_URL", ...) direto — o problema e que quando
+# staging exportava MYSQL_DB=cpe_plus_staging mas nao DATABASE_URL, o
+# load_dotenv acima carregava DATABASE_URL do .env (dev) e o engine ficava
+# preso em cpe_plus. Componentes MYSQL_* sao a fonte da verdade agora.
+# Password precisa ser URL-encoded — chars como '@' no password quebram a URL.
+from urllib.parse import quote_plus as _q
+_mysql_user = os.getenv("MYSQL_USER", "root")
+_mysql_pass = os.getenv("MYSQL_PASSWORD", "")
+_mysql_host = os.getenv("MYSQL_HOST", "127.0.0.1")
+_mysql_port = os.getenv("MYSQL_PORT", "3306")
+_mysql_db   = os.getenv("MYSQL_DB",   "cpe_plus")
+_database_url = f"mysql+pymysql://{_q(_mysql_user)}:{_q(_mysql_pass)}@{_mysql_host}:{_mysql_port}/{_mysql_db}?charset=utf8mb4"
 engine = create_engine(_database_url, pool_pre_ping=True)
 
 # =========================================

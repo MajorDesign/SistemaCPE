@@ -12,7 +12,7 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css?v=2026-08-27-footer-fix2">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css?v=2026-09-03-login-height">
 
   <style>
     /* ── KPI Cards ── */
@@ -239,7 +239,11 @@
                 <span class="text-muted small" id="rptContagem">—</span>
                 <div class="input-group input-group-sm" style="width:200px;">
                   <span class="input-group-text"><i class="bi bi-search"></i></span>
-                  <input type="text" class="form-control" id="rptBusca" placeholder="Buscar na tabela..." oninput="rptFiltrarTabela()" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
+                  <input type="text" class="form-control" id="rptBusca"
+                         placeholder="ID (FA0231N6T7), número, assunto, solicitante, e-mail…"
+                         oninput="rptFiltrarTabela()" autocomplete="off"
+                         data-lpignore="true" data-1p-ignore="true"
+                         title="Aceita ID alfanumérico (FA0231N6T7), número (FAT-2026-00231), '#FA0231', assunto, nome ou e-mail do solicitante">
                 </div>
               </div>
             </div>
@@ -304,64 +308,11 @@
               </div>
             </div>
 
-            <!-- ── TERMÔMETRO DO GRUPO ───────────────────────── -->
-            <div class="bg-white border rounded-3 p-4 mb-4" id="rptAvalTermometro" style="display:none;">
-              <div class="d-flex align-items-center mb-3">
-                <i class="bi bi-thermometer-half me-2 text-warning"></i>
-                <span class="fw-semibold" style="font-size:.88rem;">Excelência do Grupo</span>
-              </div>
-              <div class="row g-4 align-items-center">
-                <!-- Gauge -->
-                <div class="col-12 col-md-4 text-center">
-                  <div style="position:relative;display:inline-block;">
-                    <svg viewBox="0 0 200 120" width="220" height="132" id="rptAvalGaugeSvg">
-                      <!-- trilha cinza -->
-                      <path d="M20,110 A90,90 0 0,1 180,110" fill="none" stroke="#e5e7eb" stroke-width="18" stroke-linecap="round"/>
-                      <!-- arco colorido -->
-                      <path id="rptAvalGaugeArc" d="M20,110 A90,90 0 0,1 180,110" fill="none" stroke="#d1d5db" stroke-width="18" stroke-linecap="round"
-                            stroke-dasharray="283" stroke-dashoffset="283"/>
-                      <!-- agulha -->
-                      <line id="rptAvalGaugeNeedle" x1="100" y1="110" x2="100" y2="30"
-                            stroke="#374151" stroke-width="3" stroke-linecap="round"
-                            transform="rotate(0,100,110)"/>
-                      <circle cx="100" cy="110" r="6" fill="#374151"/>
-                    </svg>
-                    <div style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);text-align:center;">
-                      <div id="rptAvalGaugeVal" style="font-size:1.8rem;font-weight:800;line-height:1;color:#1f2937;">—</div>
-                      <div id="rptAvalGaugeLabel" style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;">Carregando</div>
-                    </div>
-                  </div>
-                  <div class="d-flex justify-content-between px-2 mt-1" style="font-size:.68rem;color:#9ca3af;width:220px;margin:0 auto;">
-                    <span>Crítico</span><span>Médio</span><span>Excelente</span>
-                  </div>
-                </div>
-                <!-- Legenda de faixas -->
-                <div class="col-12 col-md-4">
-                  <div class="d-flex flex-column gap-2">
-                    <div class="d-flex align-items-center gap-2">
-                      <div style="width:12px;height:12px;border-radius:3px;background:#059669;flex-shrink:0;"></div>
-                      <span style="font-size:.8rem;"><strong>Excelente</strong> — 8,0 a 10 ★</span>
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                      <div style="width:12px;height:12px;border-radius:3px;background:#3b82f6;flex-shrink:0;"></div>
-                      <span style="font-size:.8rem;"><strong>Bom</strong> — 6,0 a 7,9 ★</span>
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                      <div style="width:12px;height:12px;border-radius:3px;background:#f59e0b;flex-shrink:0;"></div>
-                      <span style="font-size:.8rem;"><strong>Mediano</strong> — 4,0 a 5,9 ★</span>
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                      <div style="width:12px;height:12px;border-radius:3px;background:#ef4444;flex-shrink:0;"></div>
-                      <span style="font-size:.8rem;"><strong>Crítico</strong> — abaixo de 4,0 ★</span>
-                    </div>
-                  </div>
-                </div>
-                <!-- Mini-KPIs -->
-                <div class="col-12 col-md-4">
-                  <div class="row g-2" id="rptAvalMiniKpis"></div>
-                </div>
-              </div>
-            </div>
+            <!-- ── TERMÔMETRO DO GRUPO ─────────────────────────
+                 Container dinamico. JS gera 1 card se consolidado (ADMIN),
+                 ou N cards se RESPONSAVEL_GRUPO tem escopo em varios grupos
+                 (renderizado por _rptRenderTermometrosPorGrupo). -->
+            <div id="rptAvalTermometros" style="display:none;"></div>
 
             <!-- Distribuição -->
             <div class="bg-white border rounded-3 p-3 mb-4" id="rptAvalDist" style="display:none;">
@@ -412,6 +363,13 @@
                 <div class="col-6 col-md-2">
                   <label class="form-label small fw-semibold mb-1">Data Fim</label>
                   <input type="date" class="form-control form-control-sm" id="rptAvalDf">
+                </div>
+                <div class="col-12 col-md-4">
+                  <label class="form-label small fw-semibold mb-1">Buscar chamado / solicitante</label>
+                  <input type="text" class="form-control form-control-sm" id="rptAvalBusca"
+                         placeholder="ID (FA0231N6T7), número, assunto, nome ou e-mail…"
+                         autocomplete="off" data-lpignore="true" data-1p-ignore="true"
+                         onkeydown="if(event.key==='Enter'){event.preventDefault();rptAvalCarregar();}">
                 </div>
                 <div class="col-6 col-md-2">
                   <label class="form-label small fw-semibold mb-1">Grupo</label>
@@ -884,11 +842,22 @@
     const q         = (document.getElementById('rptBusca').value||'').toLowerCase();
     const slaFiltro = document.getElementById('rptSlaFiltro').value;
 
+    // 2026-09-03: normaliza busca (ignora '#' e espacos, case insensitive)
+    // e inclui id_alfanumerica (FA0231N6T7) + email do solicitante alem de
+    // numero/assunto/nomes/categoria/prioridade/status.
+    const qNorm = q.replace(/[#\s]/g, '');
     rptFiltrados = rptDados.filter(t => {
-      // Busca textual — inclui categoria e prioridade (2026-08-24)
-      const txt = [t.numero, t.assunto, t.categoria_nome, t.solicitante_nome, t.responsavel_nome, PR_LABEL[t.prioridade_id], STATUS_LABEL[t.status_id]]
-        .join(' ').toLowerCase();
-      if (q && !txt.includes(q)) return false;
+      if (qNorm) {
+        const alvos = [
+          t.numero, t.id_alfanumerica, String(t.id),
+          t.assunto, t.categoria_nome,
+          t.solicitante_nome, t.solicitante_email,
+          t.responsavel_nome,
+          PR_LABEL[t.prioridade_id], STATUS_LABEL[t.status_id],
+        ];
+        const bate = alvos.some(v => v && String(v).toLowerCase().replace(/\s/g, '').includes(qNorm));
+        if (!bate) return false;
+      }
 
       // Filtro SLA
       if (slaFiltro) {
@@ -1048,6 +1017,7 @@
     const rid  = document.getElementById('rptAvalResp')?.value  || '';
     const cid  = document.getElementById('rptAvalCat')?.value   || '';
     const sid  = document.getElementById('rptAvalSub')?.value   || '';
+    const q    = (document.getElementById('rptAvalBusca')?.value || '').trim();
 
     const p = new URLSearchParams({ usuario_id: user.id, pagina, por_pagina: _RPT_AVAL_PP });
     if (di)   p.append('data_inicio', di);
@@ -1059,20 +1029,34 @@
     if (rid)  p.append('responsavel_id', rid);
     if (cid)  p.append('categoria_id', cid);
     if (sid)  p.append('subcategoria_id', sid);
+    if (q)    p.append('q', q);
+
+    // KPIs (resumo) e por-responsavel tambem seguem o filtro de busca
+    const pResumo = new URLSearchParams({ usuario_id: user.id });
+    if (gid) pResumo.append('grupo_id', gid);
+    if (q)   pResumo.append('q', q);
 
     const pMembro = new URLSearchParams({ usuario_id: user.id });
     if (di) pMembro.append('data_inicio', di);
     if (df) pMembro.append('data_fim', df);
+    if (gid) pMembro.append('grupo_id', gid);
+    if (q)   pMembro.append('q', q);
 
     try {
-      const [data, resumo, porResp] = await Promise.all([
+      // 2026-09-03: usa /resumo-por-grupo — quando RESPONSAVEL_GRUPO tem
+      // escopo em varios grupos, retorna 1 entry por grupo (renderiza N
+      // termometros separados). ADMIN sem filtro grupo -> 1 entry consolidada
+      // (comportamento antigo). Ver docs/REGRAS_NEGOCIO.md.
+      const [data, resumoGrp, porResp] = await Promise.all([
         apiRequest('GET', `/avaliacoes?${p}`),
-        apiRequest('GET', `/avaliacoes/resumo?usuario_id=${user.id}`),
+        apiRequest('GET', `/avaliacoes/resumo-por-grupo?${pResumo}`),
         apiRequest('GET', `/avaliacoes/por-responsavel?${pMembro}`)
       ]);
-      _rptRenderAvalKpis(resumo);
-      _rptRenderAvalTermometro(resumo);
-      _rptRenderAvalDist(resumo);
+      const grupos = (resumoGrp && resumoGrp.grupos) || [];
+      const consolidado = _rptConsolidarGrupos(grupos);
+      _rptRenderAvalKpis(consolidado);
+      _rptRenderTermometrosPorGrupo(grupos);
+      _rptRenderAvalDist(consolidado);
       _rptRenderMembroAval(porResp.membros || []);
       _rptRenderAvalTabela(data);
       document.getElementById('rptAvalSubtitulo').textContent =
@@ -1087,11 +1071,13 @@
   }
 
   function rptAvalLimpar() {
-    document.getElementById('rptAvalDi').value   = '';
-    document.getElementById('rptAvalDf').value   = '';
-    document.getElementById('rptAvalEMin').value = '';
-    document.getElementById('rptAvalEMax').value = '';
-    document.getElementById('rptAvalSit').value  = '';
+    document.getElementById('rptAvalDi').value    = '';
+    document.getElementById('rptAvalDf').value    = '';
+    document.getElementById('rptAvalEMin').value  = '';
+    document.getElementById('rptAvalEMax').value  = '';
+    document.getElementById('rptAvalSit').value   = '';
+    const b = document.getElementById('rptAvalBusca');
+    if (b) b.value = '';
     const gSel = document.getElementById('rptAvalGrupo');
     if (gSel) gSel.value = '';
     rptAvalOnGrupoChange();
@@ -1163,71 +1149,147 @@
   }
 
   // ── TERMÔMETRO ────────────────────────────────────────────────
-  function _rptRenderAvalTermometro(r) {
-    const media   = r.media || 0;
-    const total   = r.total_avaliados || 0;
-    const termEl  = document.getElementById('rptAvalTermometro');
+  // 2026-09-03: consolida N entries em um objeto pra alimentar os
+  // KPIs superiores + distribuicao (que sao globais na tela).
+  function _rptConsolidarGrupos(grupos) {
+    const acc = {
+      total_avaliados: 0, positivas: 0, neutras: 0, negativas: 0,
+      pendentes: 0, expiradas: 0, distribuicao: {},
+      _somaEstrelas: 0,
+    };
+    (grupos || []).forEach(g => {
+      acc.total_avaliados += g.total_avaliados || 0;
+      acc.positivas       += g.positivas       || 0;
+      acc.neutras         += g.neutras         || 0;
+      acc.negativas       += g.negativas       || 0;
+      acc.pendentes       += g.pendentes       || 0;
+      acc.expiradas       += g.expiradas       || 0;
+      acc._somaEstrelas   += (g.media || 0) * (g.total_avaliados || 0);
+      Object.entries(g.distribuicao || {}).forEach(([est, qtd]) => {
+        acc.distribuicao[est] = (acc.distribuicao[est] || 0) + qtd;
+      });
+    });
+    acc.media = acc.total_avaliados > 0
+      ? (acc._somaEstrelas / acc.total_avaliados)
+      : 0;
+    delete acc._somaEstrelas;
+    return acc;
+  }
 
-    if (total === 0) { termEl.style.display = 'none'; return; }
-    termEl.style.display = '';
+  // Render N termometros — 1 card por grupo. Se so ha 1 grupo (ADMIN
+  // consolidado ou RESPONSAVEL de 1 grupo unico) renderiza igual, sem
+  // titulo de grupo. Se ha varios, cada card tem o nome do grupo no header.
+  function _rptRenderTermometrosPorGrupo(grupos) {
+    const wrap = document.getElementById('rptAvalTermometros');
+    if (!wrap) return;
+    const listaValidos = (grupos || []).filter(g => (g.total_avaliados || 0) > 0);
+    if (!listaValidos.length) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+    wrap.style.display = '';
 
-    // Classificação e cor
-    let label, cor, corHex;
-    if (media >= 8)      { label = 'Excelente'; cor = 'classif-exc';  corHex = '#059669'; }
-    else if (media >= 6) { label = 'Bom';       cor = 'classif-bom';  corHex = '#3b82f6'; }
-    else if (media >= 4) { label = 'Mediano';   cor = 'classif-med';  corHex = '#f59e0b'; }
-    else                  { label = 'Crítico';   cor = 'classif-crit'; corHex = '#ef4444'; }
+    const multi = listaValidos.length > 1;
+    wrap.innerHTML = listaValidos.map((g, idx) => _rptTermometroCardHtml(g, idx, multi)).join('');
 
-    // Gauge SVG — arco de 0° (esq) a 180° (dir): total = 283px de comprimento
-    const pct    = Math.min(media / 10, 1);
-    const offset = 283 - (pct * 283);           // dashoffset decresce conforme sobe
-    const angleDeg = -90 + pct * 180;           // agulha de -90° (esq) a +90° (dir)
-
-    const arc    = document.getElementById('rptAvalGaugeArc');
-    const needle = document.getElementById('rptAvalGaugeNeedle');
-    const val    = document.getElementById('rptAvalGaugeVal');
-    const lbl    = document.getElementById('rptAvalGaugeLabel');
-
-    // Pequeno delay para a transição CSS funcionar
+    // Anima gauges apos um tick (deixa CSS pintar antes de rodar)
     setTimeout(() => {
-      arc.setAttribute('stroke', corHex);
-      arc.setAttribute('stroke-dashoffset', offset);
-      needle.setAttribute('transform', `rotate(${angleDeg},100,110)`);
+      listaValidos.forEach((g, idx) => _rptTermometroAnimarGauge(g, idx));
     }, 80);
+  }
 
-    val.textContent   = media.toFixed(1);
-    val.style.color   = corHex;
-    lbl.textContent   = label;
-    lbl.style.color   = corHex;
+  function _rptClassifMedia(media) {
+    if (media >= 8) return { label: 'Excelente', corHex: '#059669' };
+    if (media >= 6) return { label: 'Bom',       corHex: '#3b82f6' };
+    if (media >= 4) return { label: 'Mediano',   corHex: '#f59e0b' };
+    return           { label: 'Crítico',   corHex: '#ef4444' };
+  }
 
-    // Mini-KPIs ao lado
-    const pctPos = total > 0 ? Math.round(r.positivas / total * 100) : 0;
-    const pctNeg = total > 0 ? Math.round(r.negativas / total * 100) : 0;
-    document.getElementById('rptAvalMiniKpis').innerHTML = `
-      <div class="col-6">
-        <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;text-align:center;">
-          <div style="font-size:1.3rem;font-weight:800;color:#059669;">${pctPos}%</div>
-          <div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Satisfeitos</div>
-        </div>
-      </div>
-      <div class="col-6">
-        <div style="background:#fef2f2;border-radius:8px;padding:10px 12px;text-align:center;">
-          <div style="font-size:1.3rem;font-weight:800;color:#dc2626;">${pctNeg}%</div>
-          <div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Insatisfeitos</div>
-        </div>
-      </div>
-      <div class="col-6 mt-1">
-        <div style="background:#fffbeb;border-radius:8px;padding:10px 12px;text-align:center;">
-          <div style="font-size:1.3rem;font-weight:800;color:#d97706;">${r.pendentes}</div>
-          <div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Pendentes</div>
-        </div>
-      </div>
-      <div class="col-6 mt-1">
-        <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;text-align:center;">
-          <div style="font-size:1.3rem;font-weight:800;color:#475569;">${total}</div>
-          <div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Avaliações</div>
+  function _rptTermometroCardHtml(g, idx, multi) {
+    const media = g.media || 0;
+    const total = g.total_avaliados || 0;
+    const { label, corHex } = _rptClassifMedia(media);
+    const pctPos = total > 0 ? Math.round((g.positivas || 0) / total * 100) : 0;
+    const pctNeg = total > 0 ? Math.round((g.negativas || 0) / total * 100) : 0;
+
+    // Header muda quando ha varios grupos — destaca o nome
+    const header = multi
+      ? `<div class="d-flex align-items-center justify-content-between mb-3">
+           <div class="d-flex align-items-center">
+             <i class="bi bi-people-fill me-2" style="color:${corHex};"></i>
+             <span class="fw-bold" style="font-size:1rem;color:#1f2937;">${_rptEsc(g.group_name || 'Grupo')}</span>
+             <span class="ms-2 badge" style="background:${corHex};color:#fff;font-weight:600;">${label}</span>
+           </div>
+           <span class="text-muted small">${total} avaliação(ões)</span>
+         </div>`
+      : `<div class="d-flex align-items-center mb-3">
+           <i class="bi bi-thermometer-half me-2 text-warning"></i>
+           <span class="fw-semibold" style="font-size:.88rem;">Excelência do Grupo</span>
+         </div>`;
+
+    return `
+      <div class="bg-white border rounded-3 p-4 mb-3" data-rpt-term-idx="${idx}">
+        ${header}
+        <div class="row g-4 align-items-center">
+          <div class="col-12 col-md-4 text-center">
+            <div style="position:relative;display:inline-block;">
+              <svg viewBox="0 0 200 120" width="220" height="132">
+                <path d="M20,110 A90,90 0 0,1 180,110" fill="none" stroke="#e5e7eb" stroke-width="18" stroke-linecap="round"/>
+                <path class="rpt-gauge-arc" d="M20,110 A90,90 0 0,1 180,110" fill="none"
+                      stroke="#d1d5db" stroke-width="18" stroke-linecap="round"
+                      stroke-dasharray="283" stroke-dashoffset="283"
+                      style="transition:stroke-dashoffset .8s ease, stroke .8s ease;"/>
+                <line class="rpt-gauge-needle" x1="100" y1="110" x2="100" y2="30"
+                      stroke="#374151" stroke-width="3" stroke-linecap="round"
+                      transform="rotate(-90,100,110)"
+                      style="transition:transform .8s ease;"/>
+                <circle cx="100" cy="110" r="6" fill="#374151"/>
+              </svg>
+              <div style="position:absolute;bottom:2px;left:50%;transform:translateX(-50%);text-align:center;">
+                <div class="rpt-gauge-val" style="font-size:1.8rem;font-weight:800;line-height:1;color:${corHex};">${media.toFixed(1)}</div>
+                <div class="rpt-gauge-label" style="font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;color:${corHex};">${label}</div>
+              </div>
+            </div>
+            <div class="d-flex justify-content-between px-2 mt-1" style="font-size:.68rem;color:#9ca3af;width:220px;margin:0 auto;">
+              <span>Crítico</span><span>Médio</span><span>Excelente</span>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="d-flex flex-column gap-2">
+              <div class="d-flex align-items-center gap-2"><div style="width:12px;height:12px;border-radius:3px;background:#059669;flex-shrink:0;"></div><span style="font-size:.8rem;"><strong>Excelente</strong> — 8,0 a 10 ★</span></div>
+              <div class="d-flex align-items-center gap-2"><div style="width:12px;height:12px;border-radius:3px;background:#3b82f6;flex-shrink:0;"></div><span style="font-size:.8rem;"><strong>Bom</strong> — 6,0 a 7,9 ★</span></div>
+              <div class="d-flex align-items-center gap-2"><div style="width:12px;height:12px;border-radius:3px;background:#f59e0b;flex-shrink:0;"></div><span style="font-size:.8rem;"><strong>Mediano</strong> — 4,0 a 5,9 ★</span></div>
+              <div class="d-flex align-items-center gap-2"><div style="width:12px;height:12px;border-radius:3px;background:#ef4444;flex-shrink:0;"></div><span style="font-size:.8rem;"><strong>Crítico</strong> — abaixo de 4,0 ★</span></div>
+            </div>
+          </div>
+          <div class="col-12 col-md-4">
+            <div class="row g-2">
+              <div class="col-6"><div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:1.3rem;font-weight:800;color:#059669;">${pctPos}%</div><div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Satisfeitos</div></div></div>
+              <div class="col-6"><div style="background:#fef2f2;border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:1.3rem;font-weight:800;color:#dc2626;">${pctNeg}%</div><div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Insatisfeitos</div></div></div>
+              <div class="col-6 mt-1"><div style="background:#fffbeb;border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:1.3rem;font-weight:800;color:#d97706;">${g.pendentes || 0}</div><div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Pendentes</div></div></div>
+              <div class="col-6 mt-1"><div style="background:#f8fafc;border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:1.3rem;font-weight:800;color:#475569;">${total}</div><div style="font-size:.68rem;color:#6b7280;text-transform:uppercase;font-weight:600;">Avaliações</div></div></div>
+            </div>
+          </div>
         </div>
       </div>`;
+  }
+
+  function _rptTermometroAnimarGauge(g, idx) {
+    const card = document.querySelector(`[data-rpt-term-idx="${idx}"]`);
+    if (!card) return;
+    const media = g.media || 0;
+    const { corHex } = _rptClassifMedia(media);
+    const pct = Math.min(media / 10, 1);
+    const offset = 283 - (pct * 283);
+    const angle  = -90 + pct * 180;
+    const arc    = card.querySelector('.rpt-gauge-arc');
+    const needle = card.querySelector('.rpt-gauge-needle');
+    if (arc)    { arc.setAttribute('stroke', corHex); arc.setAttribute('stroke-dashoffset', offset); }
+    if (needle) { needle.setAttribute('transform', `rotate(${angle},100,110)`); }
+  }
+
+  // esc HTML simples
+  function _rptEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   // ── TABELA INDIVIDUAL ──────────────────────────────────────────

@@ -44,26 +44,45 @@ interacoes_router = APIRouter(prefix="/api/interacoes", tags=["interacoes"])
     summary="Listar interações de um ticket",
     description="Obtém todos os comentários de um ticket"
 )
-async def get_interacoes_ticket(ticket_id: int, mostrar_internas: bool = False):
-    """Obtém interações de um ticket"""
-    logger.info(f"[INTERACOES] Obtendo comentários do ticket #{ticket_id}")
-    
+async def get_interacoes_ticket(ticket_id: int,
+                                 mostrar_internas: bool = False,
+                                 usuario_id: Optional[int] = None):
+    """Obtém interações de um ticket.
+    2026-09-03: aceita usuario_id pra checar privacidade — se o user nao
+    tem permissao pra ver o ticket (regra de negocio em
+    docs/REGRAS_NEGOCIO.md "Privacidade de tickets"), 403.
+    """
+    logger.info(f"[INTERACOES] Obtendo comentários do ticket #{ticket_id} (uid={usuario_id})")
+
     from app import get_db_or_404, convert_datetime_list
-    
+
     conn = get_db_or_404()
     cursor = None
-    
+
     try:
         cursor = conn.cursor(dictionary=True)
-        
-        # Verificar se ticket existe
-        cursor.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
-        if not cursor.fetchone():
+
+        # Verificar se ticket existe + carregar campos usados pelo check de privacidade
+        cursor.execute(
+            "SELECT id, solicitante_id, responsavel_id, group_id "
+            "FROM tickets WHERE id = %s",
+            (ticket_id,),
+        )
+        ticket = cursor.fetchone()
+        if not ticket:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Ticket #{ticket_id} não encontrado"
             )
-        
+
+        if usuario_id:
+            from routes.tickets import user_pode_ver_ticket
+            if not user_pode_ver_ticket(cursor, usuario_id, ticket):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Voce nao tem permissao para ver este chamado.",
+                )
+
         # Montar query com ou sem notas internas
         where = "publico = TRUE" if not mostrar_internas else "1=1"
         

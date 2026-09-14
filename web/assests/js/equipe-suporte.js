@@ -551,6 +551,8 @@ async function abrirModalAgenda(id) {
     a ? !!a.oferece_presencial : true;
   document.getElementById('agOfereceOnline').checked =
     a ? !!a.oferece_online : true;
+  document.getElementById('agOfereceDrones').checked =
+    a ? !!a.oferece_drones : false;
 
   // Link direto — só mostra quando a agenda já tem slug (editando)
   const wrap = document.getElementById('agSlugFieldWrap');
@@ -566,8 +568,258 @@ async function abrirModalAgenda(id) {
 
   document.getElementById('btnExcluirAgenda').style.display =
     (a && _canAdmin) ? 'inline-flex' : 'none';
+
+  // Delegados: so mostra em modo edicao (id existente) e para admin.
+  const delWrap = document.getElementById('agDelegadosWrap');
+  if (delWrap) {
+    if (a && _canAdmin) {
+      delWrap.style.display = '';
+      setErro('erroDelegado', '');
+      document.getElementById('agDelegadoBusca').value = '';
+      document.getElementById('agDelegadoClear').hidden = true;
+      document.getElementById('agDelegadoAddBtn').disabled = true;
+      _pickerSelected = null;
+      carregarDelegadosAgenda(a.id);
+      _pickerBindOnce();
+    } else {
+      delWrap.style.display = 'none';
+    }
+  }
+
   abrirModal('modalAgenda');
 }
+
+/* ============ DELEGADOS DA AGENDA ============ */
+let _delegadosAgendaAtual = [];
+let _pickerCandidatos = [];    // resultado atual do backend
+let _pickerFocusIdx  = -1;     // opcao selecionada por teclado
+let _pickerSelected  = null;   // user escolhido (habilita botao Adicionar)
+let _pickerBuscaTimer = null;
+
+function _iniciais(nome) {
+  const partes = String(nome || '').trim().split(/\s+/).slice(0, 2);
+  return partes.map(p => p[0] || '').join('').toUpperCase() || '?';
+}
+
+async function carregarDelegadosAgenda(agendaId) {
+  const box = document.getElementById('agDelegadosChips');
+  box.innerHTML = '<span class="sup-help">Carregando…</span>';
+  const r = await apiFetch(`/agendas/${agendaId}/delegados`);
+  if (!r.success) {
+    box.innerHTML = '<span class="sup-help" style="color:#b91c1c">Erro ao carregar delegados.</span>';
+    _delegadosAgendaAtual = [];
+    return;
+  }
+  _delegadosAgendaAtual = r.delegados || [];
+  if (!_delegadosAgendaAtual.length) {
+    box.innerHTML = '<span class="sup-help">Nenhum usuário delegado — só admins de suporte têm acesso.</span>';
+  } else {
+    box.innerHTML = _delegadosAgendaAtual.map(d => `
+      <span class="sup-chip" title="Concedido em ${d.granted_at || '—'}${d.granted_by_name ? ' por ' + esc(d.granted_by_name) : ''}">
+        <span class="sup-chip__avatar">${esc(_iniciais(d.name))}</span>
+        ${esc(d.name)}
+        <button type="button" class="sup-chip-x"
+                onclick="removerDelegadoAgenda(${d.user_id})"
+                title="Remover acesso">&times;</button>
+      </span>
+    `).join('');
+  }
+}
+
+/* --- Combobox custom (substitui datalist nativo) --- */
+
+function _pickerHighlight(txt, termo) {
+  if (!termo) return esc(txt);
+  const esct = esc(txt);
+  try {
+    const re = new RegExp('(' + termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig');
+    return esct.replace(re, '<mark>$1</mark>');
+  } catch { return esct; }
+}
+
+function _pickerRenderVazio(msg) {
+  const dd = document.getElementById('agDelegadoDropdown');
+  dd.innerHTML = `<div class="sup-user-picker__empty">${esc(msg)}</div>`;
+  dd.hidden = false;
+  document.getElementById('agDelegadoBusca').setAttribute('aria-expanded', 'true');
+}
+
+function _pickerRenderLoading() {
+  const dd = document.getElementById('agDelegadoDropdown');
+  dd.innerHTML = Array.from({length: 3}).map(() => `
+    <div class="sup-user-picker__skeleton">
+      <div class="sup-user-picker__sk-avatar"></div>
+      <div class="sup-user-picker__sk-lines">
+        <div class="sup-user-picker__sk-line"></div>
+        <div class="sup-user-picker__sk-line sup-user-picker__sk-line--sm"></div>
+      </div>
+    </div>`).join('');
+  dd.hidden = false;
+  document.getElementById('agDelegadoBusca').setAttribute('aria-expanded', 'true');
+}
+
+function _pickerRender(users, termo) {
+  const dd = document.getElementById('agDelegadoDropdown');
+  if (!users.length) {
+    _pickerRenderVazio(termo
+      ? `Nenhum usuário casa com "${termo}".`
+      : 'Nenhum usuário disponível para delegar.');
+    return;
+  }
+  dd.innerHTML = users.map((u, idx) => {
+    const grupo = u.group_name ? `<span class="sup-user-picker__group">${esc(u.group_name)}</span>` : '';
+    return `
+      <div class="sup-user-picker__item" role="option" data-idx="${idx}" data-uid="${u.id}"
+           tabindex="-1">
+        <div class="sup-user-picker__avatar">${esc(_iniciais(u.name))}</div>
+        <div class="sup-user-picker__meta">
+          <div class="sup-user-picker__name">${_pickerHighlight(u.name, termo)}</div>
+          <div class="sup-user-picker__email">${_pickerHighlight(u.email || '—', termo)}</div>
+        </div>
+        ${grupo}
+      </div>`;
+  }).join('');
+  dd.hidden = false;
+  document.getElementById('agDelegadoBusca').setAttribute('aria-expanded', 'true');
+  _pickerFocusIdx = -1;
+  dd.querySelectorAll('.sup-user-picker__item').forEach(el => {
+    el.addEventListener('click', () => _pickerEscolher(Number(el.dataset.idx)));
+    el.addEventListener('mouseenter', () => _pickerFocar(Number(el.dataset.idx)));
+  });
+}
+
+function _pickerFocar(idx) {
+  const dd = document.getElementById('agDelegadoDropdown');
+  const items = dd.querySelectorAll('.sup-user-picker__item');
+  if (!items.length) return;
+  if (idx < 0) idx = items.length - 1;
+  if (idx >= items.length) idx = 0;
+  items.forEach(i => i.classList.remove('is-focused'));
+  items[idx].classList.add('is-focused');
+  items[idx].scrollIntoView({ block: 'nearest' });
+  _pickerFocusIdx = idx;
+}
+
+function _pickerEscolher(idx) {
+  const u = _pickerCandidatos[idx];
+  if (!u) return;
+  _pickerSelected = u;
+  const input = document.getElementById('agDelegadoBusca');
+  input.value = `${u.name} — ${u.email || ''}`;
+  _pickerFechar();
+  document.getElementById('agDelegadoAddBtn').disabled = false;
+  document.getElementById('agDelegadoAddBtn').focus();
+}
+
+function _pickerFechar() {
+  const dd = document.getElementById('agDelegadoDropdown');
+  dd.hidden = true;
+  document.getElementById('agDelegadoBusca').setAttribute('aria-expanded', 'false');
+  _pickerFocusIdx = -1;
+}
+
+function _pickerAbrir(agendaId, q = '') {
+  const dd = document.getElementById('agDelegadoDropdown');
+  if (!dd) return;
+  _pickerRenderLoading();
+  const params = q ? '?q=' + encodeURIComponent(q) : '';
+  apiFetch(`/agendas/${agendaId}/delegados/candidatos${params}`).then(r => {
+    if (!r.success) { _pickerRenderVazio('Erro ao carregar candidatos.'); return; }
+    _pickerCandidatos = r.usuarios || [];
+    _pickerRender(_pickerCandidatos, q);
+  });
+}
+
+function limparBuscaDelegado() {
+  const input = document.getElementById('agDelegadoBusca');
+  input.value = '';
+  document.getElementById('agDelegadoClear').hidden = true;
+  document.getElementById('agDelegadoAddBtn').disabled = true;
+  _pickerSelected = null;
+  input.focus();
+  const agendaId = document.getElementById('agendaId').value;
+  if (agendaId) _pickerAbrir(agendaId, '');
+}
+
+function _pickerBindOnce() {
+  const picker = document.getElementById('agDelegadoPicker');
+  const input  = document.getElementById('agDelegadoBusca');
+  if (!picker || !input || picker.dataset.bound === '1') return;
+  picker.dataset.bound = '1';
+
+  input.addEventListener('focus', () => {
+    const agendaId = document.getElementById('agendaId').value;
+    if (agendaId) _pickerAbrir(agendaId, input.value.trim());
+  });
+
+  input.addEventListener('input', () => {
+    const val = input.value.trim();
+    document.getElementById('agDelegadoClear').hidden = !val;
+    // Digitou manualmente — invalida selecao anterior
+    _pickerSelected = null;
+    document.getElementById('agDelegadoAddBtn').disabled = true;
+    clearTimeout(_pickerBuscaTimer);
+    _pickerBuscaTimer = setTimeout(() => {
+      const agendaId = document.getElementById('agendaId').value;
+      if (agendaId) _pickerAbrir(agendaId, val);
+    }, 180);
+  });
+
+  input.addEventListener('keydown', (e) => {
+    const dd = document.getElementById('agDelegadoDropdown');
+    if (dd.hidden && (e.key === 'ArrowDown' || e.key === 'Enter')) {
+      const agendaId = document.getElementById('agendaId').value;
+      if (agendaId) _pickerAbrir(agendaId, input.value.trim());
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'ArrowDown') { _pickerFocar(_pickerFocusIdx + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowUp') { _pickerFocar(_pickerFocusIdx - 1); e.preventDefault(); }
+    else if (e.key === 'Enter') {
+      if (_pickerFocusIdx >= 0) { _pickerEscolher(_pickerFocusIdx); e.preventDefault(); }
+    }
+    else if (e.key === 'Escape') { _pickerFechar(); }
+  });
+
+  // Fecha ao clicar fora
+  document.addEventListener('click', (e) => {
+    if (!picker.contains(e.target)) _pickerFechar();
+  });
+}
+
+async function adicionarDelegadoAgenda() {
+  const agendaId = document.getElementById('agendaId').value;
+  if (!agendaId) return;
+  if (!_pickerSelected) {
+    setErro('erroDelegado', 'Selecione um usuário da lista.');
+    return;
+  }
+  setErro('erroDelegado', '');
+  const target = _pickerSelected;
+  const r = await apiFetch(`/agendas/${agendaId}/delegados`, {
+    method: 'POST', body: JSON.stringify({ user_id: target.id }),
+  });
+  if (!r.success) { setErro('erroDelegado', r.detail || 'Erro ao adicionar.'); return; }
+  toast(`${target.name} agora tem acesso à agenda.`, 'success');
+  limparBuscaDelegado();
+  await carregarDelegadosAgenda(agendaId);
+}
+
+async function removerDelegadoAgenda(userId) {
+  const agendaId = document.getElementById('agendaId').value;
+  if (!agendaId) return;
+  const alvo = _delegadosAgendaAtual.find(d => d.user_id === userId);
+  const nomeAlvo = alvo ? alvo.name : 'este usuário';
+  if (!confirm(`Remover acesso de ${nomeAlvo} a esta agenda?`)) return;
+  const r = await apiFetch(`/agendas/${agendaId}/delegados/${userId}`, { method: 'DELETE' });
+  if (!r.success) { setErro('erroDelegado', r.detail || 'Erro ao remover.'); return; }
+  toast('Acesso removido.', 'success');
+  await carregarDelegadosAgenda(agendaId);
+}
+
+window.adicionarDelegadoAgenda = adicionarDelegadoAgenda;
+window.removerDelegadoAgenda   = removerDelegadoAgenda;
+window.limparBuscaDelegado     = limparBuscaDelegado;
 
 function copiarLinkAgenda() {
   const link = document.getElementById('agSlugPreview').value;
@@ -595,6 +847,7 @@ async function salvarAgenda() {
     instrutor_id: instrutorId ? parseInt(instrutorId) : null,
     oferece_presencial: oferecePres,
     oferece_online: ofereceOnl,
+    oferece_drones: document.getElementById('agOfereceDrones').checked,
     slot_duracao_min: parseInt(document.getElementById('agDuracao').value) || 30,
     cor: document.getElementById('agCor').value,
     ativo: document.getElementById('agAtivo').value === '1',
@@ -818,14 +1071,22 @@ function gridSemana(refDate, soUmDia = false) {
     let cells = '';
     for (let h = HORA_INI; h < HORA_FIM; h++) cells += '<div class="sup-hour-cell"></div>';
 
-    // bloqueios do dia
+    // bloqueios do dia — click abre modal de detalhe (motivo + autor + remover).
+    // Antes so tinha tooltip nativo e nada acontecia no click.
     let blocos = '';
     calBloqueios.forEach(b => {
       const bi = parseDT(b.inicio), bf = parseDT(b.fim);
       if (!bi || !mesmoDia(bi, d)) return;
-      const top = topoPx(bi), alt = Math.max(16, topoPx(bf) - top);
-      blocos += `<div class="sup-event-block" style="top:${top}px;height:${alt}px"
-        title="Bloqueado: ${esc(b.motivo || '')}"></div>`;
+      const top = topoPx(bi), alt = Math.max(24, topoPx(bf) - top);
+      const autor = b.created_by_nome ? ` — por ${esc(b.created_by_nome)}` : '';
+      const motivoTxt = b.motivo ? esc(b.motivo) : 'Sem motivo informado';
+      const compacto = alt < 44 ? ' sup-event-block--compacto' : '';
+      blocos += `<div class="sup-event-block${compacto}" style="top:${top}px;height:${alt}px"
+        title="Bloqueado: ${motivoTxt}${autor}"
+        onclick="event.stopPropagation(); abrirModalBloqueioDetalhe(${b.id})">
+        <div class="sup-event-block__head"><i class="bi bi-lock-fill"></i> Bloqueado</div>
+        <div class="sup-event-block__motivo">${motivoTxt}</div>
+      </div>`;
     });
 
     // agendamentos do dia
@@ -1142,6 +1403,40 @@ async function salvarBloqueio() {
   carregarCalendario();
 }
 
+/** Detalhe do bloqueio (clicar no bloco do calendario). */
+let _bloqueioAtualId = null;
+function _fmtDTHumano(v) {
+  const dt = parseDT(v);
+  if (!dt) return '—';
+  return dt.toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+function abrirModalBloqueioDetalhe(id) {
+  const b = calBloqueios.find(x => Number(x.id) === Number(id));
+  if (!b) { toast('Bloqueio nao encontrado.', 'error'); return; }
+  _bloqueioAtualId = b.id;
+  document.getElementById('bdMotivo').textContent   = b.motivo || 'Sem motivo informado';
+  document.getElementById('bdInicio').textContent   = _fmtDTHumano(b.inicio);
+  document.getElementById('bdFim').textContent      = _fmtDTHumano(b.fim);
+  document.getElementById('bdAutor').textContent    = b.created_by_nome || '—';
+  document.getElementById('bdCriadoEm').textContent = _fmtDTHumano(b.created_at);
+  abrirModal('modalBloqueioDetalhe');
+}
+async function removerBloqueioAtual() {
+  if (!_bloqueioAtualId) return;
+  if (!confirm('Remover este bloqueio? O horario voltara a ficar disponivel.')) return;
+  const r = await apiFetch('/bloqueios/' + _bloqueioAtualId, { method: 'DELETE' });
+  if (!r.success) { toast(r.detail || 'Erro ao remover.', 'error'); return; }
+  _bloqueioAtualId = null;
+  fecharModal('modalBloqueioDetalhe');
+  toast('Bloqueio removido.', 'success');
+  carregarCalendario();
+}
+window.abrirModalBloqueioDetalhe = abrirModalBloqueioDetalhe;
+window.removerBloqueioAtual      = removerBloqueioAtual;
+
 /* ============ CONFIGURAR HORÁRIOS ============ */
 async function abrirConfigHorarios() {
   if (!agendaAtual) { toast('Abra uma agenda primeiro.', 'error'); return; }
@@ -1422,7 +1717,21 @@ async function carregarEquipamentos() {
     return;
   }
   tbody.innerHTML = equipsSecao.map(e => {
-    // Vinculos: chips compactos sentence-case com icone que discrimina o tipo.
+    // 2026-09-04 UX: quando ha vinculos com nome IDENTICO (mesmo treinamento
+    // em varias unidades), cada chip mostra a agenda entre parenteses pra
+    // evidenciar que sao itens distintos (nao duplicata). Nome unico continua
+    // limpo, sem sufixo. Encurta "CPE Tecnologia XX" -> "XX" pra caber.
+    const nomeCount = {};
+    (e.vinculos || []).forEach(v => {
+      const key = (v.entidade || 'curso') + '|' + (v.nome || '?');
+      nomeCount[key] = (nomeCount[key] || 0) + 1;
+    });
+    const _shortAgenda = (nomeAgenda) => {
+      if (!nomeAgenda) return '';
+      // "CPE Tecnologia BH convencionais" -> "BH convencionais"
+      // "CPE Tecnologia SP"                -> "SP"
+      return String(nomeAgenda).replace(/^CPE\s+Tecnologia\s+/i, '').trim();
+    };
     const vincs = (e.vinculos || []).map(v => {
       const tipoIcon = v.entidade === 'treinamento' ? 'bi-easel'
                      : v.entidade === 'drone'       ? 'bi-airplane-engines-fill'
@@ -1431,11 +1740,20 @@ async function carregarEquipamentos() {
                       : v.entidade === 'drone'       ? 'Drone'
                       :                                'Curso';
       const nome = v.nome || '?';
-      const titleAttr = (tipoLabel + ': ' + nome).replace(/"/g, '&quot;');
+      const key  = (v.entidade || 'curso') + '|' + nome;
+      const duplicado = nomeCount[key] > 1;
+      const agShort = _shortAgenda(v.agenda_nome);
+      const sufixo  = duplicado && agShort
+        ? ' <span class="sup-equip-vinc-agenda">(' + esc(agShort) + ')</span>'
+        : '';
+      const agFull = v.agenda_nome || (v.agenda_id ? ('Agenda #' + v.agenda_id) : '');
+      const titleAttr = (
+        tipoLabel + ': ' + nome + (agFull ? '\n· ' + agFull : '')
+      ).replace(/"/g, '&quot;');
       return '<span class="sup-equip-vinc-chip tipo-' + esc(v.entidade) +
              '" title="' + titleAttr + '">' +
              '<i class="bi ' + tipoIcon + '"></i>' +
-             '<span>' + esc(nome) + '</span></span>';
+             '<span>' + esc(nome) + '</span>' + sufixo + '</span>';
     }).join('');
     const vincsCell = vincs
       ? '<div class="sup-equip-vincs">' + vincs + '</div>'
@@ -2136,8 +2454,11 @@ let dronesSecao = [];
 
 async function initSecaoDrones() {
   if (!agendas.length) await loadAgendas();
-  // Drone é apenas presencial — não listar agendas online no select
-  _opcoesAgendas('droneAgendaSel', a => (a.tipo || 'fisica') !== 'online');
+  // 2026-09-02: dropdown so lista agendas explicitamente marcadas como
+  // "oferece_drones=1" no cadastro. Antes mostrava tudo — filtro so pelo
+  // tipo (fisica vs online) — o que enchia o combo com agendas de cursos/
+  // treinamentos que nao tem nada a ver com drones.
+  _opcoesAgendas('droneAgendaSel', a => Number(a.oferece_drones) === 1);
   if (dronesPreselect) {
     document.getElementById('droneAgendaSel').value = dronesPreselect;
     dronesPreselect = null;
@@ -2149,7 +2470,11 @@ async function carregarDrones() {
   const agId = document.getElementById('droneAgendaSel').value;
   const tbody = document.getElementById('tbodyDrones');
   if (!agId) {
-    tbody.innerHTML = '<tr><td colspan="7" class="sup-empty">Cadastre uma agenda primeiro.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="sup-empty">'
+      + 'Nenhuma agenda marcada para oferecer drones. '
+      + 'Vá em <strong>Agendas</strong>, edite a que oferece drones e ative '
+      + '<strong>"Oferece drones"</strong>.'
+      + '</td></tr>';
     dronesSecao = [];
     return;
   }

@@ -10,6 +10,10 @@ Configuração via .env:
     SMTP_FROM_NAME  → nome amigável do remetente (default = "CPE Control")
     SMTP_USE_TLS    → "1" para STARTTLS (default), "0" para desabilitar
     SMTP_USE_SSL    → "1" para SSL puro (porta 465). Default = "0".
+    SMTP_ALLOW_EXPIRED_CERT → "1" pra aceitar cert TLS invalido/expirado do
+                              servidor SMTP. Workaround temporario enquanto
+                              o cert do mail.cpetecnologia.com.br nao e
+                              renovado. RENOVE o cert e volte pra "0" ASAP.
 
 Envio sempre acontece em uma thread separada — a requisição HTTP não bloqueia
 esperando o SMTP responder. Falhas são logadas mas NÃO derrubam o endpoint.
@@ -77,6 +81,22 @@ def smtp_configurado(perfil: str = "default") -> bool:
     return bool(cfg["host"] and cfg["user"] and cfg["from_addr"])
 
 
+def _make_ssl_context() -> ssl.SSLContext:
+    """Cria SSLContext pro SMTP. Se SMTP_ALLOW_EXPIRED_CERT=1, ignora
+    validacao do cert do servidor (workaround temporario pra cert expirado).
+    """
+    if os.getenv("SMTP_ALLOW_EXPIRED_CERT", "0").strip() == "1":
+        logger.warning(
+            "[EMAIL] SMTP_ALLOW_EXPIRED_CERT=1 — aceitando cert TLS invalido "
+            "do servidor SMTP. RENOVE o cert do host e desligue esse flag."
+        )
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+    return ssl.create_default_context()
+
+
 def _enviar_sync(
     para: list[str],
     assunto: str,
@@ -106,15 +126,14 @@ def _enviar_sync(
 
     try:
         if cfg["use_ssl"]:
-            ctx = ssl.create_default_context()
-            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=ctx, timeout=30) as smtp:
+            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=_make_ssl_context(), timeout=30) as smtp:
                 smtp.login(cfg["user"], cfg["password"])
                 smtp.send_message(msg)
         else:
             with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as smtp:
                 smtp.ehlo()
                 if cfg["use_tls"]:
-                    smtp.starttls(context=ssl.create_default_context())
+                    smtp.starttls(context=_make_ssl_context())
                     smtp.ehlo()
                 if cfg["user"] and cfg["password"]:
                     smtp.login(cfg["user"], cfg["password"])
@@ -221,8 +240,7 @@ def _enviar_sync_bcc(
 
     try:
         if cfg["use_ssl"]:
-            ctx = ssl.create_default_context()
-            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=ctx, timeout=30) as smtp:
+            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=_make_ssl_context(), timeout=30) as smtp:
                 smtp.login(cfg["user"], cfg["password"])
                 # send_message com to_addrs explicito faz BCC real (RCPT TO sem expor)
                 smtp.send_message(msg, from_addr=cfg["from_addr"], to_addrs=destinatarios)
@@ -230,7 +248,7 @@ def _enviar_sync_bcc(
             with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as smtp:
                 smtp.ehlo()
                 if cfg["use_tls"]:
-                    smtp.starttls(context=ssl.create_default_context())
+                    smtp.starttls(context=_make_ssl_context())
                     smtp.ehlo()
                 if cfg["user"] and cfg["password"]:
                     smtp.login(cfg["user"], cfg["password"])
@@ -342,11 +360,12 @@ _BASE_TEMPLATE = """<!DOCTYPE html>
           </div>
           <div style="font-size:12px;color:#6B7280;line-height:1.5;">
             Em caso de dúvidas, escreva para
-            <span style="display:inline-block;background:#FEF9E7;color:#1A1A1A;
-                         padding:2px 10px;border-radius:12px;font-weight:600;
-                         font-size:12px;margin-left:4px;">
-              suporte@cpetecnologia.com.br
-            </span>
+            <a href="mailto:helpdesk@cpetecnologia.com.br"
+               style="display:inline-block;background:#FEF9E7;color:#1A1A1A;
+                      padding:2px 10px;border-radius:12px;font-weight:600;
+                      font-size:12px;margin-left:4px;text-decoration:none;">
+              helpdesk@cpetecnologia.com.br
+            </a>
           </div>
           <div style="margin-top:14px;padding-top:12px;border-top:1px solid #E5E7EB;
                       font-size:11px;color:#6B7280;">

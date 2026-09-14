@@ -198,6 +198,10 @@
       console.log("[LOGIN] 💾 Salvando dados no localStorage...");
       
       // ✅ Salvar objeto completo do usuario
+      // 2026-09-03: incluir `groups` (multi-grupo) senao o frontend nao
+      // sabe quais grupos secundarios o user participa — bug do botao
+      // Assumir sumindo pra USER que participa do grupo do ticket como
+      // grupo secundario (ex: Izabela primary Estoque, USER Faturamento).
       const userObject = {
         id: data.user.id,
         name: data.user.name,
@@ -206,6 +210,9 @@
         role: data.user.role,
         group_id: data.user.group_id,
         group_name: data.user.group_name ?? null,
+        groups: data.user.groups || [],
+        unit_id: data.user.unit_id ?? null,
+        cpf: data.user.cpf ?? null,
         is_active: data.user.is_active,
         created_at: data.user.created_at
       };

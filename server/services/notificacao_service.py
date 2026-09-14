@@ -112,6 +112,51 @@ class NotificacaoService:
                 logger.warning(f"  |-  Nenhum usuário ativo no setor!")
                 return False
 
+            # 2026-09-04: filtro por ticket_membro_categorias — membro
+            # restrito a certas categorias so recebe notificacao in-app
+            # pra tickets nessas categorias. Silencioso se migration nao
+            # aplicada. Mesma regra do filtro de email em
+            # routes/tickets.py::_destinatarios_email_ticket.
+            try:
+                cursor.execute(
+                    "SELECT categoria_id, subcategoria_id FROM tickets WHERE id = %s",
+                    (ticket_id,),
+                )
+                tk_row = cursor.fetchone() or {}
+                tk_cat = tk_row.get("categoria_id")
+                tk_sub = tk_row.get("subcategoria_id")
+                filtrados = []
+                for u in usuarios_setor:
+                    cursor.execute(
+                        "SELECT COUNT(*) AS n FROM ticket_membro_categorias WHERE user_id = %s",
+                        (u["id"],),
+                    )
+                    tem_restricao = int((cursor.fetchone() or {}).get("n") or 0) > 0
+                    if not tem_restricao:
+                        filtrados.append(u)
+                        continue
+                    cursor.execute(
+                        """
+                        SELECT 1 FROM ticket_membro_categorias
+                         WHERE user_id = %s
+                           AND (
+                             (subcategoria_id IS NULL     AND categoria_id = %s)
+                          OR (subcategoria_id IS NOT NULL AND subcategoria_id = %s)
+                           )
+                         LIMIT 1
+                        """,
+                        (u["id"], tk_cat, tk_sub),
+                    )
+                    if cursor.fetchone():
+                        filtrados.append(u)
+                if len(filtrados) != len(usuarios_setor):
+                    logger.info(
+                        f"  |-  filtro por categoria: {len(usuarios_setor)} -> {len(filtrados)}"
+                    )
+                usuarios_setor = filtrados
+            except Exception as e:
+                logger.warning(f"  |-  filtro por categoria falhou (silencioso): {e}")
+
             # Criar notificacao para cada responsavel
             notificacoes_criadas = 0
 

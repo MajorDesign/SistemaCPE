@@ -158,14 +158,70 @@
   .table-responsive {
     margin-bottom: 0;
     border-radius: 0.375rem;
-    /* 2026-08-24: era overflow:hidden — cortava as colunas do fim (SLA,
-       Data, Ações) sem oferecer scroll. Bootstrap padrão é overflow-x:auto
-       (com barra horizontal quando a tabela passa da largura). */
-    overflow-x: auto;
+    /* 2026-09-04: sem scroll horizontal — tabela cabe na viewport via
+       table-layout:fixed + ellipsis nas celulas longas. Overflow-x hidden
+       impede a barra lateral que aparecia em telas medias. */
+    overflow-x: hidden;
     overflow-y: visible;
     border: 1px solid #dee2e6;
+    max-width: 100%;
+    width: 100%;
   }
-  
+
+  /* Permite flex child encolher ao limite da viewport. */
+  .main-content, .main-content .content {
+    min-width: 0;
+  }
+
+  /* 2026-09-04: escopo dedicado #tabelaTicketsAtuais.
+     table-layout:fixed forca colunas a respeitarem width/min e as celulas
+     longas caem em ellipsis. Sem isso, titulos/categorias longos empurravam
+     a tabela alem da viewport.
+     2026-09-04 (v2): antes o seletor era generico
+     (.main-content .content > .table-responsive) e afetava tambem a tabela
+     de chamados antigos, fazendo badge de status sobrepor categoria la.
+     Isolado pra este id. Chamados antigos tem escopo proprio em
+     #tabelaChamadosAntigos (comportamento default Bootstrap). */
+  #tabelaTicketsAtuais .table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  #tabelaTicketsAtuais .table tbody td,
+  #tabelaTicketsAtuais .table thead th {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Badges dentro das celulas nao podem estourar a coluna — antes um
+     badge grande (ex: "SLA ESTOURADO HA 11.1D") vazava pra celula seguinte. */
+  #tabelaTicketsAtuais .table td .badge {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+  }
+
+  /* Chamados antigos: layout automatico do Bootstrap, sem table-layout:fixed
+     nem ellipsis forcado. As colunas se ajustam ao conteudo, badges nao
+     sobrepoem outras celulas. Reserva de largura minima pro Status na coluna
+     dele pra o badge caber inteiro. */
+  #tabelaChamadosAntigos .table {
+    table-layout: auto;
+    width: 100%;
+  }
+  #tabelaChamadosAntigos .table tbody td,
+  #tabelaChamadosAntigos .table thead th {
+    overflow: visible;
+    white-space: normal;
+    word-break: break-word;
+  }
+  #tabelaChamadosAntigos .table td .badge {
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
   .table {
     margin-bottom: 0;
     /* 2026-08-24: reduzido de 0.95rem pra 13px pra caber as 12 colunas
@@ -185,10 +241,39 @@
   }
 
   .table tbody td {
-    padding: 0.5rem 0.5rem;
+    /* 2026-09-04 UX: mais respiracao vertical (era 0.5rem — apertado
+       quando nome do user e titulo ficavam em ellipsis lado a lado,
+       dava sensacao de "linha unica confusa"). E mais gap horizontal
+       entre colunas pra separar visualmente. */
+    padding: 0.7rem 0.65rem;
     vertical-align: middle;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid #eef0f3;
     font-size: 13px;
+  }
+
+  /* 2026-09-04 UX: hierarquia tipografica — separar visualmente
+     "quem abriu" (usuario, cor suave) de "o que quer" (titulo, forte).
+     Escopo #tabelaTicketsAtuais — nao afeta chamados antigos que tem
+     colunas diferentes (Trackid, Assunto, Solicitante...). */
+  #tabelaTicketsAtuais .table tbody td:nth-child(3) span {
+    color: #64748b;
+    font-weight: 400;
+  }
+  #tabelaTicketsAtuais .table tbody td:nth-child(4) {
+    color: #0f172a;
+    font-weight: 500;
+  }
+  /* Avatar da coluna Usuario — menos dominante quando nome ja e claro */
+  #tabelaTicketsAtuais .table tbody td:nth-child(3) .avatar {
+    width: 26px; height: 26px;
+    font-size: 11px;
+    background: #e2e8f0;
+    color: #475569;
+    font-weight: 600;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center; justify-content: center;
   }
 
   /* 2026-08-24: Categoria pode ter nomes longos ("FATURAMENTO - AJUSTE
@@ -748,27 +833,42 @@
      CHAT LAYOUT - TWO COLUMNS
      ======================================== */
   
+  /* 2026-09-04 UX: era 3 scrolls competindo (modal + chat-left + description-box
+     + comments-list). Confuso — user rola descricao, chega no fim, precisa
+     rolar OUTRO scroll (modal) pra ver comentario. Fix: SCROLL UNICO (o do
+     ticket-modal-body). Colunas fluem naturalmente. Right column vira sticky
+     pra que o form de resposta continue sempre visivel enquanto usuario
+     rola descricao/historico do lado esquerdo. */
   .chat-layout {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 2rem;
-    height: calc(100vh - 400px);
+    align-items: start;
+    height: auto;              /* era: calc(100vh - 400px) — travava */
   }
-  
+
   .chat-left {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
-    overflow-y: auto;
     padding-right: 1rem;
+    min-width: 0;              /* respeita grid, quebra palavras longas */
+    /* overflow: visible — usa o scroll do modal, sem competir */
   }
-  
+
   .chat-right {
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
     padding-left: 1rem;
     border-left: 2px solid #dee2e6;
+    /* Sticky: form de resposta fica grudado no topo enquanto o user rola.
+       Top 0.5rem pra respirar da borda superior do modal-body. */
+    position: sticky;
+    top: 0.5rem;
+    align-self: start;
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;          /* fallback se form crescer alem da tela */
   }
   
   .description-section,
@@ -799,8 +899,10 @@
     line-height: 1.8;
     color: #495057;
     font-size: 0.95rem;
-    /* Conter texto longo dentro do container, com scroll vertical próprio */
-    max-height: 380px;
+    /* 2026-09-04: sem scroll proprio — flui no scroll do modal. Deixa uma
+       max-height muito grande apenas como safety pra imagens/quotes gigantes
+       nao rebentarem o layout. Comum caber inteiro sem scroll interno. */
+    max-height: 70vh;
     overflow-y: auto;
     overflow-x: hidden;
     white-space: pre-wrap;
@@ -811,14 +913,13 @@
   .description-box::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 3px; }
   .description-box::-webkit-scrollbar-thumb { background: #667eea; border-radius: 3px; }
   .description-box::-webkit-scrollbar-thumb:hover { background: #764ba2; }
-  
+
   .comments-list {
     display: flex;
     flex-direction: column;
     gap: 1rem;
-    overflow-y: auto;
     padding-right: 0.5rem;
-    max-height: 320px;
+    /* 2026-09-04: sem max-height — historico flui no scroll do modal. */
   }
   
   .comments-list::-webkit-scrollbar {
@@ -1370,19 +1471,22 @@
   
     .chat-left {
       padding-right: 0;
-      min-height: 400px;
+      /* Layout empilhado — sem min-height forcado que gera espaço vazio */
     }
-  
+
     .chat-right {
       padding-left: 0;
       border-left: none;
       border-top: 2px solid #dee2e6;
       padding-top: 1.5rem;
+      /* 2026-09-04: em telas menores as colunas empilham (single column),
+         entao sticky nao faz sentido — volta ao fluxo normal. */
+      position: static;
+      max-height: none;
+      overflow-y: visible;
     }
-  
-    .comments-list {
-      max-height: 300px;
-    }
+
+    /* 2026-09-04: comments-list nao usa mais max-height fixo — flui no scroll do modal. */
   
     .info-grid {
       grid-template-columns: 1fr;
