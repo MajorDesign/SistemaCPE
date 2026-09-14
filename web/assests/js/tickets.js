@@ -701,11 +701,23 @@ function applyDetailPermissions(ticket) {
     btnDeletar.style.display = podeDeletar ? '' : 'none';
   }
 
+  // 2026-09-03 multi-grupo: considera todos os grupos do user (primary +
+  // secundarios via user_groups) ao decidir "mesmoGrupo". Antes so olhava
+  // users.group_id (primary) e escondia botao pra quem participava do grupo
+  // do ticket so como secundario (ex: Izabela primary Estoque, USER tambem
+  // em Faturamento nao via Assumir em ticket do Faturamento).
+  const _usuarioTemGrupo = (user, gid) => {
+    if (!gid) return false;
+    if (user.group_id && Number(user.group_id) === Number(gid)) return true;
+    const groups = Array.isArray(user.groups) ? user.groups : [];
+    return groups.some(g => Number(g.group_id) === Number(gid));
+  };
+
   // ── Botão "Assumir": sem responsável + mesmo grupo + não encerrado ──
   const btnAssumir = document.getElementById('btnAssumirTicket');
   if (btnAssumir) {
     const user = getCurrentUser();
-    const mesmoGrupo = admin || (user.group_id && user.group_id === ticket.group_id);
+    const mesmoGrupo = admin || _usuarioTemGrupo(user, ticket.group_id);
     btnAssumir.classList.toggle('d-none', !(semResponsavel && mesmoGrupo && !ticketEncerrado));
   }
 
@@ -721,7 +733,7 @@ function applyDetailPermissions(ticket) {
   const btnEncaminhar = document.getElementById('btnEncaminharTicket');
   if (btnEncaminhar) {
     const user = getCurrentUser();
-    const mesmoGrupo = admin || (user.group_id && user.group_id === ticket.group_id);
+    const mesmoGrupo = admin || _usuarioTemGrupo(user, ticket.group_id);
     const podeEncaminhar = !ticketEncerrado && (
       semResponsavel
         ? (isSolicitante || mesmoGrupo)
@@ -1323,18 +1335,52 @@ function applyFilters() {
     return true; // 'todos'
   };
 
+  // 2026-09-03: busca cobre 5 campos e aceita variacoes uteis do ID:
+  //   - id_alfanumerica (FA0231N6T7 — o que o user ve na tabela)
+  //   - numero interno (FAT-2026-00231 — o que aparece no detalhe)
+  //   - id numerico raw (231 — se colar direto ou digitar so numero)
+  //   - titulo do chamado
+  //   - nome do solicitante
+  //   - email do solicitante
+  // Case insensitive, aceita substring. Ignora espacos e "#" na entrada
+  // (pra colar "#FA0231" ou "FA0231 " tambem funcionar).
+  const buscaCanonica = search.replace(/[#\s]/g, '');
+  const bateBusca = (t) => {
+    if (!buscaCanonica) return true;
+    const alvos = [
+      t.id_alfanumerica, t.numero, String(t.id),
+      t.title, t.userName, t.email
+    ];
+    return alvos.some(v => v && String(v).toLowerCase().replace(/\s/g, '').includes(buscaCanonica));
+  };
+
+  // 2026-09-04 UX: por padrao, esconde tickets JA ENCERRADOS (Resolvido/Fechado)
+  // da listagem — tela fica limpa focada no que precisa de acao. Se user
+  // aplicar filtro explicito por status Resolvido ou Fechado, mostra so
+  // esses. Vista "Chamados antigos" (aba separada) nao e afetada. KPIs
+  // superiores continuam mostrando totais globais (visao executiva).
+  const _STATUS_ENCERRADOS = new Set(['resolved', 'closed']);
+  const semFiltroStatus = !statuses.length;
+  const bateStatus = (t) => {
+    if (statuses.length) return statuses.includes(t.status);
+    // Sem filtro explicito: esconde encerrados
+    return !_STATUS_ENCERRADOS.has(t.status);
+  };
+
   filteredTickets = tickets.filter(t =>
     matchVista(t) &&
-    (!statuses.length || statuses.includes(t.status)) &&
+    bateStatus(t) &&
     (!priority || t.priority === priority) &&
     (!grupoId  || String(t.group_id)        === grupoId) &&
     (!respId   || String(t.assignedTo || '') === respId) &&
     (!catId    || String(t.categoria_id)    === catId) &&
     (!subId    || String(t.subcategoria_id) === subId) &&
-    (!search   || t.title.toLowerCase().includes(search) ||
-                  t.userName.toLowerCase().includes(search) ||
-                  t.numero.toLowerCase().includes(search))
+    bateBusca(t)
   );
+
+  // Atualiza hint sutil "mostrando so ativos" acima da tabela
+  const hintEl = document.getElementById('ticketsFiltroAtivoHint');
+  if (hintEl) hintEl.style.display = semFiltroStatus ? '' : 'none';
 
   updateVistaCounts();
   currentPage = 1;
@@ -1343,6 +1389,19 @@ function applyFilters() {
   // Depois de renderizar, decide se abre banner "salvar como padrão"
   atualizarBannerFiltroPref();
 }
+
+/** Atalho: abre painel de filtros avançados e marca status Resolvido+Fechado
+ *  pra usuario ver os chamados encerrados (que estao escondidos por padrao). */
+function showResolvedFilter() {
+  const panel = document.getElementById('advancedFilters');
+  if (panel && panel.classList.contains('d-none')) toggleAdvancedFilters();
+  document.querySelectorAll('.status-filter-cb').forEach(cb => {
+    cb.checked = (cb.value === 'resolved' || cb.value === 'closed');
+  });
+  updateStatusFilterLabel();
+  applyFilters();
+}
+window.showResolvedFilter = showResolvedFilter;
 
 function clearFilters() {
   ['searchInput', 'priorityFilter', 'grupoFilter',
@@ -1864,7 +1923,10 @@ async function carregarCamposDetalhe(id) {
   if (row)  row.style.display = 'none';
   if (cont) cont.innerHTML = '';
   try {
-    const res = await fetch(`${API_BASE}/tickets/${id}`);
+    // 2026-09-03: manda usuario_id pro backend checar privacidade
+    // (Nathalia do RH ve so ate alguem do TI assumir).
+    const uid = getCurrentUserId();
+    const res = await fetch(`${API_BASE}/tickets/${id}${uid ? '?usuario_id=' + uid : ''}`);
     if (!res.ok) return;
     const data = await res.json();
 
@@ -2351,11 +2413,27 @@ function getSLABadge(sla) {
              : c.cor === 'amarelo'  ? 'bi-clock-history'
              : c.cor === 'cinza'    ? 'bi-pause-circle'
              : 'bi-check-circle';
-  // 2026-08-24: label compacto — remove prefixo "RESTAM " que enchia
-  // demais a coluna ("RESTAM 3.9D" -> "3.9D"). Tooltip mantem label
-  // completo. Badge menor (font 11px, padding compacto).
-  const labelCurto = String(c.label || '').replace(/^RESTAM\s+/i, '').trim() || c.label;
-  return `<span class="badge" style="background:${bg};color:${text};white-space:nowrap;`
+  // 2026-08-24: label compacto — remove prefixos verbosos que enchiam
+  // a coluna estreita. Tooltip mantem texto completo pro user que quer
+  // detalhe. 2026-09-04: cobre estourado, pausado e concluido no prazo
+  // (o icone/cor ja comunicam o estado, o label so precisa do numero).
+  let labelCurto = String(c.label || '').trim();
+  // "SLA ESTOURADO HÁ 11.1D" -> "-11.1d"
+  const mEst = labelCurto.match(/estourad[oa]\s+h[áa]\s+(\S+)/i);
+  if (mEst) {
+    labelCurto = '-' + mEst[1].toLowerCase();
+  } else if (/^conclu[íi]do\s+dentro\s+do\s+prazo$/i.test(labelCurto)) {
+    // Icone verde ja diz "OK". Texto curto reforca sem cortar.
+    labelCurto = 'No prazo';
+  } else {
+    // "Restam 3.9d" / "Pausado — Restam 2h" -> compacta
+    labelCurto = labelCurto
+      .replace(/^Restam\s+/i, '')
+      .replace(/^Pausado\s+[-—]\s+Restam\s+/i, '')
+      .replace(/^Pausado\s+[-—]\s+/i, '');
+  }
+  if (!labelCurto) labelCurto = c.label;
+  return `<span class="badge" style="background:${bg};color:${text};`
        + `font-size:11px;font-weight:600;padding:4px 7px;" title="${c.label}">`
        + `<i class="bi ${icon}"></i> ${labelCurto}`
        + `</span>`;
@@ -2957,12 +3035,34 @@ async function submitReabrir() {
 }
 
 async function updateTicketStatus() {
-  const newStatus = document.getElementById("detailStatusSelect")?.value;
+  const sel = document.getElementById("detailStatusSelect");
+  const newStatus = sel?.value;
   if (!newStatus) { showError("❌ Selecione um status"); return; }
+
+  const originalTicket = tickets.find(t => t.id === viewingTicketId);
+  const _reverter = () => {
+    if (sel && originalTicket) sel.value = originalTicket.status;
+  };
+
+  // 2026-09-03 UX: mudar pra "Resolvido"/"Fechado" no dropdown era perigoso —
+  // o onchange disparava PUT imediato sem confirmacao, o ticket "sumia" pra
+  // quem estava vendo e ficava sem resolvido_em/historico. Agora:
+  //  - resolved -> abre o modal de Finalizar (obriga solucao/motivo)
+  //  - closed   -> confirm() explicito
+  if (newStatus === 'resolved') {
+    _reverter();  // deixa o select como estava; finalizarTicket() cuida do resto
+    finalizarTicket();
+    return;
+  }
+  if (newStatus === 'closed') {
+    if (!confirm('Fechar este chamado definitivamente? O solicitante nao podera reabri-lo apos fechado.')) {
+      _reverter();
+      return;
+    }
+  }
 
   const userId = getCurrentUserId();
 
-  // ✅ usuario_id obrigatório no PUT
   const result = await apiRequest(
     'PUT',
     `/tickets/${viewingTicketId}?usuario_id=${userId}`,
@@ -2972,17 +3072,13 @@ async function updateTicketStatus() {
   if (result) {
     showSuccess("✅ Status atualizado com sucesso!");
     await loadTickets();
-
     const updatedTicket = tickets.find(t => t.id === viewingTicketId);
     if (updatedTicket) {
       document.getElementById("detailStatusQuick").innerHTML = getStatusBadge(updatedTicket.status);
       document.getElementById("detailStatus").innerHTML      = getStatusBadge(updatedTicket.status);
     }
   } else {
-    const originalTicket = tickets.find(t => t.id === viewingTicketId);
-    if (originalTicket) {
-      document.getElementById("detailStatusSelect").value = originalTicket.status;
-    }
+    _reverter();
   }
 }
 
@@ -3114,26 +3210,87 @@ async function openForwardModal() {
     await loadGroups();
   }
 
-  // Popular grupos — excluir o grupo atual do ticket
+  // 2026-09-03: NAO exclui mais o grupo atual — permite "encaminhar" pro
+  // proprio grupo pra recategorizar (ex: TI recebeu ticket em categoria
+  // errada e quer mover pra "Melhoria Sankhya" dentro do mesmo grupo TI).
+  // O backend valida: mesmo grupo exige categoria informada e diferente da atual.
   const currentGroupId = ticket.group_id;
+  const currentCatId   = ticket.categoria_id ?? null;
+  const currentSubId   = ticket.subcategoria_id ?? null;
   groups.forEach(g => {
-    if (g.id === currentGroupId) return; // pula grupo atual
     const opt = document.createElement('option');
     opt.value       = g.id;
-    opt.textContent = g.name;
+    opt.textContent = (g.id === currentGroupId) ? `${g.name} (grupo atual — só p/ recategorizar)` : g.name;
     groupSelect.appendChild(opt);
   });
 
-  // Mostrar responsável apenas para admins
-  if (isAdmin()) {
-    respDiv.classList.remove('d-none');
+  // Elementos de categoria/subcategoria e hint
+  const catSel     = document.getElementById('forwardCategoriaSelect');
+  const subSel     = document.getElementById('forwardSubcategoriaSelect');
+  const catReq     = document.getElementById('forwardCatReq');
+  const hintMesmo  = document.getElementById('forwardMesmoGrupoHint');
+  catSel.innerHTML = '<option value="">— sem categoria (deixar em branco no destino) —</option>';
+  subSel.innerHTML = '<option value="">— nenhuma —</option>';
+  catSel.disabled  = true; subSel.disabled = true;
+  catReq.style.display    = 'none';
+  hintMesmo.style.display = 'none';
 
-    // Quando o grupo de destino mudar, carregar usuários daquele grupo
-    groupSelect.onchange = async () => {
+  async function _fwCarregarCats(gid) {
+    catSel.innerHTML = '<option value="">— sem categoria (deixar em branco no destino) —</option>';
+    subSel.innerHTML = '<option value="">— nenhuma —</option>';
+    subSel.disabled  = true;
+    if (!gid) { catSel.disabled = true; return; }
+    try {
+      const r = await fetch(`${API_BASE}/categorias?group_id=${gid}`);
+      if (!r.ok) { catSel.disabled = true; return; }
+      const cats = await r.json();
+      if (!cats.length) { catSel.disabled = true; return; }
+      catSel.innerHTML = '<option value="">— sem categoria (deixar em branco no destino) —</option>' +
+        cats.map(c => `<option value="${c.id}" data-subs='${JSON.stringify(c.subcategorias || [])}'>${c.nome}</option>`).join('');
+      catSel.disabled = false;
+    } catch (e) {
+      console.warn('[FWD] cats:', e);
+      catSel.disabled = true;
+    }
+  }
+
+  catSel.onchange = () => {
+    const opt = catSel.options[catSel.selectedIndex];
+    const subs = (opt && opt.dataset.subs) ? JSON.parse(opt.dataset.subs) : [];
+    subSel.innerHTML = '<option value="">— nenhuma —</option>' +
+      subs.map(s => `<option value="${s.id}">${s.nome}</option>`).join('');
+    subSel.disabled = subs.length === 0;
+  };
+
+  // Handler unico do grupo — controla categorias + responsavel (admin)
+  groupSelect.onchange = async () => {
+    const gid = parseInt(groupSelect.value) || 0;
+
+    // Hint + required de categoria quando escolhe o proprio grupo
+    if (gid && gid === currentGroupId) {
+      hintMesmo.style.display = '';
+      catReq.style.display    = '';
+    } else {
+      hintMesmo.style.display = 'none';
+      catReq.style.display    = 'none';
+    }
+
+    // Carrega categorias do grupo alvo
+    await _fwCarregarCats(gid);
+
+    // Se for mesmo grupo, pre-seleciona categoria atual pra evidenciar
+    // "voce precisa MUDAR isso" — user vai trocar pela nova.
+    if (gid && gid === currentGroupId && currentCatId) {
+      catSel.value = String(currentCatId);
+      catSel.dispatchEvent(new Event('change'));
+      if (currentSubId) subSel.value = String(currentSubId);
+    }
+
+    // Responsavel: so admin, e usuarios do grupo destino
+    if (isAdmin()) {
+      respDiv.classList.remove('d-none');
       respSelect.innerHTML = '<option value="">Sem atribuição</option>';
-      const gid = parseInt(groupSelect.value);
       if (!gid) return;
-
       try {
         const userId = getCurrentUserId();
         const token  = localStorage.getItem('cpe_token') || '';
@@ -3143,7 +3300,6 @@ async function openForwardModal() {
         if (!res.ok) return;
         const data = await res.json();
         const list = Array.isArray(data) ? data : (data.users || []);
-
         list
           .filter(u => u.group_id === gid)
           .forEach(u => {
@@ -3155,11 +3311,10 @@ async function openForwardModal() {
       } catch (e) {
         console.error('[ENCAMINHAR] Erro ao carregar usuários do grupo:', e);
       }
-    };
-  } else {
-    respDiv.classList.add('d-none');
-    groupSelect.onchange = null;
-  }
+    } else {
+      respDiv.classList.add('d-none');
+    }
+  };
 
   // Abrir modal
   const modal = new bootstrap.Modal(document.getElementById('forwardModal'));
@@ -3174,12 +3329,32 @@ async function submitForward() {
   const respSelect  = document.getElementById('forwardResponsavelSelect');
   const motivoEl    = document.getElementById('forwardMotivo');
   const errorEl     = document.getElementById('forwardError');
+  const catSel      = document.getElementById('forwardCategoriaSelect');
+  const subSel      = document.getElementById('forwardSubcategoriaSelect');
 
   const groupId = parseInt(groupSelect.value);
   if (!groupId) {
     errorEl.textContent = 'Selecione o grupo de destino.';
     errorEl.classList.remove('d-none');
     return;
+  }
+
+  const catId = catSel && catSel.value ? parseInt(catSel.value) : null;
+  const subId = subSel && subSel.value ? parseInt(subSel.value) : null;
+
+  // Validacao client-side: mesmo grupo exige categoria diferente
+  const ticket = tickets.find(t => t.id === viewingTicketId);
+  if (ticket && groupId === ticket.group_id) {
+    if (!catId) {
+      errorEl.textContent = 'Para recategorizar dentro do mesmo grupo, escolha uma categoria.';
+      errorEl.classList.remove('d-none');
+      return;
+    }
+    if (catId === (ticket.categoria_id || null) && subId === (ticket.subcategoria_id || null)) {
+      errorEl.textContent = 'A categoria/subcategoria escolhida é a mesma do ticket. Selecione uma diferente.';
+      errorEl.classList.remove('d-none');
+      return;
+    }
   }
 
   const userId       = getCurrentUserId();
@@ -3190,7 +3365,9 @@ async function submitForward() {
     usuario_id:     userId,
     group_id:       groupId,
     motivo:         motivo || null,
-    responsavel_id: responsavelId
+    responsavel_id: responsavelId,
+    categoria_id:   catId,
+    subcategoria_id: subId
   };
 
   try {
@@ -3572,47 +3749,71 @@ async function carregarTotalChamadosAntigos() {
   } catch (e) { /* ignore */ }
 }
 
-/** Popula o select de categorias com os valores distintos da base. Cacheado por sessão. */
-let _antigosCategoriasCarregadas = false;
+/** Monta os params contextuais pros dropdowns (exclui o proprio campo). */
+function _antigosFiltrosContexto(excluir) {
+  const p = new URLSearchParams();
+  const q         = document.getElementById('antigosSearch')?.value?.trim() || '';
+  const status    = document.getElementById('antigosStatus')?.value || '';
+  const categoria = document.getElementById('antigosCategoria')?.value || '';
+  const dataIni   = document.getElementById('antigosDataIni')?.value || '';
+  const dataFim   = document.getElementById('antigosDataFim')?.value || '';
+  if (q)                                p.set('q', q);
+  if (status    && excluir !== 'status')    p.set('status', status);
+  if (categoria && excluir !== 'categoria') p.set('categoria', categoria);
+  if (dataIni)                          p.set('data_ini', dataIni);
+  if (dataFim)                          p.set('data_fim', dataFim);
+  return p;
+}
+
+/** Popula o select de categorias com contagem CONTEXTUAL (respeita outros filtros).
+ *  Mantem a categoria selecionada visivel mesmo que caia pra 0 no contexto atual —
+ *  senao o usuario nao consegue mais desmarcar. */
 async function carregarCategoriasAntigas() {
-  if (_antigosCategoriasCarregadas) return;
   try {
-    const r = await fetch(`${API_BASE}/chamados-antigos/categorias`);
+    const params = _antigosFiltrosContexto('categoria');
+    const r = await fetch(`${API_BASE}/chamados-antigos/categorias?${params}`);
     if (!r.ok) return;
     const cats = await r.json();
     const sel = document.getElementById('antigosCategoria');
     if (!sel) return;
     const valorAtual = sel.value;
-    sel.innerHTML = '<option value="">Todas categorias</option>' +
-      cats.map(c => {
-        const nome = (c.categoria || '').replace(/</g,'&lt;');
-        return `<option value="${nome}">${nome} (${c.total})</option>`;
-      }).join('');
+    const nomes = new Set(cats.map(c => c.categoria));
+    const opcoes = cats.map(c => {
+      const nome = (c.categoria || '').replace(/</g,'&lt;');
+      return `<option value="${nome}">${nome} (${c.total})</option>`;
+    });
+    if (valorAtual && !nomes.has(valorAtual)) {
+      const nome = valorAtual.replace(/</g,'&lt;');
+      opcoes.unshift(`<option value="${nome}">${nome} (0)</option>`);
+    }
+    sel.innerHTML = '<option value="">Todas categorias</option>' + opcoes.join('');
     sel.value = valorAtual;
-    _antigosCategoriasCarregadas = true;
   } catch (e) { console.warn('[ANTIGOS] erro categorias:', e); }
 }
 
-/** Popula o select de status com os valores reais da base (cacheado).
+/** Popula o select de status com contagem CONTEXTUAL. Mesma logica da categoria.
  *  Legado usa Novo/Respondido/Em Progresso/etc — hardcode antigo
  *  (Aberto/Em andamento/Fechado) nao batia e sempre retornava 0. */
-let _antigosStatusCarregados = false;
 async function carregarStatusAntigos() {
-  if (_antigosStatusCarregados) return;
   try {
-    const r = await fetch(`${API_BASE}/chamados-antigos/status`);
+    const params = _antigosFiltrosContexto('status');
+    const r = await fetch(`${API_BASE}/chamados-antigos/status?${params}`);
     if (!r.ok) return;
     const arr = await r.json();
     const sel = document.getElementById('antigosStatus');
     if (!sel) return;
     const valorAtual = sel.value;
-    sel.innerHTML = '<option value="">Todos status</option>' +
-      arr.map(s => {
-        const nome = (s.nome_status || '').replace(/</g,'&lt;');
-        return `<option value="${nome}">${nome} (${s.total})</option>`;
-      }).join('');
+    const nomes = new Set(arr.map(s => s.nome_status));
+    const opcoes = arr.map(s => {
+      const nome = (s.nome_status || '').replace(/</g,'&lt;');
+      return `<option value="${nome}">${nome} (${s.total})</option>`;
+    });
+    if (valorAtual && !nomes.has(valorAtual)) {
+      const nome = valorAtual.replace(/</g,'&lt;');
+      opcoes.unshift(`<option value="${nome}">${nome} (0)</option>`);
+    }
+    sel.innerHTML = '<option value="">Todos status</option>' + opcoes.join('');
     sel.value = valorAtual;
-    _antigosStatusCarregados = true;
   } catch (e) { console.warn('[ANTIGOS] erro status:', e); }
 }
 
@@ -3633,6 +3834,10 @@ async function buscarChamadosAntigos(pagina = 1) {
 
   const tbody = document.getElementById('antigosBody');
   if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted py-3"><i class="bi bi-hourglass-split"></i> Carregando...</td></tr>';
+
+  // Refresh dos dropdowns em paralelo — contagem contextual atualiza a cada filtro.
+  carregarCategoriasAntigas();
+  carregarStatusAntigos();
 
   try {
     const r = await fetch(`${API_BASE}/chamados-antigos?${params}`);
@@ -3886,12 +4091,23 @@ document.addEventListener('DOMContentLoaded', () => {
   if (m) m.addEventListener('hidden.bs.modal', () => { _viewingAntigoId = null; });
 });
 
-/** Atualiza os contadores das abas a partir da lista carregada. */
+/** Atualiza os contadores das abas a partir da lista carregada.
+ *  2026-09-04: as abas contam APENAS ATIVOS (mesma regra da tabela — esconde
+ *  encerrados quando nao ha filtro de status). Assim os numeros das abas
+ *  batem com o que aparece na tabela. Se user filtrar por Resolvido/Fechado,
+ *  as abas passam a contar so os encerrados que casam com o filtro. */
 function updateVistaCounts() {
   const userId = getCurrentUserId();
-  const total    = tickets.length;
-  const meus     = tickets.filter(t => t.solicitante_id === userId).length;
-  const paraMim  = tickets.filter(t => t.assignedTo === userId).length;
+  const statuses = getStatusFilterValues();
+  const ENCERRADOS = new Set(['resolved', 'closed']);
+  const bateStatus = (t) => statuses.length
+    ? statuses.includes(t.status)
+    : !ENCERRADOS.has(t.status);
+
+  const base     = tickets.filter(bateStatus);
+  const total    = base.length;
+  const meus     = base.filter(t => t.solicitante_id === userId).length;
+  const paraMim  = base.filter(t => t.assignedTo === userId).length;
 
   const setCount = (id, val) => {
     const el = document.getElementById(id);

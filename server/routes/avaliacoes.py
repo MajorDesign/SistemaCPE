@@ -85,6 +85,25 @@ def _resp_group_ids(cursor, uid: int) -> list:
     return []
 
 
+def _filtro_busca_avaliacoes(q: Optional[str]):
+    """Filtro por texto (numero do ticket, id alfanumerico, assunto, solicitante).
+    Retorna (join_extra, where_frag, params). join_extra vazio se filtro nao ativo.
+    Se ativo, garante JOIN em tickets/users pra os campos usados.
+    Aceita '#', espacos e case insensitive."""
+    if not q or not q.strip():
+        return ("", [], [])
+    termo = f"%{q.strip().lstrip('#').strip()}%"
+    join_extra = (
+        " LEFT JOIN tickets t_q ON t_q.id = a.ticket_id"
+        " LEFT JOIN users us_q  ON us_q.id = a.solicitante_id"
+    )
+    frag = (
+        "(t_q.numero LIKE %s OR t_q.id_alfanumerica LIKE %s "
+        " OR t_q.assunto LIKE %s OR us_q.name LIKE %s OR us_q.email LIKE %s)"
+    )
+    return (join_extra, [frag], [termo] * 5)
+
+
 def _aplica_filtro_grupo_avaliacoes(cursor, usuario, grupo_id_query):
     """
     Constroi (fragmento_where, params) para o filtro por grupo em avaliacoes.
@@ -252,6 +271,7 @@ async def listar_avaliacoes(
     responsavel_id: Optional[int] = Query(None, gt=0),
     categoria_id:    Optional[int] = Query(None, gt=0),
     subcategoria_id: Optional[int] = Query(None, gt=0),
+    q:           Optional[str] = Query(None, description="Busca por numero, ID alfa, assunto, solicitante ou email"),
     pagina:      int           = Query(1, ge=1),
     por_pagina:  int           = Query(50, ge=1, le=200),
 ):
@@ -294,6 +314,17 @@ async def listar_avaliacoes(
             filtros.append("t.subcategoria_id = %s")
             params.append(subcategoria_id)
 
+        # 2026-09-03: filtro busca livre por ticket/solicitante.
+        # Aceita numero (FAT-2026-00231), id alfanumerico (FA0231N6T7),
+        # assunto, nome do solicitante ou email. Ignora '#' e case.
+        if q and q.strip():
+            termo = f"%{q.strip().lstrip('#').strip()}%"
+            filtros.append(
+                "(t.numero LIKE %s OR t.id_alfanumerica LIKE %s "
+                " OR t.assunto LIKE %s OR us.name LIKE %s OR us.email LIKE %s)"
+            )
+            params.extend([termo] * 5)
+
         where = ("WHERE " + " AND ".join(filtros)) if filtros else ""
         offset = (pagina - 1) * por_pagina
 
@@ -317,8 +348,18 @@ async def listar_avaliacoes(
         cursor.execute(sql, params + [por_pagina, offset])
         rows = cursor.fetchall()
 
-        # total
-        cursor.execute(f"SELECT COUNT(*) AS total FROM ticket_avaliacoes a JOIN tickets t ON t.id = a.ticket_id {where}", params)
+        # total — precisa dos MESMOS JOINs do query principal quando ha filtro
+        # que referencia us/ur/g (2026-09-03: filtro q referencia us.name/email).
+        cursor.execute(
+            f"""SELECT COUNT(*) AS total
+                  FROM ticket_avaliacoes a
+                  JOIN tickets t     ON t.id  = a.ticket_id
+                  JOIN users us      ON us.id = a.solicitante_id
+             LEFT JOIN users ur      ON ur.id = a.responsavel_id
+             LEFT JOIN cpe_grupo g   ON g.id  = a.group_id
+                  {where}""",
+            params,
+        )
         total = cursor.fetchone()["total"]
 
         for r in rows:
@@ -342,8 +383,10 @@ async def listar_avaliacoes(
 async def resumo_avaliacoes(
     usuario_id: int           = Query(..., gt=0),
     grupo_id:   Optional[int] = Query(None),
+    q:          Optional[str] = Query(None),
 ):
-    """KPIs: média, total, distribuição por estrela — para reports.html."""
+    """KPIs: média, total, distribuição por estrela — para reports.html.
+    2026-09-03: aceita q pra alinhar KPIs com filtro de busca da tabela."""
     conn = get_db_or_404()
     cursor = None
     try:
@@ -352,6 +395,11 @@ async def resumo_avaliacoes(
         _f_g, _p_g = _aplica_filtro_grupo_avaliacoes(cursor, usuario, grupo_id)
         filtros = ["a.avaliado_em IS NOT NULL"] + list(_f_g)
         params  = list(_p_g)
+
+        # Busca livre (numero/id/assunto/solicitante/email) exige JOINs extras
+        join_q, filtro_q, params_q = _filtro_busca_avaliacoes(q)
+        filtros.extend(filtro_q)
+        params.extend(params_q)
 
         where = "WHERE " + " AND ".join(filtros)
 
@@ -363,6 +411,7 @@ async def resumo_avaliacoes(
                 SUM(estrelas BETWEEN 4 AND 7) AS neutras,
                 SUM(estrelas < 4)    AS negativas
             FROM ticket_avaliacoes a
+            {join_q}
             {where}
         """, params)
         kpis = cursor.fetchone()
@@ -373,6 +422,7 @@ async def resumo_avaliacoes(
                    SUM(avaliado_em IS NULL AND expira_em > NOW()) AS pendentes,
                    SUM(avaliado_em IS NULL AND expira_em <= NOW()) AS expiradas
             FROM ticket_avaliacoes a
+            {join_q}
             {where.replace('a.avaliado_em IS NOT NULL AND', '').replace('AND a.avaliado_em IS NOT NULL', '').replace('WHERE a.avaliado_em IS NOT NULL', 'WHERE 1=1')}
         """, params)
         totais = cursor.fetchone()
@@ -381,6 +431,7 @@ async def resumo_avaliacoes(
         cursor.execute(f"""
             SELECT estrelas, COUNT(*) AS qtd
             FROM ticket_avaliacoes a
+            {join_q}
             {where}
             GROUP BY estrelas
             ORDER BY estrelas
@@ -402,6 +453,134 @@ async def resumo_avaliacoes(
         if conn:   conn.close()
 
 
+# ─── GET /api/avaliacoes/resumo-por-grupo ────────────────────────────────────
+@avaliacoes_router.get("/resumo-por-grupo")
+async def resumo_avaliacoes_por_grupo(
+    usuario_id: int           = Query(..., gt=0),
+    grupo_id:   Optional[int] = Query(None),
+    q:          Optional[str] = Query(None),
+):
+    """Retorna KPIs de avaliacoes AGRUPADOS por grupo.
+    Regra (2026-09-03, docs/REGRAS_NEGOCIO.md):
+    - ADMIN/TI: se filtro grupo_id ativo, 1 entry desse grupo; senao 1 entry
+      consolidada (comportamento historico da "Excelencia do Grupo").
+    - RESPONSAVEL_GRUPO: 1 entry por CADA grupo onde ele responde. Se filtro
+      grupo_id ativo, so o desse grupo (e valida que ele responde por ele).
+    - Resposta: { grupos: [{group_id, group_name, media, total_avaliados,
+      positivas, neutras, negativas, pendentes, expiradas, distribuicao}] }.
+    """
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        usuario = _usuario(cursor, usuario_id)
+        role = (usuario.get("role") or "USER").upper()
+
+        # Determina quais grupos o request tem escopo.
+        if role in ROLES_REPORTS:
+            # ADMIN/TI: se filtro veio, restringe; senao consolida em 1 entry.
+            escopo_gids = [grupo_id] if grupo_id else None  # None = consolidado
+        else:
+            # RESPONSAVEL_GRUPO: seus grupos (multi-grupo aware)
+            resp_gids = _resp_group_ids(cursor, usuario["id"])
+            if not resp_gids:
+                raise HTTPException(status_code=403, detail="Acesso negado.")
+            if grupo_id:
+                if grupo_id not in resp_gids:
+                    raise HTTPException(status_code=403,
+                                        detail="Voce nao responde por este grupo.")
+                escopo_gids = [grupo_id]
+            else:
+                escopo_gids = list(resp_gids)  # todos os grupos dele — 1 entry por grupo
+
+        # Helper interno pra rodar as 3 queries pra um grupo (ou consolidado se gid=None)
+        def _kpis_para(gid):
+            filtros = ["a.avaliado_em IS NOT NULL"]
+            params  = []
+            if gid is not None:
+                filtros.append("a.group_id = %s")
+                params.append(gid)
+            join_q, filtro_q, params_q = _filtro_busca_avaliacoes(q)
+            filtros.extend(filtro_q)
+            params.extend(params_q)
+            where = "WHERE " + " AND ".join(filtros)
+
+            cursor.execute(f"""
+                SELECT COUNT(*) AS total_avaliados,
+                       ROUND(AVG(estrelas), 2) AS media,
+                       SUM(estrelas >= 8) AS positivas,
+                       SUM(estrelas BETWEEN 4 AND 7) AS neutras,
+                       SUM(estrelas < 4) AS negativas
+                  FROM ticket_avaliacoes a
+                  {join_q}
+                  {where}
+            """, params)
+            k = cursor.fetchone()
+
+            # Pendentes/expiradas — sem filtro avaliado_em (nao avaliadas ainda)
+            filtros_pend = []
+            params_pend  = []
+            if gid is not None:
+                filtros_pend.append("a.group_id = %s")
+                params_pend.append(gid)
+            join_qp, filtro_qp, params_qp = _filtro_busca_avaliacoes(q)
+            filtros_pend.extend(filtro_qp)
+            params_pend.extend(params_qp)
+            where_pend = ("WHERE " + " AND ".join(filtros_pend)) if filtros_pend else ""
+            cursor.execute(f"""
+                SELECT SUM(avaliado_em IS NULL AND expira_em > NOW()) AS pendentes,
+                       SUM(avaliado_em IS NULL AND expira_em <= NOW()) AS expiradas
+                  FROM ticket_avaliacoes a
+                  {join_qp}
+                  {where_pend}
+            """, params_pend)
+            tp = cursor.fetchone() or {}
+
+            cursor.execute(f"""
+                SELECT estrelas, COUNT(*) AS qtd
+                  FROM ticket_avaliacoes a
+                  {join_q}
+                  {where}
+                 GROUP BY estrelas
+                 ORDER BY estrelas
+            """, params)
+            dist = {str(r["estrelas"]): r["qtd"] for r in cursor.fetchall()}
+
+            return {
+                "media":           float(k["media"] or 0),
+                "total_avaliados": int(k["total_avaliados"] or 0),
+                "positivas":       int(k["positivas"] or 0),
+                "neutras":         int(k["neutras"] or 0),
+                "negativas":       int(k["negativas"] or 0),
+                "pendentes":       int(tp.get("pendentes") or 0),
+                "expiradas":       int(tp.get("expiradas") or 0),
+                "distribuicao":    dist,
+            }
+
+        grupos_out = []
+        if escopo_gids is None:
+            # ADMIN sem filtro → 1 entry consolidada (sem group_id/name)
+            item = _kpis_para(None)
+            item["group_id"]   = None
+            item["group_name"] = None
+            grupos_out.append(item)
+        else:
+            for gid in escopo_gids:
+                cursor.execute("SELECT id, name FROM cpe_grupo WHERE id = %s", (gid,))
+                g = cursor.fetchone() or {}
+                item = _kpis_para(gid)
+                item["group_id"]   = gid
+                item["group_name"] = g.get("name") or f"Grupo #{gid}"
+                grupos_out.append(item)
+
+        # Ordena por media desc pra destacar melhores no topo
+        grupos_out.sort(key=lambda x: x["media"], reverse=True)
+        return {"grupos": grupos_out}
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
 # ─── GET /api/avaliacoes/por-responsavel ─────────────────────────────────────
 @avaliacoes_router.get("/por-responsavel")
 async def avaliacoes_por_responsavel(
@@ -409,10 +588,12 @@ async def avaliacoes_por_responsavel(
     grupo_id:   Optional[int] = Query(None),
     data_inicio:Optional[str] = Query(None),
     data_fim:   Optional[str] = Query(None),
+    q:          Optional[str] = Query(None),
 ):
     """
     Estatísticas de avaliação agrupadas por responsável.
     Acesso: RESPONSAVEL_GRUPO (só grupo) ou ADMIN.
+    2026-09-03: aceita q pra alinhar KPIs individuais com filtro da tabela.
     """
     conn = get_db_or_404()
     cursor = None
@@ -431,6 +612,10 @@ async def avaliacoes_por_responsavel(
             filtros.append("a.avaliado_em <= %s")
             params.append(data_fim + " 23:59:59")
 
+        join_q, filtro_q, params_q = _filtro_busca_avaliacoes(q)
+        filtros.extend(filtro_q)
+        params.extend(params_q)
+
         where = "WHERE " + " AND ".join(filtros)
 
         cursor.execute(f"""
@@ -446,6 +631,7 @@ async def avaliacoes_por_responsavel(
                 MAX(a.estrelas)                  AS maior_nota
             FROM ticket_avaliacoes a
             JOIN users u ON u.id = a.responsavel_id
+            {join_q}
             {where}
             GROUP BY a.responsavel_id, u.name
             ORDER BY media DESC, total_avaliados DESC

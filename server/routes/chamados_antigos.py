@@ -60,21 +60,66 @@ def stats(usuario_id: Optional[int] = Query(None, gt=0)):
         if conn: conn.close()
 
 
+def _montar_filtros_contexto(q, status, categoria, data_ini, data_fim, excluir=None):
+    """Monta clausulas WHERE contextuais para o dropdown de categorias/status.
+    `excluir` = campo a nao aplicar (o proprio campo do dropdown).
+    Retorna (where_sql, params)."""
+    filtros, params = [], []
+
+    if q and q.strip():
+        termo = f"%{q.strip()}%"
+        filtros.append(
+            "(trackid LIKE %s OR assunto LIKE %s OR solicitante LIKE %s "
+            " OR email LIKE %s OR mensagem LIKE %s OR resposta LIKE %s "
+            " OR atribuido_a LIKE %s OR respondido_por LIKE %s)"
+        )
+        params.extend([termo] * 8)
+
+    if excluir != "status" and status and status.strip():
+        filtros.append("nome_status = %s")
+        params.append(status.strip())
+
+    if excluir != "categoria" and categoria and categoria.strip():
+        filtros.append("categoria = %s")
+        params.append(categoria.strip())
+
+    if data_ini:
+        filtros.append("DATE(aberto_em) >= %s")
+        params.append(data_ini)
+    if data_fim:
+        filtros.append("DATE(aberto_em) <= %s")
+        params.append(data_fim)
+
+    return (" AND " + " AND ".join(filtros)) if filtros else "", params
+
+
 @router.get("/categorias")
-def listar_categorias():
-    """Retorna categorias distintas da base — para popular o filtro no front."""
+def listar_categorias(
+    q:         Optional[str] = Query(None),
+    status:    Optional[str] = Query(None),
+    data_ini:  Optional[str] = Query(None),
+    data_fim:  Optional[str] = Query(None),
+):
+    """Retorna categorias distintas da base — para popular o filtro no front.
+    2026-08-31: aceita filtros q/status/data_* pra contagem contextual.
+    Nao aplica o filtro `categoria` porque e o proprio campo listado."""
     conn = get_db_or_404()
     cur = None
     try:
         cur = conn.cursor(dictionary=True)
+        where_extra, params = _montar_filtros_contexto(
+            q, status, None, data_ini, data_fim, excluir="categoria"
+        )
         cur.execute(
-            """
+            f"""
             SELECT categoria, COUNT(*) AS total
               FROM chamados_antigos
              WHERE categoria IS NOT NULL AND categoria <> ''
+                   {where_extra}
              GROUP BY categoria
              ORDER BY categoria ASC
-            """
+            """,
+            params
         )
         return cur.fetchall() or []
     except Exception as e:
@@ -88,24 +133,35 @@ def listar_categorias():
 
 
 @router.get("/status")
-def listar_status():
+def listar_status(
+    q:         Optional[str] = Query(None),
+    categoria: Optional[str] = Query(None),
+    data_ini:  Optional[str] = Query(None),
+    data_fim:  Optional[str] = Query(None),
+):
     """Retorna status distintos da base — para popular o filtro no front.
     Os valores no legado (Novo/Respondido/Em Progresso/etc) nao batem com
     o vocabulario do sistema novo (Aberto/Em Andamento/Resolvido/Fechado);
     listar dinamicamente evita hardcode desalinhado. Ordena pelo mais
-    frequente primeiro."""
+    frequente primeiro.
+    2026-08-31: aceita filtros q/categoria/data_* pra contagem contextual."""
     conn = get_db_or_404()
     cur = None
     try:
         cur = conn.cursor(dictionary=True)
+        where_extra, params = _montar_filtros_contexto(
+            q, None, categoria, data_ini, data_fim, excluir="status"
+        )
         cur.execute(
-            """
+            f"""
             SELECT nome_status, COUNT(*) AS total
               FROM chamados_antigos
              WHERE nome_status IS NOT NULL AND nome_status <> ''
+                   {where_extra}
              GROUP BY nome_status
              ORDER BY total DESC, nome_status ASC
-            """
+            """,
+            params
         )
         return cur.fetchall() or []
     except Exception as e:

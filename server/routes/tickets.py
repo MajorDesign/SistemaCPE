@@ -336,7 +336,8 @@ def log_fim(status_text: str, **kwargs):
 def validar_ticket_existe(cursor, ticket_id: int):
     cursor.execute(
         "SELECT id, numero, group_id, solicitante_id, responsavel_id, "
-        "categoria_id, subcategoria_id FROM tickets WHERE id = %s",
+        "categoria_id, subcategoria_id, status_id, reopen_count, "
+        "resolvido_em FROM tickets WHERE id = %s",
         (ticket_id,)
     )
     ticket = cursor.fetchone()
@@ -385,6 +386,114 @@ def obter_role_usuario(cursor, usuario_id: int) -> str:
             detail=f"Usuario #{usuario_id} nao encontrado ou inativo"
         )
     return row["role"] or "USER"
+
+
+# =========================================
+# MULTI-GRUPO (Fase 2 PLANO_MULTIGRUPO.md)
+# =========================================
+
+def carregar_group_ids_usuario(cursor, usuario_id: int) -> list:
+    """Retorna TODOS os group_ids de um usuario (user_groups table).
+    Fallback: se user_groups vazio, cai no users.group_id primario.
+    Usado em checks de permissao — nao no listar (o listar tem query propria)."""
+    try:
+        cursor.execute(
+            "SELECT group_id FROM user_groups WHERE user_id = %s",
+            (usuario_id,)
+        )
+        rows = cursor.fetchall() or []
+        gids = [r["group_id"] for r in rows if r.get("group_id")]
+        if gids:
+            return gids
+    except Exception:
+        pass  # Tabela pode nao existir em ambiente pre-migracao
+    # Fallback para group_id primario
+    cursor.execute(
+        "SELECT group_id FROM users WHERE id = %s",
+        (usuario_id,)
+    )
+    row = cursor.fetchone() or {}
+    return [row["group_id"]] if row.get("group_id") else []
+
+
+def user_pode_ver_ticket(cursor, usuario_id: int, ticket: dict) -> bool:
+    """Regra de PRIVACIDADE do ticket (2026-09-03). Define quem pode ler
+    o ticket (detalhe + interacoes + listagem).
+
+    Contexto do negocio: Nathalia do RH abre chamado pra TI. Enquanto
+    ninguem do TI assumiu, todo mundo do TI ve na fila do grupo. Assim
+    que Fulano do TI ASSUME (vira responsavel_id), o assunto vira privado
+    entre Nathalia (solicitante) e Fulano (responsavel) — os outros
+    USERs do TI nao devem mais enxergar o conteudo.
+
+    Quem PODE ver:
+    - ADMIN / TI / MANAGER global
+    - Solicitante do ticket (sempre — e o dono)
+    - Responsavel do ticket (sempre — esta atendendo)
+    - RESPONSAVEL_GRUPO do grupo do ticket (gestor precisa acompanhar
+      tudo do grupo dele, atribuido ou nao)
+    - USER que pertence ao grupo do ticket E o ticket ainda esta em fila
+      (responsavel_id IS NULL — ainda ninguem assumiu)
+
+    Nao aplica a categoria (migration 089 tem seu proprio filtro).
+    Ver docs/REGRAS_NEGOCIO.md "Privacidade de tickets".
+    """
+    if not ticket:
+        return False
+
+    cursor.execute("SELECT role FROM users WHERE id = %s AND is_active = 1", (usuario_id,))
+    row = cursor.fetchone()
+    if not row:
+        return False
+    role = (row.get("role") or "").upper()
+
+    if role in ROLES_ADMIN:
+        return True
+    if ticket.get("solicitante_id") == usuario_id:
+        return True
+    if ticket.get("responsavel_id") == usuario_id:
+        return True
+
+    tk_group_id = ticket.get("group_id")
+    if not tk_group_id:
+        return False
+
+    resp_gids = carregar_responsavel_group_ids(cursor, usuario_id)
+    if tk_group_id in resp_gids:
+        return True
+
+    user_gids = carregar_group_ids_usuario(cursor, usuario_id)
+    if tk_group_id in user_gids and ticket.get("responsavel_id") is None:
+        return True
+
+    return False
+
+
+def carregar_responsavel_group_ids(cursor, usuario_id: int) -> list:
+    """Retorna group_ids onde o usuario e RESPONSAVEL_GRUPO.
+    Fallback: se user_groups vazio ou coluna role_in_grp faltando,
+    usa o role global do users + group_id primario."""
+    try:
+        cursor.execute(
+            "SELECT group_id FROM user_groups "
+            "WHERE user_id = %s AND role_in_grp = 'RESPONSAVEL_GRUPO'",
+            (usuario_id,)
+        )
+        rows = cursor.fetchall() or []
+        gids = [r["group_id"] for r in rows if r.get("group_id")]
+        if gids:
+            return gids
+    except Exception:
+        pass
+    # Fallback: role global + group_id primario
+    cursor.execute(
+        "SELECT role, group_id FROM users WHERE id = %s",
+        (usuario_id,)
+    )
+    row = cursor.fetchone() or {}
+    if (row.get("role") or "").upper() == "RESPONSAVEL_GRUPO" and row.get("group_id"):
+        return [row["group_id"]]
+    return []
 
 def gerar_numero_ticket(cursor, group_id: int):
     """
@@ -519,6 +628,7 @@ def _destinatarios_email_ticket(
     cursor.execute(
         """
         SELECT t.solicitante_id, t.responsavel_id, t.group_id,
+               t.categoria_id, t.subcategoria_id,
                sol.email AS sol_email, sol.name AS sol_nome,
                resp.email AS resp_email, resp.name AS resp_nome
           FROM tickets t
@@ -570,6 +680,46 @@ def _destinatarios_email_ticket(
             if m["id"] in excluir_ids: continue
             if not m.get("email"): continue
             grupo_membros.append(m)
+
+        # 2026-09-04: filtro por ticket_membro_categorias (migration 089).
+        # Regra: se o membro TEM restricao configurada, so recebe email de
+        # tickets nas categorias/subcategorias liberadas. Se nao tem
+        # restricao (fila vazia na tabela), recebe tudo (comportamento
+        # padrao). Evita inundacao de emails pra membros que so cuidam de
+        # uma sub-area do grupo. Falha silenciosa se migration ainda nao
+        # aplicada. Ver docs/REGRAS_NEGOCIO.md "Permissoes por categoria".
+        try:
+            tk_cat = tk.get("categoria_id")
+            tk_sub = tk.get("subcategoria_id")
+            filtrados = []
+            for m in grupo_membros:
+                # Verifica se o membro tem alguma restricao
+                cursor.execute(
+                    "SELECT COUNT(*) AS n FROM ticket_membro_categorias WHERE user_id = %s",
+                    (m["id"],),
+                )
+                tem_restricao = int((cursor.fetchone() or {}).get("n") or 0) > 0
+                if not tem_restricao:
+                    filtrados.append(m)
+                    continue
+                # Membro restrito — precisa bater categoria OU subcategoria
+                cursor.execute(
+                    """
+                    SELECT 1 FROM ticket_membro_categorias
+                     WHERE user_id = %s
+                       AND (
+                         (subcategoria_id IS NULL     AND categoria_id = %s)
+                      OR (subcategoria_id IS NOT NULL AND subcategoria_id = %s)
+                       )
+                     LIMIT 1
+                    """,
+                    (m["id"], tk_cat, tk_sub),
+                )
+                if cursor.fetchone():
+                    filtrados.append(m)
+            grupo_membros = filtrados
+        except Exception as e:
+            logger.warning(f"[EMAIL] falha no filtro por categoria (ticket {ticket_id}): {e}")
 
     # 4) Filtro de preferencias de email (opt-out por tipo). Falha silenciosa
     # se modulo nao carregar (ex: migration ainda nao aplicada).
@@ -687,22 +837,28 @@ async def obter_tickets(
 
             if resp_group_ids:
                 ph = ",".join(["%s"] * len(resp_group_ids))
+                # 2026-09-09 PRIVACIDADE POR SETOR: RESPONSAVEL_GRUPO so ve
+                # tickets ENCAMINHADOS ao proprio setor. NAO ve tickets que
+                # membros do grupo dele abriram pra OUTRO setor — nesses casos
+                # so o solicitante e o setor destino (e seus RESP_GRUPO) veem.
+                # Ver docs/REGRAS_NEGOCIO.md "Privacidade de tickets".
                 or_parts.append(f"t.group_id IN ({ph})")
-                or_params.extend(resp_group_ids)
-                # tickets abertos por membros dos grupos onde ele responde
-                or_parts.append(
-                    f"t.solicitante_id IN ("
-                    f"  SELECT DISTINCT ug2.user_id"
-                    f"    FROM user_groups ug2 JOIN users u2 ON u2.id=ug2.user_id"
-                    f"   WHERE ug2.group_id IN ({ph}) AND u2.is_active = 1"
-                    f")"
-                )
                 or_params.extend(resp_group_ids)
 
             if usr_group_ids:
                 ph2 = ",".join(["%s"] * len(usr_group_ids))
-                or_parts.append(f"t.group_id IN ({ph2})")
+                # 2026-09-03 PRIVACIDADE: USER so ve tickets do seu grupo que
+                # ainda estao em fila (responsavel_id IS NULL) OU que foram
+                # atribuidos a ele proprio. Assim que alguem do grupo assume,
+                # os outros USERs perdem visibilidade — so solicitante,
+                # responsavel e RESP_GRUPO do grupo continuam vendo.
+                # Ver docs/REGRAS_NEGOCIO.md "Privacidade de tickets".
+                or_parts.append(
+                    f"(t.group_id IN ({ph2}) AND "
+                    f"(t.responsavel_id IS NULL OR t.responsavel_id = %s))"
+                )
                 or_params.extend(usr_group_ids)
+                or_params.append(usuario_id)
 
             filtros.append("(" + " OR ".join(or_parts) + ")")
             params.extend(or_params)
@@ -902,14 +1058,16 @@ async def dashboard_sla(
         if e_admin:
             pass  # Admin vê tudo
         elif role_usuario == "RESPONSAVEL_GRUPO":
-            if not group_id_usuario:
+            # 2026-09-01 multi-grupo: gestor pode ser RESPONSAVEL em varios grupos.
+            resp_gids = carregar_responsavel_group_ids(cursor, usuario_id)
+            if not resp_gids:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Usuário RESPONSAVEL_GRUPO sem grupo atribuído no sistema"
                 )
-            # Apenas tickets do grupo — responsável pertence ao grupo do gestor
-            filtros.append("t.group_id = %s")
-            params.append(group_id_usuario)
+            placeholders = ",".join(["%s"] * len(resp_gids))
+            filtros.append(f"t.group_id IN ({placeholders})")
+            params.extend(resp_gids)
         else:
             # Usuário comum vê tickets onde é o responsável (atendente)
             filtros.append("t.responsavel_id = %s")
@@ -1156,14 +1314,27 @@ async def dashboard_sla(
             "sla_pr_aguardando":     {"qtd": kpi["pr_aguardando"],      "percentual": pct(kpi["pr_aguardando"],      total_geral)},
         }
 
-        # Para RESPONSAVEL_GRUPO: busca IDs dos membros do grupo para filtrar por_usuario
+        # Para RESPONSAVEL_GRUPO: busca IDs dos membros dos grupos onde ele e
+        # RESPONSAVEL (multi-grupo, 2026-09-01) — para poder filtrar por_usuario.
         ids_do_grupo = set()
-        if role_usuario == "RESPONSAVEL_GRUPO" and group_id_usuario:
-            cursor.execute(
-                "SELECT id FROM users WHERE group_id = %s AND is_active = 1",
-                (group_id_usuario,)
-            )
-            ids_do_grupo = {row["id"] for row in cursor.fetchall()}
+        if role_usuario == "RESPONSAVEL_GRUPO":
+            resp_gids2 = carregar_responsavel_group_ids(cursor, usuario_id)
+            if resp_gids2:
+                placeholders2 = ",".join(["%s"] * len(resp_gids2))
+                # Busca usuarios que participam de qualquer um desses grupos:
+                # aceita tanto users.group_id (primary legado) quanto user_groups.
+                cursor.execute(
+                    f"""
+                    SELECT DISTINCT u.id
+                      FROM users u
+                     WHERE u.is_active = 1
+                       AND (u.group_id IN ({placeholders2})
+                            OR u.id IN (SELECT ug.user_id FROM user_groups ug
+                                        WHERE ug.group_id IN ({placeholders2})))
+                    """,
+                    resp_gids2 + resp_gids2
+                )
+                ids_do_grupo = {row["id"] for row in cursor.fetchall()}
 
         por_usuario = []
         if e_admin or role_usuario == "RESPONSAVEL_GRUPO":
@@ -1208,13 +1379,24 @@ async def dashboard_sla(
 
 
 @tickets_router.get("/{ticket_id}", response_model=TicketResposta)
-async def obter_ticket(ticket_id: int = Path(..., gt=0)):
-    log_inicio("obter_ticket", ticket_id=ticket_id)
+async def obter_ticket(ticket_id: int = Path(..., gt=0),
+                        usuario_id: Optional[int] = Query(None, gt=0)):
+    log_inicio("obter_ticket", ticket_id=ticket_id, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
     try:
         cursor = conexao.cursor(dictionary=True)
-        validar_ticket_existe(cursor, ticket_id)
+        ticket_basico = validar_ticket_existe(cursor, ticket_id)
+
+        # 2026-09-03 PRIVACIDADE: sem usuario_id nao da pra checar quem esta
+        # perguntando — mantem compat com callers antigos (retornar 400
+        # quebraria muita coisa). Frontend NOVO manda usuario_id sempre.
+        if usuario_id is not None:
+            if not user_pode_ver_ticket(cursor, usuario_id, ticket_basico):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Voce nao tem permissao para ver este chamado.",
+                )
 
         cursor.execute(
             """
@@ -1320,12 +1502,17 @@ async def assumir_ticket(ticket_id: int, payload: AssumiPayload):
                 detail="Este ticket já possui um responsável atribuído"
             )
 
-        # Usuário deve pertencer ao mesmo grupo do ticket (exceto admins)
-        if not e_admin and usuario.get("group_id") != ticket_db.get("group_id"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Você não pertence ao grupo deste ticket"
-            )
+        # 2026-09-03 multi-grupo: usuario pode participar de varios grupos
+        # via user_groups. Antes so olhava users.group_id (primary) e
+        # bloqueava quem participava do grupo do ticket como secundario —
+        # caso da Izabela (primary Estoque, USER tambem em Faturamento).
+        if not e_admin:
+            group_ids = carregar_group_ids_usuario(cursor, payload.usuario_id)
+            if ticket_db.get("group_id") not in group_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Você não pertence ao grupo deste ticket"
+                )
 
         nome_usuario = usuario.get("name") or f"Usuário #{payload.usuario_id}"
 
@@ -1685,6 +1872,11 @@ class EncaminharPayload(BaseModel):
     group_id:   int = Field(..., gt=0)
     motivo:     Optional[str] = Field(None, max_length=500)
     responsavel_id: Optional[int] = Field(None, gt=0)  # só admin pode usar
+    # 2026-09-03: permite ja definir categoria/subcategoria no destino
+    # (opcional). Se group_id == atual, categoria_id vira OBRIGATORIO —
+    # senao encaminhar pro proprio grupo nao teria efeito util.
+    categoria_id:    Optional[int] = Field(None, gt=0)
+    subcategoria_id: Optional[int] = Field(None, gt=0)
 
 @tickets_router.post("/{ticket_id}/encaminhar")
 async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
@@ -1702,10 +1894,20 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
 
         validar_grupo_existe(cursor, payload.group_id)
 
-        if payload.group_id == ticket_db["group_id"]:
+        # 2026-09-03: encaminhar pro proprio grupo AGORA e permitido, desde
+        # que informe categoria/subcategoria nova (recategorizacao). Se for
+        # mesmo grupo sem categoria, ai sim bloqueia — nao teria efeito.
+        mesmo_grupo = (payload.group_id == ticket_db["group_id"])
+        if mesmo_grupo and not payload.categoria_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="O ticket já pertence a este grupo"
+                detail="Para encaminhar dentro do mesmo grupo, informe a nova categoria."
+            )
+        if mesmo_grupo and payload.categoria_id == ticket_db.get("categoria_id") \
+           and (payload.subcategoria_id or None) == (ticket_db.get("subcategoria_id") or None):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A categoria/subcategoria informada e a mesma do ticket — nada a mudar."
             )
 
         # Permissão de encaminhamento:
@@ -1743,34 +1945,73 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
             validar_usuario_existe(cursor, payload.responsavel_id)
             novo_responsavel_id = payload.responsavel_id
 
+        # Se veio categoria no payload, valida que pertence ao grupo destino.
+        # Se nao veio, zera (comportamento historico — cada grupo tem seu catalogo).
+        nova_cat_id = None
+        nova_sub_id = None
+        if payload.categoria_id:
+            cursor.execute(
+                "SELECT id, group_id, nome FROM categorias WHERE id = %s",
+                (payload.categoria_id,),
+            )
+            _cat = cursor.fetchone()
+            if not _cat:
+                raise HTTPException(status_code=400, detail="Categoria nao encontrada.")
+            if _cat.get("group_id") and _cat["group_id"] != payload.group_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="A categoria informada nao pertence ao grupo destino.",
+                )
+            nova_cat_id = payload.categoria_id
+            if payload.subcategoria_id:
+                cursor.execute(
+                    "SELECT id, categoria_id FROM subcategorias WHERE id = %s",
+                    (payload.subcategoria_id,),
+                )
+                _sub = cursor.fetchone()
+                if not _sub or _sub.get("categoria_id") != nova_cat_id:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="A subcategoria informada nao pertence a categoria escolhida.",
+                    )
+                nova_sub_id = payload.subcategoria_id
+
         # Atualizar ticket: novo grupo, limpar responsável (a menos que admin
-        # atribua), e ZERAR categoria/subcategoria — cada grupo tem suas
-        # proprias categorias, a antiga nao faz sentido no novo grupo.
+        # atribua), categoria/sub informada ou zerada.
         # 2026-08-21: fix — antes deixava categoria_id/subcategoria_id
         # apontando pra categorias do grupo antigo. Isso fazia o ticket
-        # sumir do filtro cascade (categoria so aparece quando escolhe o
-        # grupo dono; se o ticket foi movido, nunca aparece) e travava
-        # exclusao da categoria antiga por ter "ticket vinculado" que ja
-        # nao pertencia mais ao grupo dela.
+        # sumir do filtro cascade.
+        # 2026-09-03: aceita nova categoria/sub no payload.
         cursor.execute(
             """UPDATE tickets
                   SET group_id = %s,
                       responsavel_id = %s,
-                      categoria_id = NULL,
-                      subcategoria_id = NULL,
+                      categoria_id = %s,
+                      subcategoria_id = %s,
                       updated_at = NOW()
                 WHERE id = %s""",
-            (payload.group_id, novo_responsavel_id, ticket_id)
+            (payload.group_id, novo_responsavel_id, nova_cat_id, nova_sub_id, ticket_id)
         )
 
         # Registrar interação de encaminhamento
         motivo_txt = f" — Motivo: {payload.motivo}" if payload.motivo else ""
-        mensagem_interacao = (
-            f"🔀 Ticket encaminhado para o grupo '{nome_grupo_destino}' "
-            f"por {nome_usuario}{motivo_txt}. "
-            f"Categoria e subcategoria foram resetadas — o grupo destino "
-            f"pode recategorizar."
-        )
+        if mesmo_grupo:
+            mensagem_interacao = (
+                f"🔀 Ticket recategorizado dentro do grupo '{nome_grupo_destino}' "
+                f"por {nome_usuario}{motivo_txt}."
+            )
+        elif nova_cat_id:
+            mensagem_interacao = (
+                f"🔀 Ticket encaminhado para o grupo '{nome_grupo_destino}' "
+                f"por {nome_usuario}{motivo_txt}. Nova categoria ja definida."
+            )
+        else:
+            mensagem_interacao = (
+                f"🔀 Ticket encaminhado para o grupo '{nome_grupo_destino}' "
+                f"por {nome_usuario}{motivo_txt}. "
+                f"Categoria e subcategoria foram resetadas — o grupo destino "
+                f"pode recategorizar."
+            )
         cursor.execute(
             """
             INSERT INTO ticket_interacoes
@@ -2610,12 +2851,16 @@ async def atualizar_ticket(
                     detail="Você não tem permissão para alterar esses campos"
                 )
 
-        # ✅ RESPONSAVEL_GRUPO só pode alterar tickets do seu próprio grupo
+        # RESPONSAVEL_GRUPO so pode alterar tickets dos grupos onde tem essa role.
+        # 2026-09-01 multi-grupo: user pode ser RESPONSAVEL em varios grupos, o
+        # check antigo comparava so com o group_id primario (users.group_id) e
+        # bloqueava o gestor de mexer em tickets dos grupos secundarios.
         elif role_atual == "RESPONSAVEL_GRUPO":
-            if ticket_db["group_id"] != group_id_usuario:
+            resp_group_ids = carregar_responsavel_group_ids(cursor, usuario_id)
+            if ticket_db["group_id"] not in resp_group_ids:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Você só pode alterar tickets do seu grupo"
+                    detail="Você só pode alterar tickets dos seus grupos"
                 )
 
         # Montar os campos a atualizar
@@ -2624,6 +2869,17 @@ async def atualizar_ticket(
         if payload.status_id is not None:
             updates.append("status_id = %s")
             params.append(payload.status_id)
+            # 2026-09-03: quando finaliza via PUT (dropdown "Alterar Status"
+            # ou API externa), garante consistencia dos timestamps que o
+            # endpoint /finalizar setaria. Sem isso o ticket fica com
+            # status_id=4 mas resolvido_em=NULL, quebra relatorios e
+            # a listagem de "resolvidos".
+            if payload.status_id == 4 and not ticket_db.get("resolvido_em"):
+                updates.append("resolvido_em = NOW()")
+            if payload.status_id == 5:
+                updates.append("fechado_em = NOW()")
+                if not ticket_db.get("resolvido_em"):
+                    updates.append("resolvido_em = NOW()")
 
         if payload.prioridade_id is not None:
             updates.append("prioridade_id = %s")
@@ -2638,15 +2894,17 @@ async def atualizar_ticket(
                     detail="Apenas responsáveis do grupo ou admins podem atribuir chamados"
                 )
             
-            responsavel_usuario = validar_usuario_existe(cursor, payload.responsavel_id)
-            # 08/04/2026 16:35 - Ask cpp - BUG FIX: Validar responsável pertence ao mesmo grupo do ticket
-            responsavel_group_id = responsavel_usuario.get("group_id")
-            
-            # Se não é admin e o responsável NÃO pertence ao mesmo grupo do ticket
-            if not e_admin and responsavel_group_id != ticket_db["group_id"]:
+            validar_usuario_existe(cursor, payload.responsavel_id)
+            # 2026-09-01 multi-grupo: verifica se o RESPONSAVEL escolhido participa
+            # de ALGUM grupo do ticket (nao so o primary). Antes o check era
+            # `responsavel.group_id != ticket.group_id` e bloqueava atribuir alguem
+            # que tem o ticket-group como grupo secundario.
+            responsavel_group_ids = carregar_group_ids_usuario(cursor, payload.responsavel_id)
+
+            if not e_admin and ticket_db["group_id"] not in responsavel_group_ids:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Você só pode atribuir pessoas do seu próprio grupo"
+                    detail="Você só pode atribuir pessoas dos grupos do ticket"
                 )
             
             updates.append("responsavel_id = %s")
@@ -2701,6 +2959,28 @@ async def atualizar_ticket(
         if payload.status_id in (4, 5):
             SLAService.concluir_sla(conexao, ticket_id)
             logger.info(f"  ✓ SLA encerrado — ticket #{ticket_id} finalizado com status {payload.status_id}")
+
+            # 2026-09-03: registrar interacao de resolucao/fechamento no
+            # historico (o endpoint /finalizar ja fazia, mas o PUT direto
+            # nao — ticket ficava sem trilha visivel). Silencioso se falha.
+            try:
+                cursor.execute(
+                    "SELECT name FROM users WHERE id=%s", (usuario_id,)
+                )
+                _u = cursor.fetchone() or {}
+                nome = _u.get("name") or f"Usuário #{usuario_id}"
+                acao = "finalizado" if payload.status_id == 4 else "fechado"
+                emoji = "✅" if payload.status_id == 4 else "🔒"
+                cursor.execute(
+                    """INSERT INTO ticket_interacoes
+                         (ticket_id, usuario_id, tipo, mensagem, publico, created_at)
+                       VALUES (%s, %s, %s, %s, 1, NOW())""",
+                    (ticket_id, usuario_id,
+                     "resolucao" if payload.status_id == 4 else "sistema",
+                     f"{emoji} Chamado {acao} por {nome}."),
+                )
+            except Exception as e_hist:
+                logger.warning(f"[TICKETS] falha ao gravar interacao de resolucao: {e_hist}")
 
         conexao.commit()
 
@@ -2896,26 +3176,41 @@ async def deletar_ticket(
 # ========================================
 
 @interacoes_router.get("/{ticket_id}", response_model=List[InteracaoResposta])
-async def obter_interacoes(ticket_id: int = Path(..., gt=0)):
+async def obter_interacoes(ticket_id: int = Path(..., gt=0),
+                            usuario_id: Optional[int] = Query(None, gt=0)):
     """
     Obtém todas as INTERAÇÕES (comentários) de um TICKET
     ✅ Retorna lista de interações
     ✅ Ordena por data de criação
+    2026-09-03: aceita usuario_id — se informado, checa privacidade
+    (ver docs/REGRAS_NEGOCIO.md "Privacidade de tickets"). USERs do mesmo
+    grupo do ticket, apos alguem assumir, perdem visibilidade.
     """
-    log_inicio("obter_interacoes", ticket_id=ticket_id)
+    log_inicio("obter_interacoes", ticket_id=ticket_id, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
     try:
         cursor = conexao.cursor(dictionary=True)
 
         logger.info(f"  ▶️ Buscando interações do ticket {ticket_id}...")
-        
-        # Validar se ticket existe
-        cursor.execute("SELECT id FROM tickets WHERE id = %s", (ticket_id,))
-        if not cursor.fetchone():
+
+        # Validar se ticket existe + campos usados no check de privacidade
+        cursor.execute(
+            "SELECT id, solicitante_id, responsavel_id, group_id "
+            "FROM tickets WHERE id = %s",
+            (ticket_id,),
+        )
+        ticket_row = cursor.fetchone()
+        if not ticket_row:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Ticket {ticket_id} não encontrado"
+            )
+
+        if usuario_id and not user_pode_ver_ticket(cursor, usuario_id, ticket_row):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Voce nao tem permissao para ver este chamado.",
             )
 
         # Buscar interações
