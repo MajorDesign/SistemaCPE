@@ -517,12 +517,13 @@ def _fetch_cloudflare_turn_usage() -> Optional[dict]:
 
 @router.get("/turn-usage")
 def get_turn_usage(request: Request):
-    """Retorna consumo TURN do mes corrente (so ADMIN). Cache 15 min."""
+    """Retorna consumo TURN do mes corrente. Acesso: ADMIN e
+    RESPONSAVEL_GRUPO (dono precisa acompanhar quota do time). Cache 15 min."""
     user = _exigir_user(request)  # so autenticado
     role = (user.get("role") or "").upper()
-    if role != "ADMIN":
+    if role not in ("ADMIN", "RESPONSAVEL_GRUPO"):
         raise HTTPException(status_code=403,
-                            detail="Apenas ADMIN pode ver consumo do TURN.")
+                            detail="Apenas ADMIN ou RESPONSAVEL_GRUPO pode ver consumo do TURN.")
 
     now = _time.time()
     if _TURN_USAGE_CACHE["data"] and now < _TURN_USAGE_CACHE["expires_at"]:
@@ -603,12 +604,17 @@ def criar_meeting(body: MeetingCreate, request: Request):
         conn.commit()
     finally:
         cur.close(); conn.close()
+    from config import PUBLIC_BASE_URL
+    url_path = f"/SistemaCPE/web/pages/meet.html?code={code}"
     return {
         "success": True,
         "meeting_id": mid,
         "codigo": code,
         "nome": body.nome.strip(),
-        "url_path": f"/SistemaCPE/web/pages/meet.html?code={code}",
+        "url_path": url_path,
+        # URL publica completa — sempre com o dominio do tunel (mesmo se o
+        # host abriu o chat pela LAN interna). Convidados externos usam esta.
+        "public_url": f"{PUBLIC_BASE_URL}{url_path}",
     }
 
 
