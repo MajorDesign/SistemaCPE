@@ -2575,20 +2575,34 @@ def listar_users_disponiveis(request: Request, q: Optional[str] = Query(None)):
     plus = get_db_or_404()
     cur = plus.cursor(dictionary=True)
     try:
+        # 2026-09-10: incluir group_name + unit_nome pra desktop mostrar
+        # contexto do contato ('Suporte TI · CPE Belo Horizonte') sem
+        # precisar de N round-trips.
         if q:
             like = f"%{q.strip().lower()}%"
             cur.execute("""
-                SELECT id, name, email, role, group_id, avatar_url
-                FROM users
-                WHERE is_active=1
-                  AND (LOWER(name) LIKE %s OR LOWER(email) LIKE %s)
-                ORDER BY name LIMIT 50
+                SELECT u.id, u.name, u.email, u.role, u.group_id, u.unit_id,
+                       u.avatar_url,
+                       g.name AS group_name,
+                       un.nome AS unit_nome
+                FROM users u
+                LEFT JOIN cpe_grupo g ON g.id = u.group_id
+                LEFT JOIN unidades_cpe un ON un.id = u.unit_id
+                WHERE u.is_active=1
+                  AND (LOWER(u.name) LIKE %s OR LOWER(u.email) LIKE %s)
+                ORDER BY u.name LIMIT 50
             """, (like, like))
         else:
             cur.execute("""
-                SELECT id, name, email, role, group_id, avatar_url
-                FROM users WHERE is_active=1
-                ORDER BY name LIMIT 200
+                SELECT u.id, u.name, u.email, u.role, u.group_id, u.unit_id,
+                       u.avatar_url,
+                       g.name AS group_name,
+                       un.nome AS unit_nome
+                FROM users u
+                LEFT JOIN cpe_grupo g ON g.id = u.group_id
+                LEFT JOIN unidades_cpe un ON un.id = u.unit_id
+                WHERE u.is_active=1
+                ORDER BY u.name LIMIT 200
             """)
         return {"success": True, "users": cur.fetchall()}
     finally:
