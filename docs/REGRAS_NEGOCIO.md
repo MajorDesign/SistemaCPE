@@ -131,6 +131,57 @@ Banner "Checklist de saída pendente" tem 2 botões: **Fazer Checklist Agora** e
 - Ticket criado em categoria X é atendido pelo grupo dono
 - Ticket comum: USER vê os próprios; RESPONSAVEL_GRUPO vê do grupo; ADMIN/TI/MANAGER vê tudo
 
+<a id="privacidade-de-tickets"></a>
+### Privacidade de tickets (2026-09-03)
+
+**Cenário motivador**: Nathalia (RH) abre chamado direcionado ao grupo TI. Enquanto ninguém do TI assumiu, o chamado é "da fila do grupo" — qualquer USER do TI pode ver pra decidir se pega. Assim que **Fulano (TI) assume** (vira `responsavel_id`), o assunto vira **privado entre Nathalia e Fulano**: os outros USERs do TI **não devem mais** enxergar mensagens ou detalhes do que está sendo tratado. O gestor do grupo (RESPONSAVEL_GRUPO do TI) continua vendo — é papel dele acompanhar.
+
+**Quem pode ver um ticket (regra unificada)** — implementada em [`server/routes/tickets.py`](../server/routes/tickets.py) na função `user_pode_ver_ticket()`:
+
+| Perfil do requisitante | Vê o ticket? |
+|---|---|
+| ADMIN / TI / MANAGER (globais) | Sempre |
+| Solicitante do ticket | Sempre |
+| Responsável do ticket | Sempre |
+| RESPONSAVEL_GRUPO do grupo **do ticket** | Sempre |
+| USER que pertence ao grupo do ticket | **Só** enquanto `responsavel_id IS NULL` (em fila). Depois de atribuído, **não** vê mais |
+| Qualquer outro (ex: USER do RH tentando ver ticket que Nathalia abriu pro TI) | Nunca |
+
+**Grupo do ticket** = `tickets.group_id` (grupo alvo, NÃO o do solicitante). Nathalia abrindo pra TI → o ticket vai pra `group_id=TI`, portanto ninguém do RH que não seja ela vê.
+
+**Privacidade por setor — RESPONSAVEL_GRUPO (2026-09-09):** o gestor de um setor **só vê tickets encaminhados ao próprio setor**. Se um membro do grupo dele abre um chamado pra OUTRO setor, o gestor **não** enxerga — vale só o solicitante, o responsável (quando atribuído) e o RESP_GRUPO do setor destino. Exemplo: Viviane responde por Faturamento e Fiscal. Maria Lucia (membro de Faturamento) abre um chamado pra Financeiro. Viviane **não** vê esse chamado — nem que Maria Lucia é da equipe dela — porque o `group_id` do ticket é Financeiro. Só se o ticket for encaminhado pra Faturamento/Fiscal (via `PUT /tickets/{id}` alterando `group_id`) a Viviane passa a enxergar. Regra aplicada em `listar_tickets` (SQL `t.group_id IN (resp_group_ids)` — sem cláusula de "solicitante é do grupo") e em `user_pode_ver_ticket()` (linha `if tk_group_id in resp_gids`).
+
+**Multi-grupo**: `carregar_group_ids_usuario()` considera `users.group_id` (legado) + `user_groups` (novo). Se Fulano é USER em TI e também em Frotas, ele vê a fila dos dois.
+
+**3 pontos de reforço** — a mesma regra é aplicada em cada camada:
+
+1. **Listagem** `GET /api/tickets?usuario_id=X` — filtro no `WHERE` do SQL exclui tickets que ele não pode ver. Comentário `# 2026-09-03 PRIVACIDADE` marca o local exato.
+2. **Detalhe** `GET /api/tickets/{id}?usuario_id=X` — chama `user_pode_ver_ticket()`, retorna **403** se negado.
+3. **Interações (comentários)** `GET /api/ticket-interacoes/{id}?usuario_id=X` — mesmo check. Isso fecha o vazamento óbvio (ver ticket vazio + comentários cheios).
+
+**Consequência de UX** — frontend precisa **sempre passar `usuario_id`** nesses 3 endpoints. Se omitir, os endpoints de detalhe/interações caem em modo legacy (não bloqueiam — retrocompat). O `tickets.js` já passa em todas as chamadas de detail/comentários. Ao adicionar novos consumidores, seguir o mesmo padrão.
+
+**O que NÃO muda**:
+- RESPONSAVEL_GRUPO do grupo do ticket segue vendo tudo (gestão precisa)
+- ADMIN/TI/MANAGER seguem vendo tudo (auditoria)
+- Solicitante sempre vê seu próprio chamado, independente de grupo (é o dono)
+- Após resolvido, quem podia ver continua podendo (histórico permanece pros mesmos atores)
+
+**Cenários derivados** — a regra é sobre **estado atual** do ticket (não histórico), então dois fluxos existentes se encaixam sem código adicional:
+
+1. **Desistir do chamado** (`POST /tickets/{id}/devolver`, [tickets.py](../server/routes/tickets.py) linha ~1567): responsável escreve motivo, backend faz `UPDATE tickets SET responsavel_id = NULL, status_id = 1` e grava `interacao.tipo='devolucao'` no histórico. Como agora `responsavel_id IS NULL`, o ticket volta pra fila do grupo e TODOS os USERs do grupo voltam a enxergar. O ex-responsável **continua vendo** (é membro do grupo e o ticket está sem dono).
+
+2. **Transferir chamado** (`PUT /tickets/{id}` com novo `responsavel_id`, feito por ADMIN ou RESPONSAVEL_GRUPO): assim que o UPDATE grava o novo responsável, o **antigo** perde visibilidade automaticamente (não é mais solicitante, não é mais responsável, e o ticket agora tem `responsavel_id != NULL`). Nada extra a fazer — a regra de privacidade cobre.
+
+**Matriz de teste** (validada em staging, ticket real):
+
+| Ação | Solicitante | Ex-responsável | Novo responsável | RESP_GRP do grupo | USER do grupo sem envolvimento |
+|---|---|---|---|---|---|
+| Sem responsável (fila) | vê | — | — | vê | **vê** |
+| Alguém assume | vê | — | vê | vê | ❌ 403 |
+| Responsável desiste | vê | vê (voltou fila) | — | vê | **vê** |
+| Transferido pra outro | vê | ❌ 403 | vê | vê | ❌ 403 |
+
 <a id="relatorios-e-avaliacoes"></a>
 ### Relatórios e Avaliações (2026-08-25)
 
@@ -153,6 +204,10 @@ Todos os 3 exigem `role in ROLES_REPORTS` (ADMIN, TI) OU `role == 'RESPONSAVEL_G
 - `ROLES_REPORTS = ("ADMIN", "TI")` — **exceção para relatórios/avaliações** (MANAGER fica de fora explicitamente)
 
 **Se um dia MANAGER precisar ver relatórios** — mudar a constante `ROLES_REPORTS` no `avaliacoes.py` + o array `RPT_ROLES_OK` no `reports.html` + o `requiredRoles` do item de menu em `nav.js`. Os 3 pontos precisam ficar consistentes.
+
+**Excelência do Grupo — card do termômetro (2026-09-03):**
+
+Cada `RESPONSAVEL_GRUPO` só enxerga esse card com dados dos SEUS grupos. Quando responde por **mais de um** grupo (via `user_groups` com `role_in_grp='RESPONSAVEL_GRUPO'`), o card **não** consolida — mostra **um card por grupo**, empilhados verticalmente, ordenados por média decrescente (o melhor no topo). ADMIN/TI sem filtro veem 1 card consolidado como antes; com filtro `grupo_id` ativo veem só o grupo escolhido. Endpoint que alimenta: `GET /api/avaliacoes/resumo-por-grupo`. Os KPIs de topo (média geral / 68 avaliados / 66 positivas / etc.) permanecem agregados via `_rptConsolidarGrupos()` no frontend — dão a visão total do escopo do usuário e são o "cabeçalho executivo" da tela.
 
 
 ### Reabertura
@@ -274,6 +329,12 @@ Tabela `ticket_membro_categorias` (`user_id`, `group_id`, `categoria_id`, `subca
 - Se user tem 0 linhas (vê tudo) → não mexe.
 
 **Frontend:** botão "Permissões" na action-bar de `tickets.html`, visível só pra ADMIN e RESPONSAVEL_GRUPO. Modal com lista de membros + árvore de categorias/subcategorias com checkboxes.
+
+**Filtro de notificações (2026-09-04):** a mesma regra vale pras notificações de novo chamado — evita inundar de aviso quem não atende aquela sub-área.
+- **E-mail** (`_destinatarios_email_ticket` em [routes/tickets.py](../server/routes/tickets.py)): ao montar `grupo_emails`, exclui membros com restrição cuja categoria/subcategoria não bate com a do ticket.
+- **In-app** (`NotificacaoService.notificar_novo_ticket` em [services/notificacao_service.py](../server/services/notificacao_service.py)): mesma lógica no loop de destinatários.
+- Membros SEM restrição continuam recebendo tudo (comportamento padrão preservado).
+- Falha silenciosa se a migration 089 não estiver aplicada em algum ambiente.
 
 ---
 

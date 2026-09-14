@@ -130,6 +130,22 @@ Este é o passo-a-passo que a regra de ouro #9 exige. Não pular.
 - **Windows shell**: use PowerShell pra operações no CPEDC22 (WinRM). Bash pra scripts locais.
 - **Emojis nos commits/docs**: OK e usado (padrão do repo).
 
+### Regras de negócio destacadas (as que mais afetam decisões técnicas)
+
+Fonte da verdade: **`docs/REGRAS_NEGOCIO.md`** (leia sempre antes de mexer no módulo). Este bloco é só um índice do que existe:
+
+- **Privacidade de tickets** — assim que alguém do grupo assume um ticket, os OUTROS USERs do grupo perdem visibilidade (só solicitante + responsável + gestor + admin continuam vendo). Vale pra lista, detalhe e interações. Se você mexer em qualquer query de tickets, respeite o helper `user_pode_ver_ticket()` em `server/routes/tickets.py`.
+- **Privacidade por setor — RESPONSAVEL_GRUPO (2026-09-09)** — o gestor **só vê tickets encaminhados ao setor dele** (`tickets.group_id`). NÃO vê tickets que membros do grupo dele abriram pra OUTRO setor. Só passa a ver se o ticket for encaminhado (mudança de `group_id`). Não reintroduza a cláusula `t.solicitante_id IN (membros_dos_grupos)` em `listar_tickets` — ela quebra essa regra.
+- **Permissões por categoria** (`ticket_membro_categorias`, migration 089) — membro pode ser restringido a certas categorias/subcategorias dentro do grupo dele. Regra vale pra 3 canais:
+  1. Listagem/detalhe de tickets (backend filtra automaticamente)
+  2. **E-mail** de novo chamado (`_destinatarios_email_ticket` em `routes/tickets.py`)
+  3. **Notificação in-app** de novo chamado (`NotificacaoService.notificar_novo_ticket` em `services/notificacao_service.py`)
+  Membro sem restrição continua vendo/recebendo tudo. **Sempre que criar novo canal de notificação de ticket, aplicar o mesmo filtro.**
+- **Multi-grupo** (`user_groups`, migration 090) — user pode participar de N grupos. Sempre olhar `user_groups` E `users.group_id` (fallback legacy) ao decidir permissão de grupo. Helpers `carregar_group_ids_usuario()` e `carregar_responsavel_group_ids()` em `routes/tickets.py`.
+- **Modo suporte / impersonate** — sessão IMP é **READ-ONLY** total (middleware `impersonate_readonly_guard`). Nunca crie exceção sem falar com o usuário.
+- **Reabrir chamado** — até 3 vezes, até 2 meses após resolução, só solicitante + admin. Regras técnicas fixas.
+- **Delegados de agenda** (`atend_agenda_delegados`, migration 092) — permissão granular user×agenda no módulo Atendimentos, independente da hierarquia de grupo.
+
 ---
 
-**Última revisão desta documentação:** 2026-08-04
+**Última revisão desta documentação:** 2026-09-04
