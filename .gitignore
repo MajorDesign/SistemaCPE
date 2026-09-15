@@ -222,10 +222,12 @@ web/uploads/atendimentos/*
 web/uploads/chat/*
 web/uploads/server-avatars/*
 web/uploads/user-avatars/*
+web/uploads/agenda/*
 !web/uploads/contratos/.gitkeep
 !web/uploads/fleet/.gitkeep
 !web/uploads/atendimentos/.gitkeep
 !web/uploads/chat/.gitkeep
+!web/uploads/agenda/.gitkeep
 !web/uploads/server-avatars/.gitkeep
 !web/uploads/user-avatars/.gitkeep
 

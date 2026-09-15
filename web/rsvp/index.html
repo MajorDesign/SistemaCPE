@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Confirmar presença — CPE Control</title>
+  <link rel="icon" type="image/svg+xml" href="/SistemaCPE/web/favicon.svg?v=2026-07-02b">
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #f5f7fb 0%, #e6eefb 100%);
+      color: #111;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 32px 28px;
+      max-width: 520px;
+      width: 100%;
+      box-shadow: 0 10px 40px rgba(30, 60, 120, 0.08);
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 4px;
+      color: #1a1a1a;
+    }
+    .sub {
+      color: #6b7280;
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: baseline;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+    }
+    .row strong { min-width: 100px; color: #374151; font-weight: 600; }
+    .cta {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 24px;
+    }
+    .cta button {
+      padding: 12px 8px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #fff;
+      font-size: 14px;
+      transition: opacity .1s;
+    }
+    .cta button:hover { opacity: 0.9; }
+    .cta button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-aceito { background: #16a34a; }
+    .btn-talvez { background: #d97706; }
+    .btn-recusar { background: #dc2626; }
+    .status {
+      margin-top: 18px;
+      padding: 12px 14px;
+      background: #f3f4f6;
+      color: #374151;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 13px;
+    }
+    .status--ok { background: #dcfce7; color: #14532d; }
+    .status--err { background: #fee2e2; color: #7f1d1d; }
+    .cancelado {
+      background: #fef3c7;
+      color: #78350f;
+      padding: 10px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 600;
+    }
+    .footer {
+      margin-top: 20px;
+      text-align: center;
+      font-size: 11px;
+      color: #9ca3af;
+    }
+    .link {
+      display: inline-block;
+      margin-top: 8px;
+      color: #1f6feb;
+      font-size: 13px;
+      text-decoration: none;
+    }
+    .link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="card" id="app">
+    <div id="loading">
+      <h1>Carregando…</h1>
+      <p class="sub">Buscando informações do evento.</p>
+    </div>
+  </div>
+
+<script>
+(function () {
+  const app = document.getElementById('app');
+  const params = new URLSearchParams(location.search);
+  const token = params.get('token');
+  const respostaSugerida = params.get('resposta'); // vem do link do email
+
+  const API_BASE = location.origin;
+
+  if (!token) {
+    render(errorHtml('Link inválido: token ausente.'));
+    return;
+  }
+
+  fetch(`${API_BASE}/api/agenda/v2/rsvp/${encodeURIComponent(token)}`)
+    .then(r => r.ok ? r.json() : Promise.reject(r))
+    .then(showEvento)
+    .catch(async err => {
+      let msg = 'Não foi possível carregar o evento.';
+      try {
+        const d = await err.json();
+        if (d?.detail) msg = d.detail;
+      } catch {}
+      render(errorHtml(msg));
+    });
+
+  function render(html) { app.innerHTML = html; }
+  function esc(s) {
+    return (s || '').replace(/[<>&"']/g, c => ({
+      '<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;',
+    }[c]));
+  }
+  function fmtDt(s) {
+    if (!s) return '—';
+    const d = new Date(s.replace(' ', 'T'));
+    if (isNaN(d.getTime())) return s;
+    const pad = n => String(n).padStart(2, '0');
+    return `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  function errorHtml(msg) {
+    return `<h1>⚠ ${esc(msg)}</h1>
+      <p class="sub">Se recebeu este link por email, verifique se copiou completo.</p>`;
+  }
+
+  function showEvento(data) {
+    const ev = data.evento;
+    const part = data.participante;
+    const isCancelado = ev.status_op === 'cancelado';
+
+    let content = `
+      <h1>Confirmar presença</h1>
+      <p class="sub">Você foi convidado para o evento abaixo.</p>
+      <div class="row"><strong>Evento:</strong> <span>${esc(ev.titulo)}</span></div>
+      <div class="row"><strong>Quando:</strong> <span>${fmtDt(ev.inicio)} – ${fmtDt(ev.fim)}</span></div>
+      ${ev.local ? `<div class="row"><strong>Local:</strong> <span>${esc(ev.local)}</span></div>` : ''}
+      <div class="row"><strong>Organizador:</strong> <span>${esc(ev.organizador_nome || '—')}</span></div>
+      <div class="row"><strong>Convidado:</strong> <span>${esc(part.nome || part.email)}</span></div>
+    `;
+
+    if (isCancelado) {
+      content += `<div class="cancelado" style="margin-top:16px">Este evento foi cancelado.</div>`;
+    } else {
+      const rsvpAtual = part.rsvp;
+      const label = {
+        aceito: '✓ Você aceitou',
+        recusado: '✗ Você recusou',
+        talvez: '? Você respondeu talvez',
+      }[rsvpAtual];
+      content += `
+        <div class="cta">
+          <button class="btn-aceito" data-r="aceito">✓ Aceitar</button>
+          <button class="btn-talvez" data-r="talvez">? Talvez</button>
+          <button class="btn-recusar" data-r="recusado">✗ Recusar</button>
+        </div>
+        ${label ? `<div class="status" id="statusBox">${esc(label)} <span id="respAt">em ${fmtDt(part.respondido_em)}</span></div>` : `<div class="status" id="statusBox">Aguardando sua resposta…</div>`}
+        ${ev.link_online ? `<div style="text-align:center"><a class="link" href="${esc(ev.link_online)}" target="_blank" rel="noopener">Abrir link da reunião</a></div>` : ''}
+      `;
+    }
+
+    content += `<div class="footer">CPE Control · Agenda</div>`;
+    render(content);
+
+    if (!isCancelado) {
+      document.querySelectorAll('.cta button').forEach(b => {
+        b.addEventListener('click', () => enviar(b.dataset.r));
+      });
+      if (respostaSugerida && ['aceito','talvez','recusado'].includes(respostaSugerida) && !part.rsvp) {
+        enviar(respostaSugerida);
+      }
+    }
+  }
+
+  function enviar(status) {
+    document.querySelectorAll('.cta button').forEach(b => b.disabled = true);
+    const box = document.getElementById('statusBox');
+    box.className = 'status';
+    box.textContent = 'Enviando…';
+
+    fetch(`${API_BASE}/api/agenda/v2/rsvp/${encodeURIComponent(token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    })
+      .then(async r => {
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d?.detail || `HTTP ${r.status}`);
+        box.className = 'status status--ok';
+        const label = { aceito: 'Presença confirmada!', talvez: 'Resposta registrada: talvez.', recusado: 'Recusa registrada.' }[status];
+        box.textContent = `✓ ${label}`;
+      })
+      .catch(e => {
+        box.className = 'status status--err';
+        box.textContent = `Falha: ${e.message}`;
+        document.querySelectorAll('.cta button').forEach(b => b.disabled = false);
+      });
+  }
+})();
+</script>
+</body>
+</html>
