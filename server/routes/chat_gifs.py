@@ -66,17 +66,14 @@ def _giphy_key() -> str:
 
 
 def _giphy_normalize(item: dict) -> dict:
-    """Converte item da API Giphy num formato compacto pro cliente.
-    Priorizamos WebP no preview (leve) e mp4 no original (menor que GIF)."""
+    """Converte item da API Giphy num formato compacto pro cliente."""
     imgs = item.get("images") or {}
     fh = imgs.get("fixed_height") or {}
     preview_url = fh.get("webp") or fh.get("url") or ""
     original = imgs.get("original") or {}
-    # Usamos o url do original (GIF) pra manter compatibilidade — se
-    # quisermos otimizar depois, usar 'mp4' + <video>.
     original_url = original.get("url") or ""
     return {
-        "id": item.get("id"),
+        "id": str(item.get("id")),
         "title": item.get("title") or "",
         "provider": "giphy",
         "preview_url": preview_url,
@@ -84,6 +81,64 @@ def _giphy_normalize(item: dict) -> dict:
         "width": int(fh.get("width") or 0),
         "height": int(fh.get("height") or 0),
     }
+
+
+# --------------------------------------------------------------
+# Klipy — API key vai como PATH param na URL: /api/v1/{KEY}/gifs/...
+# --------------------------------------------------------------
+def _klipy_key() -> str:
+    k = (os.getenv("KLIPY_API_KEY") or "").strip()
+    if not k:
+        raise HTTPException(status_code=503, detail="Klipy nao configurado no servidor")
+    return k
+
+
+def _klipy_pick_variant(file_root: dict, size_pref: list[str], fmt_pref: list[str]) -> dict:
+    """Escolhe primeira variante disponivel de acordo com preferencia
+    de tamanho ('sm','md','hd','xs') e formato ('webp','gif','mp4')."""
+    for size in size_pref:
+        node = file_root.get(size) or {}
+        for fmt in fmt_pref:
+            v = node.get(fmt)
+            if v and v.get("url"):
+                return v
+    return {}
+
+
+def _klipy_normalize(item: dict) -> dict:
+    """Klipy response: item.file.{hd|md|sm|xs}.{gif|webp|mp4|...}.
+    Preview: preferir sm/webp (leve). Original: hd/gif (compat maxima)."""
+    file_root = item.get("file") or {}
+    preview = _klipy_pick_variant(file_root, ["sm", "md", "xs", "hd"], ["webp", "gif"])
+    original = _klipy_pick_variant(file_root, ["hd", "md", "sm"], ["gif", "webp"])
+    return {
+        "id": str(item.get("id") or item.get("slug") or ""),
+        "title": item.get("title") or "",
+        "provider": "klipy",
+        "preview_url": preview.get("url", ""),
+        "original_url": original.get("url", ""),
+        "width": int(preview.get("width") or 0),
+        "height": int(preview.get("height") or 0),
+    }
+
+
+def _klipy_call(path: str, params: dict) -> dict:
+    """Chama Klipy e valida payload comum. Retorna a lista de items."""
+    url = f"https://api.klipy.com/api/v1/{_klipy_key()}/{path.lstrip('/')}"
+    try:
+        r = requests.get(url, params=params, timeout=10)
+        if r.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Klipy HTTP {r.status_code}")
+        payload = r.json()
+        if not payload.get("result"):
+            errs = payload.get("errors") or {}
+            raise HTTPException(status_code=502, detail=f"Klipy: {errs}")
+        return payload.get("data") or {}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"[klipy] falha: {e}")
+        raise HTTPException(status_code=502, detail="Falha ao consultar Klipy")
 
 
 @router.get("/providers")
@@ -98,6 +153,9 @@ def providers(request: Request):
     }
 
 
+_ALLOWED_PROVIDERS = ("giphy", "klipy")
+
+
 @router.get("/trending")
 def trending(
     request: Request,
@@ -106,37 +164,37 @@ def trending(
     offset: int = Query(0, ge=0, le=5000),
 ):
     _exigir_user(request)
-    if provider != "giphy":
-        raise HTTPException(status_code=400, detail=f"Provider '{provider}' nao suportado (por enquanto)")
+    if provider not in _ALLOWED_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Provider '{provider}' nao suportado")
 
-    key = f"trending:giphy:{limit}:{offset}"
+    key = f"trending:{provider}:{limit}:{offset}"
     cached = _cache_get(key)
     if cached:
         return cached
 
-    try:
-        r = requests.get(
-            "https://api.giphy.com/v1/gifs/trending",
-            params={
-                "api_key": _giphy_key(),
-                "limit": limit,
-                "offset": offset,
-                "rating": "g",  # safe-for-work
-            },
-            timeout=10,
-        )
-        if r.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"Giphy HTTP {r.status_code}")
-        payload = r.json()
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning(f"[gifs/trending] falha: {e}")
-        raise HTTPException(status_code=502, detail="Falha ao consultar Giphy")
+    if provider == "giphy":
+        try:
+            r = requests.get(
+                "https://api.giphy.com/v1/gifs/trending",
+                params={"api_key": _giphy_key(), "limit": limit, "offset": offset, "rating": "g"},
+                timeout=10,
+            )
+            if r.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"Giphy HTTP {r.status_code}")
+            payload = r.json()
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"[gifs/trending] giphy: {e}")
+            raise HTTPException(status_code=502, detail="Falha ao consultar Giphy")
+        items = [_giphy_normalize(x) for x in (payload.get("data") or [])]
+    else:  # klipy
+        # Klipy usa 'page' + 'per_page' em vez de offset. Convertemos.
+        page = (offset // limit) + 1
+        data = _klipy_call("gifs/trending", {"page": page, "per_page": limit})
+        items = [_klipy_normalize(x) for x in (data.get("data") or [])]
 
-    items = [_giphy_normalize(x) for x in (payload.get("data") or [])]
-    resp = {"success": True, "gifs": items, "provider": "giphy",
-            "pagination": payload.get("pagination") or {}}
+    resp = {"success": True, "gifs": items, "provider": provider}
     _cache_set(key, resp)
     return resp
 
@@ -150,42 +208,40 @@ def search(
     offset: int = Query(0, ge=0, le=5000),
 ):
     _exigir_user(request)
-    if provider != "giphy":
-        raise HTTPException(status_code=400, detail=f"Provider '{provider}' nao suportado (por enquanto)")
+    if provider not in _ALLOWED_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"Provider '{provider}' nao suportado")
 
     q_clean = q.strip()
     if not q_clean:
         raise HTTPException(status_code=400, detail="Query vazia")
 
-    key = f"search:giphy:{q_clean.lower()}:{limit}:{offset}"
+    key = f"search:{provider}:{q_clean.lower()}:{limit}:{offset}"
     cached = _cache_get(key)
     if cached:
         return cached
 
-    try:
-        r = requests.get(
-            "https://api.giphy.com/v1/gifs/search",
-            params={
-                "api_key": _giphy_key(),
-                "q": q_clean,
-                "limit": limit,
-                "offset": offset,
-                "rating": "g",
-                "lang": "pt",
-            },
-            timeout=10,
-        )
-        if r.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"Giphy HTTP {r.status_code}")
-        payload = r.json()
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning(f"[gifs/search] falha: {e}")
-        raise HTTPException(status_code=502, detail="Falha ao consultar Giphy")
+    if provider == "giphy":
+        try:
+            r = requests.get(
+                "https://api.giphy.com/v1/gifs/search",
+                params={"api_key": _giphy_key(), "q": q_clean, "limit": limit,
+                        "offset": offset, "rating": "g", "lang": "pt"},
+                timeout=10,
+            )
+            if r.status_code != 200:
+                raise HTTPException(status_code=502, detail=f"Giphy HTTP {r.status_code}")
+            payload = r.json()
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"[gifs/search] giphy: {e}")
+            raise HTTPException(status_code=502, detail="Falha ao consultar Giphy")
+        items = [_giphy_normalize(x) for x in (payload.get("data") or [])]
+    else:  # klipy
+        page = (offset // limit) + 1
+        data = _klipy_call("gifs/search", {"q": q_clean, "page": page, "per_page": limit})
+        items = [_klipy_normalize(x) for x in (data.get("data") or [])]
 
-    items = [_giphy_normalize(x) for x in (payload.get("data") or [])]
-    resp = {"success": True, "gifs": items, "provider": "giphy",
-            "pagination": payload.get("pagination") or {}}
+    resp = {"success": True, "gifs": items, "provider": provider}
     _cache_set(key, resp)
     return resp
