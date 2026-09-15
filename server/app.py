@@ -2029,6 +2029,16 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ REGISTRAR ROUTER DE AGENDA V2 (agenda corporativa desktop — sprint 1+)
+try:
+    from routes.agenda_v2 import router as agenda_v2_router
+    app.include_router(agenda_v2_router)
+    logger.info("✅ Router de Agenda V2 registrado: /api/agenda/v2")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Agenda V2: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ REGISTRAR ROUTER DE BASE DE CONHECIMENTO (KB)
 try:
     from routes.knowledge_base import router as kb_router
@@ -2219,14 +2229,20 @@ if os.getenv("TESTING") != "1":
 else:
     logger.info("⚙️  TESTING=1 — fleet scheduler NÃO iniciado")
 
-# ✅ SERVIR UPLOADS ESTÁTICOS (fotos de veículos)
+# ✅ SERVIR UPLOADS ESTÁTICOS (fotos de veículos, chat, avatars, etc)
 try:
     _uploads_dir = os.path.normpath(
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "web", "uploads")
     )
     os.makedirs(_uploads_dir, exist_ok=True)
     app.mount("/uploads", StaticFiles(directory=_uploads_dir), name="uploads")
-    logger.info(f"✅ Upload estático montado em /uploads → {_uploads_dir}")
+    # Alias pro path historico do web (chat/AttachmentPreview usa
+    # a.arquivo='/SistemaCPE/web/uploads/chat/xxx.png' — em prod isso
+    # chega no Apache; no dev do desktop o backend precisa servir tambem
+    # pra imagens funcionarem quando apiBaseUrl=http://localhost:8000).
+    app.mount("/SistemaCPE/web/uploads",
+              StaticFiles(directory=_uploads_dir), name="uploads_legacy_path")
+    logger.info(f"✅ Uploads estáticos montados em /uploads e /SistemaCPE/web/uploads → {_uploads_dir}")
 except Exception as err:
     logger.warning(f"⚠️ Não foi possível montar uploads estáticos: {str(err)}")
 
