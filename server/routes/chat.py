@@ -304,6 +304,7 @@ def listar_canais(request: Request):
             WHERE m.user_id = %s
               AND c.arquivado_em IS NULL
               AND c.server_id IS NULL
+              AND m.ocultado_em IS NULL
             UNION ALL
             SELECT c.id, c.tipo, c.nome, c.descricao, c.grupo_id,
                    c.server_id, c.categoria_id, c.criado_em, c.ata_habilitada,
@@ -425,6 +426,12 @@ def abrir_ou_criar_dm(other_user_id: int, request: Request):
         """, (user["id"], other_user_id))
         row = cur.fetchone()
         if row:
+            # se o user tinha ocultado essa DM, ele esta abrindo dnv → unhide
+            cur.execute(
+                "UPDATE chat_channel_members SET ocultado_em=NULL "
+                "WHERE channel_id=%s AND user_id=%s AND ocultado_em IS NOT NULL",
+                (row["id"], user["id"]))
+            conn.commit()
             return {"success": True, "channel_id": row["id"], "created": False}
 
         # Cria
@@ -560,6 +567,19 @@ async def enviar_mensagem(channel_id: int, body: MensagemNova, request: Request)
         content=body.content,
         reply_to_id=body.reply_to_id,
     )
+    # Auto-unhide DM ocultada — se o outro peer havia arquivado a conversa,
+    # e o remetente escreve algo novo, volta a aparecer na sidebar dele.
+    try:
+        conn = get_chat_db_or_404()
+        c2 = conn.cursor()
+        c2.execute(
+            "UPDATE chat_channel_members SET ocultado_em=NULL "
+            "WHERE channel_id=%s AND ocultado_em IS NOT NULL",
+            (channel_id,))
+        conn.commit()
+        c2.close(); conn.close()
+    except Exception as e:
+        logger.warning(f"[chat] falha auto-unhide DM channel={channel_id}: {e}")
     return {"success": True, "message": msg_payload}
 
 
@@ -676,6 +696,66 @@ async def deletar_mensagem(message_id: int, request: Request):
     membros = _listar_membros_canal(m["channel_id"])
     await manager.send_to_users(membros, payload)
     return {"success": True}
+
+
+# =====================================================================
+# Forward — encaminhar mensagem pra 1+ canais/DMs (2026-09-15)
+# =====================================================================
+class ForwardBody(BaseModel):
+    target_channel_ids: List[int] = Field(..., min_length=1, max_length=20)
+
+
+@router.post("/messages/{message_id}/forward")
+async def encaminhar_mensagem(message_id: int, body: ForwardBody, request: Request):
+    """Encaminha uma mensagem pra 1..N canais. Copia o content da msg
+    original + adiciona uma referencia visual ('Encaminhada de <autor>').
+    Requer: user tem acesso a msg original (e membro do canal) + e membro
+    de cada destino."""
+    user = _user_from_request(request)
+    uid = user["id"]
+
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # busca mensagem original com nome do autor
+        cur.execute("""
+            SELECT m.id, m.channel_id, m.user_id, m.content, m.deletado_em
+            FROM chat_messages m
+            WHERE m.id=%s
+        """, (message_id,))
+        m = cur.fetchone()
+        if not m:
+            raise HTTPException(status_code=404, detail="Mensagem nao encontrada")
+        if m["deletado_em"]:
+            raise HTTPException(status_code=400, detail="Mensagem deletada nao pode ser encaminhada")
+        if not _usuario_pertence_ao_canal(uid, m["channel_id"]):
+            raise HTTPException(status_code=403, detail="Sem acesso a mensagem original")
+        content = m["content"] or ""
+        original_author = get_user_by_id(m["user_id"]) or {}
+        original_name = original_author.get("name") or f"Usuário #{m['user_id']}"
+    finally:
+        cur.close(); conn.close()
+
+    # marker de encaminhamento no content: prefixo especial que o frontend
+    # pode detectar e renderizar diferenciado, ao mesmo tempo mantendo
+    # backwards compat (aparece como texto se cliente nao souber renderizar).
+    forwarded_prefix = f"↪ Encaminhada de {original_name}:\n"
+    new_content = forwarded_prefix + content
+
+    created: List[dict] = []
+    for target_cid in body.target_channel_ids:
+        if not _usuario_pertence_ao_canal(uid, target_cid):
+            continue  # ignora canais que o user nao pertence
+        msg_payload = await _persistir_e_broadcastar(
+            channel_id=target_cid,
+            user_id=uid,
+            user_name=user.get("name"),
+            content=new_content,
+            reply_to_id=None,
+        )
+        created.append({"channel_id": target_cid, "message_id": msg_payload.get("id")})
+
+    return {"success": True, "created": created}
 
 
 # =====================================================================
@@ -2286,6 +2366,61 @@ async def editar_canal(channel_id: int, body: CanalEdit, request: Request):
         "nome": body.nome, "descricao": body.descricao,
     })
     return {"success": True}
+
+
+# ---------------------------------------------------------------------
+# DM hide/unhide — soft-hide por user (2026-09-15, migration 094)
+# ---------------------------------------------------------------------
+@router.post("/channels/{channel_id}/hide")
+def ocultar_dm(channel_id: int, request: Request):
+    """Arquiva (esconde) uma DM APENAS pra quem chamou. O outro peer nao
+    e afetado. Se receber mensagem nova ou o user reabrir a conversa,
+    a hide e desfeita automaticamente (ver send_message + open_dm)."""
+    user = _user_from_request(request)
+    uid = user["id"]
+    conn = get_chat_db_or_404()
+    cur = conn.cursor(dictionary=True)
+    try:
+        # so DMs podem ser ocultadas — canal / grupo_sistema tem outro fluxo
+        cur.execute(
+            "SELECT tipo FROM chat_channels WHERE id=%s AND arquivado_em IS NULL",
+            (channel_id,))
+        r = cur.fetchone()
+        if not r:
+            raise HTTPException(status_code=404, detail="Canal nao encontrado")
+        if r["tipo"] != "dm":
+            raise HTTPException(status_code=400, detail="Apenas DMs podem ser arquivadas por usuario")
+        # user precisa ser membro
+        cur.execute(
+            "SELECT id FROM chat_channel_members WHERE channel_id=%s AND user_id=%s",
+            (channel_id, uid))
+        if not cur.fetchone():
+            raise HTTPException(status_code=403, detail="Voce nao participa dessa conversa")
+        cur.execute(
+            "UPDATE chat_channel_members SET ocultado_em=NOW() "
+            "WHERE channel_id=%s AND user_id=%s",
+            (channel_id, uid))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/channels/{channel_id}/unhide")
+def desocultar_dm(channel_id: int, request: Request):
+    """Reexibe uma DM previamente ocultada."""
+    user = _user_from_request(request)
+    conn = get_chat_db_or_404()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "UPDATE chat_channel_members SET ocultado_em=NULL "
+            "WHERE channel_id=%s AND user_id=%s",
+            (channel_id, user["id"]))
+        conn.commit()
+        return {"success": True}
+    finally:
+        cur.close(); conn.close()
 
 
 @router.delete("/channels/{channel_id}")
