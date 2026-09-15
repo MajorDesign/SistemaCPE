@@ -491,9 +491,9 @@ def listar_mensagens(channel_id: int, request: Request,
             msg_ids = [m["id"] for m in msgs]
             placeholders = ",".join(["%s"] * len(msg_ids))
 
-            # Attachments
+            # Attachments (inclui duracao_s pra audios)
             cur.execute(f"""
-                SELECT id, message_id, tipo, arquivo, nome_original, mime, tamanho
+                SELECT id, message_id, tipo, arquivo, nome_original, mime, tamanho, duracao_s
                 FROM chat_attachments WHERE message_id IN ({placeholders}) ORDER BY id
             """, msg_ids)
             atts_por_msg: Dict[int, List[dict]] = {}
@@ -3522,10 +3522,12 @@ async def _persistir_e_broadcastar(channel_id: int, user_id: int, user_name: str
         if attachments:
             for a in attachments:
                 cur.execute("""
-                    INSERT INTO chat_attachments (message_id, tipo, arquivo, nome_original, mime, tamanho)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO chat_attachments
+                      (message_id, tipo, arquivo, nome_original, mime, tamanho, duracao_s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """, (msg_id, a.get("tipo", "image"), a["arquivo"],
-                      a.get("nome_original"), a.get("mime"), a.get("tamanho")))
+                      a.get("nome_original"), a.get("mime"), a.get("tamanho"),
+                      a.get("duracao_s")))
                 atts_out.append({"id": cur.lastrowid, "message_id": msg_id, **a})
 
         # Mentions
