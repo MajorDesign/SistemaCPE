@@ -190,6 +190,9 @@ def _chamada_pendente(target: int) -> Optional[dict]:
 _UPLOAD_CHAT_ROOT     = Path(__file__).resolve().parents[2] / "web" / "uploads" / "chat"
 _UPLOAD_CHAT_URL_BASE = "/SistemaCPE/web/uploads/chat"
 _CHAT_IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+_CHAT_AUDIO_EXTS = {".webm", ".ogg", ".opus", ".m4a", ".mp3", ".mp4", ".wav"}
+_MAX_CHAT_AUDIO_MB = 5           # 5 MB — cabe folgado 90s webm/opus
+_MAX_CHAT_AUDIO_DURATION_S = 95  # limite superior por precaucao (client bloqueia em 90s)
 _MAX_CHAT_IMG_MB = 25
 _CLEANUP_DIAS = 90
 
@@ -3686,6 +3689,75 @@ async def upload_imagem(channel_id: int, request: Request,
     msg_payload = await _persistir_e_broadcastar(
         channel_id=channel_id, user_id=user["id"],
         user_name=user.get("name"), content=(caption or ""),
+        reply_to_id=None, attachments=[attachment],
+    )
+    return {"success": True, "message": msg_payload}
+
+
+# =====================================================================
+# Upload de audio: POST /channels/{id}/upload-audio (multipart)
+# Cliente grava com MediaRecorder (webm/opus por default) e envia aqui.
+# Max 5 MB / 95s (limite client-side 90s).
+# =====================================================================
+@router.post("/channels/{channel_id}/upload-audio")
+async def upload_audio(
+    channel_id: int,
+    request: Request,
+    file: UploadFile = File(...),
+    duration_s: Optional[float] = None,
+):
+    user = _user_from_request(request)
+    if not _usuario_pertence_ao_canal(user["id"], channel_id):
+        raise HTTPException(status_code=403, detail="Voce nao e membro deste canal")
+
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if not ext:
+        # cliente pode enviar 'audio.webm' sem ext — deduz de content_type
+        if "webm" in (file.content_type or ""):
+            ext = ".webm"
+        elif "ogg" in (file.content_type or ""):
+            ext = ".ogg"
+        elif "mp4" in (file.content_type or ""):
+            ext = ".m4a"
+    if ext not in _CHAT_AUDIO_EXTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Extensao nao permitida ({ext or 'n/a'}). Use: {', '.join(sorted(_CHAT_AUDIO_EXTS))}"
+        )
+    if duration_s is not None and duration_s > _MAX_CHAT_AUDIO_DURATION_S:
+        raise HTTPException(status_code=400,
+                            detail=f"Audio maior que {_MAX_CHAT_AUDIO_DURATION_S}s")
+
+    _UPLOAD_CHAT_ROOT.mkdir(parents=True, exist_ok=True)
+    filename = f"aud_ch{channel_id}_{_uuid.uuid4().hex[:14]}{ext}"
+    destino = _UPLOAD_CHAT_ROOT / filename
+    size = 0
+    limit = _MAX_CHAT_AUDIO_MB * 1024 * 1024
+    with open(destino, "wb") as out:
+        while True:
+            chunk = await file.read(64 * 1024)
+            if not chunk:
+                break
+            size += len(chunk)
+            if size > limit:
+                out.close()
+                destino.unlink(missing_ok=True)
+                raise HTTPException(status_code=413,
+                                    detail=f"Audio maior que {_MAX_CHAT_AUDIO_MB} MB")
+            out.write(chunk)
+
+    arquivo_url = f"{_UPLOAD_CHAT_URL_BASE}/{filename}"
+    attachment = {
+        "tipo": "audio",
+        "arquivo": arquivo_url,
+        "nome_original": file.filename or f"audio{ext}",
+        "mime": file.content_type or f"audio/{ext.lstrip('.')}",
+        "tamanho": size,
+        "duracao_s": round(duration_s, 2) if duration_s else None,
+    }
+    msg_payload = await _persistir_e_broadcastar(
+        channel_id=channel_id, user_id=user["id"],
+        user_name=user.get("name"), content="",
         reply_to_id=None, attachments=[attachment],
     )
     return {"success": True, "message": msg_payload}
