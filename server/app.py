@@ -2039,6 +2039,16 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# ✅ REGISTRAR ROUTER DE CHAT GIFS (proxy pra Giphy/Klipy)
+try:
+    from routes.chat_gifs import router as chat_gifs_router
+    app.include_router(chat_gifs_router)
+    logger.info("✅ Router de Chat GIFs registrado: /api/chat/gifs")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Chat GIFs: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ REGISTRAR ROUTER DE BASE DE CONHECIMENTO (KB)
 try:
     from routes.knowledge_base import router as kb_router
