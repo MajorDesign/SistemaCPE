@@ -13,7 +13,8 @@ Quando é chamado:
 import logging
 import mysql.connector
 from mysql.connector import Error
-from typing import Tuple
+from datetime import datetime
+from typing import Iterable, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -588,5 +589,113 @@ class NotificacaoService:
         finally:
             if cursor:
                 cursor.close()
+            if conn:
+                conn.close()
+    # =========================================
+    # 6️⃣ REUNIÃO — CONVITE / CANCELAMENTO / LEMBRETE
+    # =========================================
+
+    def notificar_convite_reuniao(
+        self,
+        user_ids: Iterable[int],
+        host_nome: str,
+        titulo: str,
+        start_at: datetime,
+        meeting_code: str,
+    ) -> int:
+        """Cria notificação in-app para cada convidado interno.
+        Retorna quantas notificações foram inseridas."""
+        return self._insert_notif_reuniao(
+            user_ids=user_ids,
+            tipo="reuniao_convite",
+            mensagem=(
+                f"{host_nome} te convidou para {titulo!r} em "
+                f"{start_at.strftime('%d/%m %H:%M')}"
+            ),
+            meeting_code=meeting_code,
+        )
+
+    def notificar_cancelamento_reuniao(
+        self,
+        user_ids: Iterable[int],
+        titulo: str,
+        motivo: Optional[str] = None,
+    ) -> int:
+        msg = f"Reunião {titulo!r} foi cancelada"
+        if motivo:
+            msg += f" — motivo: {motivo}"
+        return self._insert_notif_reuniao(
+            user_ids=user_ids,
+            tipo="reuniao_cancelada",
+            mensagem=msg,
+            meeting_code=None,
+        )
+
+    def notificar_lembrete_reuniao(
+        self,
+        user_ids: Iterable[int],
+        titulo: str,
+        minutos: int,
+        meeting_code: str,
+    ) -> int:
+        return self._insert_notif_reuniao(
+            user_ids=user_ids,
+            tipo="reuniao_lembrete",
+            mensagem=f"Reunião {titulo!r} começa em {minutos} min",
+            meeting_code=meeting_code,
+        )
+
+    def _insert_notif_reuniao(
+        self,
+        *,
+        user_ids: Iterable[int],
+        tipo: str,
+        mensagem: str,
+        meeting_code: Optional[str],
+    ) -> int:
+        """Backend comum das três notificações de reunião acima. Cada
+        registro fica com ticket_id=NULL (campo nullable no schema) e
+        link_alvo aponta pro meet.html quando aplicável (coluna adicionada
+        na migration 096)."""
+        ids = [int(u) for u in user_ids if u]
+        if not ids:
+            return 0
+        link_alvo = (
+            f"/SistemaCPE/web/pages/meet.html?code={meeting_code}"
+            if meeting_code else None
+        )
+        conn = None
+        cur = None
+        try:
+            conn = self.get_connection()
+            cur = conn.cursor()
+            inserted = 0
+            for uid in ids:
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO notificacoes
+                        (ticket_id, usuario_id, mensagem, tipo, link_alvo, lido, created_at)
+                        VALUES (NULL, %s, %s, %s, %s, 0, NOW())
+                        """,
+                        (uid, mensagem[:255], tipo, link_alvo),
+                    )
+                    inserted += 1
+                except Error as err:
+                    logger.warning(f"[NOTIF-SERVICE/reuniao] falha uid={uid}: {err}")
+            conn.commit()
+            logger.info(f"[NOTIF-SERVICE/reuniao] tipo={tipo} inseridas={inserted}")
+            return inserted
+        except Error as err:
+            logger.error(f"[NOTIF-SERVICE/reuniao] erro: {err}")
+            if conn:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+            return 0
+        finally:
+            if cur:
+                cur.close()
             if conn:
                 conn.close()
