@@ -2008,6 +2008,8 @@ async function openTicketDetail(id) {
 
   // ✅ Passa usuario_id para filtrar comentários internos no backend
   await loadTicketComments(id);
+  // Linha do tempo de setores (memoria organizacional — 2026-09-16)
+  loadTicketTimeline(id);
 
   // Limpa estado fantasma deixado por um minimize anterior
   const _ticketModalEl = document.getElementById("ticketDetailModal");
@@ -2193,6 +2195,57 @@ async function handleFormSubmit(e) {
 // =========================================
 // 17. COMENTÁRIOS / INTERAÇÕES
 // =========================================
+
+// -----------------------------------------------------------
+// LINHA DO TEMPO de setores envolvidos (2026-09-16)
+// Popula o bloco #detailTimeline no modal do ticket. Cada card
+// mostra o setor por onde o chamado passou, com data de entrada
+// e saida. O ultimo (saiu_em=NULL) e destacado como "ATUAL".
+// Ver docs/REGRAS_NEGOCIO.md "Memoria de setores envolvidos".
+// -----------------------------------------------------------
+async function loadTicketTimeline(ticketId) {
+  const box = document.getElementById('detailTimeline');
+  if (!box) return;
+  const userId = getCurrentUserId();
+  try {
+    const r = await apiRequest(
+      'GET', `/tickets/${ticketId}/linha-do-tempo?usuario_id=${userId}`
+    );
+    const linha = (r && r.linha) || [];
+    if (!linha.length) {
+      box.innerHTML = '<div class="timeline-setores__empty">Sem histórico de encaminhamento.</div>';
+      return;
+    }
+    box.innerHTML = linha.map((it, i) => {
+      const isAtual = !it.saiu_em;
+      const nome = it.group_name || `Setor #${it.group_id}`;
+      const entrou = formatDateTime(it.entrou_em);
+      const saiu = it.saiu_em ? formatDateTime(it.saiu_em) : null;
+      const por = it.encaminhado_por_nome
+        ? `<div class="timeline-setores__meta"><strong>Por:</strong> ${it.encaminhado_por_nome}</div>`
+        : '';
+      const motivo = it.motivo
+        ? `<div class="timeline-setores__motivo">"${it.motivo}"</div>`
+        : '';
+      return `
+        <div class="timeline-setores__item${isAtual ? ' timeline-setores__item--atual' : ''}">
+          <div class="timeline-setores__grupo">
+            <i class="bi bi-people-fill"></i> ${nome}
+            ${isAtual ? '<span class="timeline-setores__badge">Atual</span>' : ''}
+          </div>
+          <div class="timeline-setores__meta">
+            <strong>Entrou:</strong> ${entrou}
+          </div>
+          ${saiu ? `<div class="timeline-setores__meta"><strong>Saiu:</strong> ${saiu}</div>` : ''}
+          ${por}
+          ${motivo}
+        </div>`;
+    }).join('');
+  } catch (err) {
+    console.warn('[TIMELINE] falha ao carregar:', err);
+    box.innerHTML = '<div class="timeline-setores__empty">Não foi possível carregar a linha do tempo.</div>';
+  }
+}
 
 async function loadTicketComments(ticketId) {
   console.log(`[COMENTARIOS] 📥 Carregando para ticket #${ticketId}...`);
