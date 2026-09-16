@@ -466,7 +466,76 @@ def user_pode_ver_ticket(cursor, usuario_id: int, ticket: dict) -> bool:
     if tk_group_id in user_gids and ticket.get("responsavel_id") is None:
         return True
 
+    # Memoria de setores envolvidos (migration 097 — 2026-09-16).
+    # Se o ticket ja PASSOU por algum setor onde o user participa hoje,
+    # ele mantem acesso pro historico:
+    #  - RESPONSAVEL_GRUPO de qualquer setor da linha do tempo: sempre ve.
+    #  - USER de setor ANTERIOR (nao e mais o corrente): sempre ve.
+    #  - USER do setor CORRENTE: cai na regra 2026-09-03 acima (fila).
+    setores_hist = carregar_setores_envolvidos_ticket(cursor, ticket.get("id"))
+    if setores_hist:
+        if any(g in resp_gids for g in setores_hist):
+            return True
+        setores_anteriores = [g for g in setores_hist if g != tk_group_id]
+        if any(g in user_gids for g in setores_anteriores):
+            return True
+
     return False
+
+
+# ==========================================================================
+# LINHA DO TEMPO de setores envolvidos no ticket (migration 097 — 2026-09-16)
+# ==========================================================================
+# Ver docs/REGRAS_NEGOCIO.md "Memoria de setores envolvidos".
+# Toda vez que um ticket e criado ou encaminhado, gravamos uma linha em
+# `ticket_setores_envolvidos` (encerrando a anterior). Isso da memoria
+# organizacional: o setor original continua enxergando o ticket mesmo
+# depois dele ter sido encaminhado, e mesmo se a pessoa que cuidou saiu
+# da empresa e foi desativada, os colegas de setor ainda veem o historico.
+
+def registrar_setor_envolvido(
+    cursor, ticket_id: int, group_id: int,
+    encaminhado_por: int | None = None, motivo: str | None = None,
+) -> None:
+    """Fecha a linha vigente (saiu_em=NOW) e abre uma nova pro setor
+    informado. Idempotente: se o setor atual ja e o mesmo, nao faz nada."""
+    if not group_id:
+        return
+    cursor.execute(
+        "SELECT group_id FROM ticket_setores_envolvidos "
+        "WHERE ticket_id=%s AND saiu_em IS NULL LIMIT 1",
+        (ticket_id,),
+    )
+    row = cursor.fetchone()
+    atual = row.get("group_id") if row and isinstance(row, dict) else (row[0] if row else None)
+    if atual == group_id:
+        return  # noop
+    if atual is not None:
+        cursor.execute(
+            "UPDATE ticket_setores_envolvidos "
+            "SET saiu_em=NOW() WHERE ticket_id=%s AND saiu_em IS NULL",
+            (ticket_id,),
+        )
+    cursor.execute(
+        "INSERT INTO ticket_setores_envolvidos "
+        "(ticket_id, group_id, entrou_em, encaminhado_por, motivo) "
+        "VALUES (%s, %s, NOW(), %s, %s)",
+        (ticket_id, group_id, encaminhado_por, (motivo or None)),
+    )
+
+
+def carregar_setores_envolvidos_ticket(cursor, ticket_id) -> list:
+    """Retorna todos os group_ids que ja estiveram envolvidos no ticket
+    (atual + historicos). Usado por user_pode_ver_ticket pra ampliar."""
+    if not ticket_id:
+        return []
+    cursor.execute(
+        "SELECT DISTINCT group_id FROM ticket_setores_envolvidos "
+        "WHERE ticket_id=%s",
+        (ticket_id,),
+    )
+    rows = cursor.fetchall() or []
+    return [r["group_id"] if isinstance(r, dict) else r[0] for r in rows]
 
 
 def carregar_responsavel_group_ids(cursor, usuario_id: int) -> list:
@@ -859,6 +928,26 @@ async def obter_tickets(
                 )
                 or_params.extend(usr_group_ids)
                 or_params.append(usuario_id)
+
+            # 2026-09-16 MEMORIA DE SETORES: se o ticket ja PASSOU por algum
+            # setor onde o user participa (mesmo que hoje esteja em outro),
+            # ele continua vendo. Isso resolve o caso "responsavel foi
+            # desativado e ninguem mais do setor original enxerga o
+            # historico". Usa a tabela ticket_setores_envolvidos (migration
+            # 097). Filtra por saiu_em IS NOT NULL pra pegar so setores
+            # ANTERIORES — o corrente ja foi coberto pelas clausulas acima
+            # (que carregam a regra 2026-09-03 de fila/responsavel).
+            # Ver docs/REGRAS_NEGOCIO.md "Memoria de setores envolvidos".
+            todos_gids = list(set(resp_group_ids + usr_group_ids))
+            if todos_gids:
+                ph3 = ",".join(["%s"] * len(todos_gids))
+                or_parts.append(
+                    f"EXISTS (SELECT 1 FROM ticket_setores_envolvidos tse "
+                    f"WHERE tse.ticket_id = t.id "
+                    f"AND tse.saiu_em IS NOT NULL "
+                    f"AND tse.group_id IN ({ph3}))"
+                )
+                or_params.extend(todos_gids)
 
             filtros.append("(" + " OR ".join(or_parts) + ")")
             params.extend(or_params)
@@ -1993,6 +2082,16 @@ async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
             (payload.group_id, novo_responsavel_id, nova_cat_id, nova_sub_id, ticket_id)
         )
 
+        # Linha do tempo: fecha vigente + abre nova pro grupo destino
+        # (idempotente pra recategorizacao dentro do mesmo grupo)
+        try:
+            registrar_setor_envolvido(
+                cursor, ticket_id, payload.group_id,
+                encaminhado_por=payload.usuario_id, motivo=payload.motivo,
+            )
+        except Exception as e:
+            logger.warning(f"[timeline] falha registrar encaminhamento: {e}")
+
         # Registrar interação de encaminhamento
         motivo_txt = f" — Motivo: {payload.motivo}" if payload.motivo else ""
         if mesmo_grupo:
@@ -2609,6 +2708,16 @@ async def criar_ticket(payload: TicketCriar):
         ticket_id = cursor.lastrowid
         logger.info(f"  ✓ Ticket inserido no banco com ID: {ticket_id}")
 
+        # ── Linha do tempo: registra setor inicial (migration 097) ──
+        try:
+            registrar_setor_envolvido(
+                cursor, ticket_id, payload.group_id,
+                encaminhado_por=None, motivo="Criacao do ticket",
+            )
+            conexao.commit()
+        except Exception as e:
+            logger.warning(f"[timeline] falha registrar setor inicial: {e}")
+
         # ── Gravar valores dos campos personalizados ──
         if campos_def and valores_por_campo:
             ids_validos = {c["id"] for c in campos_def}
@@ -3174,6 +3283,67 @@ async def deletar_ticket(
 # GET - OBTER INTERAÇÕES DE UM TICKET
 # Data: 31/03/2026 19:00
 # ========================================
+
+# ==========================================================================
+# Linha do tempo de setores envolvidos (2026-09-16)
+# ==========================================================================
+@tickets_router.get("/{ticket_id}/linha-do-tempo")
+async def obter_linha_do_tempo(
+    ticket_id: int = Path(..., gt=0),
+    usuario_id: Optional[int] = Query(None, gt=0),
+):
+    """Retorna a sequencia de setores por onde o ticket passou (migration
+    097). Cada linha traz group_id, group_name, entrou_em, saiu_em (NULL
+    se e o setor atual), motivo e o nome de quem encaminhou.
+
+    Autorizacao: mesma regra do detalhe do ticket (user_pode_ver_ticket).
+    Frontend consome pra montar a timeline no modal do ticket.
+    """
+    log_inicio("obter_linha_do_tempo", ticket_id=ticket_id, usuario_id=usuario_id)
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id, solicitante_id, responsavel_id, group_id "
+            "FROM tickets WHERE id = %s",
+            (ticket_id,),
+        )
+        tk = cursor.fetchone()
+        if not tk:
+            raise HTTPException(status_code=404, detail="Ticket nao encontrado")
+        if usuario_id and not user_pode_ver_ticket(cursor, usuario_id, tk):
+            raise HTTPException(status_code=403, detail="Sem permissao pra ver este ticket")
+
+        cursor.execute(
+            """
+            SELECT tse.id, tse.group_id, g.name AS group_name,
+                   tse.entrou_em, tse.saiu_em, tse.motivo,
+                   tse.encaminhado_por,
+                   u.name AS encaminhado_por_nome
+              FROM ticket_setores_envolvidos tse
+              LEFT JOIN groups g ON g.id = tse.group_id
+              LEFT JOIN users u ON u.id = tse.encaminhado_por
+             WHERE tse.ticket_id = %s
+             ORDER BY tse.entrou_em ASC, tse.id ASC
+            """,
+            (ticket_id,),
+        )
+        rows = convert_datetime_list(cursor.fetchall() or [])
+        return {"success": True, "linha": rows}
+    except HTTPException:
+        raise
+    except Exception as e:
+        log_fim("erro", erro=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao obter linha do tempo: {str(e)}",
+        )
+    finally:
+        if cursor:
+            cursor.close()
+        conexao.close()
+
 
 @interacoes_router.get("/{ticket_id}", response_model=List[InteracaoResposta])
 async def obter_interacoes(ticket_id: int = Path(..., gt=0),

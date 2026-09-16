@@ -182,6 +182,59 @@ Banner "Checklist de saída pendente" tem 2 botões: **Fazer Checklist Agora** e
 | Responsável desiste | vê | vê (voltou fila) | — | vê | **vê** |
 | Transferido pra outro | vê | ❌ 403 | vê | vê | ❌ 403 |
 
+<a id="memoria-de-setores-envolvidos"></a>
+### Memória de setores envolvidos (2026-09-16)
+
+**Cenário motivador**: Faturamento recebe um chamado. Depois de investigar, encaminha pro Financeiro. O Financeiro finaliza. Um mês depois, a pessoa que cuidou do chamado no Faturamento pediu demissão e o usuário dela é desativado. Ninguém mais no Faturamento consegue ver o histórico daquele chamado — a coluna `tickets.group_id` só carrega o setor **atual** (Financeiro), então a regra de [Privacidade de tickets](#privacidade-de-tickets) exclui o pessoal do Faturamento. Perde-se memória organizacional.
+
+**Solução** — nova tabela `ticket_setores_envolvidos` (migration 097) que guarda a **linha do tempo** de setores por onde o ticket passou:
+
+```
+id | ticket_id | group_id | entrou_em | saiu_em | motivo | encaminhado_por
+```
+
+- `saiu_em = NULL` marca o setor **corrente**. Múltiplas linhas por ticket = histórico completo.
+- Preenchida em 2 gatilhos, em [`server/routes/tickets.py`](../server/routes/tickets.py):
+  - **Criação** (`criar_ticket`): INSERT com o `group_id` inicial.
+  - **Encaminhamento** (`encaminhar_ticket`): `UPDATE saiu_em=NOW()` na linha vigente + INSERT do novo setor.
+- **Backfill retroativo**: migration cria uma linha aberta pro estado corrente de cada ticket já existente. A linha do tempo dos antigos começa hoje e cresce a partir do próximo encaminhamento.
+
+**Regra de visibilidade ampliada** — `user_pode_ver_ticket()` mantém tudo da [Privacidade de tickets](#privacidade-de-tickets) e **acrescenta** uma última cláusula:
+
+| Perfil vs setores da linha do tempo | Vê o ticket? |
+|---|---|
+| **RESPONSAVEL_GRUPO** de qualquer setor que **já esteve envolvido** | ✅ Sim, sempre (memória do gestor) |
+| **USER** de setor **anterior** (não é mais o corrente) | ✅ Sim, sempre (memória do time) |
+| **USER** do setor **corrente** | Segue regra 2026-09-03: só vê se `responsavel_id IS NULL` ou é ele mesmo |
+
+**Por que a distinção entre "setor anterior" e "setor corrente"**: mantém a privacidade da fila viva (2026-09-03) intacta — o USER de outro setor não passa a espiar chamados em andamento por causa da nova regra. Só ganha acesso ao **histórico** dos que já passaram por ele. RESPONSAVEL_GRUPO tem visibilidade plena porque é papel de gestão acompanhar tudo do próprio setor (atual ou histórico).
+
+**Efeito no cenário motivador**:
+- Enquanto o chamado está no Faturamento → todos do Faturamento veem (regra padrão).
+- Encaminhado pro Financeiro → Faturamento continua vendo o histórico (novo). Financeiro passa a ver como setor corrente.
+- Chamado finalizado → Faturamento e Financeiro continuam vendo. Se qualquer um dos envolvidos for desativado, os colegas de setor não perdem a memória.
+
+**Endpoint dedicado** — `GET /api/tickets/{id}/linha-do-tempo?usuario_id=X` retorna a sequência ordenada de `{group_id, group_name, entrou_em, saiu_em, motivo, encaminhado_por_nome}`. Consumido pelo modal de detalhe do ticket ([tickets.html](../web/pages/tickets.html) — bloco `#detailTimeline`), que renderiza cards horizontais tipo timeline com o setor atual destacado em verde.
+
+**3 pontos de reforço** (mesmo padrão da regra 2026-09-03):
+1. **Listagem** `GET /api/tickets?usuario_id=X` — WHERE recebe cláusula `OR EXISTS (SELECT 1 FROM ticket_setores_envolvidos tse WHERE tse.saiu_em IS NOT NULL AND tse.group_id IN grupos_do_user)`. Só setores **anteriores** (fecha a porta pra USER espiar fila viva).
+2. **Detalhe** `GET /api/tickets/{id}?usuario_id=X` — `user_pode_ver_ticket()` aplica a matriz acima.
+3. **Interações** `GET /api/ticket-interacoes/{id}?usuario_id=X` — herda o mesmo check.
+
+**O que NÃO muda**:
+- Sigilo de comentários internos entre setores? **Não há** filtro por linha — o setor anterior vê TODAS as interações (mensagens públicas + notas internas). Decisão explícita: o chamado é da empresa, não da pessoa; a memória é institucional. Se um dia precisar restringir nota interna por setor de origem, adicionar `ticket_interacoes.setor_origem_id` e filtrar por ele.
+- ADMIN/TI/MANAGER seguem vendo tudo (auditoria).
+- Solicitante e responsável seguem sempre vendo.
+
+**Matriz de teste** (ticket criado em Setor A, encaminhado pra Setor B):
+
+| Ação/observador | Solic. | USER de A (não-solic.) | RESP_GRP de A | USER de B (não-resp.) | RESP_GRP de B | USER de C (não envolvido) |
+|---|---|---|---|---|---|---|
+| Antes do encaminhamento (em A, sem responsável) | ✅ | ✅ (fila) | ✅ | ❌ | ❌ | ❌ |
+| Encaminhado pra B (em fila) | ✅ | ✅ **(novo — histórico)** | ✅ **(novo — histórico)** | ✅ (fila) | ✅ | ❌ |
+| Alguém de B assume | ✅ | ✅ (histórico) | ✅ | ❌ (regra fila) | ✅ | ❌ |
+| Ticket resolvido / responsável desativado | ✅ | ✅ (histórico) | ✅ | ❌ (não era responsável) | ✅ | ❌ |
+
 <a id="relatorios-e-avaliacoes"></a>
 ### Relatórios e Avaliações (2026-08-25)
 

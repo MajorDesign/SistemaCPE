@@ -3644,3 +3644,98 @@ body #forwardModal .modal-footer .btn-danger:hover {
   body #finalizarModal .modal-eyebrow,
   body #forwardModal .modal-eyebrow { display: none; }
 }
+
+/* =========================================================
+   LINHA DO TEMPO de setores envolvidos (2026-09-16)
+   Ver docs/REGRAS_NEGOCIO.md "Memoria de setores envolvidos"
+   ========================================================= */
+.timeline-section {
+  margin-top: 18px;
+  margin-bottom: 22px;
+  padding: 14px 16px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+}
+.timeline-section .section-title {
+  margin-bottom: 12px;
+}
+.timeline-setores {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.timeline-setores__item {
+  flex: 0 0 auto;
+  min-width: 180px;
+  max-width: 240px;
+  padding: 10px 12px;
+  background: #FFFFFF;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  position: relative;
+  transition: border-color .12s ease;
+}
+.timeline-setores__item:hover {
+  border-color: #9CA3AF;
+}
+.timeline-setores__item--atual {
+  border-color: #16A34A;
+  background: #F0FDF4;
+  box-shadow: 0 1px 3px rgba(22,163,74,0.15);
+}
+.timeline-setores__item + .timeline-setores__item::before {
+  content: "→";
+  position: absolute;
+  left: -13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #9CA3AF;
+  font-size: 14px;
+  font-weight: 700;
+}
+.timeline-setores__grupo {
+  font-weight: 700;
+  font-size: 13px;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.timeline-setores__badge {
+  display: inline-block;
+  padding: 1px 7px;
+  background: #16A34A;
+  color: #FFFFFF;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+.timeline-setores__meta {
+  font-size: 11px;
+  color: #6B7280;
+  line-height: 1.45;
+}
+.timeline-setores__meta strong { color: #374151; font-weight: 600; }
+.timeline-setores__motivo {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #E5E7EB;
+  font-size: 11px;
+  color: #6B7280;
+  font-style: italic;
+}
+.timeline-setores__empty {
+  padding: 12px 14px;
+  color: #9CA3AF;
+  font-size: 12px;
+  text-align: center;
+  background: #FFFFFF;
+  border: 1px dashed #D1D5DB;
+  border-radius: 6px;
+  width: 100%;
+}
