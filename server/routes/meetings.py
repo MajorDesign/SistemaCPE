@@ -26,11 +26,40 @@ from fastapi import (
 )
 from pydantic import BaseModel, Field
 
-from database import get_chat_db_or_404, get_db_or_404
+from database import get_chat_db_or_404, get_db_or_404, DB_CONFIG
 from security import parse_session_token, get_user_by_id
+
+# Servicos opcionais — sync de reuniao <-> Agenda V2 e notificacao in-app.
+# Import graceful pra nao quebrar o boot se alguem remover.
+try:
+    from services.meeting_agenda_sync import (
+        criar_evento_reuniao as _ag_criar_evento_reuniao,
+        atualizar_evento_reuniao as _ag_atualizar_evento_reuniao,
+        cancelar_evento_reuniao as _ag_cancelar_evento_reuniao,
+    )
+except Exception:
+    _ag_criar_evento_reuniao = None
+    _ag_atualizar_evento_reuniao = None
+    _ag_cancelar_evento_reuniao = None
+
+try:
+    from services.notificacao_service import NotificacaoService as _NotificacaoService
+except Exception:
+    _NotificacaoService = None
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 logger = logging.getLogger(__name__)
+
+
+def _notif_service():
+    """Instancia NotificacaoService quando disponivel. None se import falhou."""
+    if not _NotificacaoService:
+        return None
+    try:
+        return _NotificacaoService(DB_CONFIG)
+    except Exception as e:
+        logger.warning(f"[meet] NotificacaoService init falhou: {e}")
+        return None
 
 # ---------------------------------------------------------------------
 # Geracao de codes / tokens
@@ -792,6 +821,53 @@ def criar_schedule(body: ScheduleCreate, request: Request):
             link=link,
         )
 
+    # 5) Notifica in-app cada convidado interno + espelha na Agenda V2.
+    #    Ambos best-effort — falhas nao invalidam o agendamento.
+    invitees_uids = [
+        internal_map[i["email"].lower()]
+        for i in invitees_norm
+        if internal_map.get(i["email"].lower())
+    ]
+    if invitees_uids:
+        ns = _notif_service()
+        if ns:
+            try:
+                ns.notificar_convite_reuniao(
+                    user_ids=invitees_uids,
+                    host_nome=host,
+                    titulo=body.titulo.strip(),
+                    start_at=start_at,
+                    meeting_code=code,
+                )
+            except Exception as e:
+                logger.warning(f"[meet] notif convite falhou: {e}")
+
+    if _ag_criar_evento_reuniao:
+        try:
+            evento_id = _ag_criar_evento_reuniao(
+                host_id=user["id"],
+                titulo=body.titulo.strip(),
+                descricao=body.descricao,
+                start_at=start_at,
+                end_at=end_at,
+                meeting_code=code,
+                link_publico=link,
+                invitees_user_ids=invitees_uids,
+            )
+            if evento_id:
+                conn2 = get_chat_db_or_404()
+                cur2 = conn2.cursor()
+                try:
+                    cur2.execute(
+                        "UPDATE chat_meeting_schedules SET agenda_evento_id=%s WHERE id=%s",
+                        (evento_id, schedule_id),
+                    )
+                    conn2.commit()
+                finally:
+                    cur2.close(); conn2.close()
+        except Exception as e:
+            logger.warning(f"[meet] espelhamento agenda falhou: {e}")
+
     return {
         "success": True,
         "schedule_id": schedule_id,
@@ -804,12 +880,21 @@ def criar_schedule(body: ScheduleCreate, request: Request):
 
 @router.get("/schedules")
 def listar_schedules(request: Request, status: Optional[str] = None):
-    """Lista MINHAS reunioes agendadas. Filtro por status opcional."""
+    """Lista reunioes onde o user e host OU convidado interno.
+
+    Ate a Sprint F (2026-09-15) filtrava so por `host_id`, o que escondia
+    reunioes onde o user era invitee. Agora usa union de dois filtros pra
+    contemplar ambos os papeis; retorna tambem `sou_host` pra UI destacar.
+    """
     user = _exigir_user(request)
-    where = ["host_id = %s"]
-    params: List = [user["id"]]
+    uid = user["id"]
+    where = ["(s.host_id = %s OR EXISTS ("
+             "  SELECT 1 FROM chat_meeting_schedule_invitees i2 "
+             "   WHERE i2.schedule_id = s.id AND i2.user_id = %s"
+             "))"]
+    params: List = [uid, uid]
     if status and status in ("agendada", "em_andamento", "concluida", "cancelada"):
-        where.append("status = %s")
+        where.append("s.status = %s")
         params.append(status)
 
     conn = get_chat_db_or_404()
@@ -818,7 +903,9 @@ def listar_schedules(request: Request, status: Optional[str] = None):
         cur.execute(f"""
             SELECT s.id, s.titulo, s.descricao, s.start_at, s.end_at, s.status,
                    s.cancelamento_motivo, s.cancelado_em, s.created_at,
+                   s.host_id,
                    m.codigo AS meeting_code,
+                   (s.host_id = %s) AS sou_host,
                    (SELECT COUNT(*) FROM chat_meeting_schedule_invitees i
                      WHERE i.schedule_id = s.id) AS total_invitees
               FROM chat_meeting_schedules s
@@ -826,13 +913,14 @@ def listar_schedules(request: Request, status: Optional[str] = None):
              WHERE {' AND '.join(where)}
              ORDER BY s.start_at DESC
              LIMIT 200
-        """, params)
+        """, [uid] + params)
         rows = cur.fetchall() or []
     finally:
         cur.close(); conn.close()
 
     for r in rows:
         r["link"] = _schedule_link(r["meeting_code"]) if r.get("meeting_code") else None
+        r["sou_host"] = bool(r.get("sou_host"))
     return {"success": True, "schedules": rows}
 
 
@@ -845,10 +933,14 @@ def obter_schedule(schedule_id: int, request: Request):
         s = _fetch_schedule(cur, schedule_id)
         if not s:
             raise HTTPException(status_code=404, detail="Agendamento nao encontrado")
-        if s["host_id"] != user["id"]:
-            raise HTTPException(status_code=403, detail="So o host pode ver este agendamento")
+        invitees = _fetch_invitees(cur, schedule_id)
+        sou_host = (s["host_id"] == user["id"])
+        eh_invitee = any((inv.get("user_id") == user["id"]) for inv in invitees)
+        if not (sou_host or eh_invitee):
+            raise HTTPException(status_code=403, detail="Voce nao participa deste agendamento")
         s["link"] = _schedule_link(s["meeting_code"]) if s.get("meeting_code") else None
-        s["invitees"] = _fetch_invitees(cur, schedule_id)
+        s["invitees"] = invitees
+        s["sou_host"] = sou_host
     finally:
         cur.close(); conn.close()
     return {"success": True, "schedule": s}
@@ -983,6 +1075,7 @@ def cancelar_schedule(schedule_id: int, request: Request,
             )
 
         invitees = _fetch_invitees(cur, schedule_id)
+        agenda_evento_id = s.get("agenda_evento_id")
         conn.commit()
     finally:
         cur.close(); conn.close()
@@ -995,6 +1088,26 @@ def cancelar_schedule(schedule_id: int, request: Request,
             host_nome=host, titulo=s["titulo"],
             start_at=s["start_at"], motivo=motivo,
         )
+
+    # Notif in-app + cancela evento espelhado na Agenda V2
+    invitees_uids = [inv["user_id"] for inv in invitees if inv.get("user_id")]
+    if invitees_uids:
+        ns = _notif_service()
+        if ns:
+            try:
+                ns.notificar_cancelamento_reuniao(
+                    user_ids=invitees_uids,
+                    titulo=s["titulo"],
+                    motivo=(motivo or "").strip() or None,
+                )
+            except Exception as e:
+                logger.warning(f"[meet] notif cancelamento falhou: {e}")
+    if agenda_evento_id and _ag_cancelar_evento_reuniao:
+        try:
+            _ag_cancelar_evento_reuniao(evento_id=agenda_evento_id, host_id=user["id"])
+        except Exception as e:
+            logger.warning(f"[meet] agenda cancelar falhou: {e}")
+
     return {"success": True, "invitees_notificados": len(invitees)}
 
 
