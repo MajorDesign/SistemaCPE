@@ -84,6 +84,7 @@ class NotificacaoResposta(BaseModel):
     usuario_id: int
     mensagem: str
     tipo: str
+    link_alvo: Optional[str] = None
     lido: bool
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -204,7 +205,7 @@ async def listar_notificacoes_por_usuario(
 
         cursor.execute(
             """
-            SELECT id, ticket_id, usuario_id, mensagem, tipo, lido, created_at, updated_at
+            SELECT id, ticket_id, usuario_id, mensagem, tipo, link_alvo, lido, created_at, updated_at
             FROM notificacoes
             WHERE usuario_id = %s
             ORDER BY created_at DESC
@@ -311,7 +312,7 @@ async def listar_notificacoes(
 
         cursor.execute(
             f"""
-            SELECT id, ticket_id, usuario_id, mensagem, tipo, lido, created_at, updated_at
+            SELECT id, ticket_id, usuario_id, mensagem, tipo, link_alvo, lido, created_at, updated_at
             FROM notificacoes
             WHERE {where}
             ORDER BY created_at DESC
@@ -388,7 +389,7 @@ async def atualizar_notificacao(
         cursor.execute(f"UPDATE notificacoes SET {', '.join(atualizacoes)} WHERE id = %s", params)
         conexao.commit()
 
-        cursor.execute("SELECT id, ticket_id, usuario_id, mensagem, tipo, lido, created_at, updated_at FROM notificacoes WHERE id = %s", (notificacao_id,))
+        cursor.execute("SELECT id, ticket_id, usuario_id, mensagem, tipo, link_alvo, lido, created_at, updated_at FROM notificacoes WHERE id = %s", (notificacao_id,))
         notif_atualizada = convert_datetime_to_string(cursor.fetchone())
         notif_atualizada['lido'] = bool(notif_atualizada.get('lido', 0))
 
