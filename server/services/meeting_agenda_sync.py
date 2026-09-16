@@ -20,7 +20,7 @@ import logging
 from datetime import datetime
 from typing import Iterable, Optional
 
-from server.database import get_db_connection as _get_db
+from database import get_db_connection as _get_db
 
 logger = logging.getLogger(__name__)
 
