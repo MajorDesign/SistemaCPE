@@ -3322,7 +3322,7 @@ async def obter_linha_do_tempo(
                    tse.encaminhado_por,
                    u.name AS encaminhado_por_nome
               FROM ticket_setores_envolvidos tse
-              LEFT JOIN groups g ON g.id = tse.group_id
+              LEFT JOIN cpe_grupo g ON g.id = tse.group_id
               LEFT JOIN users u ON u.id = tse.encaminhado_por
              WHERE tse.ticket_id = %s
              ORDER BY tse.entrou_em ASC, tse.id ASC
