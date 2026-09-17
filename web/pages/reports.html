@@ -47,6 +47,45 @@
     .rpt-table tbody td { padding: 10px 12px; vertical-align: middle; border-color: #f3f4f6; }
     .rpt-table tbody tr:hover { background: #f9fafb; }
 
+    /* ── Coluna Trajeto (2026-09-16) ── */
+    .rpt-traj { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; color: #374151; max-width: 260px; }
+    .rpt-traj-text {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      max-width: 200px; display: inline-block; vertical-align: middle;
+    }
+    .rpt-traj-badge {
+      display: inline-block; padding: 1px 6px;
+      background: #EFF6FF; color: #1D4ED8;
+      border: 1px solid #BFDBFE; border-radius: 999px;
+      font-size: .65rem; font-weight: 700;
+    }
+    .rpt-traj .btn-link { color: #6f42c1; font-size: 1rem; line-height: 1; }
+    .rpt-traj .btn-link:hover { color: #5a2b9a; }
+
+    /* ── Modal Linha do Tempo ── */
+    .rpt-tl-cards { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+    .rpt-tl-item {
+      flex: 0 0 auto; min-width: 180px; max-width: 240px;
+      padding: 10px 12px;
+      background: #F9FAFB; border: 1px solid #D1D5DB; border-radius: 8px;
+      position: relative;
+    }
+    .rpt-tl-item--atual {
+      border-color: #16A34A; background: #F0FDF4;
+      box-shadow: 0 1px 3px rgba(22,163,74,0.15);
+    }
+    .rpt-tl-item + .rpt-tl-item::before {
+      content: "→"; position: absolute; left: -13px; top: 50%;
+      transform: translateY(-50%); color: #9CA3AF;
+      font-size: 14px; font-weight: 700;
+    }
+    .rpt-tl-grupo { font-weight: 700; font-size: 13px; color: #111827; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+    .rpt-tl-badge { display: inline-block; padding: 1px 7px; background: #16A34A; color: #FFF; font-size: 9px; font-weight: 800; letter-spacing: .4px; border-radius: 999px; text-transform: uppercase; }
+    .rpt-tl-meta { font-size: 11px; color: #6B7280; line-height: 1.45; }
+    .rpt-tl-meta strong { color: #374151; font-weight: 600; }
+    .rpt-tl-motivo { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #E5E7EB; font-size: 11px; color: #6B7280; font-style: italic; }
+    .rpt-tl-empty { padding: 12px 14px; color: #9CA3AF; font-size: 12px; text-align: center; background: #FFF; border: 1px dashed #D1D5DB; border-radius: 6px; width: 100%; }
+
     /* ── Status badges ── */
     .badge-status { font-size: .71rem; padding: 3px 8px; border-radius: 20px; font-weight: 600; }
     .s-open     { background:#dbeafe; color:#1d4ed8; }
@@ -150,6 +189,10 @@
               </button>
               <button class="btn btn-outline-success btn-sm" onclick="rptExportCSV()">
                 <i class="bi bi-file-earmark-spreadsheet me-1"></i>Exportar CSV
+              </button>
+              <button class="btn btn-outline-primary btn-sm" onclick="rptExportTimelineCSV()"
+                      title="CSV com 1 linha por passagem em cada setor — trajeto completo dos chamados">
+                <i class="bi bi-clock-history me-1"></i>Exportar linha do tempo
               </button>
             </div>
           </div>
@@ -262,10 +305,11 @@
                     <th>SLA Total</th>
                     <th>1ª Resposta</th>
                     <th onclick="rptOrdenar('created_at')" style="cursor:pointer">Criado em <i class="bi bi-arrow-down-up text-muted"></i></th>
+                    <th title="Trajeto de setores por onde o chamado passou">Trajeto</th>
                   </tr>
                 </thead>
                 <tbody id="rptTbody">
-                  <tr><td colspan="8" class="text-center py-4 text-muted">
+                  <tr><td colspan="11" class="text-center py-4 text-muted">
                     <div class="spinner-border spinner-border-sm me-2"></div>Carregando...
                   </td></tr>
                 </tbody>
@@ -757,7 +801,7 @@
     const catId     = document.getElementById('rptCategoria')?.value    || '';
     const subId     = document.getElementById('rptSubcategoria')?.value || '';
 
-    let url = `/tickets/?usuario_id=${user.id}&limite=500`;
+    let url = `/tickets/?usuario_id=${user.id}&limite=500&include_timeline=1`;
     if (dataIni)  url += `&data_inicio=${dataIni}`;
     if (dataFim)  url += `&data_fim=${dataFim}`;
     if (statusId) url += `&status_id=${statusId}`;
@@ -904,7 +948,7 @@
 
     if (!pagina.length) {
       document.getElementById('rptTbody').innerHTML =
-        '<tr><td colspan="10" class="text-center py-5 text-muted"><i class="bi bi-inbox" style="font-size:2rem;opacity:.3;display:block;margin-bottom:.5rem;"></i>Nenhum ticket encontrado.</td></tr>';
+        '<tr><td colspan="11" class="text-center py-5 text-muted"><i class="bi bi-inbox" style="font-size:2rem;opacity:.3;display:block;margin-bottom:.5rem;"></i>Nenhum ticket encontrado.</td></tr>';
       return;
     }
 
@@ -930,6 +974,27 @@
       const prCell = prId
         ? `<span class="badge" style="background:${prCor}1a;color:${prCor};border:1px solid ${prCor}44;font-weight:600;font-size:.7rem;padding:3px 8px;">${prLbl}</span>`
         : '<span class="text-muted">—</span>';
+      // Trajeto: chips compactos "Faturamento → Financeiro" + botao pra abrir modal detalhado
+      const trajArr = Array.isArray(t.trajeto) ? t.trajeto : [];
+      let trajCell;
+      if (trajArr.length === 0) {
+        trajCell = '<span class="text-muted">—</span>';
+      } else {
+        const nomes = trajArr.map(s => _esc(s.group_name || '')).join(' → ');
+        const badge = trajArr.length > 1
+          ? `<span class="rpt-traj-badge">${trajArr.length} setores</span>`
+          : '';
+        trajCell = `
+          <div class="rpt-traj">
+            <span class="rpt-traj-text" title="${nomes}">${nomes}</span>
+            ${badge}
+            <button type="button" class="btn btn-link btn-sm p-0 ms-1"
+                    onclick="rptAbrirTimeline(${t.id})"
+                    title="Ver linha do tempo detalhada">
+              <i class="bi bi-clock-history"></i>
+            </button>
+          </div>`;
+      }
       return `
         <tr>
           <td><a href="/SistemaCPE/web/pages/tickets.html?id=${t.id}" class="fw-semibold text-decoration-none" style="color:#6f42c1;">${_esc(t.numero||'#'+t.id)}</a></td>
@@ -942,6 +1007,7 @@
           <td style="font-size:.78rem;">${slaText}</td>
           <td style="font-size:.78rem;">${prText}</td>
           <td style="font-size:.78rem;white-space:nowrap;">${_fmt_date(t.created_at)}</td>
+          <td>${trajCell}</td>
         </tr>`;
     }).join('');
   }
@@ -1566,19 +1632,27 @@
 
   // ── EXPORT CSV ────────────────────────────────────────────────
   function rptExportCSV() {
-    const cols  = ['Número','Assunto','Categoria','Solicitante','Responsável','Prioridade','Status','SLA','1ª Resposta','Criado em'];
-    const rows  = rptFiltrados.map(t => [
-      t.numero || t.id,
-      `"${(t.assunto||'').replace(/"/g,'""')}"`,
-      `"${(t.categoria_nome||'').replace(/"/g,'""')}"`,
-      t.solicitante_nome || '',
-      t.responsavel_nome || '',
-      PR_LABEL[t.prioridade_id] || '',
-      STATUS_LABEL[t.status_id] || '',
-      _slaLabel(_classifSLA(t)),
-      _classifPR(t) ? (_classifPR(t) === 'ok' ? 'No Prazo' : _classifPR(t) === 'aguardando' ? 'Aguardando' : 'Estourado') : '',
-      t.created_at ? new Date(t.created_at).toLocaleString('pt-BR') : '',
-    ].join(';'));
+    // 2026-09-16: coluna Trajeto agrega o percurso de setores por onde
+    // o chamado passou. Ver rptExportTimelineCSV pra 1-linha-por-passagem.
+    const cols  = ['Número','Assunto','Categoria','Solicitante','Responsável','Prioridade','Status','SLA','1ª Resposta','Criado em','Trajeto','Setores envolvidos'];
+    const rows  = rptFiltrados.map(t => {
+      const traj = Array.isArray(t.trajeto) ? t.trajeto : [];
+      const nomes = traj.map(s => s.group_name || '').filter(Boolean).join(' > ');
+      return [
+        t.numero || t.id,
+        `"${(t.assunto||'').replace(/"/g,'""')}"`,
+        `"${(t.categoria_nome||'').replace(/"/g,'""')}"`,
+        t.solicitante_nome || '',
+        t.responsavel_nome || '',
+        PR_LABEL[t.prioridade_id] || '',
+        STATUS_LABEL[t.status_id] || '',
+        _slaLabel(_classifSLA(t)),
+        _classifPR(t) ? (_classifPR(t) === 'ok' ? 'No Prazo' : _classifPR(t) === 'aguardando' ? 'Aguardando' : 'Estourado') : '',
+        t.created_at ? new Date(t.created_at).toLocaleString('pt-BR') : '',
+        `"${nomes.replace(/"/g,'""')}"`,
+        traj.length,
+      ].join(';');
+    });
 
     const csv     = [cols.join(';'), ...rows].join('\n');
     const blob    = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -1590,7 +1664,131 @@
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  // ── EXPORT DETALHADO: 1 linha por passagem em cada setor ──────
+  // CSV pra auditoria/BI: cada linha e uma etapa do trajeto do chamado
+  // com data de entrada, saida, duracao no setor, quem encaminhou e motivo.
+  // Ver docs/REGRAS_NEGOCIO.md "Memoria de setores envolvidos".
+  function rptExportTimelineCSV() {
+    const cols = [
+      'Chamado','Assunto','Solicitante','Status Final',
+      'Ordem','Setor','Entrou em','Saiu em','Duração (min)',
+      'Encaminhado por','Motivo do encaminhamento','É setor atual?',
+    ];
+    const linhas = [];
+    rptFiltrados.forEach(t => {
+      const traj = Array.isArray(t.trajeto) ? t.trajeto : [];
+      if (traj.length === 0) return;
+      traj.forEach((s, i) => {
+        const entrou = s.entrou_em ? new Date(s.entrou_em) : null;
+        const saiu   = s.saiu_em   ? new Date(s.saiu_em)   : null;
+        const durMin = entrou && saiu
+          ? Math.round((saiu.getTime() - entrou.getTime()) / 60000)
+          : '';
+        linhas.push([
+          t.numero || t.id,
+          `"${(t.assunto||'').replace(/"/g,'""')}"`,
+          t.solicitante_nome || '',
+          STATUS_LABEL[t.status_id] || '',
+          i + 1,
+          `"${(s.group_name || '').replace(/"/g,'""')}"`,
+          entrou ? entrou.toLocaleString('pt-BR') : '',
+          saiu   ? saiu.toLocaleString('pt-BR')   : '',
+          durMin,
+          s.encaminhado_por_nome || '',
+          `"${(s.motivo || '').replace(/"/g,'""')}"`,
+          s.saiu_em ? 'Não' : 'Sim',
+        ].join(';'));
+      });
+    });
+    if (!linhas.length) {
+      alert('Nenhum dado de trajeto disponível pros tickets filtrados.');
+      return;
+    }
+    const csv     = [cols.join(';'), ...linhas].join('\n');
+    const blob    = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url     = URL.createObjectURL(blob);
+    const a       = document.createElement('a');
+    const hoje    = new Date().toISOString().slice(0,10);
+    a.href        = url;
+    a.download    = `relatorio-tickets-linha-do-tempo-${hoje}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── MODAL: linha do tempo detalhada de UM chamado ─────────────
+  // Reusa dados de rptDados (evita novo fetch). Cards horizontais tipo
+  // timeline, setor atual em verde. Mesmo padrao visual do tickets.html
+  // (mas classes proprias pra nao depender do tickets.css).
+  function rptAbrirTimeline(ticketId) {
+    const t = rptDados.find(x => x.id === ticketId);
+    if (!t) return;
+    const traj = Array.isArray(t.trajeto) ? t.trajeto : [];
+    document.getElementById('rptTlTitulo').textContent = `Trajeto — ${t.numero || '#' + t.id}`;
+    document.getElementById('rptTlAssunto').textContent = t.assunto || '';
+    const box = document.getElementById('rptTlCards');
+    if (!traj.length) {
+      box.innerHTML = '<div class="rpt-tl-empty">Sem histórico de encaminhamento.</div>';
+    } else {
+      box.innerHTML = traj.map((s, i) => {
+        const isAtual = !s.saiu_em;
+        const entrou = s.entrou_em ? new Date(s.entrou_em).toLocaleString('pt-BR') : '—';
+        const saiu   = s.saiu_em   ? new Date(s.saiu_em).toLocaleString('pt-BR')   : null;
+        const dur = s.entrou_em && s.saiu_em
+          ? _rptFmtDur(new Date(s.saiu_em).getTime() - new Date(s.entrou_em).getTime())
+          : null;
+        const por    = s.encaminhado_por_nome
+          ? `<div class="rpt-tl-meta"><strong>Por:</strong> ${_esc(s.encaminhado_por_nome)}</div>`
+          : '';
+        const motivo = s.motivo
+          ? `<div class="rpt-tl-motivo">"${_esc(s.motivo)}"</div>`
+          : '';
+        return `
+          <div class="rpt-tl-item${isAtual ? ' rpt-tl-item--atual' : ''}">
+            <div class="rpt-tl-grupo">
+              <i class="bi bi-people-fill"></i> ${_esc(s.group_name || 'Setor')}
+              ${isAtual ? '<span class="rpt-tl-badge">Atual</span>' : ''}
+            </div>
+            <div class="rpt-tl-meta"><strong>Entrou:</strong> ${entrou}</div>
+            ${saiu ? `<div class="rpt-tl-meta"><strong>Saiu:</strong> ${saiu}</div>` : ''}
+            ${dur ? `<div class="rpt-tl-meta"><strong>Ficou:</strong> ${dur}</div>` : ''}
+            ${por}
+            ${motivo}
+          </div>`;
+      }).join('');
+    }
+    new bootstrap.Modal(document.getElementById('rptTimelineModal')).show();
+  }
+
+  function _rptFmtDur(ms) {
+    if (!ms || ms < 0) return '—';
+    const min = Math.floor(ms / 60000);
+    if (min < 60) return `${min} min`;
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h < 24) return m ? `${h}h${m}min` : `${h}h`;
+    const d = Math.floor(h / 24);
+    return `${d}d${h % 24}h`;
+  }
   </script>
+
+  <!-- ── Modal: Linha do Tempo de setores (2026-09-16) ── -->
+  <div class="modal fade" id="rptTimelineModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content" style="border-radius:14px;overflow:hidden;">
+        <div class="modal-header" style="background:#F0F9FF;border-bottom:2px solid #0EA5E9;padding:14px 20px;">
+          <div>
+            <div style="font-weight:700;color:#0C4A6E;font-size:1.05rem;" id="rptTlTitulo">Trajeto</div>
+            <div style="font-size:.8rem;color:#075985;" id="rptTlAssunto"></div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body" style="padding:18px 20px;">
+          <div id="rptTlCards" class="rpt-tl-cards"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ── Modal: Detalhe de Avaliação ── -->
   <div class="modal fade" id="rptAvalDetalheModal" tabindex="-1" aria-hidden="true">
