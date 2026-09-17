@@ -849,7 +849,8 @@ async def obter_tickets(
     subcategoria_id: Optional[int] = Query(None, gt=0),
     vista: Optional[str] = Query(None, description="Aba: 'meus' (eu sou solicitante), 'para_mim' (eu sou responsavel), ou None=todos"),
     pular: int = Query(0, ge=0),
-    limite: int = Query(LIMITE_PADRAO, ge=1, le=500)
+    limite: int = Query(LIMITE_PADRAO, ge=1, le=500),
+    include_timeline: int = Query(0, ge=0, le=1, description="1=inclui campo 'trajeto' (setores por onde passou) em cada ticket. Usado por relatorios."),
 ):
     # ✅ CORRIGIDO: Adicionar filtro de acesso baseado em ROLE + GROUP_ID
     # Data: 06/04/2026 19:45
@@ -1085,6 +1086,43 @@ async def obter_tickets(
             tickets.append(row)
 
         tickets = convert_datetime_list(tickets)
+
+        # Enriquece com a linha do tempo de setores (memoria organizacional —
+        # migration 097). Feito em UMA query pra todos os tickets de uma vez,
+        # depois agrupado em Python — evita N+1. Habilitado por include_timeline=1
+        # (default 0 pra nao inflar payload de quem nao precisa).
+        # Ver docs/REGRAS_NEGOCIO.md "Memoria de setores envolvidos".
+        if include_timeline and tickets:
+            ids = [t["id"] for t in tickets]
+            ph = ",".join(["%s"] * len(ids))
+            cursor.execute(
+                f"""
+                SELECT tse.ticket_id, tse.group_id, g.name AS group_name,
+                       tse.entrou_em, tse.saiu_em, tse.motivo,
+                       tse.encaminhado_por, u.name AS encaminhado_por_nome
+                  FROM ticket_setores_envolvidos tse
+                  LEFT JOIN cpe_grupo g ON g.id = tse.group_id
+                  LEFT JOIN users u ON u.id = tse.encaminhado_por
+                 WHERE tse.ticket_id IN ({ph})
+                 ORDER BY tse.ticket_id, tse.entrou_em ASC, tse.id ASC
+                """,
+                tuple(ids),
+            )
+            trajeto_rows = convert_datetime_list(cursor.fetchall() or [])
+            trajeto_por_ticket: dict = {}
+            for r in trajeto_rows:
+                trajeto_por_ticket.setdefault(r["ticket_id"], []).append({
+                    "group_id": r["group_id"],
+                    "group_name": r["group_name"] or f"Setor #{r['group_id']}",
+                    "entrou_em": r["entrou_em"],
+                    "saiu_em": r["saiu_em"],
+                    "motivo": r["motivo"],
+                    "encaminhado_por": r["encaminhado_por"],
+                    "encaminhado_por_nome": r["encaminhado_por_nome"],
+                })
+            for t in tickets:
+                t["trajeto"] = trajeto_por_ticket.get(t["id"], [])
+
         log_fim("sucesso", total=len(tickets), filtro_acesso=role_usuario)
         return tickets or []
 
