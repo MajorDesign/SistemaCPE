@@ -202,10 +202,10 @@
               <button class="btn btn-outline-secondary btn-sm" onclick="rptCarregar()">
                 <i class="bi bi-arrow-clockwise me-1"></i>Atualizar
               </button>
-              <button class="btn btn-outline-success btn-sm" onclick="rptExportCSV()">
+              <button class="btn btn-outline-success btn-sm" onclick="rptExportCSV(event)">
                 <i class="bi bi-file-earmark-spreadsheet me-1"></i>Exportar CSV
               </button>
-              <button class="btn btn-outline-primary btn-sm" onclick="rptExportTimelineCSV()"
+              <button class="btn btn-outline-primary btn-sm" onclick="rptExportTimelineCSV(event)"
                       title="CSV com 1 linha por passagem em cada setor — trajeto completo dos chamados">
                 <i class="bi bi-clock-history me-1"></i>Exportar linha do tempo
               </button>
@@ -323,6 +323,10 @@
                 </div>
               </div>
             </div>
+
+            <!-- 2026-09-17: banner de aviso quando o retorno se aproxima ou
+                 estoura o cap do backend. Preenchido por _rptRenderBannerLimite. -->
+            <div id="rptBannerLimite"></div>
 
             <div class="table-responsive rpt-table-scroll">
               <table class="table rpt-table mb-0">
@@ -584,6 +588,14 @@
   // Só RESPONSAVEL_GRUPO (vê próprio grupo) + ADMIN/TI (vê todos).
   const RPT_ROLES_OK = ['RESPONSAVEL_GRUPO', 'ADMIN', 'TI'];
   const RPT_POR_PAGINA = 20;
+  // 2026-09-17: teto do backend por request. Se o retorno bater nesse
+  // valor, e sinal fortissimo de que ha mais tickets alem do que veio
+  // e a listagem visual esta subestimada. Bloqueamos a tabela e forcamos
+  // o export CSV (que auto-pagina o backend pra vir tudo).
+  const RPT_LIMITE_BACKEND = 500;
+  const RPT_ALERTA_SOFT    = 400; // aviso amarelo (80% do cap)
+  let   _rptTruncado       = false; // true quando rptDados.length >= 500
+  let   _rptUltimoFiltroBase = ''; // URL base do ultimo fetch (sem &limite/&pular) — usada pelo export
 
   let rptDados       = [];   // todos os tickets carregados
   let rptFiltrados   = [];   // após busca na tabela
@@ -839,32 +851,41 @@
     const catId     = document.getElementById('rptCategoria')?.value    || '';
     const subId     = document.getElementById('rptSubcategoria')?.value || '';
 
-    let url = `/tickets/?usuario_id=${user.id}&limite=500&include_timeline=1`;
-    if (dataIni)  url += `&data_inicio=${dataIni}`;
-    if (dataFim)  url += `&data_fim=${dataFim}`;
-    if (statusId) url += `&status_id=${statusId}`;
-    if (respId)   url += `&responsavel_id=${respId}`;
-    if (grupoId)  url += `&grupo_id=${grupoId}`;
-    if (catId)    url += `&categoria_id=${catId}`;
-    if (subId)    url += `&subcategoria_id=${subId}`;
+    // URL base sem &limite/&pular — reusada pelo export auto-paginado
+    let base = `/tickets/?usuario_id=${user.id}&include_timeline=1`;
+    if (dataIni)  base += `&data_inicio=${dataIni}`;
+    if (dataFim)  base += `&data_fim=${dataFim}`;
+    if (statusId) base += `&status_id=${statusId}`;
+    if (respId)   base += `&responsavel_id=${respId}`;
+    if (grupoId)  base += `&grupo_id=${grupoId}`;
+    if (catId)    base += `&categoria_id=${catId}`;
+    if (subId)    base += `&subcategoria_id=${subId}`;
+    _rptUltimoFiltroBase = base;
 
     document.getElementById('rptTbody').innerHTML =
-      '<tr><td colspan="8" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Carregando...</td></tr>';
+      '<tr><td colspan="11" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm me-2"></div>Carregando...</td></tr>';
     document.getElementById('rptKpiRow').innerHTML = '';
 
     try {
-      rptDados = await apiRequest('GET', url);
+      rptDados = await apiRequest('GET', `${base}&limite=${RPT_LIMITE_BACKEND}`);
     } catch(e) {
       document.getElementById('rptTbody').innerHTML =
-        `<tr><td colspan="8" class="text-center py-3 text-danger"><i class="bi bi-exclamation-circle me-1"></i>Erro: ${e.detail||e.message||'tente novamente'}</td></tr>`;
+        `<tr><td colspan="11" class="text-center py-3 text-danger"><i class="bi bi-exclamation-circle me-1"></i>Erro: ${e.detail||e.message||'tente novamente'}</td></tr>`;
       return;
     }
+
+    // 2026-09-17: se veio exatamente RPT_LIMITE_BACKEND, considerar truncado.
+    // (Empate exato tambem sinaliza truncamento na pratica — se ha mais que
+    // o cap no filtro atual, o backend corta em cap. Se o total real fosse
+    // exatamente 500, o CSV auto-paginado vai buscar pag 2 e vir vazio — sem custo.)
+    _rptTruncado = rptDados.length >= RPT_LIMITE_BACKEND;
 
     // Atualizar subtítulo
     const periodo = dataIni && dataFim
       ? `${new Date(dataIni+'T00:00').toLocaleDateString('pt-BR')} → ${new Date(dataFim+'T00:00').toLocaleDateString('pt-BR')}`
       : 'Todos os períodos';
-    document.getElementById('rptSubtitulo').textContent = `${periodo} · ${rptDados.length} ticket(s) encontrado(s)`;
+    const trunc = _rptTruncado ? ` — mostrando os ${RPT_LIMITE_BACKEND} primeiros; baixe o CSV pra ver tudo` : '';
+    document.getElementById('rptSubtitulo').textContent = `${periodo} · ${rptDados.length} ticket(s) encontrado(s)${trunc}`;
 
     _renderKPIs();
     rptPaginaAtual = 1;
@@ -992,6 +1013,45 @@
     const inicio = (rptPaginaAtual - 1) * RPT_POR_PAGINA;
     const fim    = Math.min(inicio + RPT_POR_PAGINA, total);
     const pagina = rptFiltrados.slice(inicio, fim);
+
+    // 2026-09-17: banner soft (>=400) e hard (>=500 = truncado no backend)
+    _rptRenderBannerLimite();
+
+    // BLOQUEIO HARD: quando bateu no cap do backend, esconde a tabela e
+    // paginação e força o usuario a baixar o CSV (que auto-pagina).
+    if (_rptTruncado) {
+      document.getElementById('rptContagem').textContent = `${rptDados.length}+ tickets encontrados`;
+      document.getElementById('rptPaginaInfo').textContent = 'Listagem oculta — baixe o CSV pra ver tudo';
+      document.getElementById('rptBtnAnterior').disabled = true;
+      document.getElementById('rptBtnProximo').disabled  = true;
+      document.getElementById('rptTbody').innerHTML = `
+        <tr><td colspan="11" class="text-center py-5">
+          <div style="max-width:520px;margin:0 auto;">
+            <i class="bi bi-cloud-download" style="font-size:2.5rem;color:#6f42c1;"></i>
+            <h5 class="mt-3 fw-bold" style="color:#1f2937;">
+              Muitos resultados pra exibir na tela
+            </h5>
+            <p class="text-muted mb-3" style="font-size:.88rem;">
+              Sua busca retornou <strong>${rptDados.length}+ chamados</strong>. Pra evitar travar
+              o navegador, a listagem foi ocultada. Você tem duas opções:
+            </p>
+            <div class="d-flex gap-2 justify-content-center flex-wrap">
+              <button class="btn btn-primary btn-sm" onclick="rptExportCSV(event)">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Baixar CSV completo
+              </button>
+              <button class="btn btn-outline-primary btn-sm" onclick="rptExportTimelineCSV(event)">
+                <i class="bi bi-clock-history me-1"></i>Baixar linha do tempo detalhada
+              </button>
+            </div>
+            <div class="mt-3 pt-3 border-top" style="font-size:.8rem;color:#6b7280;">
+              <i class="bi bi-lightbulb me-1"></i>
+              Ou <strong>refine os filtros</strong> (grupo, categoria, período, status)
+              pra reduzir o volume e voltar a ver a tabela.
+            </div>
+          </div>
+        </td></tr>`;
+      return;
+    }
 
     document.getElementById('rptContagem').textContent = `${total} resultado(s)`;
     document.getElementById('rptPaginaInfo').textContent = total > 0
@@ -1123,6 +1183,62 @@
     document.getElementById('rptDataInicio').value = '';
     document.getElementById('rptDataFim').value    = '';
     rptCarregar();
+  }
+
+  // 2026-09-17: banner acima da tabela avisando limite (soft ou hard).
+  function _rptRenderBannerLimite() {
+    const el = document.getElementById('rptBannerLimite');
+    if (!el) return;
+    const n = rptDados.length;
+    if (_rptTruncado) {
+      el.innerHTML = `
+        <div class="alert alert-danger d-flex align-items-center gap-2 mb-3 py-2 px-3" role="alert" style="border-radius:8px;">
+          <i class="bi bi-exclamation-octagon-fill"></i>
+          <div class="flex-grow-1" style="font-size:.85rem;">
+            <strong>Muitos chamados</strong> (${n}+ no filtro atual — o backend só devolve
+            ${RPT_LIMITE_BACKEND} por vez). A tabela foi ocultada; use os botões abaixo pra
+            baixar o CSV completo (o download busca todas as páginas automaticamente).
+          </div>
+        </div>`;
+    } else if (n >= RPT_ALERTA_SOFT) {
+      const restam = RPT_LIMITE_BACKEND - n;
+      el.innerHTML = `
+        <div class="alert alert-warning d-flex align-items-center gap-2 mb-3 py-2 px-3" role="alert" style="border-radius:8px;">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <div class="flex-grow-1" style="font-size:.85rem;">
+            Você está próximo do limite: <strong>${n}</strong> de ${RPT_LIMITE_BACKEND} chamados
+            que a tela suporta (faltam ${restam}). Se passar disso, a listagem será ocultada e você
+            precisará baixar o CSV. Considere refinar filtros ou já
+            <a href="#" onclick="event.preventDefault();rptExportCSV()">baixar o CSV agora</a>.
+          </div>
+        </div>`;
+    } else {
+      el.innerHTML = '';
+    }
+  }
+
+  // Busca TODAS as paginas do backend pro filtro corrente. Usado pelos exports
+  // quando o usuario clica em "Baixar CSV" e o retorno atual estava truncado
+  // (>= RPT_LIMITE_BACKEND). Retorna array completo de tickets ou lança erro.
+  async function _rptBuscarTudoPaginado(onProgress) {
+    const acc = [];
+    let pular = 0;
+    let pagina = 1;
+    // Hard cap de seguranca: 20 paginas x 500 = 10.000 tickets. Se algum
+    // filtro trouxer mais que isso, a ideia e a pessoa refinar filtro.
+    const MAX_PAG = 20;
+    while (pagina <= MAX_PAG) {
+      if (onProgress) onProgress(pagina, acc.length);
+      const url = `${_rptUltimoFiltroBase}&limite=${RPT_LIMITE_BACKEND}&pular=${pular}`;
+      const parte = await apiRequest('GET', url);
+      const arr = Array.isArray(parte) ? parte : (parte.tickets || []);
+      if (!arr.length) break;
+      acc.push(...arr);
+      if (arr.length < RPT_LIMITE_BACKEND) break;
+      pular += RPT_LIMITE_BACKEND;
+      pagina += 1;
+    }
+    return acc;
   }
 
   // ── TROCA DE ABA ─────────────────────────────────────────────
@@ -1706,12 +1822,49 @@
     new bootstrap.Modal(document.getElementById('rptAvalDetalheModal')).show();
   }
 
+  // Reaplica os filtros locais (busca, SLA, trajeto) num dataset arbitrario.
+  // Usado quando o export baixa mais paginas do backend e precisa reproduzir
+  // exatamente o que estava visivel/filtrado na tela.
+  function _rptAplicarFiltrosLocais(dataset) {
+    const q         = (document.getElementById('rptBusca')?.value||'').toLowerCase();
+    const slaFiltro = document.getElementById('rptSlaFiltro')?.value;
+    const trajFiltro= document.getElementById('rptTrajFiltro')?.value;
+    const qNorm = q.replace(/[#\s]/g, '');
+    return (dataset || []).filter(t => {
+      if (qNorm) {
+        const alvos = [t.numero, t.id_alfanumerica, String(t.id), t.assunto, t.categoria_nome, t.solicitante_nome, t.solicitante_email, t.responsavel_nome, PR_LABEL[t.prioridade_id], STATUS_LABEL[t.status_id]];
+        if (!alvos.some(v => v && String(v).toLowerCase().replace(/\s/g,'').includes(qNorm))) return false;
+      }
+      if (slaFiltro) {
+        const s = _classifSLA(t);
+        if (slaFiltro === 'ok'        && s !== 'ok')        return false;
+        if (slaFiltro === 'estourado' && !['estourado','estourado_ok'].includes(s)) return false;
+        if (slaFiltro === 'proximo'   && s !== 'proximo')   return false;
+        if (slaFiltro === 'sem_sla'   && s !== 'sem_sla')   return false;
+      }
+      if (trajFiltro) {
+        const n = (Array.isArray(t.trajeto) ? t.trajeto : []).length;
+        if (trajFiltro === '1'  && n !== 1) return false;
+        if (trajFiltro === '2+' && n < 2)   return false;
+        if (trajFiltro === '3+' && n < 3)   return false;
+      }
+      return true;
+    });
+  }
+
   // ── EXPORT CSV ────────────────────────────────────────────────
-  function rptExportCSV() {
+  async function rptExportCSV(ev) {
+    // 2026-09-17: quando truncado, busca todas as paginas antes de gerar
+    // o CSV — o arquivo baixado reflete o TOTAL do filtro, nao os 500 da tela.
+    let dados = rptFiltrados;
+    if (_rptTruncado) {
+      dados = await _rptExportarComPaginacao(ev);
+      if (!dados) return; // erro ja notificado
+    }
     // 2026-09-16: coluna Trajeto agrega o percurso de setores por onde
     // o chamado passou. Ver rptExportTimelineCSV pra 1-linha-por-passagem.
     const cols  = ['Número','Assunto','Categoria','Solicitante','Responsável','Prioridade','Status','SLA','1ª Resposta','Criado em','Trajeto','Setores envolvidos'];
-    const rows  = rptFiltrados.map(t => {
+    const rows  = dados.map(t => {
       const traj = Array.isArray(t.trajeto) ? t.trajeto : [];
       const nomes = traj.map(s => s.group_name || '').filter(Boolean).join(' > ');
       return [
@@ -1741,18 +1894,43 @@
     URL.revokeObjectURL(url);
   }
 
+  // Helper compartilhado pelos 2 exports: baixa todas as paginas do
+  // backend e reaplica os filtros locais. Retorna array ou null (em erro).
+  async function _rptExportarComPaginacao(ev) {
+    const btn = ev?.target?.closest('button');
+    const orig = btn ? btn.innerHTML : null;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Baixando…'; }
+    try {
+      const todos = await _rptBuscarTudoPaginado((pg, acc) => {
+        if (btn) btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>Baixando página ${pg} (${acc} chamados)…`;
+      });
+      return _rptAplicarFiltrosLocais(todos);
+    } catch (e) {
+      alert('Falha ao baixar todas as páginas: ' + (e.detail || e.message || 'tente novamente'));
+      return null;
+    } finally {
+      if (btn && orig) { btn.disabled = false; btn.innerHTML = orig; }
+    }
+  }
+
   // ── EXPORT DETALHADO: 1 linha por passagem em cada setor ──────
   // CSV pra auditoria/BI: cada linha e uma etapa do trajeto do chamado
   // com data de entrada, saida, duracao no setor, quem encaminhou e motivo.
   // Ver docs/REGRAS_NEGOCIO.md "Memoria de setores envolvidos".
-  function rptExportTimelineCSV() {
+  async function rptExportTimelineCSV(ev) {
+    // 2026-09-17: quando truncado, baixa tudo antes de gerar o CSV
+    let dados = rptFiltrados;
+    if (_rptTruncado) {
+      dados = await _rptExportarComPaginacao(ev);
+      if (!dados) return;
+    }
     const cols = [
       'Chamado','Assunto','Solicitante','Status Final',
       'Ordem','Setor','Entrou em','Saiu em','Duração (min)',
       'Encaminhado por','Motivo do encaminhamento','É setor atual?',
     ];
     const linhas = [];
-    rptFiltrados.forEach(t => {
+    dados.forEach(t => {
       const traj = Array.isArray(t.trajeto) ? t.trajeto : [];
       if (traj.length === 0) return;
       traj.forEach((s, i) => {
