@@ -278,12 +278,20 @@
                   <option value="3+">3+ setores (múltiplas trocas)</option>
                 </select>
               </div>
-              <div class="col-6 col-md-2 d-flex gap-2">
+              <div class="col-12 col-md-3 d-flex gap-2">
                 <button class="btn btn-primary btn-sm flex-grow-1" onclick="rptCarregar()">
                   <i class="bi bi-search me-1"></i>Filtrar
                 </button>
-                <button class="btn btn-outline-secondary btn-sm" onclick="rptLimparFiltros()" title="Limpar filtros">
+                <button class="btn btn-outline-secondary btn-sm" onclick="rptLimparFiltros()" title="Voltar aos filtros padrão (mês corrente)">
                   <i class="bi bi-x-lg"></i>
+                </button>
+                <!-- 2026-09-17: histórico completo sem filtro de data. Zera o intervalo
+                     (data_inicio/data_fim) mantendo os outros filtros; ideal pra RESP_GRUPO
+                     que quer o inventário completo do próprio setor. -->
+                <button class="btn btn-outline-primary btn-sm text-nowrap"
+                        onclick="rptHistoricoCompleto()"
+                        title="Traz todos os chamados do escopo, ignorando o filtro de data">
+                  <i class="bi bi-collection me-1"></i>Histórico completo
                 </button>
               </div>
             </div>
@@ -1105,6 +1113,15 @@
     if (grupoSel) grupoSel.value = '';
     rptOnGrupoChange();
     document.getElementById('rptBusca').value       = '';
+    rptCarregar();
+  }
+
+  // 2026-09-17: histórico completo — zera SÓ o intervalo de data e recarrega
+  // (mantém grupo/categoria/status/SLA/trajeto/busca ativos). Util pra RESP_GRUPO
+  // extrair todo o inventario do proprio setor sem esbarrar no default do mes.
+  function rptHistoricoCompleto() {
+    document.getElementById('rptDataInicio').value = '';
+    document.getElementById('rptDataFim').value    = '';
     rptCarregar();
   }
 
