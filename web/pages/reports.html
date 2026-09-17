@@ -43,9 +43,24 @@
     .rpt-table-header { padding: 14px 20px; border-bottom: 1px solid #f3f4f6; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; }
     .rpt-table-header h6 { margin: 0; font-weight: 700; color: #1f2937; }
     .rpt-table { font-size: .83rem; }
-    .rpt-table thead th { background: #f9fafb; font-size: .72rem; text-transform: uppercase; letter-spacing:.04em; color: #6b7280; font-weight: 600; border-bottom: 2px solid #e5e7eb; padding: 10px 12px; white-space: nowrap; }
+    /* Header sticky pra manter contexto de coluna ao rolar (2026-09-17) */
+    .rpt-table thead th {
+      background: #f9fafb; font-size: .72rem; text-transform: uppercase;
+      letter-spacing:.04em; color: #6b7280; font-weight: 600;
+      border-bottom: 2px solid #e5e7eb; padding: 10px 12px; white-space: nowrap;
+      position: sticky; top: 0; z-index: 5;
+    }
     .rpt-table tbody td { padding: 10px 12px; vertical-align: middle; border-color: #f3f4f6; }
-    .rpt-table tbody tr:hover { background: #f9fafb; }
+    /* Row inteira interativa — cursor pointer + hover destaca linha inteira */
+    .rpt-table tbody tr { cursor: pointer; transition: background .1s ease; }
+    .rpt-table tbody tr:hover { background: #f5f3ff; }
+    /* Wrapper com altura maxima pro sticky funcionar */
+    .rpt-table-scroll { max-height: 68vh; overflow: auto; }
+    /* Numero do ticket sem quebra de linha */
+    .rpt-num { white-space: nowrap; }
+    /* SLA cell compacta: badge + tempo em UMA linha */
+    .rpt-sla-cell { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: .78rem; }
+    .rpt-sla-cell small { color: #9ca3af; }
 
     /* ── Coluna Trajeto (2026-09-16) ── */
     .rpt-traj { display: inline-flex; align-items: center; gap: 4px; font-size: .75rem; color: #374151; max-width: 260px; }
@@ -253,6 +268,16 @@
                   <option value="">Todas</option>
                 </select>
               </div>
+              <!-- 2026-09-17: filtro por qtd de setores da linha do tempo -->
+              <div class="col-6 col-md-2">
+                <label class="form-label small fw-semibold mb-1" title="Filtrar por chamados que passaram por mais de um setor">Trajeto</label>
+                <select class="form-select form-select-sm" id="rptTrajFiltro" onchange="rptFiltrarTabela()">
+                  <option value="">Todos</option>
+                  <option value="1">Só 1 setor (nunca encaminhado)</option>
+                  <option value="2+">2+ setores (foi encaminhado)</option>
+                  <option value="3+">3+ setores (múltiplas trocas)</option>
+                </select>
+              </div>
               <div class="col-6 col-md-2 d-flex gap-2">
                 <button class="btn btn-primary btn-sm flex-grow-1" onclick="rptCarregar()">
                   <i class="bi bi-search me-1"></i>Filtrar
@@ -291,7 +316,7 @@
               </div>
             </div>
 
-            <div class="table-responsive">
+            <div class="table-responsive rpt-table-scroll">
               <table class="table rpt-table mb-0">
                 <thead>
                   <tr>
@@ -305,7 +330,10 @@
                     <th>SLA Total</th>
                     <th>1ª Resposta</th>
                     <th onclick="rptOrdenar('created_at')" style="cursor:pointer">Criado em <i class="bi bi-arrow-down-up text-muted"></i></th>
-                    <th title="Trajeto de setores por onde o chamado passou">Trajeto</th>
+                    <th onclick="rptOrdenar('_trajeto_len')" style="cursor:pointer"
+                        title="Ordenar por quantidade de setores por onde passou">
+                      Trajeto <i class="bi bi-arrow-down-up text-muted"></i>
+                    </th>
                   </tr>
                 </thead>
                 <tbody id="rptTbody">
@@ -559,7 +587,9 @@
   const STATUS_CLASS = { 1:'s-open', 2:'s-progress', 3:'s-waiting', 4:'s-resolved', 5:'s-closed' };
   // 2026-08-24: labels + cores de prioridade — bate com badges de tickets.html
   const PR_LABEL = { 1:'Baixa', 2:'Média', 3:'Alta', 4:'Urgente' };
-  const PR_COLOR = { 1:'#16a34a', 2:'#d97706', 3:'#dc2626', 4:'#7f1d1d' };
+  // 2026-09-17: BAIXA em cinza (era verde) — verde compete com "no prazo"
+  // e "resolvido"; BAIXA é intensidade neutra, nao qualidade positiva.
+  const PR_COLOR = { 1:'#6b7280', 2:'#d97706', 3:'#dc2626', 4:'#7f1d1d' };
 
   function _esc(s) {
     return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -885,6 +915,9 @@
   function rptFiltrarTabela() {
     const q         = (document.getElementById('rptBusca').value||'').toLowerCase();
     const slaFiltro = document.getElementById('rptSlaFiltro').value;
+    // 2026-09-17: filtro por trajeto — só chamados que trocaram de setor
+    const trajFiltroEl = document.getElementById('rptTrajFiltro');
+    const trajFiltro = trajFiltroEl ? trajFiltroEl.value : '';
 
     // 2026-09-03: normaliza busca (ignora '#' e espacos, case insensitive)
     // e inclui id_alfanumerica (FA0231N6T7) + email do solicitante alem de
@@ -911,14 +944,27 @@
         if (slaFiltro === 'proximo'  && s !== 'proximo')  return false;
         if (slaFiltro === 'sem_sla'  && s !== 'sem_sla')  return false;
       }
+
+      // 2026-09-17: filtro por qtd de setores da linha do tempo
+      if (trajFiltro) {
+        const n = (Array.isArray(t.trajeto) ? t.trajeto : []).length;
+        if (trajFiltro === '1'   && n !== 1)  return false;
+        if (trajFiltro === '2+'  && n < 2)    return false;
+        if (trajFiltro === '3+'  && n < 3)    return false;
+      }
       return true;
     });
 
-    // Ordenar
+    // Ordenar — trata coluna virtual _trajeto_len (qtd de setores)
     const col = rptOrdenacao.col;
     rptFiltrados.sort((a,b) => {
-      let va = a[col]||'', vb = b[col]||'';
-      if (typeof va === 'number') return rptOrdenacao.asc ? va-vb : vb-va;
+      const getVal = (t) => col === '_trajeto_len'
+        ? (Array.isArray(t.trajeto) ? t.trajeto.length : 0)
+        : (t[col] ?? '');
+      const va = getVal(a), vb = getVal(b);
+      if (typeof va === 'number' && typeof vb === 'number') {
+        return rptOrdenacao.asc ? va-vb : vb-va;
+      }
       return rptOrdenacao.asc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
     });
 
@@ -955,11 +1001,12 @@
     document.getElementById('rptTbody').innerHTML = pagina.map(t => {
       const sla     = _classifSLA(t);
       const pr      = _classifPR(t);
+      // 2026-09-17: SLA e 1a resposta em UMA linha (badge + tempo inline)
       const slaText = sla !== 'sem_sla'
-        ? `${_slaDot(sla)}${_slaLabel(sla)}${t.sla_minutos ? `<br><small class="text-muted">${_fmt_sla(t.sla_minutos)}</small>` : ''}`
+        ? `<span class="rpt-sla-cell">${_slaDot(sla)}${_slaLabel(sla)}${t.sla_minutos ? `<small>· ${_fmt_sla(t.sla_minutos)}</small>` : ''}</span>`
         : '<span class="text-muted">—</span>';
       const prText  = pr
-        ? `${_slaDot(pr === 'ok' ? 'ok' : pr === 'aguardando' ? 'aguardando' : 'estourado')}${pr === 'ok' ? 'No Prazo' : pr === 'aguardando' ? 'Aguardando' : 'Estourado'}<br><small class="text-muted">${_fmt_sla(t.sla_pr_minutos)}</small>`
+        ? `<span class="rpt-sla-cell">${_slaDot(pr === 'ok' ? 'ok' : pr === 'aguardando' ? 'aguardando' : 'estourado')}${pr === 'ok' ? 'No Prazo' : pr === 'aguardando' ? 'Aguardando' : 'Estourado'}<small>· ${_fmt_sla(t.sla_pr_minutos)}</small></span>`
         : '<span class="text-muted">—</span>';
 
       // Categoria: truncate + tooltip (mesmo padrão do tickets.html)
@@ -974,40 +1021,50 @@
       const prCell = prId
         ? `<span class="badge" style="background:${prCor}1a;color:${prCor};border:1px solid ${prCor}44;font-weight:600;font-size:.7rem;padding:3px 8px;">${prLbl}</span>`
         : '<span class="text-muted">—</span>';
-      // Trajeto: chips compactos "Faturamento → Financeiro" + botao pra abrir modal detalhado
+      // Trajeto: 2026-09-17 — clock so quando >1 setor (evita botao morto);
+      // celula inteira clicavel quando ha trajeto pra ver.
       const trajArr = Array.isArray(t.trajeto) ? t.trajeto : [];
       let trajCell;
       if (trajArr.length === 0) {
-        trajCell = '<span class="text-muted">—</span>';
+        trajCell = '<td><span class="text-muted">—</span></td>';
+      } else if (trajArr.length === 1) {
+        const nome = _esc(trajArr[0].group_name || '');
+        trajCell = `<td><span class="rpt-traj"><span class="rpt-traj-text" title="${nome}">${nome}</span></span></td>`;
       } else {
         const nomes = trajArr.map(s => _esc(s.group_name || '')).join(' → ');
-        const badge = trajArr.length > 1
-          ? `<span class="rpt-traj-badge">${trajArr.length} setores</span>`
-          : '';
         trajCell = `
-          <div class="rpt-traj">
-            <span class="rpt-traj-text" title="${nomes}">${nomes}</span>
-            ${badge}
-            <button type="button" class="btn btn-link btn-sm p-0 ms-1"
-                    onclick="rptAbrirTimeline(${t.id})"
-                    title="Ver linha do tempo detalhada">
-              <i class="bi bi-clock-history"></i>
-            </button>
-          </div>`;
+          <td class="rpt-traj-cell"
+              onclick="event.stopPropagation();rptAbrirTimeline(${t.id})"
+              title="Clique pra ver a linha do tempo detalhada"
+              style="cursor:pointer;">
+            <span class="rpt-traj">
+              <span class="rpt-traj-text" title="${nomes}">${nomes}</span>
+              <span class="rpt-traj-badge">${trajArr.length} setores</span>
+              <i class="bi bi-clock-history ms-1" style="color:#6f42c1;"></i>
+            </span>
+          </td>`;
       }
+      // 2026-09-17: row inteira clicavel — abre detalhe do ticket em nova aba.
+      // stopPropagation nos links/celulas de acao pra nao disparar duplo.
       return `
-        <tr>
-          <td><a href="/SistemaCPE/web/pages/tickets.html?id=${t.id}" class="fw-semibold text-decoration-none" style="color:#6f42c1;">${_esc(t.numero||'#'+t.id)}</a></td>
+        <tr onclick="window.open('/SistemaCPE/web/pages/tickets.html?id=${t.id}','_blank')">
+          <td class="rpt-num">
+            <a href="/SistemaCPE/web/pages/tickets.html?id=${t.id}"
+               onclick="event.stopPropagation()"
+               class="fw-semibold text-decoration-none" style="color:#6f42c1;">
+              ${_esc(t.numero||'#'+t.id)}
+            </a>
+          </td>
           <td style="max-width:220px;"><span class="d-block text-truncate" title="${_esc(t.assunto)}">${_esc(t.assunto)}</span></td>
           <td>${catCell}</td>
           <td>${_esc(t.solicitante_nome||'—')}</td>
           <td>${t.responsavel_nome ? _esc(t.responsavel_nome) : '<span class="text-muted fst-italic">Não atribuído</span>'}</td>
           <td>${prCell}</td>
           <td><span class="badge-status ${STATUS_CLASS[t.status_id]||'s-open'}">${STATUS_LABEL[t.status_id]||'—'}</span></td>
-          <td style="font-size:.78rem;">${slaText}</td>
-          <td style="font-size:.78rem;">${prText}</td>
+          <td>${slaText}</td>
+          <td>${prText}</td>
           <td style="font-size:.78rem;white-space:nowrap;">${_fmt_date(t.created_at)}</td>
-          <td>${trajCell}</td>
+          ${trajCell}
         </tr>`;
     }).join('');
   }
@@ -1041,6 +1098,8 @@
     document.getElementById('rptDataFim').value     = hoje.toISOString().slice(0,10);
     document.getElementById('rptStatus').value      = '';
     document.getElementById('rptSlaFiltro').value   = '';
+    const trajEl = document.getElementById('rptTrajFiltro');
+    if (trajEl) trajEl.value = '';
     // Zera Grupo -> dispara cascade que limpa Cat/Sub/Responsavel
     const grupoSel = document.getElementById('rptGrupo');
     if (grupoSel) grupoSel.value = '';
