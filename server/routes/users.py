@@ -562,6 +562,23 @@ async def update_user(
         if "unit" in data and data["unit"]:
             updates["unit"] = normalize_string(data["unit"])
 
+        # 2026-09-17: cargo/telefone/ramal — todos podem editar (usuario
+        # atualiza proprio perfil, admin qualquer). Migration 098.
+        if "cargo" in data:
+            v = (data.get("cargo") or "").strip()
+            updates["cargo"] = v[:120] if v else None
+        if "telefone" in data:
+            v = (data.get("telefone") or "").strip()
+            updates["telefone"] = v[:30] if v else None
+        if "ramal" in data:
+            v = (data.get("ramal") or "").strip()
+            if v and not v.isdigit():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Ramal deve conter apenas números"
+                )
+            updates["ramal"] = v[:10] if v else None
+
         # ================================================== 
         # CAMPOS RESTRITOS - APENAS ADMIN E TI
         # Data: 02/04/2026 18:20

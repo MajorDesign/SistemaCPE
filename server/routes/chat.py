@@ -2720,7 +2720,7 @@ def listar_users_disponiveis(request: Request, q: Optional[str] = Query(None)):
             like = f"%{q.strip().lower()}%"
             cur.execute("""
                 SELECT u.id, u.name, u.email, u.role, u.group_id, u.unit_id,
-                       u.avatar_url,
+                       u.avatar_url, u.cargo, u.telefone, u.ramal,
                        g.name AS group_name,
                        un.nome AS unit_nome
                 FROM users u
@@ -2733,7 +2733,7 @@ def listar_users_disponiveis(request: Request, q: Optional[str] = Query(None)):
         else:
             cur.execute("""
                 SELECT u.id, u.name, u.email, u.role, u.group_id, u.unit_id,
-                       u.avatar_url,
+                       u.avatar_url, u.cargo, u.telefone, u.ramal,
                        g.name AS group_name,
                        un.nome AS unit_nome
                 FROM users u
@@ -2743,6 +2743,40 @@ def listar_users_disponiveis(request: Request, q: Optional[str] = Query(None)):
                 ORDER BY u.name LIMIT 200
             """)
         return {"success": True, "users": cur.fetchall()}
+    finally:
+        cur.close(); plus.close()
+
+
+@router.get("/contato/{user_id}")
+def obter_contato_publico(user_id: int, request: Request):
+    """Cartao de contato de qualquer colaborador ativo. Endpoint publico
+    entre usuarios autenticados (todo mundo pode consultar o telefone/ramal
+    de qualquer colega, igual lista corporativa). Nao expoe dados sensiveis
+    (senha, tokens, cpf).
+
+    Usado pelo ContactDetailModal do desktop. Migration 098 (cargo/telefone/ramal).
+    """
+    _user_from_request(request)  # auth obrigatoria
+    plus = get_db_or_404()
+    cur = plus.cursor(dictionary=True)
+    try:
+        cur.execute("""
+            SELECT u.id, u.name, u.email, u.username, u.role,
+                   u.cargo, u.telefone, u.ramal,
+                   u.avatar_url,
+                   u.group_id, u.unit_id,
+                   g.name AS group_name,
+                   un.nome AS unit_nome
+              FROM users u
+              LEFT JOIN cpe_grupo g ON g.id = u.group_id
+              LEFT JOIN unidades_cpe un ON un.id = u.unit_id
+             WHERE u.id = %s AND u.is_active = 1
+             LIMIT 1
+        """, (user_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Usuario nao encontrado ou inativo")
+        return {"success": True, "contato": row}
     finally:
         cur.close(); plus.close()
 
