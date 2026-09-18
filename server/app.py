@@ -96,6 +96,10 @@ class UserUpdate(BaseModel):
     unit_id: Optional[int] = None
     is_active: Optional[bool] = None
     cpf: Optional[str] = Field(None, max_length=14)
+    # 2026-09-18 migration 098: perfil de contato editavel pelo proprio user
+    cargo: Optional[str] = Field(None, max_length=120)
+    telefone: Optional[str] = Field(None, max_length=30)
+    ramal: Optional[str] = Field(None, max_length=10)
 
 # ✅ CORRIGIDO: adicionado group_name para o frontend preencher o modal de ticket
 # ✅ NOVO (2026-04-30): unit_id e unit_nome para vincular usuário a uma unidade CPE
@@ -1490,6 +1494,29 @@ async def update_user(user_id: int, user: UserUpdate):
             cpf_clean = ''.join(filter(str.isdigit, user.cpf)) or None
             updates.append("cpf = %s")
             params.append(cpf_clean)
+
+        # 2026-09-18: campos do perfil de contato (migration 098).
+        # Aceitos aqui porque este endpoint app.py PUT /users/{id} nao passa
+        # pelo bloco de autorizacao das rotas em routes/users.py — o Depends
+        # de get_current_user nem esta declarado. Se voce esta editando o
+        # proprio perfil pelo desktop, cai aqui e antes ficavam dropados.
+        if user.cargo is not None:
+            v = (user.cargo or "").strip()
+            updates.append("cargo = %s")
+            params.append(v[:120] if v else None)
+        if user.telefone is not None:
+            v = (user.telefone or "").strip()
+            updates.append("telefone = %s")
+            params.append(v[:30] if v else None)
+        if user.ramal is not None:
+            v = (user.ramal or "").strip()
+            if v and not v.isdigit():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Ramal deve conter apenas números"
+                )
+            updates.append("ramal = %s")
+            params.append(v[:10] if v else None)
 
         if not updates:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")

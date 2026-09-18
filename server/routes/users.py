@@ -3,7 +3,7 @@ Rotas de usuários: CRUD
 """
 
 from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Body
 from sqlalchemy import text
 from database import engine
 from security import get_current_user
@@ -24,7 +24,7 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 
 @router.post("/")
 async def create_user(
-    data: dict,
+    data: dict = Body(...),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Cria um novo usuário (apenas ADMIN, TI e MANAGER)"""
@@ -445,7 +445,7 @@ async def get_user(
 @router.put("/{user_id}")
 async def update_user(
     user_id: int,
-    data: dict,
+    data: dict = Body(...),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Atualiza dados de um usuário conforme permissão do role"""
