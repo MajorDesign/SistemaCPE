@@ -1300,8 +1300,9 @@ async def get_users():
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
+            # 2026-09-21: avatar_url pra users.html mostrar foto na lista.
             "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, u.cpf, "
-            "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
+            "       u.is_active, u.created_at, u.avatar_url, unidades_cpe.nome AS unit_nome "
             "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
             "ORDER BY u.created_at DESC"
         )

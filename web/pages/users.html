@@ -1673,7 +1673,9 @@
           unit_id: user.unit_id || null,
           unit_nome: user.unit_nome || null,
           is_active: user.is_active === true || user.is_active === 1,
-          created_at: user.created_at || ''
+          created_at: user.created_at || '',
+          // 2026-09-21: foto de perfil (users.avatar_url do backend)
+          avatar_url: user.avatar_url || null
         }));
 
         console.log("[USERS/LOAD] " + users.length + " usuario(s) carregado(s)");
@@ -1830,13 +1832,19 @@ function renderUsers(list = users) {
         const groupName = escapeHtml(getGroupName(user.group_id));
         const createdDate = user.created_at ? user.created_at.split('T')[0] : 'N/A';
         const nameFirstChar = name.charAt(0).toUpperCase();
+        // 2026-09-21: se o user tem foto, mostra <img> preenchendo o circulo;
+        // senao mostra a inicial (fallback). onerror volta pra inicial se a
+        // foto sumir do disco.
+        const avatarInner = user.avatar_url
+          ? `<img src="${user.avatar_url}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.replaceWith('${nameFirstChar}')">`
+          : nameFirstChar;
 
         return `
           <tr>
             <td>
               <div class="user-name-cell" style="display: flex; gap: 0.75rem; align-items: center;">
-                <div style="flex:0 0 36px;width:36px;height:36px;min-width:36px;border-radius:50%;background:#667eea;color:white;display:flex;align-items:center;justify-content:center;font-weight:600;">
-                  ${nameFirstChar}
+                <div style="flex:0 0 36px;width:36px;height:36px;min-width:36px;border-radius:50%;background:#667eea;color:white;display:flex;align-items:center;justify-content:center;font-weight:600;overflow:hidden;">
+                  ${avatarInner}
                 </div>
                 <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;">${name}</span>
               </div>
