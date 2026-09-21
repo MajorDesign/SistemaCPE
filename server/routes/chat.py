@@ -358,7 +358,12 @@ def listar_canais(request: Request):
                 other_uid = outros_por_canal.get(c["id"])
                 u = users_map.get(other_uid, {})
                 c["dm_with"] = {
-                    "id": other_uid, "name": u.get("name"), "email": u.get("email")
+                    "id": other_uid,
+                    "name": u.get("name"),
+                    "email": u.get("email"),
+                    # 2026-09-21: expõe avatar_url pra o desktop mostrar foto
+                    # nas linhas de DM sem precisar buscar contato por contato.
+                    "avatar_url": u.get("avatar_url"),
                 }
                 c["nome"] = u.get("name") or f"Usuario #{other_uid}"
 
