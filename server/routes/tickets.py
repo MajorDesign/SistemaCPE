@@ -1505,6 +1505,40 @@ async def dashboard_sla(
 # ========================================
 
 
+# 2026-09-21: lookup pelo id_alfanumerica (ex "SUP-2026-00178"), usado
+# pelo comando /consultachamado no chat desktop. Delega o resto pra
+# obter_ticket() pra manter uma unica fonte da verdade sobre permissao,
+# enrichment (nomes, categoria, campos personalizados etc).
+# IMPORTANTE: precisa ser registrado ANTES de "/{ticket_id}" pra FastAPI
+# nao tentar castar "SUP-2026-00178" pra int.
+@tickets_router.get("/by-numero/{numero}", response_model=TicketResposta)
+async def obter_ticket_por_numero(
+    numero: str = Path(..., min_length=3, max_length=50),
+    usuario_id: Optional[int] = Query(None, gt=0),
+):
+    log_inicio("obter_ticket_por_numero", numero=numero, usuario_id=usuario_id)
+    conexao = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conexao.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT id FROM tickets WHERE id_alfanumerica = %s LIMIT 1",
+            (numero.strip().upper(),),
+        )
+        row = cursor.fetchone()
+    finally:
+        if cursor:  cursor.close()
+        if conexao: conexao.close()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Chamado {numero} não encontrado.",
+        )
+    # Delega pro handler existente — reusa permission check + enrichment
+    return await obter_ticket(ticket_id=row["id"], usuario_id=usuario_id)
+
+
 @tickets_router.get("/{ticket_id}", response_model=TicketResposta)
 async def obter_ticket(ticket_id: int = Path(..., gt=0),
                         usuario_id: Optional[int] = Query(None, gt=0)):
