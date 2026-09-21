@@ -1359,11 +1359,23 @@ function applyFilters() {
   // aplicar filtro explicito por status Resolvido ou Fechado, mostra so
   // esses. Vista "Chamados antigos" (aba separada) nao e afetada. KPIs
   // superiores continuam mostrando totais globais (visao executiva).
+  //
+  // 2026-09-21 EXCECOES ao esconder automatico:
+  //   (a) Ticket RESOLVIDO mas AINDA NAO AVALIADO pelo solicitante fica
+  //       visivel — precisa aparecer pra o botao amarelo pulsante "Avaliar"
+  //       chamar atencao. So depois de avaliar (backend remove de
+  //       /avaliacoes/pendentes) o ticket some naturalmente.
+  //   (b) Se ha texto na busca, tambem bypassa: user digitou um numero de
+  //       ticket, deve achar independente de status (nao sabe se foi resolvido).
   const _STATUS_ENCERRADOS = new Set(['resolved', 'closed']);
   const semFiltroStatus = !statuses.length;
+  const buscaAtiva = buscaCanonica.length > 0;
   const bateStatus = (t) => {
     if (statuses.length) return statuses.includes(t.status);
-    // Sem filtro explicito: esconde encerrados
+    // Excecao (a): resolvido pendente de avaliacao sempre aparece
+    if (t.precisaAvaliar) return true;
+    // Excecao (b): busca ativa mostra qualquer status
+    if (buscaAtiva) return true;
     return !_STATUS_ENCERRADOS.has(t.status);
   };
 
