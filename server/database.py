@@ -332,8 +332,10 @@ def mapa_dados_ticket(ticket: dict, cursor) -> dict:
     """
     try:
         # Buscar nome do solicitante
+        # 2026-09-21: inclui avatar_url pra tickets.html mostrar foto na
+        # coluna Usuario em vez da inicial quando o user tem foto salva.
         cursor.execute(
-            "SELECT name, email FROM users WHERE id = %s",
+            "SELECT name, email, avatar_url FROM users WHERE id = %s",
             (ticket['solicitante_id'],)
         )
         solicitante = cursor.fetchone()
@@ -360,6 +362,7 @@ def mapa_dados_ticket(ticket: dict, cursor) -> dict:
             **ticket,
             "solicitante_nome": solicitante['name'] if solicitante else "Desconhecido",
             "solicitante_email": solicitante['email'] if solicitante else "sem-email",
+            "solicitante_avatar_url": solicitante['avatar_url'] if solicitante else None,
             "responsavel_nome": responsavel['name'] if responsavel else "Nao atribuido",
             "group_name": grupo['name'] if grupo else "Sem setor"
         }

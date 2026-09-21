@@ -1202,6 +1202,8 @@ async function loadTickets() {
         title:           t.assunto || 'Sem título',
         userName:        t.solicitante_nome  || "Desconhecido",
         email:           t.solicitante_email || "sem-email",
+        // 2026-09-21: foto do solicitante pra render <img> na coluna Usuario
+        avatarUrl:       t.solicitante_avatar_url || null,
         groupName:       t.group_name        || "Sem setor",
         group_id:        t.group_id          || null,
         // 2026-08-24: nome da categoria pra exibir na tabela
@@ -1746,6 +1748,12 @@ function renderTable() {
 
   body.innerHTML = pageTickets.map(t => {
     const initial = t.userName.charAt(0).toUpperCase() || "?";
+    // 2026-09-21: se o user tem foto salva, mostra <img> em vez da inicial.
+    // Fonte: users.avatar_url (mesma coluna que web/desktop escrevem em
+    // /api/chat/me/avatar), path relativo tipo /SistemaCPE/web/uploads/...
+    const avatarContent = t.avatarUrl
+      ? `<img class="avatar-img" src="${t.avatarUrl}" alt="" onerror="this.replaceWith('${initial}')">`
+      : initial;
     const checked = selectedTickets.has(t.id) ? 'checked' : '';
 
     // 2026-08-24: coluna Acoes removida da tabela. Delete continua
@@ -1763,7 +1771,7 @@ function renderTable() {
         </td>
         <td onclick="openTicketDetail(${t.id})">
           <div class="d-flex align-items-center gap-2">
-            <div class="avatar">${initial}</div>
+            <div class="avatar">${avatarContent}</div>
             <span>${t.userName}</span>
           </div>
         </td>

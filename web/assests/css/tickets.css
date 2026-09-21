@@ -274,6 +274,13 @@
     flex-shrink: 0;
     display: inline-flex;
     align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  /* 2026-09-21: quando o user tem foto, mostra <img> preenchendo o circulo */
+  #tabelaTicketsAtuais .table tbody td:nth-child(3) .avatar .avatar-img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
   }
 
   /* 2026-08-24: Categoria pode ter nomes longos ("FATURAMENTO - AJUSTE

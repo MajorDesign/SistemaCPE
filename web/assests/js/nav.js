@@ -495,7 +495,42 @@ function renderNavbar() {
 
   
   console.log("[NAV/NAVBAR] ✅ Navbar renderizada com sucesso");
+
+  // 2026-09-21: Refetch async do avatar_url — localStorage guarda o snapshot
+  // do login e nao aprende quando o user sobe foto depois. Puxa /api/chat/me
+  // e atualiza cache + DOM se a foto mudou (sem bloquear o render).
+  _refreshNavbarAvatar(userData);
+
   return true;
+}
+
+async function _refreshNavbarAvatar(cachedUser) {
+  try {
+    const tok = localStorage.getItem('cpe_token') || localStorage.getItem('token');
+    if (!tok) return;
+    const base = (typeof API_BASE_URL !== 'undefined') ? API_BASE_URL : '';
+    const r = await fetch(`${base}/api/chat/me`, {
+      headers: { 'Authorization': 'Bearer ' + tok }
+    });
+    if (!r.ok) return;
+    const j = await r.json();
+    const fresh = (j && j.user) || {};
+    if (!fresh.avatar_url) return;
+    if (fresh.avatar_url === (cachedUser && cachedUser.avatar_url)) return;
+    // Atualiza cache pra proximas renderizacoes
+    try {
+      const merged = Object.assign({}, cachedUser || {}, fresh);
+      localStorage.setItem('cpe_user', JSON.stringify(merged));
+    } catch (_) { /* localStorage cheio — ignora, o DOM ainda atualiza */ }
+    // Substitui iniciais pela foto ao vivo
+    const wrap = document.querySelector('.user-avatar-navbar');
+    if (wrap) {
+      const bust = fresh.avatar_url.includes('?') ? '' : ('?t=' + Date.now());
+      wrap.innerHTML = `<img src="${fresh.avatar_url}${bust}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`;
+    }
+  } catch (err) {
+    console.warn('[NAV/AVATAR] refresh falhou:', err && err.message);
+  }
 }
 
 /* =========================================
