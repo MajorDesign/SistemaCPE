@@ -457,14 +457,19 @@ def notify_discord_if_linked(
         logger.warning(f"[DISCORD-NOTIFY] event_type invalido: {event_type}")
         return
     try:
-        # 1. Checa vinculo (LIMIT 1, indexado)
+        # 1. Checa vinculo (LIMIT 1, indexado). JOIN users pra excluir ex-
+        # funcionarios desativados — evita DM ir pra quem nao trabalha
+        # mais aqui mesmo que ainda tenha o vinculo Discord. Alinha com
+        # /link/{id} e /link/{id}/session que ja exigem is_active=1.
         cursor.execute(
-            "SELECT discord_id FROM discord_links WHERE user_id = %s LIMIT 1",
+            "SELECT l.discord_id FROM discord_links l "
+            "JOIN users u ON u.id = l.user_id "
+            "WHERE l.user_id = %s AND u.is_active = 1 LIMIT 1",
             (user_id,),
         )
         row = cursor.fetchone()
         if not row:
-            return  # user nao vinculado — nada a fazer
+            return  # user nao vinculado ou inativo — nada a fazer
 
         discord_id = row["discord_id"] if isinstance(row, dict) else row[0]
 
