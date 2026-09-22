@@ -1505,10 +1505,17 @@ async def dashboard_sla(
 # ========================================
 
 
-# 2026-09-21: lookup pelo id_alfanumerica (ex "SUP-2026-00178"), usado
+# 2026-09-21: lookup pelo numero humano (ex "SUP-2026-00178"), usado
 # pelo comando /consultachamado no chat desktop. Delega o resto pra
 # obter_ticket() pra manter uma unica fonte da verdade sobre permissao,
 # enrichment (nomes, categoria, campos personalizados etc).
+#
+# 2026-09-21 fix: buscava por id_alfanumerica (codigo curto tipo
+# SU0457N6T4) mas o user conhece o chamado pelo campo `numero` (o que
+# aparece em email/UI/tudo). Tenta os dois — numero primeiro, fallback
+# pro alfanumerico pra nao quebrar link direto se algum sistema tiver
+# guardado o hash curto.
+#
 # IMPORTANTE: precisa ser registrado ANTES de "/{ticket_id}" pra FastAPI
 # nao tentar castar "SUP-2026-00178" pra int.
 @tickets_router.get("/by-numero/{numero}", response_model=TicketResposta)
@@ -1521,9 +1528,12 @@ async def obter_ticket_por_numero(
     cursor = None
     try:
         cursor = conexao.cursor(dictionary=True)
+        numero_norm = numero.strip().upper()
         cursor.execute(
-            "SELECT id FROM tickets WHERE id_alfanumerica = %s LIMIT 1",
-            (numero.strip().upper(),),
+            "SELECT id FROM tickets "
+            "WHERE numero = %s OR id_alfanumerica = %s "
+            "LIMIT 1",
+            (numero_norm, numero_norm),
         )
         row = cursor.fetchone()
     finally:
