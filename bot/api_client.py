@@ -93,3 +93,59 @@ async def list_interacoes(ticket_id: int, token: str) -> list:
     )
     # Endpoint retorna lista pura
     return r if isinstance(r, list) else r.get("items", [])
+
+
+# ---------- Catalogo de tickets (usado pelo /criarchamado) ---------
+
+async def list_groups(token: str) -> list:
+    """Lista setores/grupos que o user pode selecionar.
+    Trailing slash e canonico — sem ela, FastAPI 307-redireciona (~200ms
+    de RTT extra que come o budget de 3s do Discord Interaction)."""
+    r = await _request("GET", "/api/groups/", headers={"X-Auth-Token": token})
+    if isinstance(r, list):
+        return r
+    return r.get("items") or r.get("groups") or []
+
+
+async def list_categorias(group_id: int, token: str) -> list:
+    r = await _request(
+        "GET",
+        f"/api/categorias/?group_id={group_id}",
+        headers={"X-Auth-Token": token},
+    )
+    if isinstance(r, list):
+        return r
+    return r.get("categorias") or r.get("items") or []
+
+
+async def list_subcategorias(categoria_id: int, token: str) -> list:
+    r = await _request(
+        "GET",
+        f"/api/subcategorias/?categoria_id={categoria_id}",
+        headers={"X-Auth-Token": token},
+    )
+    if isinstance(r, list):
+        return r
+    return r.get("subcategorias") or r.get("items") or []
+
+
+async def list_campos(categoria_id: int, subcategoria_id: Optional[int], token: str) -> list:
+    """Campos personalizados consolidados (categoria + subcategoria)."""
+    qs = [f"categoria_id={categoria_id}"]
+    if subcategoria_id:
+        qs.append(f"subcategoria_id={subcategoria_id}")
+    r = await _request(
+        "GET",
+        f"/api/categoria-campos/do-ticket?{'&'.join(qs)}",
+        headers={"X-Auth-Token": token},
+    )
+    return r.get("campos") or []
+
+
+async def create_ticket(payload: dict, token: str) -> dict:
+    return await _request(
+        "POST",
+        "/api/tickets/",
+        headers={"X-Auth-Token": token},
+        json=payload,
+    )
