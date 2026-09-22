@@ -18,13 +18,14 @@ Fluxo tipico do bot:
 """
 
 import os
+import json
 import time
 import logging
 import secrets
 import threading
-from typing import Optional
+from typing import Optional, List
 
-from fastapi import APIRouter, HTTPException, status, Header, Path
+from fastapi import APIRouter, HTTPException, status, Header, Path, Query
 from pydantic import BaseModel, EmailStr, Field
 
 from database import get_db_or_404
@@ -103,6 +104,11 @@ class ChallengeBody(BaseModel):
 class VerifyBody(BaseModel):
     discord_id: str = Field(..., pattern=r"^\d{17,20}$")
     code:       str = Field(..., pattern=r"^\d{6}$")
+
+
+class MarkDeliveredBody(BaseModel):
+    ids:   List[int] = Field(..., min_length=1, max_length=200)
+    error: Optional[str] = Field(None, max_length=255)  # se DM falhou pra esses ids
 
 
 # =========================================
@@ -411,6 +417,153 @@ async def get_session_token(
     except Exception as err:
         logger.error(f"[DISCORD] erro em session: {err}")
         raise HTTPException(status_code=500, detail="Erro interno ao emitir sessao")
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
+# =========================================
+# NOTIFICACOES PUSH (Fase 4 do bot Discord)
+# =========================================
+# Backend enfileira DMs pendentes; bot polla a cada 15s e envia.
+# Chamado dos handlers de tickets.py via _notify_discord_if_linked().
+
+_EVENT_TYPES = ("resposta", "atribuido", "status_changed", "ticket_resolvido")
+
+
+def notify_discord_if_linked(
+    cursor,
+    user_id: int,
+    event_type: str,
+    ticket_id: int,
+    payload: Optional[dict] = None,
+) -> None:
+    """Enfileira uma DM Discord SE o user esta vinculado. Silent noop se nao.
+
+    Chamado dos handlers de tickets.py (criar_interacao, assumir, atualizar,
+    finalizar). NAO deve levantar excecao — falha aqui nao pode derrubar o
+    fluxo principal do backend. Usa o cursor da conexao ja aberta pra
+    aproveitar a transacao em curso.
+
+    Args:
+      cursor:     mysql.connector cursor ja aberto (dictionary=True ideal)
+      user_id:    ID do CPE user destinatario (ex: solicitante_id do ticket)
+      event_type: 'resposta' | 'atribuido' | 'status_changed' | 'ticket_resolvido'
+      ticket_id:  ID interno do ticket
+      payload:    dict serializavel — dados extras pro bot montar o embed
+                  (autor da msg, nome novo do responsavel, novo status label...)
+    """
+    if event_type not in _EVENT_TYPES:
+        logger.warning(f"[DISCORD-NOTIFY] event_type invalido: {event_type}")
+        return
+    try:
+        # 1. Checa vinculo (LIMIT 1, indexado)
+        cursor.execute(
+            "SELECT discord_id FROM discord_links WHERE user_id = %s LIMIT 1",
+            (user_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return  # user nao vinculado — nada a fazer
+
+        discord_id = row["discord_id"] if isinstance(row, dict) else row[0]
+
+        # 2. Insere na fila
+        payload_str = json.dumps(payload or {}, ensure_ascii=False)[:8000]
+        cursor.execute(
+            "INSERT INTO discord_notifications_pending "
+            "(discord_id, ticket_id, event_type, payload_json) "
+            "VALUES (%s, %s, %s, %s)",
+            (discord_id, ticket_id, event_type, payload_str),
+        )
+        logger.info(
+            f"[DISCORD-NOTIFY] enfileirada event={event_type} "
+            f"user_id={user_id} discord_id={discord_id} ticket_id={ticket_id}"
+        )
+    except Exception as e:
+        # NUNCA propaga — evita derrubar POST /tickets se tabela ausente etc
+        logger.warning(f"[DISCORD-NOTIFY] falha silenciosa: {e}")
+
+
+@router.get("/notifications/pending")
+async def list_pending_notifications(
+    limit: int = Query(50, ge=1, le=200),
+    x_discord_bot_key: Optional[str] = Header(None),
+):
+    """Bot chama a cada 15s pra pegar batch de DMs pendentes.
+    Retorna lista ordenada por created_at ASC (FIFO)."""
+    _require_bot_key(x_discord_bot_key)
+
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            """
+            SELECT n.id, n.discord_id, n.ticket_id, n.event_type,
+                   n.payload_json, n.created_at,
+                   t.numero, t.id_alfanumerica, t.assunto, t.status_id
+              FROM discord_notifications_pending n
+              JOIN tickets t ON t.id = n.ticket_id
+             WHERE n.delivered_at IS NULL
+             ORDER BY n.created_at ASC
+             LIMIT %s
+            """,
+            (limit,),
+        )
+        rows = cursor.fetchall()
+        # Serializa datas + parse do payload_json
+        for r in rows:
+            if r.get("created_at"):
+                r["created_at"] = r["created_at"].isoformat()
+            try:
+                r["payload"] = json.loads(r.pop("payload_json") or "{}")
+            except Exception:
+                r["payload"] = {}
+        return rows
+    except Exception as err:
+        logger.error(f"[DISCORD-NOTIFY] erro em list_pending: {err}")
+        raise HTTPException(status_code=500, detail="Erro interno ao listar notificacoes")
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
+@router.post("/notifications/mark-delivered")
+async def mark_delivered(
+    body: MarkDeliveredBody,
+    x_discord_bot_key: Optional[str] = Header(None),
+):
+    """Bot chama depois de enviar (ou falhar em enviar) as DMs.
+    Se `error` vier preenchido, marca todas com esse erro (bot NAO retentara
+    porque delivered_at fica setado)."""
+    _require_bot_key(x_discord_bot_key)
+
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        placeholders = ",".join(["%s"] * len(body.ids))
+        params = list(body.ids)
+        if body.error:
+            cursor.execute(
+                f"UPDATE discord_notifications_pending "
+                f"SET delivered_at = NOW(), delivery_error = %s "
+                f"WHERE id IN ({placeholders}) AND delivered_at IS NULL",
+                [body.error[:255], *params],
+            )
+        else:
+            cursor.execute(
+                f"UPDATE discord_notifications_pending "
+                f"SET delivered_at = NOW() "
+                f"WHERE id IN ({placeholders}) AND delivered_at IS NULL",
+                params,
+            )
+        conn.commit()
+        return {"marked": cursor.rowcount}
+    except Exception as err:
+        logger.error(f"[DISCORD-NOTIFY] erro em mark_delivered: {err}")
+        raise HTTPException(status_code=500, detail="Erro interno ao marcar entrega")
     finally:
         if cursor: cursor.close()
         if conn:   conn.close()

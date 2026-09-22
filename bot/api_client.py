@@ -149,3 +149,18 @@ async def create_ticket(payload: dict, token: str) -> dict:
         headers={"X-Auth-Token": token},
         json=payload,
     )
+
+
+# ---------- Push notifications (notifier task loop) ----------------
+
+async def list_pending_notifications(limit: int = 50) -> list:
+    """Retorna DMs pendentes pro bot enviar (chamado do task loop 15s)."""
+    r = await _request("GET", f"/api/discord/notifications/pending?limit={limit}")
+    return r if isinstance(r, list) else []
+
+
+async def mark_notifications_delivered(ids: list, error: Optional[str] = None) -> dict:
+    body = {"ids": ids}
+    if error:
+        body["error"] = error[:255]
+    return await _request("POST", "/api/discord/notifications/mark-delivered", json=body)
