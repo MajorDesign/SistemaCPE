@@ -20,9 +20,11 @@
 
 USE cpe_plus;
 
+-- users.id e BIGINT(20) signed neste schema (nao INT UNSIGNED como
+-- assumimos inicialmente). FK exige tipos identicos, entao usamos BIGINT.
 CREATE TABLE IF NOT EXISTS `discord_links` (
   `discord_id`  VARCHAR(32)   NOT NULL COMMENT 'Snowflake do user no Discord (18-20 digitos)',
-  `user_id`     INT UNSIGNED  NOT NULL COMMENT 'FK users.id — a quem o Discord user esta vinculado',
+  `user_id`     BIGINT(20)    NOT NULL COMMENT 'FK users.id — a quem o Discord user esta vinculado',
   `verified_at` DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `last_seen`   DATETIME      NULL COMMENT 'Ultima interacao do bot com este user (updated pelo POST /session)',
   PRIMARY KEY (`discord_id`),
