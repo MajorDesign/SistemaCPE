@@ -1,831 +1,471 @@
 """
-Rotas de usuários: CRUD
+Endpoints de usuarios — /api/users*
+
+2026-09-22: consolidacao. Ate hoje, este arquivo tinha uma versao com
+Depends(get_current_user) que NUNCA foi importada pelo app.py — era
+codigo morto. A versao viva estava inline em app.py:1290-1691 e vencia
+o registro do router pela ordem de include. Vinha causando bugs de
+"esqueci de adicionar campo em dois lugares" (PUT sem cargo em
+2026-09-17, GET sem avatar_url em 2026-09-21).
+
+Este arquivo agora e a fonte da verdade. Comportamento identico ao
+inline anterior — zero regressao — mas modularizado e importado pelo
+app.py como qualquer outro router.
 """
 
-from typing import Dict, Any
-from fastapi import APIRouter, HTTPException, status, Depends, Body
-from sqlalchemy import text
-from database import engine
-from security import get_current_user
-from utils import (
-    normalize_email,
-    normalize_string,
-    validate_email_format,
-    validate_password_strength,
-    hash_password,
+from fastapi import APIRouter, HTTPException, status, Request
+from pydantic import BaseModel, EmailStr, Field
+from typing import Optional
+import logging
+
+from database import (
+    get_db_or_404,
+    convert_datetime_to_string,
+    convert_datetime_list,
+    validate_email_unique,
+    validate_username_unique,
 )
 
-router = APIRouter(prefix="/api/users", tags=["Users"])
+logger = logging.getLogger(__name__)
 
-# ================================================== 
-# ➕ CREATE USER
-# Data: 02/04/2026 18:00
-# ==================================================
-
-@router.post("/")
-async def create_user(
-    data: dict = Body(...),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """Cria um novo usuário (apenas ADMIN, TI e MANAGER)"""
-    print(f"[USERS/CREATE] Criando novo usuário (solicitado por: {current_user['id']} - {current_user['role']})")
-    
-    try:
-        # ================================================== 
-        # VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:00
-        # ==================================================
-        if current_user["role"] not in ["ADMIN", "TI", "MANAGER"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas ADMIN, TI e MANAGER podem criar usuários"
-            )
-        # ================================================== 
-        # [FIM] VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:00
-        # ==================================================
-
-        # ✅ VALIDAÇÕES
-        required_fields = ["name", "email", "username", "password", "role"]
-        for field in required_fields:
-            if field not in data or not data[field]:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Campo '{field}' é obrigatório"
-                )
-
-        # Normalizar e validar nome
-        name = normalize_string(data["name"])
-        if not name or len(name) < 3:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Nome deve ter no mínimo 3 caracteres"
-            )
-
-        # Normalizar e validar email
-        email = normalize_email(data["email"])
-        if not validate_email_format(email):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email inválido"
-            )
-
-        # Normalizar e validar username
-        username = normalize_string(data["username"]).lower()
-        if not username or len(username) < 3:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username deve ter no mínimo 3 caracteres"
-            )
-
-        # Validar role
-        if data["role"] not in ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Role inválido. Use: USER, RESPONSAVEL_GRUPO, ADMIN, TI ou MANAGER"
-            )
-
-        # Validar senha
-        password = data["password"]
-        if not validate_password_strength(password):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Senha deve ter no mínimo 8 caracteres"
-            )
-
-        # Hash da senha
-        password_hash = hash_password(password)
-
-        with engine.begin() as conn:
-            # Verificar se email já existe
-            existing_email = conn.execute(
-                text("SELECT id FROM users WHERE email = :email"),
-                {"email": email}
-            ).first()
-
-            if existing_email:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email já cadastrado no sistema"
-                )
-
-            # Verificar se username já existe
-            existing_username = conn.execute(
-                text("SELECT id FROM users WHERE username = :username"),
-                {"username": username}
-            ).first()
-
-            if existing_username:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Username já cadastrado no sistema"
-                )
-
-            # ✅ Validar group_id se fornecido
-            group_id = None
-            if "group_id" in data and data["group_id"]:
-                group_id = int(data["group_id"])
-                # Verificar se grupo existe
-                group_exists = conn.execute(
-                    text("SELECT id FROM `cpe_grupo` WHERE id = :id"),
-                    {"id": group_id}
-                ).first()
-
-                if not group_exists:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Grupo/Setor não encontrado"
-                    )
-
-            # ✅ USAR NOW() PARA MYSQL
-            result = conn.execute(
-                text("""
-                    INSERT INTO users
-                    (name, email, username, password_hash, role, group_id, is_active, created_at)
-                    VALUES (:name, :email, :username, :password_hash, :role, :group_id, :is_active, NOW())
-                """),
-                {
-                    "name": name,
-                    "email": email,
-                    "username": username,
-                    "password_hash": password_hash,
-                    "role": data["role"],
-                    "group_id": group_id,
-                    "is_active": 1
-                }
-            )
-            new_user_id = result.lastrowid
-
-        # 2026-08-18: hook chat — adiciona no server CPE + canal do grupo.
-        # Silencioso: falha aqui NAO deve derrubar o create_user.
-        try:
-            from services.chat_bootstrap import sync_user
-            sync_user(new_user_id, group_id)
-        except Exception as e_chat:
-            print(f"[USERS/CREATE] hook chat falhou (ignorado): {e_chat}")
-
-        print(f"[USERS/CREATE] ✓ Novo usuário criado: {email} (por: {current_user['id']} - {current_user['role']})")
-        return {
-            "success": True,
-            "message": f"Usuário '{name}' criado com sucesso"
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"[USERS/CREATE] ✗ Erro: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao criar usuário: {str(e)}"
-        )
-
-# ================================================== 
-# [FIM] CREATE USER
-# Data: 02/04/2026 18:00
-# ==================================================
-        
+router = APIRouter(prefix="/api/users", tags=["users"])
 
 
-# ================================================== 
-# 🗑️ DELETE USER
-# Data: 02/04/2026 18:05
-# ==================================================
+# =========================================
+# MODELOS PYDANTIC
+# =========================================
 
-@router.delete("/{user_id}")
-async def delete_user(
-    user_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """Deleta um usuário (apenas ADMIN, TI e MANAGER)"""
-    print(f"[USERS/DELETE] Deletando usuário: {user_id} (solicitado por: {current_user['id']} - {current_user['role']})")
-    
-    try:
-        # ================================================== 
-        # VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:05
-        # ==================================================
-        if current_user["role"] not in ["ADMIN", "TI", "MANAGER"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Apenas ADMIN, TI e MANAGER podem deletar usuários"
-            )
-        # ================================================== 
-        # [FIM] VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:05
-        # ==================================================
-
-        # ✅ Não permitir deletar a si mesmo
-        if current_user["id"] == user_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Você não pode deletar sua própria conta"
-            )
-
-        with engine.begin() as conn:
-            # Verificar se usuário existe
-            user_exists = conn.execute(
-                text("SELECT id, name FROM users WHERE id = :id"),
-                {"id": user_id}
-            ).first()
-
-            if not user_exists:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Usuário não encontrado"
-                )
-
-            user_name = user_exists[1]
-
-            # Deletar usuário
-            conn.execute(
-                text("DELETE FROM users WHERE id = :id"),
-                {"id": user_id}
-            )
-
-        print(f"[USERS/DELETE] ✓ Usuário deletado: {user_name} (por: {current_user['id']} - {current_user['role']})")
-        return {
-            "success": True,
-            "message": f"Usuário '{user_name}' deletado com sucesso"
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"[USERS/DELETE] ✗ Erro: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao deletar usuário: {str(e)}"
-        )
-
-# ================================================== 
-# [FIM] DELETE USER
-# Data: 02/04/2026 18:05
-# ==================================================
+class UserBase(BaseModel):
+    name: str = Field(..., min_length=3, max_length=255)
+    email: EmailStr
+    username: str = Field(..., min_length=3, max_length=100)
+    role: str = Field(default="USER", pattern="^(USER|ADMIN|TI|RESPONSAVEL_GRUPO)$")
+    group_id: Optional[int] = None
+    unit_id: Optional[int] = None
+    is_active: bool = True
 
 
-# ================================================== 
-# 👥 LIST USERS
-# Data: 02/04/2026 18:10
-# ==================================================
+class UserCreate(UserBase):
+    password: str = Field(..., min_length=8)
+    cpf: Optional[str] = Field(None, max_length=14)
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=3, max_length=255)
+    email: Optional[EmailStr] = None
+    username: Optional[str] = Field(None, min_length=3, max_length=100)
+    role: Optional[str] = Field(None, pattern="^(USER|ADMIN|TI|RESPONSAVEL_GRUPO)$")
+    group_id: Optional[int] = None
+    unit_id: Optional[int] = None
+    is_active: Optional[bool] = None
+    cpf: Optional[str] = Field(None, max_length=14)
+    # 2026-09-18 migration 098: perfil de contato editavel pelo proprio user
+    cargo: Optional[str] = Field(None, max_length=120)
+    telefone: Optional[str] = Field(None, max_length=30)
+    ramal: Optional[str] = Field(None, max_length=10)
+
+
+class PasswordChangeRequest(BaseModel):
+    # senha_atual eh obrigatorio quando o proprio user troca a propria senha
+    # (sem flag must_change_password ativa). Pode vir vazio quando:
+    #  - admin reseta a senha de outro user (sem confirmar a atual)
+    #  - user com must_change_password=1 trocando (acabou de receber temp)
+    senha_atual: Optional[str] = None
+    senha_nova:  str = Field(..., min_length=8)
+    # admin pode marcar pra forcar troca no proximo login do user resetado
+    forcar_troca: Optional[bool] = False
+
+
+def _resolver_requester_id(request: Request) -> Optional[int]:
+    """Pega o ID do usuario logado via cookie ou header X-Auth-Token."""
+    from security import parse_session_token, COOKIE_NAME
+    tok = request.cookies.get(COOKIE_NAME) or request.headers.get("X-Auth-Token") \
+        or request.headers.get("x-auth-token")
+    if not tok:
+        return None
+    return parse_session_token(tok)
+
+
+# =========================================
+# ENDPOINTS
+# =========================================
 
 @router.get("/")
-async def list_users(
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """Lista usuários conforme permissão do role"""
-    print(f"[USERS/LIST] Listando usuários (solicitado por: {current_user['id']} - {current_user['role']})")
-    
+async def get_users():
+    """Obtem todos os usuarios"""
+    logger.info("\n[USERS] 📋 Listando todos os usuarios...")
+
+    conn = get_db_or_404()
+    cursor = None
+
     try:
-        # ================================================== 
-        # VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:10
-        # ==================================================
-        if current_user["role"] not in ["ADMIN", "TI", "MANAGER", "RESPONSAVEL_GRUPO"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Você não tem permissão para listar usuários"
-            )
-        # ================================================== 
-        # [FIM] VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:10
-        # ==================================================
-
-        with engine.connect() as conn:
-            # ✅ Se RESPONSAVEL_GRUPO, filtra apenas usuários do seu grupo
-            if current_user["role"] == "RESPONSAVEL_GRUPO":
-                users_result = conn.execute(
-                    text("""
-                        SELECT id, name, email, username, role, sector, unit, is_active,
-                               department_id, group_id, created_at, avatar_url
-                        FROM users
-                        WHERE group_id = :group_id
-                        ORDER BY name ASC
-                    """),
-                    {"group_id": current_user.get("group_id")}
-                ).mappings().all()
-                
-                print(f"[USERS/LIST] Filtrando por grupo: {current_user.get('group_id')}")
-            
-            # ✅ Se ADMIN, TI ou MANAGER, lista TODOS os usuários
-            else:
-                users_result = conn.execute(
-                    text("""
-                        SELECT id, name, email, username, role, sector, unit, is_active,
-                               department_id, group_id, created_at, avatar_url
-                        FROM users
-                        ORDER BY name ASC
-                    """)
-                ).mappings().all()
-
-        users = [dict(u) for u in users_result]
-
-        print(f"[USERS/LIST] ✓ {len(users)} usuários listados (por: {current_user['id']} - {current_user['role']})")
-        return {
-            "success": True,
-            "total": len(users),
-            "users": users
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"[USERS/LIST] ✗ Erro: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao listar usuários: {str(e)}"
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            # 2026-09-21: avatar_url pra users.html mostrar foto na lista.
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, u.cpf, "
+            "       u.is_active, u.created_at, u.avatar_url, unidades_cpe.nome AS unit_nome "
+            "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
+            "ORDER BY u.created_at DESC"
         )
+        users = cursor.fetchall()
+        users = convert_datetime_list(users)
 
-# ================================================== 
-# [FIM] LIST USERS
-# Data: 02/04/2026 18:10
-# ==================================================
+        logger.info(f"[USERS] ✅ {len(users)} usuario(s) encontrado(s)\n")
+        return users or []
 
+    except Exception as err:
+        logger.error(f"[USERS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao listar usuarios: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
-# ================================================== 
-# 👤 GET USER BY ID
-# Data: 02/04/2026 18:15
-# ==================================================
 
 @router.get("/{user_id}")
-async def get_user(
-    user_id: int,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """Obtém dados de um usuário conforme permissão do role"""
-    print(f"[USERS/GET] Obtendo usuário: {user_id} (solicitado por: {current_user['id']} - {current_user['role']})")
-    
+async def get_user(user_id: int):
+    """Obtem um usuario especifico"""
+    logger.info(f"\n[USERS] 🔍 Obtendo usuario #{user_id}...")
+
+    conn = get_db_or_404()
+    cursor = None
+
     try:
-        # ================================================== 
-        # VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:15
-        # ==================================================
-        
-        # ✅ ADMIN, TI e MANAGER = vêem qualquer usuário
-        if current_user["role"] in ["ADMIN", "TI", "MANAGER"]:
-            pass  # Permitir acesso total
-        
-        # ✅ RESPONSAVEL_GRUPO = vê apenas usuários do seu grupo
-        elif current_user["role"] == "RESPONSAVEL_GRUPO":
-            with engine.connect() as conn:
-                user_to_check = conn.execute(
-                    text("SELECT group_id FROM users WHERE id = :id"),
-                    {"id": user_id}
-                ).first()
-                
-                if not user_to_check or user_to_check[0] != current_user.get("group_id"):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Você só pode ver usuários do seu grupo"
-                    )
-        
-        # ✅ USER = vê apenas a si mesmo
-        elif current_user["id"] != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Você só pode ver seus próprios dados"
-            )
-        
-        # ❌ Outros roles são bloqueados
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acesso negado"
-            )
-        
-        # ================================================== 
-        # [FIM] VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:15
-        # ==================================================
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, u.cpf, "
+            "       u.is_active, u.created_at, u.avatar_url, unidades_cpe.nome AS unit_nome "
+            "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
+            "WHERE u.id = %s",
+            (user_id,),
+        )
+        user = cursor.fetchone()
 
-        with engine.connect() as conn:
-            user_result = conn.execute(
-                text("""
-                    SELECT id, name, email, username, role, sector, unit, is_active,
-                           department_id, group_id, created_at, avatar_url
-                    FROM users
-                    WHERE id = :id
-                    LIMIT 1
-                """),
-                {"id": user_id}
-            ).mappings().first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
 
-        if not user_result:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Usuário não encontrado"
-            )
-
-        user = dict(user_result)
-
-        print(f"[USERS/GET] ✓ Usuário obtido: {user['name']} (por: {current_user['id']} - {current_user['role']})")
-        return {
-            "success": True,
-            "user": user
-        }
+        user = convert_datetime_to_string(user)
+        logger.info(f"[USERS] ✅ Usuario encontrado: {user['name']}\n")
+        return user
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[USERS/GET] ✗ Erro: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao obter usuário: {str(e)}"
+    except Exception as err:
+        logger.error(f"[USERS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao obter usuario: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_user(user: UserCreate):
+    """Cria um novo usuario"""
+    logger.info("\n[USERS] ➕ CRIANDO NOVO USUARIO")
+    logger.info(f"[USERS]   - Nome: {user.name}")
+    logger.info(f"[USERS]   - Email: {user.email}")
+
+    conn = get_db_or_404()
+    cursor = None
+
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        if not validate_email_unique(cursor, user.email):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Email ja registrado")
+
+        if not validate_username_unique(cursor, user.username):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Username ja registrado")
+
+        if user.group_id:
+            cursor.execute("SELECT id FROM `cpe_grupo` WHERE id = %s", (user.group_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grupo nao encontrado")
+
+        if user.unit_id:
+            cursor.execute("SELECT id FROM unidades_cpe WHERE id = %s", (user.unit_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unidade nao encontrada")
+
+        logger.info("[USERS] 🔐 Gerando hash da senha (argon2 via passlib)...")
+        try:
+            # 2026-08-21: padronizado com hash_password (utils) — antes usava
+            # bcrypt direto, criando duas familias de hash no banco (bcrypt
+            # do cadastro, argon2 do reset). Login/verify agora usam passlib
+            # e aceitam ambos, mas cadastro novo sai em argon2.
+            from utils import hash_password as _hash_pwd
+            password_hash = _hash_pwd(user.password)
+            logger.info("[USERS]   ✅ Hash gerado com sucesso")
+        except Exception:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao processar senha")
+
+        cpf_clean = ''.join(filter(str.isdigit, (user.cpf or ''))) or None
+        cursor.execute(
+            "INSERT INTO users (name, email, username, password_hash, role, group_id, unit_id, cpf, is_active) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (user.name, user.email, user.username, password_hash, user.role,
+             user.group_id, user.unit_id, cpf_clean, user.is_active)
         )
 
-# ================================================== 
-# [FIM] GET USER BY ID
-# Data: 02/04/2026 18:15
-# ==================================================
+        conn.commit()
+        new_user_id = cursor.lastrowid
+        logger.info(f"[USERS]   ✅ Usuario criado com ID: {new_user_id}")
 
-# ================================================== 
-# ✏️ UPDATE USER
-# Data: 02/04/2026 18:20
-# ==================================================
+        cursor.execute(
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, u.cpf, "
+            "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
+            "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
+            "WHERE u.id = %s",
+            (new_user_id,),
+        )
+        new_user = cursor.fetchone()
+        new_user = convert_datetime_to_string(new_user)
+
+        logger.info("[USERS] ✅ SUCESSO!\n")
+        return new_user
+
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[USERS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao criar usuario: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
 
 @router.put("/{user_id}")
-async def update_user(
-    user_id: int,
-    data: dict = Body(...),
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """Atualiza dados de um usuário conforme permissão do role"""
-    print(f"[USERS/UPDATE] Atualizando usuário: {user_id} (solicitado por: {current_user['id']} - {current_user['role']})")
-    
+async def update_user(user_id: int, user: UserUpdate):
+    """Atualiza um usuario"""
+    logger.info(f"\n[USERS] ✏️ ATUALIZANDO USUARIO #{user_id}")
+
+    conn = get_db_or_404()
+    cursor = None
+
     try:
-        # ================================================== 
-        # VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:20
-        # ==================================================
-        
-        # ✅ ADMIN, TI e MANAGER = editam QUALQUER usuário
-        if current_user["role"] in ["ADMIN", "TI", "MANAGER"]:
-            can_edit_all_fields = True
-        
-        # ✅ RESPONSAVEL_GRUPO = edita APENAS usuários do seu grupo
-        elif current_user["role"] == "RESPONSAVEL_GRUPO":
-            with engine.connect() as conn:
-                user_to_check = conn.execute(
-                    text("SELECT group_id FROM users WHERE id = :id"),
-                    {"id": user_id}
-                ).first()
-                
-                if not user_to_check or user_to_check[0] != current_user.get("group_id"):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Você só pode editar usuários do seu grupo"
-                    )
-            
-            can_edit_all_fields = False  # RESPONSAVEL_GRUPO só edita campos básicos
-        
-        # ✅ USER = edita apenas a si mesmo
-        elif current_user["id"] != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Você só pode editar seus próprios dados"
-            )
-        else:
-            can_edit_all_fields = False  # USER só edita campos básicos
-        
-        # ❌ Outros roles são bloqueados
-        if current_user["role"] not in ["ADMIN", "TI", "MANAGER", "RESPONSAVEL_GRUPO", "USER"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acesso negado"
-            )
-        
-        # ================================================== 
-        # [FIM] VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:20
-        # ==================================================
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
 
-        # ✅ Valida campos
-        updates = {}
-        
-        if "name" in data and data["name"]:
-            name = normalize_string(data["name"])
-            if not name:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Nome não pode estar vazio"
-                )
-            updates["name"] = name
+        updates = []
+        params = []
 
-        if "email" in data and data["email"]:
-            email = normalize_email(data["email"])
-            if not validate_email_format(email):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Email inválido"
-                )
-            
-            # ✅ Verificar se email já existe (em outro usuário)
-            with engine.connect() as conn:
-                existing_email = conn.execute(
-                    text("SELECT id FROM users WHERE email = :email AND id != :user_id"),
-                    {"email": email, "user_id": user_id}
-                ).first()
-                
-                if existing_email:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Email já cadastrado por outro usuário"
-                    )
-            
-            updates["email"] = email
+        if user.name is not None:
+            updates.append("name = %s")
+            params.append(user.name)
 
-        if "username" in data and data["username"]:
-            username = normalize_string(data["username"]).lower()
-            if not username:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Username não pode estar vazio"
-                )
-            
-            # ✅ Verificar se username já existe (em outro usuário)
-            with engine.connect() as conn:
-                existing_username = conn.execute(
-                    text("SELECT id FROM users WHERE username = :username AND id != :user_id"),
-                    {"username": username, "user_id": user_id}
-                ).first()
-                
-                if existing_username:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Username já cadastrado por outro usuário"
-                    )
-            
-            updates["username"] = username
+        if user.email is not None:
+            if not validate_email_unique(cursor, user.email, exclude_user_id=user_id):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email ja registrado")
+            updates.append("email = %s")
+            params.append(user.email)
 
-        if "sector" in data and data["sector"]:
-            updates["sector"] = normalize_string(data["sector"])
+        if user.username is not None:
+            if not validate_username_unique(cursor, user.username, exclude_user_id=user_id):
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username ja registrado")
+            updates.append("username = %s")
+            params.append(user.username)
 
-        if "unit" in data and data["unit"]:
-            updates["unit"] = normalize_string(data["unit"])
+        if user.role is not None:
+            updates.append("role = %s")
+            params.append(user.role)
 
-        # 2026-09-17: cargo/telefone/ramal — todos podem editar (usuario
-        # atualiza proprio perfil, admin qualquer). Migration 098.
-        if "cargo" in data:
-            v = (data.get("cargo") or "").strip()
-            updates["cargo"] = v[:120] if v else None
-        if "telefone" in data:
-            v = (data.get("telefone") or "").strip()
-            updates["telefone"] = v[:30] if v else None
-        if "ramal" in data:
-            v = (data.get("ramal") or "").strip()
+        if user.group_id is not None:
+            cursor.execute("SELECT id FROM `cpe_grupo` WHERE id = %s", (user.group_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Grupo nao encontrado")
+            updates.append("group_id = %s")
+            params.append(user.group_id)
+
+        if user.unit_id is not None:
+            if user.unit_id != 0:
+                cursor.execute("SELECT id FROM unidades_cpe WHERE id = %s", (user.unit_id,))
+                if not cursor.fetchone():
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unidade nao encontrada")
+            updates.append("unit_id = %s")
+            params.append(user.unit_id if user.unit_id != 0 else None)
+
+        if user.is_active is not None:
+            updates.append("is_active = %s")
+            params.append(user.is_active)
+
+        if user.cpf is not None:
+            cpf_clean = ''.join(filter(str.isdigit, user.cpf)) or None
+            updates.append("cpf = %s")
+            params.append(cpf_clean)
+
+        # 2026-09-18: campos do perfil de contato (migration 098).
+        if user.cargo is not None:
+            v = (user.cargo or "").strip()
+            updates.append("cargo = %s")
+            params.append(v[:120] if v else None)
+        if user.telefone is not None:
+            v = (user.telefone or "").strip()
+            updates.append("telefone = %s")
+            params.append(v[:30] if v else None)
+        if user.ramal is not None:
+            v = (user.ramal or "").strip()
             if v and not v.isdigit():
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Ramal deve conter apenas números"
                 )
-            updates["ramal"] = v[:10] if v else None
-
-        # ================================================== 
-        # CAMPOS RESTRITOS - APENAS ADMIN E TI
-        # Data: 02/04/2026 18:20
-        # ==================================================
-        
-        # ✅ Apenas ADMIN, TI e MANAGER podem alterar role e group_id
-        if can_edit_all_fields:
-            if "role" in data and data["role"]:
-                if data["role"] not in ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"]:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail="Role inválido. Use: USER, RESPONSAVEL_GRUPO, ADMIN, TI ou MANAGER"
-                    )
-                updates["role"] = data["role"]
-
-            if "group_id" in data and data["group_id"]:
-                group_id = int(data["group_id"])
-                # Verificar se grupo existe
-                with engine.connect() as conn_check:
-                    group_exists = conn_check.execute(
-                        text("SELECT id FROM `cpe_grupo` WHERE id = :id"),
-                        {"id": group_id}
-                    ).first()
-
-                    if not group_exists:
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="Grupo/Setor não encontrado"
-                        )
-                updates["group_id"] = group_id
-
-            if "is_active" in data:
-                updates["is_active"] = 1 if data["is_active"] else 0
-        
-        else:
-            # ❌ RESPONSAVEL_GRUPO e USER NÃO podem alterar role, group_id ou is_active
-            if "role" in data:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Você não tem permissão para alterar role"
-                )
-            
-            if "group_id" in data:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Você não tem permissão para alterar grupo"
-                )
-            
-            if "is_active" in data:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Você não tem permissão para alterar status"
-                )
-        
-        # ================================================== 
-        # [FIM] CAMPOS RESTRITOS
-        # Data: 02/04/2026 18:20
-        # ==================================================
+            updates.append("ramal = %s")
+            params.append(v[:10] if v else None)
 
         if not updates:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Nenhum campo para atualizar"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nenhum campo para atualizar")
 
-        # ✅ Constrói SQL dinamicamente
-        set_clause = ", ".join([f"`{k}` = :{k}" for k in updates.keys()])
-        updates["id"] = user_id
+        params.append(user_id)
+        cursor.execute(f"UPDATE users SET {', '.join(updates)} WHERE id = %s", params)
+        conn.commit()
 
-        with engine.begin() as conn:
-            result = conn.execute(
-                text(f"UPDATE users SET {set_clause} WHERE id = :id"),
-                updates
-            )
+        cursor.execute(
+            "SELECT u.id, u.name, u.email, u.username, u.role, u.group_id, u.unit_id, u.cpf, "
+            "       u.is_active, u.created_at, unidades_cpe.nome AS unit_nome "
+            "FROM users u LEFT JOIN unidades_cpe ON u.unit_id = unidades_cpe.id "
+            "WHERE u.id = %s",
+            (user_id,),
+        )
+        updated_user = cursor.fetchone()
+        updated_user = convert_datetime_to_string(updated_user)
 
-            if result.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Usuário não encontrado"
-                )
-
-        # 2026-08-18: hook chat — se group_id mudou (ou nao existia mas
-        # agora ta setado), re-sincroniza. sync_user e idempotente:
-        # migra o user pro canal certo, remove dos canais antigos, garante
-        # membro do server. Silencioso.
-        if "group_id" in updates:
-            try:
-                from services.chat_bootstrap import sync_user
-                sync_user(user_id, updates.get("group_id"))
-            except Exception as e_chat:
-                print(f"[USERS/UPDATE] hook chat falhou (ignorado): {e_chat}")
-
-        print(f"[USERS/UPDATE] ✓ Usuário atualizado: {user_id} (por: {current_user['id']} - {current_user['role']})")
-        return {
-            "success": True,
-            "message": "Usuário atualizado com sucesso"
-        }
+        logger.info("[USERS] ✅ SUCESSO!\n")
+        return updated_user
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[USERS/UPDATE] ✗ Erro: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao atualizar usuário: {str(e)}"
-        )
-
-# ================================================== 
-# [FIM] UPDATE USER
-# Data: 02/04/2026 18:20
-# ==================================================
+    except Exception as err:
+        logger.error(f"[USERS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao atualizar usuario: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
 
 
-# ================================================== 
-# 🔑 CHANGE PASSWORD
-# Data: 02/04/2026 18:25
-# ==================================================
+@router.post("/{user_id}/senha")
+async def change_password(user_id: int, payload: PasswordChangeRequest, request: Request):
+    """Troca/reseta senha de usuario.
 
-@router.put("/{user_id}/password")
-async def change_password(
-    user_id: int,
-    data: dict,
-    current_user: Dict[str, Any] = Depends(get_current_user),
-):
-    """Altera a senha de um usuário conforme permissão do role"""
-    print(f"[USERS/CHANGE-PASSWORD] Alterando senha do usuário: {user_id} (solicitado por: {current_user['id']} - {current_user['role']})")
-    
+    Tres modos:
+      1. SELF normal: user troca a propria senha — exige `senha_atual`,
+         confere com bcrypt. Zera must_change_password.
+      2. SELF apos reset admin: user com must_change_password=1 troca
+         sem precisar de `senha_atual` (acabou de receber temporaria).
+         Zera a flag.
+      3. ADMIN: ADMIN/TI/MANAGER/RESPONSAVEL_GRUPO redefine senha de
+         OUTRO user sem precisar de `senha_atual`. Pode marcar
+         `forcar_troca=true` (set must_change_password=1) — recomendado
+         pra forcar o user a definir uma senha pessoal antes de seguir.
+    """
+    requester_id = _resolver_requester_id(request)
+    if not requester_id:
+        raise HTTPException(status_code=401, detail="Nao autenticado")
+
+    conn = get_db_or_404()
+    cursor = None
     try:
-        # ================================================== 
-        # VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:25
-        # ==================================================
-        
-        # ✅ ADMIN, TI e MANAGER = alteram senha de QUALQUER usuário
-        if current_user["role"] in ["ADMIN", "TI", "MANAGER"]:
-            can_change_all = True
-        
-        # ✅ RESPONSAVEL_GRUPO = altera senha APENAS de usuários do seu grupo
-        elif current_user["role"] == "RESPONSAVEL_GRUPO":
-            with engine.connect() as conn:
-                user_to_check = conn.execute(
-                    text("SELECT group_id FROM users WHERE id = :id"),
-                    {"id": user_id}
-                ).first()
-                
-                if not user_to_check or user_to_check[0] != current_user.get("group_id"):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Você só pode alterar senha de usuários do seu grupo"
-                    )
-            
-            can_change_all = False
-        
-        # ✅ USER = altera apenas sua própria senha
-        elif current_user["id"] != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Você só pode alterar sua própria senha"
-            )
+        cursor = conn.cursor(dictionary=True)
+
+        # Quem esta solicitando + alvo
+        cursor.execute(
+            "SELECT id, role, password_hash, must_change_password "
+            "FROM users WHERE id = %s", (requester_id,))
+        requester = cursor.fetchone()
+        if not requester:
+            raise HTTPException(status_code=401, detail="Solicitante invalido")
+
+        cursor.execute(
+            "SELECT id, password_hash, must_change_password "
+            "FROM users WHERE id = %s", (user_id,))
+        target = cursor.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="Usuario nao encontrado")
+
+        is_self = (requester["id"] == user_id)
+        is_admin = requester["role"] in ("ADMIN", "TI", "MANAGER", "RESPONSAVEL_GRUPO")
+
+        if not is_self and not is_admin:
+            raise HTTPException(status_code=403,
+                                detail="Sem permissao pra resetar senha de outro usuario")
+
+        # Modo SELF: precisa confirmar a senha atual, A NAO SER que
+        # esteja com flag must_change_password (acabou de ser resetado).
+        # 2026-08-21: usa verify_password (passlib argon2+bcrypt) — antes usava
+        # bcrypt.checkpw direto, que travava quem tinha hash argon2 (do reset).
+        from utils import verify_password as _verify_pwd, hash_password as _hash_pwd
+        if is_self and not target.get("must_change_password"):
+            if not payload.senha_atual:
+                raise HTTPException(status_code=400,
+                                    detail="Informe a senha atual")
+            if not _verify_pwd(payload.senha_atual, target["password_hash"] or ""):
+                raise HTTPException(status_code=401, detail="Senha atual incorreta")
+
+        # Decide nova flag must_change_password:
+        #   admin reset com forcar_troca = 1
+        #   qualquer SELF (incluindo apos reset) = 0
+        if is_self:
+            nova_flag = 0
         else:
-            can_change_all = False
-        
-        # ❌ Outros roles são bloqueados
-        if current_user["role"] not in ["ADMIN", "TI", "MANAGER", "RESPONSAVEL_GRUPO", "USER"]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Acesso negado"
-            )
-        
-        # ================================================== 
-        # [FIM] VALIDAÇÃO DE PERMISSÃO
-        # Data: 02/04/2026 18:25
-        # ==================================================
+            nova_flag = 1 if payload.forcar_troca else 0
 
-        # ✅ Valida nova senha
-        new_password = data.get("password", "").strip()
+        # Usa hash_password (argon2 via passlib) — mesmo esquema do reset,
+        # mantem consistencia. Login e mudanca de senha aceitam ambos.
+        novo_hash = _hash_pwd(payload.senha_nova)
+        cursor.execute(
+            "UPDATE users SET password_hash = %s, must_change_password = %s WHERE id = %s",
+            (novo_hash, nova_flag, user_id))
+        conn.commit()
+        logger.info(f"[USERS] Senha alterada — alvo={user_id} solicitante={requester_id} "
+                    f"is_self={is_self} forcar_troca={nova_flag}")
+        return {"ok": True, "mensagem": "Senha alterada com sucesso",
+                "must_change_password": bool(nova_flag)}
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[USERS] ❌ ERRO ao trocar senha: {err}")
+        raise HTTPException(status_code=500, detail=f"Erro ao trocar senha: {err}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
-        if not new_password:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Nova senha é obrigatória"
-            )
 
-        if not validate_password_strength(new_password):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Senha deve ter no mínimo 8 caracteres"
-            )
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: int):
+    """Deleta um usuario"""
+    logger.info(f"\n[USERS] 🗑️ DELETANDO USUARIO #{user_id}...")
 
-        # ✅ Hash da nova senha
-        password_hash = hash_password(new_password)
+    conn = get_db_or_404()
+    cursor = None
 
-        # ✅ "forcar_troca": so admin que reseta senha de OUTRO user pode marcar.
-        # Se eh o proprio usuario trocando a propria senha, ZERA a flag.
-        is_self = (current_user["id"] == user_id)
-        is_admin_reset = (not is_self) and current_user["role"] in (
-            "ADMIN", "TI", "MANAGER", "RESPONSAVEL_GRUPO"
-        )
-        forcar_troca_flag = 0
-        if is_admin_reset and data.get("forcar_troca"):
-            forcar_troca_flag = 1
-        # is_self => sempre zera (o user acabou de redefinir do jeito dele)
+    try:
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT name FROM users WHERE id = %s", (user_id,))
+        user = cursor.fetchone()
 
-        with engine.begin() as conn:
-            # ✅ Verificar se usuário existe
-            user_exists = conn.execute(
-                text("SELECT id, name FROM users WHERE id = :id"),
-                {"id": user_id}
-            ).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario nao encontrado")
 
-            if not user_exists:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Usuário não encontrado"
-                )
+        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        conn.commit()
 
-            user_name = user_exists[1]
-
-            # ✅ Atualizar senha + flag
-            result = conn.execute(
-                text("UPDATE users SET password_hash = :hash, "
-                     "must_change_password = :mcp WHERE id = :id"),
-                {"hash": password_hash, "mcp": forcar_troca_flag, "id": user_id}
-            )
-
-            if result.rowcount == 0:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Erro ao atualizar senha"
-                )
-
-        print(f"[USERS/CHANGE-PASSWORD] ✓ Senha alterada para usuário: {user_name} (por: {current_user['id']} - {current_user['role']})")
-        return {
-            "success": True,
-            "message": "Senha alterada com sucesso"
-        }
+        logger.info(f"[USERS] ✅ DELETADO COM SUCESSO!\n")
 
     except HTTPException:
         raise
-    except Exception as e:
-        print(f"[USERS/CHANGE-PASSWORD] ✗ Erro: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Erro ao alterar senha: {str(e)}"
-        )
-
-# ================================================== 
-# [FIM] CHANGE PASSWORD
-# Data: 02/04/2026 18:25
-# ==================================================
+    except Exception as err:
+        logger.error(f"[USERS] ❌ ERRO: {str(err)}\n")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Erro ao deletar usuario: {str(err)}")
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
