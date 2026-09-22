@@ -1719,6 +1719,24 @@ async def assumir_ticket(ticket_id: int, payload: AssumiPayload):
 
         conexao.commit()
 
+        # 2026-09-22: notifica solicitante via Discord (atribuicao + status 'Em andamento')
+        try:
+            if ticket_db.get("solicitante_id") and ticket_db["solicitante_id"] != payload.usuario_id:
+                from routes.discord import notify_discord_if_linked
+                notify_discord_if_linked(
+                    cursor,
+                    user_id=ticket_db["solicitante_id"],
+                    event_type="atribuido",
+                    ticket_id=ticket_id,
+                    payload={
+                        "responsavel_id": payload.usuario_id,
+                        "responsavel_nome": nome_usuario,
+                    },
+                )
+                conexao.commit()
+        except Exception as e_dn:
+            logger.warning(f"[DISCORD-NOTIFY] assumir falhou: {e_dn}")
+
         # ── SLA: acumular pausa anterior (se estava pausado) e iniciar contagem ──
         SLAService.acumular_pausa(conexao, ticket_id)
         if SLAService.iniciar_sla(conexao, ticket_id):
@@ -2382,6 +2400,26 @@ async def finalizar_ticket(ticket_id: int, payload: FinalizarPayload):
         # Concluir SLA
         SLAService.concluir_sla(conexao, ticket_id)
         conexao.commit()
+
+        # 2026-09-22: notifica solicitante via Discord pedindo avaliacao
+        try:
+            nome_finalizador = usuario.get("name") or ""
+            if ticket_db.get("solicitante_id") and ticket_db["solicitante_id"] != payload.usuario_id:
+                from routes.discord import notify_discord_if_linked
+                notify_discord_if_linked(
+                    cursor,
+                    user_id=ticket_db["solicitante_id"],
+                    event_type="ticket_resolvido",
+                    ticket_id=ticket_id,
+                    payload={
+                        "finalizador_id": payload.usuario_id,
+                        "finalizador_nome": nome_finalizador,
+                        "solucao": (payload.solucao or "")[:500],
+                    },
+                )
+                conexao.commit()
+        except Exception as e_dn:
+            logger.warning(f"[DISCORD-NOTIFY] finalizar falhou: {e_dn}")
 
         # Registrar interação de resolução (com motivo/solução, se informado)
         nome_usuario = usuario.get("name") or f"Usuário #{payload.usuario_id}"
@@ -3175,6 +3213,35 @@ async def atualizar_ticket(
 
         conexao.commit()
 
+        # 2026-09-22: notifica solicitante via Discord se status ou responsavel
+        # mudou. NAO dispara `ticket_resolvido` aqui (status=4) — o endpoint
+        # /finalizar tem seu proprio hook e admin pode chamar ambos em sequencia.
+        # Pra status=4 via PUT direto, dispara `status_changed` mesmo (user ainda
+        # e notificado, so sem o embed especial de "pedir avaliacao").
+        try:
+            solic_id = ticket_db.get("solicitante_id")
+            if solic_id and solic_id != usuario_id:
+                from routes.discord import notify_discord_if_linked
+                if payload.status_id is not None and payload.status_id != ticket_db.get("status_id"):
+                    notify_discord_if_linked(
+                        cursor,
+                        user_id=solic_id,
+                        event_type="status_changed",
+                        ticket_id=ticket_id,
+                        payload={"status_id_novo": payload.status_id},
+                    )
+                if payload.responsavel_id is not None and payload.responsavel_id != ticket_db.get("responsavel_id"):
+                    notify_discord_if_linked(
+                        cursor,
+                        user_id=solic_id,
+                        event_type="atribuido",
+                        ticket_id=ticket_id,
+                        payload={"responsavel_id": payload.responsavel_id},
+                    )
+                conexao.commit()
+        except Exception as e_dn:
+            logger.warning(f"[DISCORD-NOTIFY] atualizar falhou: {e_dn}")
+
         # 🔔 NOTIFICAR ALTERAÇÕES
         logger.info(f"  ▶️ Enviando notificações de alteração...")
         try:
@@ -3579,6 +3646,29 @@ async def criar_interacao(payload: InteracaoCriar):
         conexao.commit()
         interacao_id = cursor.lastrowid
         logger.info(f"  ✓ Interação #{interacao_id} inserida com sucesso")
+
+        # 2026-09-22: notifica solicitante via Discord se ele estiver vinculado.
+        # So pra respostas PUBLICAS de OUTRO usuario (evita eco quando o proprio
+        # solicitante escreve). Silent noop se nao vinculado.
+        try:
+            if (publico_final == 1
+                and payload.usuario_id != ticket_db.get("solicitante_id")
+                and ticket_db.get("solicitante_id")):
+                from routes.discord import notify_discord_if_linked
+                notify_discord_if_linked(
+                    cursor,
+                    user_id=ticket_db["solicitante_id"],
+                    event_type="resposta",
+                    ticket_id=payload.ticket_id,
+                    payload={
+                        "autor_id": payload.usuario_id,
+                        "autor_nome": usuario.get("name") or "",
+                        "mensagem": (payload.mensagem or "")[:500],
+                    },
+                )
+                conexao.commit()
+        except Exception as e_dn:
+            logger.warning(f"[DISCORD-NOTIFY] criar_interacao falhou: {e_dn}")
 
         # ── Registrar primeira resposta do suporte (SLA de primeira resposta) ──
         if publico_final == 1 and payload.usuario_id != ticket_db.get("solicitante_id"):

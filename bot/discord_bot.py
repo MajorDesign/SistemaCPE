@@ -67,10 +67,13 @@ class CPEControlBot(discord.Client):
         # Registra commands scoped ao guild da CPE (propaga instantaneamente
         # ao contrario do sync global que leva ate 1h)
         guild = discord.Object(id=GUILD_ID)
-        from commands import register_all
+        from commands import register_all, register_background_tasks
         register_all(self.tree, guild)
         synced = await self.tree.sync(guild=guild)
         logger.info(f"[BOT] {len(synced)} slash commands sincronizados pra guild {GUILD_ID}")
+        # Task loop de notificacoes push (polling backend a cada 15s)
+        register_background_tasks(self)
+        logger.info("[BOT] tasks de background iniciadas (notifier)")
 
 
 bot = CPEControlBot()
