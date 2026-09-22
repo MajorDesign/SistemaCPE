@@ -349,8 +349,11 @@ def validar_ticket_existe(cursor, ticket_id: int):
     return ticket
 
 def validar_usuario_existe(cursor, usuario_id: int):
+    # 2026-09-22: `name` incluido no SELECT pra hooks Discord (evento
+    # `resposta`/`atribuido`/`ticket_resolvido` mostram nome do autor
+    # na DM). Sem isso caia em "Alguém"/"Usuário #ID" no notifier.
     cursor.execute(
-        "SELECT id, role, group_id FROM users WHERE id = %s AND is_active = 1",
+        "SELECT id, name, role, group_id FROM users WHERE id = %s AND is_active = 1",
         (usuario_id,)
     )
     user = cursor.fetchone()
@@ -3231,12 +3234,28 @@ async def atualizar_ticket(
                         payload={"status_id_novo": payload.status_id},
                     )
                 if payload.responsavel_id is not None and payload.responsavel_id != ticket_db.get("responsavel_id"):
+                    # Busca nome do novo responsavel pra o embed do bot mostrar
+                    # "Responsavel agora: Maria" em vez de "Usuario #X".
+                    resp_nome = None
+                    try:
+                        cursor.execute(
+                            "SELECT name FROM users WHERE id = %s LIMIT 1",
+                            (payload.responsavel_id,),
+                        )
+                        rrow = cursor.fetchone()
+                        if rrow:
+                            resp_nome = rrow.get("name") if isinstance(rrow, dict) else rrow[0]
+                    except Exception:
+                        pass  # nao bloqueia se falhar, cai no fallback do notifier
                     notify_discord_if_linked(
                         cursor,
                         user_id=solic_id,
                         event_type="atribuido",
                         ticket_id=ticket_id,
-                        payload={"responsavel_id": payload.responsavel_id},
+                        payload={
+                            "responsavel_id": payload.responsavel_id,
+                            "responsavel_nome": resp_nome or "",
+                        },
                     )
                 conexao.commit()
         except Exception as e_dn:
