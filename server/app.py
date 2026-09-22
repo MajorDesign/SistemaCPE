@@ -1495,6 +1495,15 @@ try:
 except Exception as e:
     logger.error(f"⚠️ Falha ao registrar router de impersonate: {e}")
 
+# Bot Discord (2026-09-22) — /api/discord/* protegido por X-Discord-Bot-Key.
+# Consumido exclusivamente pelo servico CPEControlBot; sem key vira 503.
+try:
+    from routes.discord import router as discord_router
+    app.include_router(discord_router)
+    logger.info("✅ Router do Discord registrado: /api/discord/*")
+except Exception as e:
+    logger.error(f"⚠️ Falha ao registrar router do Discord: {e}")
+
 logger.info("✅ Routers internos registrados com sucesso!")
 logger.info("   - Router de Autenticacao: /api/auth")
 logger.info("   - Router de Grupos: /api/groups")
