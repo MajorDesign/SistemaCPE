@@ -246,6 +246,25 @@
           <p class="cfg-card-subtitle">Escolha quais tipos de evento de ticket você quer receber por e-mail. Padrão: todos ligados.</p>
 
           <div id="emailPrefsAlert"></div>
+
+          <!-- 2026-09-22: master switch pra desligar TODOS os emails de uma vez.
+               Salva imediatamente ao mudar (nao precisa clicar "Salvar preferencias"). -->
+          <div class="cfg-setting-item" id="emailMasterRow"
+               style="border-left:3px solid #ef4444;background:#fef2f2;padding:12px 14px;border-radius:6px;margin-bottom:14px">
+            <div>
+              <div class="cfg-setting-name" style="color:#b91c1c;font-weight:700">
+                <i class="bi bi-envelope-slash-fill"></i> Desativar TODOS os e-mails
+              </div>
+              <div class="cfg-setting-desc" style="color:#7f1d1d">
+                Você continua recebendo notificações no sino do sistema e no Discord.
+              </div>
+            </div>
+            <label class="cfg-switch">
+              <input type="checkbox" id="emailMasterOff" onchange="onEmailMasterToggle(this.checked)">
+              <span class="cfg-slider"></span>
+            </label>
+          </div>
+
           <div id="emailPrefsList">
             <div class="cfg-setting-item">
               <div class="cfg-setting-name" style="color:#9CA3AF">
@@ -255,7 +274,7 @@
           </div>
 
           <div style="margin-top:20px">
-            <button class="cfg-btn cfg-btn-primary" onclick="salvarEmailPrefs()">
+            <button class="cfg-btn cfg-btn-primary" id="btnSalvarEmailPrefs" onclick="salvarEmailPrefs()">
               <i class="bi bi-check-lg"></i> Salvar preferências de e-mail
             </button>
           </div>
@@ -968,6 +987,12 @@
       }
       const data = await r.json();
       const prefs = data.preferencias || {};
+      const masterOff = !!data.emails_disabled_all;
+
+      // Sincroniza toggle master
+      const masterEl = document.getElementById('emailMasterOff');
+      if (masterEl) masterEl.checked = masterOff;
+
       const html = Object.entries(prefs).map(([tipo, info]) => `
         <div class="cfg-setting-item">
           <div>
@@ -982,11 +1007,60 @@
       `).join('');
       lista.innerHTML = html || `<div class="cfg-setting-item"><div class="cfg-setting-name">
         Nenhum tipo de evento disponível.</div></div>`;
+
+      // Se master OFF, mostra lista granular esmaecida (visualmente clara
+      // que ta ignorada — user pode reativar cada uma se desligar o master).
+      aplicarEstadoMaster(masterOff);
     } catch (e) {
       console.warn('[EMAIL-PREFS]', e);
       lista.innerHTML = `<div class="cfg-setting-item"><div class="cfg-setting-name" style="color:#DC2626">
         <i class="bi bi-exclamation-triangle"></i> Erro de rede ao carregar
       </div></div>`;
+    }
+  }
+
+  // Reflete visualmente que a lista granular esta ignorada quando master OFF
+  function aplicarEstadoMaster(masterOff) {
+    const lista = document.getElementById('emailPrefsList');
+    const btn   = document.getElementById('btnSalvarEmailPrefs');
+    if (lista) {
+      lista.style.opacity = masterOff ? '0.5' : '1';
+      lista.style.pointerEvents = masterOff ? 'none' : '';
+    }
+    if (btn) btn.disabled = masterOff;
+  }
+
+  // Salva imediato quando o master switch muda (nao espera "Salvar preferencias")
+  async function onEmailMasterToggle(checked) {
+    if (!currentUser?.id) return;
+    aplicarEstadoMaster(checked);
+    try {
+      const r = await fetch(
+        `${API_BASE_URL}/api/users/${currentUser.id}/email-preferencias?requisitante_id=${currentUser.id}`,
+        {
+          method: 'PUT',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ emails_disabled_all: checked }),
+        }
+      );
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        cfgToast('Falha ao aplicar: ' + (err.detail || `HTTP ${r.status}`), 'danger');
+        // Reverte visual
+        const masterEl = document.getElementById('emailMasterOff');
+        if (masterEl) masterEl.checked = !checked;
+        aplicarEstadoMaster(!checked);
+        return;
+      }
+      cfgToast(checked
+        ? 'E-mails desativados. Sino e Discord seguem ativos.'
+        : 'E-mails reativados — respeita as preferências abaixo.');
+    } catch (e) {
+      console.error('[EMAIL-PREFS] master toggle', e);
+      cfgToast('Erro de rede', 'danger');
+      const masterEl = document.getElementById('emailMasterOff');
+      if (masterEl) masterEl.checked = !checked;
+      aplicarEstadoMaster(!checked);
     }
   }
 
