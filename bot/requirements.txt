@@ -1,0 +1,5 @@
+discord.py>=2.4.0,<3.0.0
+python-dotenv>=1.0.0
+# aiohttp ja e dependencia transitiva de discord.py mas fixamos aqui pra
+# nao pegar versao velha sem suporte a ClientTimeout(total=)
+aiohttp>=3.9.0
