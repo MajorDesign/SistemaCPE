@@ -43,6 +43,8 @@ logger = logging.getLogger("cpe-bot.criar")
 
 MAX_CUSTOM_FIELDS_IN_MODAL = 3
 TICKET_URL_BASE = "https://cpecontrol.cpetecnologia.com.br/SistemaCPE/web/pages/tickets.html"
+# Backend valida descricao 5..5000; deixa margem pra o user editar
+MAX_PREFILL_DESCRICAO = 1800
 
 
 def register(tree: app_commands.CommandTree, guild: discord.Object) -> None:
@@ -53,46 +55,82 @@ def register(tree: app_commands.CommandTree, guild: discord.Object) -> None:
         guild=guild,
     )
     async def criarchamado(inter: discord.Interaction) -> None:
-        did = str(inter.user.id)
+        await _iniciar_wizard(inter, prefill_descricao=None, aviso_extra=None)
 
-        # Defer imediato pra garantir dentro dos 3s
-        await inter.response.defer(ephemeral=True, thinking=True)
+    # 2026-09-22 (Fase 3): context menu — botao direito numa mensagem
+    # do Discord vira "Apps → CPE Control → Criar chamado a partir desta".
+    # A mensagem selecionada vira prefill da descricao do modal.
+    @tree.context_menu(name="Criar chamado", guild=guild)
+    async def criar_de_mensagem(inter: discord.Interaction, msg: discord.Message):
+        # Monta prefill: autor + conteudo
+        autor = msg.author.display_name or msg.author.name
+        conteudo = (msg.content or "").strip()
+        prefill = f"[Discord] {autor} disse:\n\n{conteudo}" if conteudo else f"[Discord] Mensagem de {autor} (sem texto)"
+        if len(prefill) > MAX_PREFILL_DESCRICAO:
+            prefill = prefill[:MAX_PREFILL_DESCRICAO - 20] + "…\n\n(mensagem truncada)"
 
-        # 1. Vinculado?
-        try:
-            await get_link(did)
-        except ApiError as e:
-            if e.status == 404:
-                await inter.followup.send(
-                    "🔗 Você ainda não vinculou sua conta.\n"
-                    "Use **`/vincular email:seu.email@cpetecnologia.com.br`** primeiro.",
-                    ephemeral=True,
-                )
-                return
-            await inter.followup.send(f"❌ Erro: {e.detail}", ephemeral=True)
-            return
+        # Se tem anexos, avisa (nao anexamos automatico — anexos ficam
+        # pra fase futura ou o user anexa via navegador depois de criado)
+        aviso = None
+        if msg.attachments:
+            names = ", ".join(a.filename for a in msg.attachments[:3])
+            extra = f" (+{len(msg.attachments) - 3} mais)" if len(msg.attachments) > 3 else ""
+            aviso = (
+                f"📎 A mensagem tem **{len(msg.attachments)} anexo(s)** ({names}{extra}) "
+                f"que não vão automaticamente pro chamado. Após criar, abra no navegador "
+                f"pra anexá-los."
+            )
 
-        # 2. Sessao + grupos
-        try:
-            sess = await get_session(did)
-            groups = await list_groups(sess["token"])
-        except ApiError as e:
-            await inter.followup.send(f"❌ {e.detail}", ephemeral=True)
-            return
+        await _iniciar_wizard(inter, prefill_descricao=prefill, aviso_extra=aviso)
 
-        if not groups:
+
+async def _iniciar_wizard(
+    inter: discord.Interaction,
+    *,
+    prefill_descricao: Optional[str],
+    aviso_extra: Optional[str],
+) -> None:
+    """Ponto comum entre /criarchamado e o context menu 'Criar chamado'.
+    Faz vinculo/sessao/list_groups e mostra o SetorView."""
+    did = str(inter.user.id)
+    await inter.response.defer(ephemeral=True, thinking=True)
+
+    try:
+        await get_link(did)
+    except ApiError as e:
+        if e.status == 404:
             await inter.followup.send(
-                "❌ Nenhum setor disponível pra você criar chamado.",
+                "🔗 Você ainda não vinculou sua conta.\n"
+                "Use **`/vincular email:seu.email@cpetecnologia.com.br`** primeiro.",
                 ephemeral=True,
             )
             return
+        await inter.followup.send(f"❌ Erro: {e.detail}", ephemeral=True)
+        return
 
-        view = SetorView(groups=groups, token=sess["token"], cpe_user_id=sess["user_id"])
+    try:
+        sess = await get_session(did)
+        groups = await list_groups(sess["token"])
+    except ApiError as e:
+        await inter.followup.send(f"❌ {e.detail}", ephemeral=True)
+        return
+
+    if not groups:
         await inter.followup.send(
-            "**Passo 1/4** · Escolha o setor pra qual o chamado é:",
-            view=view,
+            "❌ Nenhum setor disponível pra você criar chamado.",
             ephemeral=True,
         )
+        return
+
+    view = SetorView(
+        groups=groups,
+        token=sess["token"], cpe_user_id=sess["user_id"],
+        prefill_descricao=prefill_descricao,
+    )
+    header = "**Passo 1/4** · Escolha o setor pra qual o chamado é:"
+    if aviso_extra:
+        header = f"{aviso_extra}\n\n{header}"
+    await inter.followup.send(header, view=view, ephemeral=True)
 
 
 # =========================================================
@@ -100,10 +138,11 @@ def register(tree: app_commands.CommandTree, guild: discord.Object) -> None:
 # =========================================================
 
 class SetorView(discord.ui.View):
-    def __init__(self, *, groups: list, token: str, cpe_user_id: int):
+    def __init__(self, *, groups: list, token: str, cpe_user_id: int, prefill_descricao: Optional[str] = None):
         super().__init__(timeout=300)
         self.token = token
         self.cpe_user_id = cpe_user_id
+        self.prefill_descricao = prefill_descricao
         self._options = _build_options(groups, label_key="name")
 
         select = discord.ui.Select(
@@ -135,12 +174,14 @@ class SetorView(discord.ui.View):
                 sub_id=None, sub_label=None,
                 campos=[],
                 token=self.token, cpe_user_id=self.cpe_user_id,
+                prefill_descricao=self.prefill_descricao,
             )
             return
 
         view = CategoriaView(
             categorias=cats, group_id=group_id, group_label=setor_label,
             token=self.token, cpe_user_id=self.cpe_user_id,
+            prefill_descricao=self.prefill_descricao,
         )
         await inter.edit_original_response(
             content=f"**Passo 2/4** · Setor: **{setor_label}**\nEscolha a categoria:",
@@ -149,12 +190,13 @@ class SetorView(discord.ui.View):
 
 
 class CategoriaView(discord.ui.View):
-    def __init__(self, *, categorias, group_id, group_label, token, cpe_user_id):
+    def __init__(self, *, categorias, group_id, group_label, token, cpe_user_id, prefill_descricao: Optional[str] = None):
         super().__init__(timeout=300)
         self.group_id = group_id
         self.group_label = group_label
         self.token = token
         self.cpe_user_id = cpe_user_id
+        self.prefill_descricao = prefill_descricao
         self._options = _build_options(categorias, label_key="nome")
 
         select = discord.ui.Select(
@@ -182,6 +224,7 @@ class CategoriaView(discord.ui.View):
                 group_id=self.group_id, group_label=self.group_label,
                 cat_id=cat_id, cat_label=cat_label,
                 token=self.token, cpe_user_id=self.cpe_user_id,
+                prefill_descricao=self.prefill_descricao,
             )
             await inter.edit_original_response(
                 content=f"**Passo 3/4** · {self.group_label} › **{cat_label}**\nEscolha a subcategoria:",
@@ -202,11 +245,12 @@ class CategoriaView(discord.ui.View):
             sub_id=None, sub_label=None,
             campos=campos,
             token=self.token, cpe_user_id=self.cpe_user_id,
+            prefill_descricao=self.prefill_descricao,
         )
 
 
 class SubcategoriaView(discord.ui.View):
-    def __init__(self, *, subs, group_id, group_label, cat_id, cat_label, token, cpe_user_id):
+    def __init__(self, *, subs, group_id, group_label, cat_id, cat_label, token, cpe_user_id, prefill_descricao: Optional[str] = None):
         super().__init__(timeout=300)
         self.group_id = group_id
         self.group_label = group_label
@@ -214,6 +258,7 @@ class SubcategoriaView(discord.ui.View):
         self.cat_label = cat_label
         self.token = token
         self.cpe_user_id = cpe_user_id
+        self.prefill_descricao = prefill_descricao
         self._options = _build_options(subs, label_key="nome")
 
         select = discord.ui.Select(
@@ -242,6 +287,7 @@ class SubcategoriaView(discord.ui.View):
             sub_id=sub_id, sub_label=sub_label,
             campos=campos,
             token=self.token, cpe_user_id=self.cpe_user_id,
+            prefill_descricao=self.prefill_descricao,
         )
 
 
@@ -251,6 +297,7 @@ async def _mostrar_preencher(
     cat_id, cat_label,
     sub_id, sub_label,
     campos, token, cpe_user_id,
+    prefill_descricao: Optional[str] = None,
 ):
     """Fetch campos ja foi feito. Decide entre PreencherView (abre modal)
     ou BrowserFallbackView (>3 campos obrigatorios)."""
@@ -285,6 +332,7 @@ async def _mostrar_preencher(
         categoria_id=cat_id, categoria_label=cat_label,
         subcategoria_id=sub_id, subcategoria_label=sub_label,
         campos=obrigatorios, token=token, cpe_user_id=cpe_user_id,
+        prefill_descricao=prefill_descricao,
     )
     resumo_campos = ""
     if obrigatorios:
@@ -305,7 +353,8 @@ class PreencherView(discord.ui.View):
     demorar >3s)."""
 
     def __init__(self, *, group_id, group_label, categoria_id, categoria_label,
-                  subcategoria_id, subcategoria_label, campos, token, cpe_user_id):
+                  subcategoria_id, subcategoria_label, campos, token, cpe_user_id,
+                  prefill_descricao: Optional[str] = None):
         super().__init__(timeout=600)
         self.group_id = group_id
         self.group_label = group_label
@@ -316,6 +365,7 @@ class PreencherView(discord.ui.View):
         self.campos = campos
         self.token = token
         self.cpe_user_id = cpe_user_id
+        self.prefill_descricao = prefill_descricao
 
     @discord.ui.button(label="Preencher chamado →", style=discord.ButtonStyle.primary)
     async def preencher(self, inter: discord.Interaction, button: discord.ui.Button):
@@ -324,6 +374,7 @@ class PreencherView(discord.ui.View):
             categoria_id=self.categoria_id, categoria_label=self.categoria_label,
             subcategoria_id=self.subcategoria_id, subcategoria_label=self.subcategoria_label,
             campos=self.campos, token=self.token, cpe_user_id=self.cpe_user_id,
+            prefill_descricao=self.prefill_descricao,
         )
         await inter.response.send_modal(modal)
 
@@ -349,6 +400,7 @@ class CriarChamadoModal(discord.ui.Modal):
         categoria_id, categoria_label,
         subcategoria_id, subcategoria_label,
         campos, token, cpe_user_id,
+        prefill_descricao: Optional[str] = None,
     ):
         titulo_modal = "Novo chamado"
         if group_label:
@@ -373,12 +425,18 @@ class CriarChamadoModal(discord.ui.Modal):
         )
         self.add_item(self.titulo)
 
+        # Se veio do context menu, pre-preenche descricao com a mensagem
+        # selecionada — user pode editar antes de enviar.
+        descricao_default = (prefill_descricao or "").strip()
+        if descricao_default and len(descricao_default) > MAX_PREFILL_DESCRICAO:
+            descricao_default = descricao_default[:MAX_PREFILL_DESCRICAO]
         self.descricao = discord.ui.TextInput(
             label="Descrição",
             style=discord.TextStyle.paragraph,
             placeholder="Detalhe o problema, contexto, o que você já tentou…",
             min_length=5, max_length=2000,
             required=True,
+            default=descricao_default if descricao_default else None,
         )
         self.add_item(self.descricao)
 
