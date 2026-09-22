@@ -84,8 +84,13 @@ def _validar_acesso(cursor, requisitante_id: int, alvo_user_id: int) -> None:
 
 
 class PrefsUpdate(BaseModel):
-    """Body do PUT. Aceita um dict {tipo_evento: bool}."""
-    preferencias: dict[str, bool]
+    """Body do PUT. Ambos campos opcionais — envia so o que quer atualizar."""
+    # Dict {tipo_evento: bool} pra atualizar preferencias granulares
+    preferencias: Optional[dict[str, bool]] = None
+    # 2026-09-22: master switch — 1 (true) desativa TODOS os emails
+    # transacionais, ignorando as preferencias por tipo. Notificacoes no
+    # sino e no Discord seguem funcionando.
+    emails_disabled_all: Optional[bool] = None
 
 
 @router.get("/{user_id}/email-preferencias")
@@ -102,6 +107,14 @@ def obter_preferencias(
         cur = con.cursor(dictionary=True)
         _validar_acesso(cur, requisitante_id, user_id)
 
+        # Master switch
+        cur.execute(
+            "SELECT emails_disabled_all FROM users WHERE id = %s",
+            (user_id,),
+        )
+        urow = cur.fetchone() or {}
+        emails_off = bool(urow.get("emails_disabled_all"))
+
         cur.execute(
             "SELECT tipo_evento, ativo FROM user_email_preferencias WHERE user_id = %s",
             (user_id,),
@@ -115,7 +128,11 @@ def obter_preferencias(
                 "ativo": salvas.get(tipo, True),
                 "label": TIPOS_EVENTO_LABEL.get(tipo, tipo),
             }
-        return {"user_id": user_id, "preferencias": preferencias}
+        return {
+            "user_id": user_id,
+            "emails_disabled_all": emails_off,
+            "preferencias": preferencias,
+        }
     finally:
         if cur:
             cur.close()
@@ -132,6 +149,10 @@ def atualizar_preferencias(
 
     Tipos invalidos (fora de TIPOS_EVENTO_EMAIL) sao silenciosamente
     ignorados — evita 400 quando frontend e backend divergem.
+
+    Se `emails_disabled_all` vier no payload (bool), atualiza a flag master
+    em users. Independente das preferencias granulares (dava pra enviar
+    juntos ou separados).
     """
     con = get_db_connection()
     if not con:
@@ -155,9 +176,23 @@ def atualizar_preferencias(
                 (user_id, tipo, 1 if ativo else 0),
             )
             atualizados += 1
+
+        master_updated = False
+        if payload.emails_disabled_all is not None:
+            cur.execute(
+                "UPDATE users SET emails_disabled_all = %s WHERE id = %s",
+                (1 if payload.emails_disabled_all else 0, user_id),
+            )
+            master_updated = True
+            logger.info(
+                f"[EMAIL-PREFS] user_id={user_id} master switch = "
+                f"{'OFF (bloqueia todos)' if payload.emails_disabled_all else 'ON (respeita granular)'}"
+            )
+
         con.commit()
         logger.info(
             f"[EMAIL-PREFS] user_id={user_id} -> {atualizados} preferencias upserted"
+            f"{' + master atualizado' if master_updated else ''}"
         )
         return {"user_id": user_id, "atualizados": atualizados, "ok": True}
     finally:
@@ -174,21 +209,38 @@ def atualizar_preferencias(
 def filtrar_optouts(cursor, user_ids: list[int], tipo_evento: str) -> set[int]:
     """Retorna SET dos user_ids QUE OPTARAM OUT do tipo_evento.
 
+    Considera DOIS niveis de opt-out:
+      1. Master switch (users.emails_disabled_all=1) — bloqueia TODOS os emails
+      2. Preferencia granular (user_email_preferencias.ativo=0 pro tipo)
+
     Uso no caller:
         opt_outs = filtrar_optouts(cursor, [u1, u2, u3], 'ticket_atribuido')
-        # ignora quem esta em opt_outs
         destinatarios = [u for u in [u1,u2,u3] if u not in opt_outs]
 
     Linhas inexistentes na tabela = ativo (default). Apenas ativo=0
-    explicito conta como opt-out.
+    explicito ou master OFF contam como opt-out.
     """
     if not user_ids:
         return set()
     placeholders = ",".join(["%s"] * len(user_ids))
+
+    # 1. Users com master OFF — bloqueio total
+    cursor.execute(
+        f"""SELECT id FROM users
+            WHERE emails_disabled_all = 1
+              AND id IN ({placeholders})""",
+        user_ids,
+    )
+    optouts = {r["id"] for r in cursor.fetchall()}
+
+    # 2. Users com preferencia granular OFF pro tipo (soma ao set acima)
     cursor.execute(
         f"""SELECT user_id FROM user_email_preferencias
             WHERE tipo_evento = %s AND ativo = 0
               AND user_id IN ({placeholders})""",
         [tipo_evento, *user_ids],
     )
-    return {r["user_id"] for r in cursor.fetchall()}
+    for r in cursor.fetchall():
+        optouts.add(r["user_id"])
+
+    return optouts
