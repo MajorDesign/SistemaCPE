@@ -70,13 +70,14 @@ AGENTS = {
         "auto_update": True,  # flag p/ frontend mostrar selo "Auto-atualizável"
     },
     # 2026-09-23: script que aplica o perfil OpenVPN novo. Usuario baixa,
-    # executa. Bat baixa os arquivos VPN do /api/packages/vpn-openvpn/*
-    # com token embutido, substitui a pasta config e testa a conexao.
-    # Distribuicao temporaria — some quando todo mundo estiver migrado.
+    # executa, e o bat baixa os 4 arquivos VPN direto do repositorio
+    # publico em /SistemaCPE/web/uploads/vpn/ (sem token, servido pelo
+    # Apache), faz backup da config atual e substitui. Distribuicao
+    # temporaria — some quando todo mundo estiver migrado.
     "vpn-atualizar": {
         "id":          "vpn-atualizar",
         "name":        "Atualizar VPN OpenVPN (CPE)",
-        "description": "Script .bat que troca o perfil OpenVPN pelo novo (cadeia de certificados nova). Baixa os arquivos direto do CPE Control, faz backup da config atual e valida a conexao. Rodar UMA vez por PC — pede permissao de administrador sozinho.",
+        "description": "Script .bat que troca o perfil OpenVPN pelo novo (cadeia de certificados nova). Baixa os arquivos direto do CPE Control, faz backup da config atual e substitui. Depois abra o OpenVPN e conecte manualmente. Rodar UMA vez por PC — pede permissao de administrador sozinho.",
         "icon":        "bi-shield-lock",
         "systems":     ["Windows 10", "Windows 11"],
         "release_dir": os.path.join(TOOLS_DIR, "vpn_atualizar", "release"),
@@ -176,10 +177,8 @@ def list_agents():
 def download_agent(agent_id: str, request: Request, format: str = "exe"):
     """Serve o binario do agente.
 
-    2026-09-23: agora aceita `format=bat` alem de `exe` — o vpn-atualizar
-    e distribuido como .bat script. Alem disso, .bat com placeholder
-    __PKG_TOKEN__ tem o token injetado em runtime do .env pra evitar
-    commit do secret no git."""
+    2026-09-23: aceita `format=bat` alem de `exe` (vpn-atualizar e um
+    script .bat)."""
     agent = AGENTS.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agente nao encontrado")
@@ -198,37 +197,7 @@ def download_agent(agent_id: str, request: Request, format: str = "exe"):
         )
     filename = os.path.basename(path)
 
-    # 2026-09-23: pra .bat com placeholder __PKG_TOKEN__ (evita commitar
-    # o token no git), le o arquivo e substitui em runtime pelo valor do
-    # PACKAGE_DOWNLOAD_TOKEN do .env. Se .env nao tiver a var, retorna 503
-    # (fail-closed — melhor nao entregar bat quebrado).
-    if path.lower().endswith(".bat"):
-        try:
-            with open(path, "rb") as f:
-                content = f.read()
-            if b"__PKG_TOKEN__" in content:
-                token = os.environ.get("PACKAGE_DOWNLOAD_TOKEN", "")
-                if not token:
-                    raise HTTPException(
-                        status_code=503,
-                        detail="PACKAGE_DOWNLOAD_TOKEN nao configurado no servidor",
-                    )
-                content = content.replace(b"__PKG_TOKEN__", token.encode("ascii"))
-                logger.info(f"[AGENTS] Download {agent_id}/{format} -> {filename} (token injetado)")
-                from fastapi.responses import Response
-                return Response(
-                    content=content,
-                    media_type="application/octet-stream",
-                    headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-                )
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.warning(f"[AGENTS] falha injecao token em {filename}: {e}")
-            # Cai pro FileResponse abaixo — bat entregue com placeholder
-            # (usuario vai ver __PKG_TOKEN__ e reportar; melhor que 500).
-
-    logger.info(f"[AGENTS] Download {agent_id}/{format} -> {os.path.basename(path)}")
+    logger.info(f"[AGENTS] Download {agent_id}/{format} -> {filename}")
     return FileResponse(path, filename=filename, media_type="application/octet-stream")
 
 

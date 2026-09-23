@@ -1504,16 +1504,6 @@ try:
 except Exception as e:
     logger.error(f"⚠️ Falha ao registrar router do Discord: {e}")
 
-# Pacotes de distribuicao (2026-09-23) — /api/packages/* pra hospedar
-# arquivos versionados que clientes Windows (ex: .bat da VPN) baixam com
-# verificacao SHA256. Cliente usa X-Package-Token; admin publica via UI.
-try:
-    from routes.packages import router as packages_router
-    app.include_router(packages_router)
-    logger.info("✅ Router de Packages registrado: /api/packages/*")
-except Exception as e:
-    logger.error(f"⚠️ Falha ao registrar router de packages: {e}")
-
 logger.info("✅ Routers internos registrados com sucesso!")
 logger.info("   - Router de Autenticacao: /api/auth")
 logger.info("   - Router de Grupos: /api/groups")
