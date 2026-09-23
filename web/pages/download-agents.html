@@ -138,6 +138,59 @@
             <p>Carregando agentes...</p>
           </div>
         </div>
+
+        <!-- ========== Pacotes de distribuição (ADMIN/TI) ========== -->
+        <div id="packagesSection" style="display:none;margin-top:32px">
+          <h3 style="font-size:1rem;font-weight:700;color:#1f2937;margin-bottom:12px">
+            <i class="bi bi-box-seam"></i> Pacotes de distribuição
+          </h3>
+          <p style="font-size:12px;color:#6b7280;margin-bottom:14px">
+            Arquivos versionados servidos com verificação SHA256 e token.
+            Consumidos por scripts .bat (ex: instalador VPN).
+          </p>
+          <div id="packagesList">
+            <div class="empty-state" style="padding:20px">
+              <i class="bi bi-hourglass-split"></i>
+              <p>Carregando pacotes...</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal de publicar nova versão -->
+        <div id="pkgModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center">
+          <div style="background:#fff;border-radius:12px;padding:24px;max-width:520px;width:90%;max-height:90vh;overflow-y:auto">
+            <h4 style="margin:0 0 8px;font-size:1.1rem;font-weight:700" id="pkgModalTitle">Publicar nova versão</h4>
+            <p style="color:#6b7280;font-size:12px;margin:0 0 16px" id="pkgModalSubtitle">—</p>
+
+            <div id="pkgModalAlert" style="display:none;padding:10px;border-radius:6px;margin-bottom:12px;font-size:13px"></div>
+
+            <div style="margin-bottom:12px">
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Versão *</label>
+              <input type="text" id="pkgVersion" placeholder="ex: 1.0.0 ou 2026.09.23"
+                style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">
+            </div>
+
+            <div style="margin-bottom:12px">
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Notas (opcional)</label>
+              <textarea id="pkgNotes" rows="2" placeholder="Ex: cadeia de certificados nova"
+                style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+            </div>
+
+            <div style="margin-bottom:12px">
+              <label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Arquivos *</label>
+              <input type="file" id="pkgFiles" multiple
+                style="width:100%;padding:8px;border:1px dashed #d1d5db;border-radius:6px;font-size:12px">
+              <p style="font-size:11px;color:#6b7280;margin:4px 0 0">Selecione os arquivos que compõem a versão (máx 100 MB cada).</p>
+            </div>
+
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+              <button type="button" class="btn btn-secondary" onclick="pkgModalClose()" id="pkgBtnCancel">Cancelar</button>
+              <button type="button" class="btn btn-primary" onclick="pkgPublish()" id="pkgBtnPublish">
+                <i class="bi bi-cloud-upload"></i> Publicar
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -260,6 +313,132 @@
     }
 
     document.addEventListener('DOMContentLoaded', loadAgents);
+
+    // ============================================================
+    // PACOTES (só ADMIN/TI) — 2026-09-23
+    // ============================================================
+    const PKG_API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname||'127.0.0.1'}:8000`) + '/api/packages';
+    let _pkgSelected = null;  // slug do pacote em publicação
+
+    async function loadPackages() {
+      // Só mostra pra ADMIN/TI (endpoint devolve 403 pra outros)
+      let cur = null;
+      try { cur = JSON.parse(localStorage.getItem('cpe_user') || 'null'); } catch {}
+      const role = (cur?.role || '').toUpperCase();
+      if (role !== 'ADMIN' && role !== 'TI') return;  // fica oculto pra USER
+
+      const section = document.getElementById('packagesSection');
+      const list = document.getElementById('packagesList');
+      section.style.display = '';
+
+      try {
+        const res = await fetch(PKG_API, {
+          credentials: 'include',
+          headers: { 'X-Auth-Token': _token() },
+        });
+        if (res.status === 403) { section.style.display = 'none'; return; }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const pkgs = data.packages || [];
+        if (!pkgs.length) {
+          list.innerHTML = '<div class="empty-state" style="padding:20px"><i class="bi bi-inbox"></i><p>Nenhum pacote cadastrado.</p></div>';
+          return;
+        }
+        list.innerHTML = pkgs.map(p => `
+          <div class="agent-card">
+            <div class="agent-header">
+              <div class="agent-icon-wrap"><i class="bi bi-box-seam"></i></div>
+              <div style="flex:1;min-width:0">
+                <h3 class="agent-title">${escapeHtml(p.name)}${p.current_version ? `<span class="agent-version-badge">v${escapeHtml(p.current_version)}</span>` : '<span class="agent-version-badge" style="background:#6b7280;color:#fff">SEM VERSÃO</span>'}</h3>
+                <p class="agent-desc">${escapeHtml(p.description||'')}</p>
+                <div class="agent-updated">
+                  ${p.version_at ? 'Publicada: ' + relDate(p.version_at) : 'Nunca publicada — publique a primeira versão'}
+                </div>
+              </div>
+              <div>
+                <button class="btn-dl" onclick="pkgModalOpen('${escapeHtml(p.slug)}','${escapeHtml(p.name)}')">
+                  <i class="bi bi-cloud-upload"></i> Publicar versão
+                </button>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        list.innerHTML = '<div class="empty-state" style="padding:20px"><i class="bi bi-exclamation-triangle"></i><p>Erro: ' + err.message + '</p></div>';
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+    }
+
+    function pkgModalOpen(slug, name) {
+      _pkgSelected = slug;
+      document.getElementById('pkgModalTitle').textContent = 'Publicar nova versão';
+      document.getElementById('pkgModalSubtitle').textContent = name + ' (' + slug + ')';
+      document.getElementById('pkgVersion').value = '';
+      document.getElementById('pkgNotes').value = '';
+      document.getElementById('pkgFiles').value = '';
+      document.getElementById('pkgModalAlert').style.display = 'none';
+      document.getElementById('pkgModal').style.display = 'flex';
+    }
+
+    function pkgModalClose() {
+      document.getElementById('pkgModal').style.display = 'none';
+      _pkgSelected = null;
+    }
+
+    function pkgAlert(msg, tipo) {
+      const el = document.getElementById('pkgModalAlert');
+      const bg = tipo === 'error' ? '#fee2e2' : (tipo === 'success' ? '#dcfce7' : '#dbeafe');
+      const fg = tipo === 'error' ? '#7f1d1d' : (tipo === 'success' ? '#14532d' : '#1e40af');
+      el.style.background = bg;
+      el.style.color = fg;
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    async function pkgPublish() {
+      if (!_pkgSelected) return;
+      const version = document.getElementById('pkgVersion').value.trim();
+      const notes = document.getElementById('pkgNotes').value.trim();
+      const filesInput = document.getElementById('pkgFiles');
+      const files = filesInput.files;
+
+      if (!version) return pkgAlert('Informe a versão.', 'error');
+      if (!/^[A-Za-z0-9._-]{1,50}$/.test(version)) return pkgAlert('Versão inválida (só letras/números/./-/_ até 50 chars).', 'error');
+      if (!files || files.length === 0) return pkgAlert('Selecione ao menos 1 arquivo.', 'error');
+
+      const btn = document.getElementById('pkgBtnPublish');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando...';
+      pkgAlert('Fazendo upload e calculando hashes...', 'info');
+
+      const fd = new FormData();
+      fd.append('version', version);
+      if (notes) fd.append('notes', notes);
+      for (const f of files) fd.append('files', f);
+
+      try {
+        const res = await fetch(PKG_API + '/' + encodeURIComponent(_pkgSelected) + '/versions', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'X-Auth-Token': _token() },
+          body: fd,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || 'HTTP ' + res.status);
+        pkgAlert('✓ Publicado! Versão ' + version + ' agora é a atual.', 'success');
+        setTimeout(() => { pkgModalClose(); loadPackages(); }, 1200);
+      } catch (err) {
+        pkgAlert('Erro: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-cloud-upload"></i> Publicar';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadPackages);
   </script>
 </body>
 </html>
