@@ -69,6 +69,21 @@ AGENTS = {
         "source_file": os.path.join(TOOLS_DIR, "inventory_agent", "CPEAgente.py"),
         "auto_update": True,  # flag p/ frontend mostrar selo "Auto-atualizável"
     },
+    # 2026-09-23: script que aplica o perfil OpenVPN novo. Usuario baixa,
+    # executa. Bat baixa os arquivos VPN do /api/packages/vpn-openvpn/*
+    # com token embutido, substitui a pasta config e testa a conexao.
+    # Distribuicao temporaria — some quando todo mundo estiver migrado.
+    "vpn-atualizar": {
+        "id":          "vpn-atualizar",
+        "name":        "Atualizar VPN OpenVPN (CPE)",
+        "description": "Script .bat que troca o perfil OpenVPN pelo novo (cadeia de certificados nova). Baixa os arquivos direto do CPE Control, faz backup da config atual e valida a conexao. Rodar UMA vez por PC — pede permissao de administrador sozinho.",
+        "icon":        "bi-shield-lock",
+        "systems":     ["Windows 10", "Windows 11"],
+        "release_dir": os.path.join(TOOLS_DIR, "vpn_atualizar", "release"),
+        "exe_glob":    "Atualizar-VPN-CPE_v*.bat",
+        "legacy_exe":  [],
+        "source_file": None,
+    },
 }
 
 
@@ -119,11 +134,17 @@ def list_agents():
             os.path.basename(exe_path) if exe_path
             else (agent.get("exe_glob", "").replace("*", "X") or "Agente.exe")
         )
-        # Só o .exe é exposto — os PCs dos usuários não têm Python instalado,
-        # então o código-fonte (.py) não serve pra instalação.
+        # 2026-09-23: infer format do glob — 'bat' pra scripts, 'exe' pra
+        # binarios. O frontend usa essa chave em ?format=... na URL de download.
+        glob_lower = (agent.get("exe_glob") or "").lower()
+        if glob_lower.endswith(".bat"):
+            fmt_key, fmt_label = "bat", "Script Windows (.bat)"
+        else:
+            fmt_key, fmt_label = "exe", "Executável Windows (.exe)"
+
         files_meta = {
-            "exe": {
-                "label":      "Executável Windows (.exe)",
+            fmt_key: {
+                "label":      fmt_label,
                 "filename":   exe_filename,
                 "available":  exe_info is not None,
                 "size_bytes": exe_info["size_bytes"] if exe_info else 0,
@@ -153,27 +174,59 @@ def list_agents():
 
 @router.get("/{agent_id}/download")
 def download_agent(agent_id: str, request: Request, format: str = "exe"):
-    """Serve o executável (.exe) do agente.
+    """Serve o binario do agente.
 
-    Só o .exe é distribuível — os PCs dos usuários não têm Python, então
-    o código-fonte (.py) nunca é servido por aqui."""
+    2026-09-23: agora aceita `format=bat` alem de `exe` — o vpn-atualizar
+    e distribuido como .bat script. Alem disso, .bat com placeholder
+    __PKG_TOKEN__ tem o token injetado em runtime do .env pra evitar
+    commit do secret no git."""
     agent = AGENTS.get(agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agente nao encontrado")
 
-    if format != "exe":
+    if format not in ("exe", "bat"):
         raise HTTPException(
             status_code=400,
-            detail="Apenas o executável (.exe) está disponível para download."
+            detail="Apenas 'exe' ou 'bat' sao suportados."
         )
 
     path, _ = _find_latest_release(agent)
     if not path or not os.path.exists(path):
         raise HTTPException(
             status_code=404,
-            detail="Executável ainda não foi gerado. Rode scripts/build.bat."
+            detail="Binário ainda não foi gerado. Coloque o arquivo na pasta release/."
         )
     filename = os.path.basename(path)
+
+    # 2026-09-23: pra .bat com placeholder __PKG_TOKEN__ (evita commitar
+    # o token no git), le o arquivo e substitui em runtime pelo valor do
+    # PACKAGE_DOWNLOAD_TOKEN do .env. Se .env nao tiver a var, retorna 503
+    # (fail-closed — melhor nao entregar bat quebrado).
+    if path.lower().endswith(".bat"):
+        try:
+            with open(path, "rb") as f:
+                content = f.read()
+            if b"__PKG_TOKEN__" in content:
+                token = os.environ.get("PACKAGE_DOWNLOAD_TOKEN", "")
+                if not token:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="PACKAGE_DOWNLOAD_TOKEN nao configurado no servidor",
+                    )
+                content = content.replace(b"__PKG_TOKEN__", token.encode("ascii"))
+                logger.info(f"[AGENTS] Download {agent_id}/{format} -> {filename} (token injetado)")
+                from fastapi.responses import Response
+                return Response(
+                    content=content,
+                    media_type="application/octet-stream",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"[AGENTS] falha injecao token em {filename}: {e}")
+            # Cai pro FileResponse abaixo — bat entregue com placeholder
+            # (usuario vai ver __PKG_TOKEN__ e reportar; melhor que 500).
 
     logger.info(f"[AGENTS] Download {agent_id}/{format} -> {os.path.basename(path)}")
     return FileResponse(path, filename=filename, media_type="application/octet-stream")
