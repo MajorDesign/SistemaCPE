@@ -104,13 +104,17 @@ def _enviar_sync(
     texto: Optional[str],
     reply_to: Optional[str],
     perfil: str = "default",
+    raise_on_error: bool = False,
 ) -> None:
     cfg = _get_cfg(perfil)
     if not smtp_configurado(perfil):
-        logger.warning(
-            f"[EMAIL] SMTP ({perfil}) nao configurado — assunto='{assunto}' destinatarios={para} "
-            f"(defina {'AGENDA_' if perfil == 'agenda' else ''}SMTP_HOST/USER/FROM no .env)"
+        msg_cfg = (
+            f"SMTP ({perfil}) nao configurado — defina "
+            f"{'AGENDA_' if perfil == 'agenda' else ''}SMTP_HOST/USER/FROM no .env"
         )
+        logger.warning(f"[EMAIL] {msg_cfg} — assunto='{assunto}' destinatarios={para}")
+        if raise_on_error:
+            raise RuntimeError(msg_cfg)
         return
 
     msg = EmailMessage()
@@ -141,6 +145,8 @@ def _enviar_sync(
         logger.info(f"[EMAIL] ✅ Enviado: assunto='{assunto}' → {para}")
     except Exception as err:
         logger.error(f"[EMAIL] ❌ Falha ao enviar para {para}: {err}")
+        if raise_on_error:
+            raise
 
 
 def enviar_email(
@@ -151,20 +157,29 @@ def enviar_email(
     reply_to: Optional[str] = None,
     async_send: bool = True,
     perfil: str = "default",
+    raise_on_error: bool = False,
 ) -> None:
     """Dispara um e-mail. Por padrão envia em background (não bloqueia o request).
 
     `para` pode ser uma string ou lista de strings. E-mails inválidos/vazios são
     descartados silenciosamente. `perfil` escolhe o conjunto de variáveis SMTP
     do .env: "default" usa SMTP_*, "agenda" usa AGENDA_SMTP_* (com fallback).
+
+    `raise_on_error=True` faz o envio SÍNCRONO propagar exceção se SMTP falhar
+    (default False mantém o comportamento historico — engole erro). Use quando
+    a operacao chamadora precisa saber se o email chegou (ex: OTP).
     """
     destinatarios = [e.strip() for e in ([para] if isinstance(para, str) else list(para))
                      if e and "@" in (e or "")]
     if not destinatarios:
         logger.warning(f"[EMAIL] sem destinatários válidos para assunto='{assunto}'")
+        if raise_on_error:
+            raise ValueError("Nenhum destinatario valido")
         return
 
     if async_send:
+        if raise_on_error:
+            raise ValueError("raise_on_error=True exige async_send=False")
         t = threading.Thread(
             target=_enviar_sync,
             args=(destinatarios, assunto, html, texto, reply_to, perfil),
@@ -172,7 +187,7 @@ def enviar_email(
         )
         t.start()
     else:
-        _enviar_sync(destinatarios, assunto, html, texto, reply_to, perfil)
+        _enviar_sync(destinatarios, assunto, html, texto, reply_to, perfil, raise_on_error=raise_on_error)
 
 
 def enviar_email_bcc(

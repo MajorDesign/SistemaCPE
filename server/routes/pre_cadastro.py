@@ -656,28 +656,34 @@ def checar_email(payload: ChecarEmailPayload, request: Request):
 
         # Log em dev: se OTP_DEBUG_LOG=1 no .env, imprime o codigo no stdout
         # pra facilitar teste local sem SMTP funcionando.
-        if os.environ.get("OTP_DEBUG_LOG", "").strip() in ("1", "true", "TRUE"):
+        debug_mode = os.environ.get("OTP_DEBUG_LOG", "").strip() in ("1", "true", "TRUE")
+        if debug_mode:
             logger.warning(f"[PRECAD/CHECAR] 🔓 DEV OTP {email_norm} = {codigo}")
 
         subject, html = email_otp_primeiro_acesso(codigo, expira_min=OTP_TTL_MIN)
         try:
-            enviar_email(email_norm, subject, html, async_send=False)
+            enviar_email(email_norm, subject, html, async_send=False, raise_on_error=True)
         except Exception as err:
-            # SMTP falhou. Codigo ja esta salvo — pra evitar reenviar em cima,
-            # tenta invalidar (nao critico se falhar aqui).
             logger.error(f"[PRECAD/CHECAR] ❌ SMTP: {err}")
-            try:
-                cursor.execute(
-                    "UPDATE pre_cadastro_otp SET used_at = NOW() WHERE email = %s AND used_at IS NULL",
-                    (email_norm,),
+            if debug_mode:
+                # Em dev: SMTP pode nao estar acessivel, mas o codigo ja saiu
+                # no log acima. Segue o baile — o dev pega do log.
+                logger.warning("[PRECAD/CHECAR] ⚠️  SMTP falhou mas OTP_DEBUG_LOG=1 — codigo esta no log")
+            else:
+                # Prod: SMTP falhou de verdade. Invalida o OTP pra evitar
+                # que sobre um pendente que ninguem viu.
+                try:
+                    cursor.execute(
+                        "UPDATE pre_cadastro_otp SET used_at = NOW() WHERE email = %s AND used_at IS NULL",
+                        (email_norm,),
+                    )
+                    conn.commit()
+                except Exception:
+                    pass
+                raise HTTPException(
+                    status_code=500,
+                    detail="Nao conseguimos enviar o codigo por email agora. Tente novamente em alguns minutos ou fale com a T.I.",
                 )
-                conn.commit()
-            except Exception:
-                pass
-            raise HTTPException(
-                status_code=500,
-                detail="Nao conseguimos enviar o codigo por email agora. Tente novamente em alguns minutos ou fale com a T.I.",
-            )
 
         logger.info(f"[PRECAD/CHECAR] ✅ OTP enviado pra {email_norm}")
         return {
