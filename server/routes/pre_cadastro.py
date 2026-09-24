@@ -27,21 +27,42 @@ Endpoints administrativos:
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import logging
+import os
 import re
+import secrets
+from datetime import datetime, timedelta
 from typing import Optional
 
 import bcrypt
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field
 
 from config import PUBLIC_BASE_URL
 from database import get_db_or_404, convert_datetime_to_string, convert_datetime_list
-from services.email_service import email_cadastro_aprovado, enviar_email
+from services.email_service import (
+    email_cadastro_aprovado,
+    email_otp_primeiro_acesso,
+    enviar_email,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/pre-cadastro", tags=["pre-cadastro"])
+
+# Dominio corporativo unico permitido pro auto-cadastro via OTP.
+# Emails fora desse dominio nao passam por esse fluxo — precisam de
+# um admin adicionar manualmente (fluxo legado /solicitar-liberacao).
+ALLOWED_EMAIL_DOMAIN = "@cpetecnologia.com.br"
+
+# Config do OTP de primeiro acesso.
+OTP_TTL_MIN         = 15   # tempo de vida do codigo
+OTP_MAX_ATTEMPTS    = 5    # tentativas de verificacao antes de invalidar
+OTP_MAX_POR_EMAIL_H = 3    # emissoes por email por hora
+OTP_MAX_POR_IP_H    = 10   # emissoes por IP por hora
+OTP_COOLDOWN_SEG    = 60   # entre reenvios do mesmo email
 
 
 # ============================================================
@@ -62,6 +83,23 @@ class SolicitarPayload(BaseModel):
 
 class RecusarPayload(BaseModel):
     motivo: str = Field(..., min_length=3, max_length=500)
+
+
+# ---------- OTP de primeiro acesso (fluxo novo) ----------
+
+class ChecarEmailPayload(BaseModel):
+    email: EmailStr
+
+
+class ConfirmarCadastroPayload(BaseModel):
+    email:    EmailStr
+    codigo:   str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+    name:     str = Field(..., min_length=2, max_length=120)
+    username: str = Field(..., min_length=3, max_length=50)
+    cpf:      str = Field(..., min_length=11, max_length=14)
+    password: str = Field(..., min_length=8, max_length=255)
+    group_id: int = Field(..., gt=0)
+    unit_id:  int = Field(..., gt=0)
 
 
 # ============================================================
@@ -489,6 +527,332 @@ async def solicitar_cadastro(payload: SolicitarPayload):
     except Exception as err:
         logger.error(f"[PRECAD/SOLICITAR] ❌ {err}")
         raise HTTPException(status_code=500, detail=f"Erro ao solicitar cadastro: {err}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+# ============================================================
+# OTP DE PRIMEIRO ACESSO (fluxo novo — 2026-09-24)
+# ============================================================
+#
+# UX antiga: user pedia cadastro, admin aprovava manualmente. Novo:
+# user com email @cpetecnologia.com.br recebe codigo de 6 digitos por
+# email, confirma e ja fica ativo — sem intervencao humana.
+#
+# Fluxo:
+#   POST /checar-email       -> valida dominio, gera OTP, envia por email
+#   POST /confirmar-cadastro -> valida OTP + cria user + retorna sessao
+
+
+def _client_ip(request: Request) -> str:
+    """IP do cliente. X-Forwarded-For so eh confiavel se veio do proxy
+    interno (loopback ou tunel Caddy) — pra chamadas externas diretas
+    usa o addr TCP real."""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff and request.client and request.client.host in ("127.0.0.1", "::1", "localhost"):
+        return xff.split(",")[0].strip()[:45]
+    return (request.client.host if request.client else "0.0.0.0")[:45]
+
+
+def _hash_otp(codigo: str) -> str:
+    return hashlib.sha256(codigo.encode("ascii")).hexdigest()
+
+
+def _gerar_codigo_otp() -> str:
+    """Codigo de 6 digitos, uniformemente aleatorio (secrets, nao random)."""
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def _checar_rate_limit_otp(cursor, email: str, ip: str) -> None:
+    """Bloqueia emissoes abusivas de OTP. Raise 429 se estourar."""
+    cursor.execute("""
+        SELECT COUNT(*) AS n FROM pre_cadastro_otp
+         WHERE email = %s AND created_at >= (NOW() - INTERVAL 1 HOUR)
+    """, (email,))
+    row = cursor.fetchone()
+    n_email = row["n"] if isinstance(row, dict) else row[0]
+    if n_email >= OTP_MAX_POR_EMAIL_H:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Muitos codigos enviados pra esse email na ultima hora. Tente novamente mais tarde.",
+        )
+
+    cursor.execute("""
+        SELECT COUNT(*) AS n FROM pre_cadastro_otp
+         WHERE ip = %s AND created_at >= (NOW() - INTERVAL 1 HOUR)
+    """, (ip,))
+    row = cursor.fetchone()
+    n_ip = row["n"] if isinstance(row, dict) else row[0]
+    if n_ip >= OTP_MAX_POR_IP_H:
+        raise HTTPException(
+            status_code=429,
+            detail="Muitas solicitacoes desse IP. Aguarde 1 hora e tente novamente.",
+        )
+
+    # Cooldown entre reenvios pro mesmo email
+    cursor.execute("""
+        SELECT created_at FROM pre_cadastro_otp
+         WHERE email = %s
+         ORDER BY id DESC LIMIT 1
+    """, (email,))
+    ultimo = cursor.fetchone()
+    if ultimo:
+        ts = ultimo["created_at"] if isinstance(ultimo, dict) else ultimo[0]
+        idade_seg = (datetime.now() - ts).total_seconds() if ts else 999
+        if idade_seg < OTP_COOLDOWN_SEG:
+            faltam = int(OTP_COOLDOWN_SEG - idade_seg)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Aguarde {faltam}s antes de pedir um novo codigo.",
+            )
+
+
+@router.post("/checar-email")
+def checar_email(payload: ChecarEmailPayload, request: Request):
+    """Valida dominio + emite OTP + envia por email.
+
+    Retorna 200 com {ok, mensagem} sempre que puder mandar o codigo.
+    Retorna 400 se dominio invalido/email ja cadastrado.
+    Retorna 429 em rate-limit. 500 se SMTP falhar.
+    """
+    email_norm = payload.email.strip().lower()
+
+    # 1) Dominio corporativo
+    if not email_norm.endswith(ALLOWED_EMAIL_DOMAIN):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cadastro restrito a colaboradores CPE ({ALLOWED_EMAIL_DOMAIN}). Fale com a T.I. se precisa de acesso externo.",
+        )
+
+    ip = _client_ip(request)
+    logger.info(f"[PRECAD/CHECAR] {email_norm} ip={ip}")
+
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        # 2) Ja tem conta ativa com esse email?
+        cursor.execute("SELECT id FROM users WHERE email = %s", (email_norm,))
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=400,
+                detail="Este e-mail ja tem conta no CPE Control. Volte pra tela de login.",
+            )
+
+        # 3) Rate-limit (antes de gerar o codigo)
+        _checar_rate_limit_otp(cursor, email_norm, ip)
+
+        # 4) Gera codigo, salva hash, envia email (SINCRONO — se SMTP falhar,
+        #    retorna erro pro user em vez de fingir sucesso).
+        codigo = _gerar_codigo_otp()
+        expires_at = datetime.now() + timedelta(minutes=OTP_TTL_MIN)
+        cursor.execute("""
+            INSERT INTO pre_cadastro_otp (email, code_hash, expires_at, ip)
+            VALUES (%s, %s, %s, %s)
+        """, (email_norm, _hash_otp(codigo), expires_at, ip))
+        conn.commit()
+
+        # Log em dev: se OTP_DEBUG_LOG=1 no .env, imprime o codigo no stdout
+        # pra facilitar teste local sem SMTP funcionando.
+        if os.environ.get("OTP_DEBUG_LOG", "").strip() in ("1", "true", "TRUE"):
+            logger.warning(f"[PRECAD/CHECAR] 🔓 DEV OTP {email_norm} = {codigo}")
+
+        subject, html = email_otp_primeiro_acesso(codigo, expira_min=OTP_TTL_MIN)
+        try:
+            enviar_email(email_norm, subject, html, async_send=False)
+        except Exception as err:
+            # SMTP falhou. Codigo ja esta salvo — pra evitar reenviar em cima,
+            # tenta invalidar (nao critico se falhar aqui).
+            logger.error(f"[PRECAD/CHECAR] ❌ SMTP: {err}")
+            try:
+                cursor.execute(
+                    "UPDATE pre_cadastro_otp SET used_at = NOW() WHERE email = %s AND used_at IS NULL",
+                    (email_norm,),
+                )
+                conn.commit()
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=500,
+                detail="Nao conseguimos enviar o codigo por email agora. Tente novamente em alguns minutos ou fale com a T.I.",
+            )
+
+        logger.info(f"[PRECAD/CHECAR] ✅ OTP enviado pra {email_norm}")
+        return {
+            "ok": True,
+            "email": email_norm,
+            "expira_min": OTP_TTL_MIN,
+            "cooldown_seg": OTP_COOLDOWN_SEG,
+            "mensagem": f"Enviamos um codigo de 6 digitos pra {email_norm}. Ele expira em {OTP_TTL_MIN} minutos.",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[PRECAD/CHECAR] ❌ {err}")
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar codigo: {err}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
+
+
+@router.post("/confirmar-cadastro")
+def confirmar_cadastro(payload: ConfirmarCadastroPayload, request: Request):
+    """Valida OTP + cria user ativo + retorna sessao (mesmo formato do /login).
+
+    Se codigo errado, incrementa attempts. Ao atingir OTP_MAX_ATTEMPTS,
+    invalida o OTP e user precisa pedir outro.
+    """
+    email_norm = payload.email.strip().lower()
+
+    # Dominio (defense in depth — o front ja filtra)
+    if not email_norm.endswith(ALLOWED_EMAIL_DOMAIN):
+        raise HTTPException(
+            status_code=400,
+            detail="E-mail nao permitido pra auto-cadastro.",
+        )
+
+    # Normaliza + valida CPF e username
+    username = validar_username_formato(payload.username)
+    cpf_fmt  = validar_cpf(payload.cpf)
+    nome     = payload.name.strip()
+
+    logger.info(f"[PRECAD/CONFIRMAR] {email_norm} username={username}")
+
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+
+        # 1) Localiza o OTP mais recente valido
+        cursor.execute("""
+            SELECT id, code_hash, attempts, expires_at
+              FROM pre_cadastro_otp
+             WHERE email = %s AND used_at IS NULL
+             ORDER BY id DESC LIMIT 1
+        """, (email_norm,))
+        otp = cursor.fetchone()
+        if not otp:
+            raise HTTPException(
+                status_code=400,
+                detail="Nenhum codigo pendente pra este email. Pedir um novo codigo.",
+            )
+
+        # Expirado?
+        if otp["expires_at"] < datetime.now():
+            cursor.execute("UPDATE pre_cadastro_otp SET used_at = NOW() WHERE id = %s", (otp["id"],))
+            conn.commit()
+            raise HTTPException(
+                status_code=400,
+                detail="Codigo expirado. Pedir um novo codigo.",
+            )
+
+        # Tentativas estouradas?
+        if otp["attempts"] >= OTP_MAX_ATTEMPTS:
+            cursor.execute("UPDATE pre_cadastro_otp SET used_at = NOW() WHERE id = %s", (otp["id"],))
+            conn.commit()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Muitas tentativas erradas. Pedir um novo codigo.",
+            )
+
+        # Codigo bate?
+        if _hash_otp(payload.codigo) != otp["code_hash"]:
+            cursor.execute("UPDATE pre_cadastro_otp SET attempts = attempts + 1 WHERE id = %s", (otp["id"],))
+            conn.commit()
+            restantes = OTP_MAX_ATTEMPTS - (otp["attempts"] + 1)
+            if restantes <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Codigo incorreto. Voce esgotou as tentativas — pedir um novo codigo.",
+                )
+            raise HTTPException(
+                status_code=400,
+                detail=f"Codigo incorreto. Tentativas restantes: {restantes}.",
+            )
+
+        # 2) Codigo OK — valida regras de negocio pra criar user
+        cursor.execute("SELECT id FROM users WHERE email = %s", (email_norm,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Este e-mail ja esta cadastrado.")
+
+        cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Nome de usuario ja esta em uso. Escolha outro.")
+
+        cursor.execute("SELECT id FROM users WHERE cpf = %s", (cpf_fmt,))
+        if cursor.fetchone():
+            raise HTTPException(status_code=400, detail="Este CPF ja esta cadastrado.")
+
+        cursor.execute(
+            "SELECT id, name FROM cpe_grupo WHERE id = %s AND visivel_signup = 1",
+            (payload.group_id,),
+        )
+        grupo = cursor.fetchone()
+        if not grupo:
+            raise HTTPException(status_code=400, detail="Grupo invalido.")
+
+        cursor.execute(
+            "SELECT id, nome FROM unidades_cpe WHERE id = %s AND ativo = 1",
+            (payload.unit_id,),
+        )
+        unidade = cursor.fetchone()
+        if not unidade:
+            raise HTTPException(status_code=400, detail="Unidade invalida.")
+
+        # 3) Cria usuario ATIVO (auto-aprovacao — a garantia veio do OTP)
+        password_hash = bcrypt.hashpw(payload.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        cursor.execute("""
+            INSERT INTO users (name, email, username, cpf, password_hash,
+                               role, is_active, group_id, department_id)
+            VALUES (%s, %s, %s, %s, %s, 'USER', 1, %s, %s)
+        """, (nome, email_norm, username, cpf_fmt, password_hash,
+              payload.group_id, payload.unit_id))
+        user_id = cursor.lastrowid
+
+        # 4) Marca OTP como usado
+        cursor.execute("UPDATE pre_cadastro_otp SET used_at = NOW() WHERE id = %s", (otp["id"],))
+
+        # 5) Se estava na whitelist antiga, marca como usado (nao critico se falhar)
+        try:
+            cursor.execute(
+                "UPDATE pre_cadastro_emails SET status = 'usado' WHERE email = %s AND status != 'usado'",
+                (email_norm,),
+            )
+        except Exception:
+            pass
+
+        conn.commit()
+        logger.info(f"[PRECAD/CONFIRMAR] ✅ user id={user_id} criado — {email_norm}")
+
+        # 6) Cria sessao (mesmo padrao do POST /login em routes/auth.py)
+        from security import make_session_token, set_session_cookie, _load_user_groups
+        token = make_session_token(user_id)
+        _groups = _load_user_groups(user_id)
+
+        response = JSONResponse({
+            "success": True,
+            "ok": True,
+            "id": user_id,
+            "name": nome,
+            "email": email_norm,
+            "username": username,
+            "role": "USER",
+            "group_id": payload.group_id,
+            "groups": _groups,
+            "must_change_password": False,
+            "mensagem": "Cadastro concluido! Bem-vindo ao CPE Control.",
+        })
+        set_session_cookie(response, token)
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[PRECAD/CONFIRMAR] ❌ {err}")
+        raise HTTPException(status_code=500, detail=f"Erro ao confirmar cadastro: {err}")
     finally:
         if cursor: cursor.close()
         if conn: conn.close()

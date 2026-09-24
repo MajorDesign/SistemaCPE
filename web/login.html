@@ -201,6 +201,58 @@
       font-size: 40px; color: #16A34A;
     }
 
+    /* ─── Validacao inline do email (fluxo OTP v2026-09-24) ─── */
+    .fa-field input.is-valid   { border-color: #16A34A !important; padding-right: 36px; }
+    .fa-field input.is-invalid { border-color: #DC2626 !important; padding-right: 36px; }
+    .fa-input-wrap { position: relative; }
+    .fa-input-wrap .fa-input-icon {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      font-size: 16px; pointer-events: none;
+    }
+    .fa-input-wrap .fa-input-icon.ok  { color: #16A34A; }
+    .fa-input-wrap .fa-input-icon.err { color: #DC2626; }
+    .fa-inline-msg {
+      font-size: 12.5px; margin-top: 6px; display: flex; gap: 6px; align-items: flex-start;
+      line-height: 1.4;
+    }
+    .fa-inline-msg.ok  { color: #166534; }
+    .fa-inline-msg.err { color: #991B1B; }
+
+    /* ─── Grupo de 6 caixas do codigo OTP ─── */
+    .otp-boxes { display: flex; gap: 8px; justify-content: center; margin: 8px 0 4px; }
+    .otp-boxes input {
+      width: 44px; height: 54px; text-align: center; font-size: 22px !important;
+      font-weight: 700; font-family: 'DM Sans', monospace;
+      border: 2px solid #E5E7EB; border-radius: 8px; background: #fff;
+      color: #111827; padding: 0 !important;
+    }
+    .otp-boxes input:focus {
+      outline: none; border-color: #FFC107;
+      box-shadow: 0 0 0 3px rgba(255,193,7,.2);
+    }
+    .otp-boxes.filled input { border-color: #16A34A; background: #F0FDF4; }
+    .otp-boxes.error  input { border-color: #DC2626; background: #FEF2F2; }
+    @media (max-width: 400px) {
+      .otp-boxes input { width: 40px; height: 48px; font-size: 20px !important; }
+    }
+
+    .fa-resend {
+      background: none; border: none; color: #B45309; font-weight: 600;
+      font-size: 13px; cursor: pointer; padding: 4px 8px;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .fa-resend:disabled { color: #9CA3AF; cursor: not-allowed; }
+    .fa-resend:hover:not(:disabled) { text-decoration: underline; }
+
+    .fa-divisor {
+      margin: 20px 0 16px; text-align: center; font-size: 11px;
+      color: #9CA3AF; letter-spacing: 1px; text-transform: uppercase;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .fa-divisor::before, .fa-divisor::after {
+      content: ''; flex: 1; height: 1px; background: #E5E7EB;
+    }
+
     /* =================================================================
        ============ REFRESH CPE 2026-06-16 — Linguagem técnica unificada ===
        Escopo body.login-page. Não toca em layout.css (regra global).
@@ -996,118 +1048,84 @@
         <div class="fa-stepper">
           <div class="fa-stepper-item active" data-step="1"></div>
           <div class="fa-stepper-item" data-step="2"></div>
-          <div class="fa-stepper-item" data-step="3"></div>
         </div>
 
-        <!-- ============ STEP 1: VERIFICAR EMAIL ============ -->
+        <!-- ============ STEP 1: EMAIL + envio de codigo ============ -->
         <div class="fa-step active" id="faStep1">
           <div class="fa-alert info">
             <i class="bi bi-info-circle"></i>
-            <span>Informe seu e-mail corporativo. Verificaremos se ele está liberado para auto-cadastro.</span>
+            <span>Cadastro aberto pra colaboradores CPE com e-mail <strong>@cpetecnologia.com.br</strong>. Vamos te enviar um código de verificação.</span>
           </div>
 
           <div id="faStep1Alert"></div>
 
           <div class="fa-field">
-            <label for="faEmail"><i class="bi bi-envelope"></i> E-mail</label>
-            <input type="email" id="faEmail" placeholder="seu.email@cpe.com.br" maxlength="190" autocomplete="email">
-          </div>
-
-          <!-- Ação secundária que aparece quando o email NÃO está autorizado -->
-          <div id="faStep1NotAuth" style="display:none;margin-top:12px">
-            <button type="button" class="fa-btn fa-btn-secondary" id="faIrParaLiberacao"
-                    style="width:100%;background:#FEF9C3;color:#92400E;border:1px solid #F59E0B">
-              <i class="bi bi-envelope-plus"></i> Enviar solicitação de pré-cadastro
-            </button>
-            <p class="fa-help" style="margin-top:8px;font-size:12px;color:#6b7280;text-align:center">
-              O administrador vai avaliar seu e-mail e liberar o cadastro.
-            </p>
+            <label for="faEmail"><i class="bi bi-envelope"></i> Seu e-mail corporativo</label>
+            <div class="fa-input-wrap">
+              <input type="email" id="faEmail" placeholder="fulano@cpetecnologia.com.br"
+                     maxlength="190" autocomplete="email">
+              <span class="fa-input-icon" id="faEmailIcon"></span>
+            </div>
+            <div class="fa-inline-msg" id="faEmailMsg" style="display:none"></div>
           </div>
 
           <div class="fa-actions">
             <button type="button" class="fa-btn fa-btn-secondary" id="faCancel1">Cancelar</button>
-            <button type="button" class="fa-btn fa-btn-primary" id="faVerificar">
-              <i class="bi bi-check2-circle"></i> Verificar
+            <button type="button" class="fa-btn fa-btn-primary" id="faEnviarCodigo" disabled>
+              <i class="bi bi-send"></i> Enviar código
             </button>
           </div>
         </div>
 
-        <!-- ============ STEP 4: SOLICITAR LIBERAÇÃO (v086) ============ -->
-        <div class="fa-step" id="faStep4">
-          <div class="fa-alert info">
-            <i class="bi bi-info-circle"></i>
-            <span>Preencha pra que o administrador libere seu e-mail. Você recebe email quando for aprovado.</span>
-          </div>
-          <div id="faStep4Alert"></div>
-          <div class="fa-field">
-            <label><i class="bi bi-envelope"></i> Seu e-mail</label>
-            <input type="email" id="faLibEmail" readonly
-                   style="background:#F9FAFB;color:#374151">
-          </div>
-          <div class="fa-field">
-            <label for="faLibNome"><i class="bi bi-person"></i> Seu nome</label>
-            <input type="text" id="faLibNome" placeholder="Nome completo" maxlength="120">
-          </div>
-          <div class="fa-field">
-            <label for="faLibMotivo"><i class="bi bi-chat-left-text"></i> Seu setor / motivo <small style="color:#6b7280">(opcional)</small></label>
-            <textarea id="faLibMotivo" placeholder="Ex: Sou do financeiro, preciso acessar contratos e chamados"
-                      maxlength="500" rows="2"></textarea>
-          </div>
-          <div class="fa-actions">
-            <button type="button" class="fa-btn fa-btn-secondary" id="faLibVoltar">
-              <i class="bi bi-arrow-left"></i> Voltar
-            </button>
-            <button type="button" class="fa-btn fa-btn-primary" id="faLibEnviar">
-              <i class="bi bi-send"></i> Enviar solicitação
-            </button>
-          </div>
-        </div>
-
-        <!-- ============ STEP 5: CONFIRMAÇÃO DE LIBERAÇÃO ENVIADA ============ -->
-        <div class="fa-step" id="faStep5">
-          <div class="fa-success">
-            <i class="bi bi-check-circle-fill" style="font-size:56px;color:#16a34a"></i>
-            <h3 style="margin-top:16px">Solicitação enviada!</h3>
-            <p style="max-width:340px">
-              O administrador recebeu seu pedido. Quando seu e-mail for liberado, você recebe uma confirmação por e-mail —
-              basta voltar aqui e clicar em <strong>Solicitar primeiro acesso</strong>.
-            </p>
-            <button type="button" class="fa-btn fa-btn-primary" id="faLibFechar" style="margin-top:20px">
-              <i class="bi bi-check"></i> Entendi
-            </button>
-          </div>
-        </div>
-
-        <!-- ============ STEP 2: FORMULÁRIO ============ -->
+        <!-- ============ STEP 2: CODIGO + FORMULARIO + FINALIZAR ============ -->
         <div class="fa-step" id="faStep2">
           <div id="faStep2Alert"></div>
 
+          <div class="fa-alert info" style="align-items:flex-start">
+            <i class="bi bi-envelope-check"></i>
+            <span>Enviamos um código de 6 dígitos pra <strong id="faEmailEcho">—</strong>. Confira sua caixa de entrada (e o spam).</span>
+          </div>
+
+          <!-- Codigo OTP: 6 boxes -->
           <div class="fa-field">
-            <label for="faName"><i class="bi bi-person"></i> Nome Completo *</label>
+            <label style="text-align:center;justify-content:center;display:flex">
+              <i class="bi bi-shield-lock"></i> Código de verificação
+            </label>
+            <div class="otp-boxes" id="faOtpBoxes">
+              <input inputmode="numeric" maxlength="1" data-otp="0">
+              <input inputmode="numeric" maxlength="1" data-otp="1">
+              <input inputmode="numeric" maxlength="1" data-otp="2">
+              <input inputmode="numeric" maxlength="1" data-otp="3">
+              <input inputmode="numeric" maxlength="1" data-otp="4">
+              <input inputmode="numeric" maxlength="1" data-otp="5">
+            </div>
+            <div style="text-align:center;margin-top:6px">
+              <button type="button" class="fa-resend" id="faReenviar" disabled>
+                <i class="bi bi-arrow-repeat"></i> <span id="faReenviarLabel">Reenviar código</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="fa-divisor">Complete seu cadastro</div>
+
+          <div class="fa-field">
+            <label for="faName"><i class="bi bi-person"></i> Nome completo *</label>
             <input type="text" id="faName" placeholder="João da Silva" maxlength="120">
-            <div class="hint">Como seu nome aparecerá no sistema.</div>
           </div>
 
           <div class="fa-field">
             <label for="faCpf"><i class="bi bi-card-text"></i> CPF *</label>
             <input type="text" id="faCpf" placeholder="000.000.000-00" maxlength="14" inputmode="numeric">
-            <div class="hint">Apenas números — a formatação é automática.</div>
           </div>
 
           <div class="fa-field">
-            <label for="faUsername"><i class="bi bi-at"></i> Username (login) *</label>
-            <div style="position:relative;">
-              <input type="text" id="faUsername"
-                     placeholder="ex: joao.silva"
-                     maxlength="50" autocomplete="username"
-                     style="padding-right:38px;">
-              <span id="faUsernameStatus"
-                    style="position:absolute;right:12px;top:50%;transform:translateY(-50%);font-size:16px;"></span>
+            <label for="faUsername"><i class="bi bi-at"></i> Nome de usuário (login) *</label>
+            <div class="fa-input-wrap">
+              <input type="text" id="faUsername" placeholder="ex: joao.silva"
+                     maxlength="50" autocomplete="username">
+              <span class="fa-input-icon" id="faUsernameStatus"></span>
             </div>
-            <div class="hint" id="faUsernameHint">
-              3-50 caracteres, sem espaços. Pode usar letras, números, ponto, sublinhado ou hífen.
-              Este será o nome usado para login.
-            </div>
+            <div class="hint">3–50 caracteres. Letras minúsculas, números, ponto, sublinhado ou hífen.</div>
           </div>
 
           <div class="fa-field">
@@ -1119,7 +1137,6 @@
               </button>
             </div>
             <div class="fa-pwd-bar" id="faPwdBar"></div>
-            <div class="hint">Use letras, números e ao menos um caractere especial (@, #, $, !).</div>
           </div>
 
           <div class="fa-field">
@@ -1129,43 +1146,21 @@
 
           <div class="fa-field">
             <label for="faUnidade"><i class="bi bi-building"></i> Unidade onde você trabalha *</label>
-            <select id="faUnidade">
-              <option value="">Carregando unidades...</option>
-            </select>
-            <div class="hint">Selecione a unidade CPE onde você está alocado.</div>
+            <select id="faUnidade"><option value="">Carregando unidades...</option></select>
           </div>
 
           <div class="fa-field">
-            <label for="faGrupo"><i class="bi bi-folder"></i> Selecione seu Grupo *</label>
-            <select id="faGrupo">
-              <option value="">Carregando grupos...</option>
-            </select>
-            <div class="hint">Agrupado por departamento. Caso escolha errado, o administrador irá recusar e justificar.</div>
+            <label for="faGrupo"><i class="bi bi-folder"></i> Grupo *</label>
+            <select id="faGrupo"><option value="">Carregando grupos...</option></select>
+            <div class="hint">Se escolher errado, o administrador ajusta depois — não bloqueia seu acesso.</div>
           </div>
 
           <div class="fa-actions">
-            <button type="button" class="fa-btn fa-btn-secondary" id="faVoltar2">Voltar</button>
-            <button type="button" class="fa-btn fa-btn-primary" id="faSolicitar">
-              <i class="bi bi-send-check"></i> Solicitar Cadastro
+            <button type="button" class="fa-btn fa-btn-secondary" id="faVoltar2">
+              <i class="bi bi-arrow-left"></i> Voltar
             </button>
-          </div>
-        </div>
-
-        <!-- ============ STEP 3: CONFIRMAÇÃO ============ -->
-        <div class="fa-step" id="faStep3">
-          <div class="fa-step-3-icon"><i class="bi bi-check-circle-fill"></i></div>
-          <h4 style="text-align:center;margin:0 0 8px;color:#1F2937;">Solicitação Enviada!</h4>
-          <p style="text-align:center;color:#6B7280;font-size:14px;margin:0 0 16px;">
-            Sua solicitação foi recebida e está aguardando a aprovação do administrador.
-            Você receberá acesso ao sistema assim que for aprovada.
-          </p>
-          <div class="fa-alert info">
-            <i class="bi bi-info-circle"></i>
-            <span>Seu username de login será: <strong id="faUsernameFinal"></strong></span>
-          </div>
-          <div class="fa-actions">
-            <button type="button" class="fa-btn fa-btn-primary" id="faFechar3">
-              <i class="bi bi-house"></i> Voltar ao Login
+            <button type="button" class="fa-btn fa-btn-primary" id="faSolicitar">
+              <i class="bi bi-check2-circle"></i> Concluir cadastro
             </button>
           </div>
         </div>
@@ -1261,16 +1256,16 @@
     'use strict';
     const API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
     const PRECAD = `${API}/api/pre-cadastro`;
+    const ALLOWED_DOMAIN = '@cpetecnologia.com.br';
 
     const overlay   = document.getElementById('faOverlay');
     const subtitle  = document.getElementById('faSubtitle');
     const stepper   = overlay.querySelectorAll('.fa-stepper-item');
 
     let emailValido = '';
-    let nomeSugerido = null;
-    let gruposCache  = [];
-    let unidadesCache = [];
-    let usernameDisponivel = null;   // null=desconhecido | true | false
+    let cooldownTimer = null;
+    let cooldownSeg = 0;
+    let usernameDisponivel = null;
     let usernameCheckTimer = null;
 
     // ---- helpers ----------------------------------------------------------
@@ -1284,11 +1279,10 @@
         else if (s === n) item.classList.add('active');
       });
       const titles = {
-        1: 'Vamos verificar se você está autorizado',
-        2: 'Preencha seus dados de cadastro',
-        3: 'Tudo certo!'
+        1: 'Comece com seu e-mail corporativo',
+        2: 'Confirme o código e complete seu cadastro',
       };
-      subtitle.textContent = titles[n];
+      subtitle.textContent = titles[n] || '';
     }
 
     function alert(containerId, tipo, msg) {
@@ -1299,8 +1293,12 @@
     }
     function clearAlert(id) { const el = document.getElementById(id); if (el) el.innerHTML = ''; }
 
-    function abrir() {
+    function resetForm() {
       document.getElementById('faEmail').value = '';
+      document.getElementById('faEmail').classList.remove('is-valid', 'is-invalid');
+      document.getElementById('faEmailIcon').innerHTML = '';
+      document.getElementById('faEmailMsg').style.display = 'none';
+      document.getElementById('faEnviarCodigo').disabled = true;
       document.getElementById('faName').value = '';
       document.getElementById('faCpf').value = '';
       document.getElementById('faUsername').value = '';
@@ -1309,82 +1307,167 @@
       document.getElementById('faPasswordConf').value = '';
       document.getElementById('faUnidade').innerHTML = '<option value="">Carregando unidades...</option>';
       document.getElementById('faGrupo').innerHTML   = '<option value="">Carregando grupos...</option>';
+      const boxes = document.querySelectorAll('#faOtpBoxes input');
+      boxes.forEach(b => { b.value = ''; });
+      document.getElementById('faOtpBoxes').classList.remove('filled', 'error');
       clearAlert('faStep1Alert');
       clearAlert('faStep2Alert');
       usernameDisponivel = null;
+      emailValido = '';
+      pararCooldown();
+    }
+
+    function abrir() {
+      resetForm();
       showStep(1);
       overlay.classList.add('show');
       setTimeout(() => document.getElementById('faEmail').focus(), 100);
     }
-    function fechar() { overlay.classList.remove('show'); }
+    function fechar() { overlay.classList.remove('show'); pararCooldown(); }
 
-    // ---- step 1: verificar e-mail -----------------------------------------
-    // Ao editar o email, esconde o botão de "solicitar liberação" (que
-    // referencia o email anterior verificado)
-    document.getElementById('faEmail').addEventListener('input', () => {
-      document.getElementById('faStep1NotAuth').style.display = 'none';
-    });
+    // ---- step 1: validacao inline do email ---------------------------------
+    // Em blur (nao onchange) — nao incomoda enquanto ainda esta digitando.
+    function validarEmailInline() {
+      const raw = document.getElementById('faEmail').value.trim().toLowerCase();
+      const inp = document.getElementById('faEmail');
+      const icon = document.getElementById('faEmailIcon');
+      const msg = document.getElementById('faEmailMsg');
+      const btn = document.getElementById('faEnviarCodigo');
 
-    async function verificarEmail() {
-      const email = document.getElementById('faEmail').value.trim().toLowerCase();
-      clearAlert('faStep1Alert');
+      inp.classList.remove('is-valid', 'is-invalid');
+      icon.className = 'fa-input-icon';
+      icon.innerHTML = '';
+      msg.style.display = 'none';
+      btn.disabled = true;
 
-      if (!email || !email.includes('@')) {
-        alert('faStep1Alert', 'danger', 'Informe um e-mail válido.');
+      if (!raw) return;
+
+      // Formato basico
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
+        inp.classList.add('is-invalid');
+        icon.classList.add('err');
+        icon.innerHTML = '<i class="bi bi-x-circle-fill"></i>';
+        msg.className = 'fa-inline-msg err';
+        msg.innerHTML = '<i class="bi bi-info-circle"></i> Formato de e-mail inválido.';
+        msg.style.display = 'flex';
         return;
       }
 
-      const btn = document.getElementById('faVerificar');
+      // Dominio corporativo
+      if (!raw.endsWith(ALLOWED_DOMAIN)) {
+        inp.classList.add('is-invalid');
+        icon.classList.add('err');
+        icon.innerHTML = '<i class="bi bi-x-circle-fill"></i>';
+        msg.className = 'fa-inline-msg err';
+        msg.innerHTML = `<i class="bi bi-shield-x"></i> <span>Cadastro restrito a colaboradores CPE (<strong>${ALLOWED_DOMAIN}</strong>). Fale com a T.I. se precisa de acesso externo.</span>`;
+        msg.style.display = 'flex';
+        return;
+      }
+
+      // OK — habilita botao
+      inp.classList.add('is-valid');
+      icon.classList.add('ok');
+      icon.innerHTML = '<i class="bi bi-check-circle-fill"></i>';
+      msg.className = 'fa-inline-msg ok';
+      msg.innerHTML = '<i class="bi bi-envelope-check"></i> E-mail corporativo válido. Vamos enviar seu código.';
+      msg.style.display = 'flex';
+      btn.disabled = false;
+    }
+
+    async function enviarCodigo() {
+      const email = document.getElementById('faEmail').value.trim().toLowerCase();
+      clearAlert('faStep1Alert');
+      if (!email.endsWith(ALLOWED_DOMAIN)) return;
+
+      const btn = document.getElementById('faEnviarCodigo');
       btn.disabled = true;
-      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Verificando...';
+      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando código...';
 
       try {
-        const r = await fetch(`${PRECAD}/verificar-email?email=${encodeURIComponent(email)}`);
-        const data = await r.json();
-
+        const r = await fetch(`${PRECAD}/checar-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await r.json().catch(() => ({}));
         if (!r.ok) {
-          alert('faStep1Alert', 'danger', data.detail || 'Erro ao verificar e-mail.');
+          let msg = data.detail || 'Erro ao enviar código.';
+          if (Array.isArray(msg)) msg = msg.map(e => e.msg || JSON.stringify(e)).join(' / ');
+          alert('faStep1Alert', 'danger', msg);
           return;
         }
 
-        if (!data.autorizado) {
-          const tipo = data.ja_cadastrado || data.ja_pendente ? 'warning' : 'danger';
-          alert('faStep1Alert', tipo, data.mensagem);
-          // v086: se motivo é "não autorizado" (sem já_cadastrado/pendente),
-          // ofereço botão pra pedir liberação. Se já cadastrado/pendente,
-          // não faz sentido pedir de novo.
-          const podePedir = !data.ja_cadastrado && !data.ja_pendente;
-          document.getElementById('faStep1NotAuth').style.display = podePedir ? 'block' : 'none';
-          return;
-        }
+        emailValido = data.email || email;
+        document.getElementById('faEmailEcho').textContent = emailValido;
 
-        // autorizado — preenche dados e vai pra step 2
-        emailValido  = data.email;
-        nomeSugerido = data.nome_sugerido;
-        if (nomeSugerido) document.getElementById('faName').value = nomeSugerido;
-
-        // Sugere username derivado do email (parte antes do @, lowercase)
+        // Sugere username derivado do email
         const sugUser = (emailValido.split('@')[0] || '').toLowerCase().replace(/[^a-z0-9._-]/g, '');
         if (sugUser) {
           document.getElementById('faUsername').value = sugUser;
-          // dispara a verificação de disponibilidade
           verificarUsernameDebounced();
-        }
-
-        // Aviso de recusa anterior, se houver
-        if (data.recusado_anterior) {
-          alert('faStep2Alert', 'warning',
-            `<strong>Cadastro anterior recusado:</strong><br>${escapeHtml(data.motivo_recusa || 'Sem motivo informado')}<br><br>Refaça preenchendo os dados corretamente.`);
         }
 
         // Carrega grupos + unidades em paralelo
         await Promise.all([carregarGrupos(), carregarUnidades()]);
         showStep(2);
+        iniciarCooldown(data.cooldown_seg || 60);
+        setTimeout(() => document.querySelector('#faOtpBoxes input')?.focus(), 200);
       } catch (err) {
         alert('faStep1Alert', 'danger', 'Erro de conexão: ' + err.message);
       } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-check2-circle"></i> Verificar';
+        btn.innerHTML = '<i class="bi bi-send"></i> Enviar código';
+      }
+    }
+
+    // ---- cooldown do reenviar ---------------------------------------------
+    function iniciarCooldown(seg) {
+      pararCooldown();
+      cooldownSeg = Math.max(1, seg);
+      const btn = document.getElementById('faReenviar');
+      const label = document.getElementById('faReenviarLabel');
+      btn.disabled = true;
+      label.textContent = `Reenviar em ${cooldownSeg}s`;
+      cooldownTimer = setInterval(() => {
+        cooldownSeg--;
+        if (cooldownSeg <= 0) {
+          pararCooldown();
+          btn.disabled = false;
+          label.textContent = 'Reenviar código';
+        } else {
+          label.textContent = `Reenviar em ${cooldownSeg}s`;
+        }
+      }, 1000);
+    }
+    function pararCooldown() {
+      if (cooldownTimer) { clearInterval(cooldownTimer); cooldownTimer = null; }
+    }
+
+    async function reenviarCodigo() {
+      if (!emailValido) return;
+      clearAlert('faStep2Alert');
+      const btn = document.getElementById('faReenviar');
+      btn.disabled = true;
+      document.getElementById('faReenviarLabel').textContent = 'Reenviando...';
+      try {
+        const r = await fetch(`${PRECAD}/checar-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailValido }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          alert('faStep2Alert', 'danger', data.detail || 'Falha ao reenviar código.');
+          document.getElementById('faReenviarLabel').textContent = 'Reenviar código';
+          btn.disabled = false;
+          return;
+        }
+        alert('faStep2Alert', 'success', `Novo código enviado pra ${emailValido}.`);
+        iniciarCooldown(data.cooldown_seg || 60);
+      } catch (err) {
+        alert('faStep2Alert', 'danger', 'Erro de conexão: ' + err.message);
+        document.getElementById('faReenviarLabel').textContent = 'Reenviar código';
+        btn.disabled = false;
       }
     }
 
@@ -1532,8 +1615,17 @@
       else               bar.classList.add('forte');
     }
 
-    // ---- step 2: solicitar cadastro --------------------------------------
-    async function solicitar() {
+    // ---- step 2: coletar codigo OTP dos 6 boxes --------------------------
+    function coletarCodigoOtp() {
+      const boxes = document.querySelectorAll('#faOtpBoxes input');
+      let cod = '';
+      boxes.forEach(b => cod += (b.value || '').replace(/\D/g, ''));
+      return cod;
+    }
+
+    // ---- step 2: confirmar cadastro (OTP + form) -------------------------
+    async function confirmarCadastro() {
+      const codigo   = coletarCodigoOtp();
       const name     = document.getElementById('faName').value.trim();
       const cpf      = document.getElementById('faCpf').value.trim();
       const username = document.getElementById('faUsername').value.trim().toLowerCase();
@@ -1543,6 +1635,11 @@
 
       clearAlert('faStep2Alert');
 
+      if (codigo.length !== 6) {
+        alert('faStep2Alert', 'danger', 'Informe os 6 dígitos do código enviado por email.');
+        document.querySelector('#faOtpBoxes input')?.focus();
+        return;
+      }
       if (!name || name.length < 3) {
         alert('faStep2Alert', 'danger', 'Informe seu nome completo (mínimo 3 caracteres).');
         return;
@@ -1553,12 +1650,12 @@
         return;
       }
       if (!/^[a-z0-9._-]{3,50}$/.test(username)) {
-        alert('faStep2Alert', 'danger', 'Username inválido. Use 3-50 caracteres: letras minúsculas, números, ponto, sublinhado ou hífen.');
+        alert('faStep2Alert', 'danger', 'Username inválido. Use 3-50 caracteres.');
         document.getElementById('faUsername').focus();
         return;
       }
       if (usernameDisponivel === false) {
-        alert('faStep2Alert', 'danger', 'Username já está em uso. Escolha outro.');
+        alert('faStep2Alert', 'danger', 'Nome de usuário já está em uso.');
         document.getElementById('faUsername').focus();
         return;
       }
@@ -1584,39 +1681,50 @@
 
       const btn = document.getElementById('faSolicitar');
       btn.disabled = true;
-      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando...';
+      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Concluindo...';
 
       try {
-        const r = await fetch(`${PRECAD}/solicitar`, {
+        const r = await fetch(`${PRECAD}/confirmar-cadastro`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             email: emailValido,
-            name: name,
-            cpf: cpf,
-            username: username,
+            codigo,
+            name,
+            cpf,
+            username,
             password: pwd,
             group_id: parseInt(grupoId),
             unit_id: unitId,
           }),
         });
-        const data = await r.json();
+        const data = await r.json().catch(() => ({}));
 
         if (!r.ok) {
-          // Pydantic detail pode vir como array — normaliza pra string
-          let msg = data.detail || 'Erro ao enviar solicitação.';
+          let msg = data.detail || 'Erro ao concluir cadastro.';
           if (Array.isArray(msg)) msg = msg.map(e => e.msg || JSON.stringify(e)).join(' / ');
           alert('faStep2Alert', 'danger', msg);
+          document.getElementById('faOtpBoxes').classList.add('error');
           return;
         }
 
-        document.getElementById('faUsernameFinal').textContent = data.username || '—';
-        showStep(3);
+        // Sucesso — salva token + user no storage e vai pro dashboard
+        // (mesmo padrao usado pelo login normal em web/login.html).
+        try {
+          const persist = { id: data.id, name: data.name, email: data.email,
+                            username: data.username, role: data.role,
+                            group_id: data.group_id, groups: data.groups };
+          localStorage.setItem('cpe_user', JSON.stringify(persist));
+        } catch {}
+
+        alert('faStep2Alert', 'success', 'Cadastro concluído! Redirecionando...');
+        setTimeout(() => { window.location.href = 'pages/dashboard.html'; }, 800);
       } catch (err) {
         alert('faStep2Alert', 'danger', 'Erro de conexão: ' + err.message);
       } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-send-check"></i> Solicitar Cadastro';
+        btn.innerHTML = '<i class="bi bi-check2-circle"></i> Concluir cadastro';
       }
     }
 
@@ -1638,79 +1746,80 @@
     }, 500);
     document.getElementById('faClose').addEventListener('click', fechar);
     document.getElementById('faCancel1').addEventListener('click', fechar);
-    document.getElementById('faFechar3').addEventListener('click', fechar);
     document.getElementById('faVoltar2').addEventListener('click', () => showStep(1));
-    document.getElementById('faVerificar').addEventListener('click', verificarEmail);
-    document.getElementById('faSolicitar').addEventListener('click', solicitar);
+    document.getElementById('faEnviarCodigo').addEventListener('click', enviarCodigo);
+    document.getElementById('faReenviar').addEventListener('click', reenviarCodigo);
+    document.getElementById('faSolicitar').addEventListener('click', confirmarCadastro);
     document.getElementById('faPassword').addEventListener('input', e => avaliarSenha(e.target.value));
-    document.getElementById('faEmail').addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); verificarEmail(); }
+
+    // Email: validacao em blur + em Enter tenta enviar
+    const _emailInp = document.getElementById('faEmail');
+    _emailInp.addEventListener('blur', validarEmailInline);
+    _emailInp.addEventListener('input', () => {
+      // Enquanto digita, so limpa mensagem de erro previa — sem revalidar
+      _emailInp.classList.remove('is-valid', 'is-invalid');
+      document.getElementById('faEmailIcon').innerHTML = '';
+      document.getElementById('faEmailMsg').style.display = 'none';
+      document.getElementById('faEnviarCodigo').disabled = true;
     });
+    _emailInp.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        validarEmailInline();
+        if (!document.getElementById('faEnviarCodigo').disabled) enviarCodigo();
+      }
+    });
+
     document.getElementById('faPwdToggle').addEventListener('click', () => {
       const inp = document.getElementById('faPassword');
       inp.type = inp.type === 'password' ? 'text' : 'password';
     });
 
-    // CPF: máscara automática em tempo real
+    // CPF: mascara em tempo real
     document.getElementById('faCpf').addEventListener('input', (e) => {
       e.target.value = aplicarMascaraCPF(e.target.value);
     });
 
-    // Username: força lowercase + checagem assíncrona de disponibilidade
+    // Username: lowercase + checagem async
     document.getElementById('faUsername').addEventListener('input', (e) => {
       e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '');
       verificarUsernameDebounced();
     });
 
-    overlay.addEventListener('click', e => { if (e.target === overlay) fechar(); });
-
-    // ============================================================
-    // v086 (2026-08-06) — solicitar liberação de pré-cadastro
-    // ============================================================
-    document.getElementById('faIrParaLiberacao').addEventListener('click', () => {
-      const email = document.getElementById('faEmail').value.trim().toLowerCase();
-      if (!email) return;
-      document.getElementById('faLibEmail').value = email;
-      document.getElementById('faLibNome').value = '';
-      document.getElementById('faLibMotivo').value = '';
-      clearAlert('faStep4Alert');
-      showStep(4);
-    });
-
-    document.getElementById('faLibVoltar').addEventListener('click', () => showStep(1));
-    document.getElementById('faLibFechar').addEventListener('click', fechar);
-
-    document.getElementById('faLibEnviar').addEventListener('click', async () => {
-      const btn = document.getElementById('faLibEnviar');
-      clearAlert('faStep4Alert');
-      const email  = document.getElementById('faLibEmail').value.trim().toLowerCase();
-      const nome   = document.getElementById('faLibNome').value.trim();
-      const motivo = document.getElementById('faLibMotivo').value.trim();
-      if (!nome) {
-        alert('faStep4Alert', 'danger', 'Informe seu nome.');
-        return;
-      }
-      btn.disabled = true;
-      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando...';
-      try {
-        const r = await fetch(`${PRECAD}/solicitar-liberacao`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, nome, motivo: motivo || null }),
-        });
-        const data = await r.json().catch(() => ({}));
-        if (!r.ok) {
-          alert('faStep4Alert', 'danger', data.detail || 'Erro ao enviar solicitação.');
-          return;
+    // OTP boxes: 1 digito por caixa, auto-avanca, backspace volta, paste espalha
+    const otpBoxes = document.querySelectorAll('#faOtpBoxes input');
+    otpBoxes.forEach((box, idx) => {
+      box.addEventListener('input', (e) => {
+        e.target.value = (e.target.value || '').replace(/\D/g, '').slice(0, 1);
+        document.getElementById('faOtpBoxes').classList.remove('error');
+        if (e.target.value && idx < otpBoxes.length - 1) otpBoxes[idx + 1].focus();
+        // marca visualmente quando esta cheio
+        const cheio = coletarCodigoOtp().length === 6;
+        document.getElementById('faOtpBoxes').classList.toggle('filled', cheio);
+      });
+      box.addEventListener('keydown', (e) => {
+        if (e.key === 'Backspace' && !e.target.value && idx > 0) {
+          otpBoxes[idx - 1].focus();
+          otpBoxes[idx - 1].value = '';
+        } else if (e.key === 'ArrowLeft' && idx > 0) {
+          otpBoxes[idx - 1].focus();
+        } else if (e.key === 'ArrowRight' && idx < otpBoxes.length - 1) {
+          otpBoxes[idx + 1].focus();
         }
-        showStep(5);
-      } catch (err) {
-        alert('faStep4Alert', 'danger', 'Erro de conexão: ' + err.message);
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-send"></i> Enviar solicitação';
-      }
+      });
+      box.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const digits = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+        for (let i = 0; i < digits.length && i < otpBoxes.length; i++) {
+          otpBoxes[i].value = digits[i];
+        }
+        const proximo = Math.min(digits.length, otpBoxes.length - 1);
+        otpBoxes[proximo].focus();
+        if (digits.length === 6) document.getElementById('faOtpBoxes').classList.add('filled');
+      });
     });
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) fechar(); });
   })();
   </script>
 

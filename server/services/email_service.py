@@ -1343,6 +1343,52 @@ def email_precadastro_liberado(
     return subject, html
 
 
+def email_otp_primeiro_acesso(
+    codigo: str,
+    expira_min: int = 15,
+) -> tuple[str, str]:
+    """Codigo OTP de 6 digitos pro primeiro acesso (auto-cadastro).
+
+    Enviado pro email corporativo do colaborador quando ele inicia o cadastro
+    na tela de login. Prova que ele tem posse do email antes de criar a conta.
+    """
+    subject = f"Seu codigo de verificacao: {codigo} - CPE Control"
+    codigo_html = _escape(codigo)
+    body = f"""
+        <p>Olá,</p>
+        <p>Você iniciou o cadastro no <strong>CPE Control</strong>. Use o
+        código abaixo para confirmar seu e-mail e concluir o cadastro:</p>
+
+        <div style="margin:24px auto;padding:20px 24px;background:#111827;
+                    border-radius:10px;text-align:center;max-width:280px;">
+          <div style="font-size:11px;letter-spacing:2px;color:#9CA3AF;
+                      text-transform:uppercase;margin-bottom:8px;">
+            Código de verificação
+          </div>
+          <div style="font-family:'Courier New',monospace;font-size:38px;
+                      font-weight:700;color:#FFC107;letter-spacing:12px;
+                      padding-left:12px;">
+            {codigo_html}
+          </div>
+        </div>
+
+        <p style="text-align:center;font-size:13px;color:#6B7280;margin:0 0 20px;">
+          Este código expira em <strong>{expira_min} minutos</strong>.
+        </p>
+
+        <div style="margin:18px 0;padding:12px 14px;background:#FEF3C7;
+                    border-left:4px solid #F59E0B;border-radius:6px;font-size:12.5px;
+                    color:#78350F;">
+          <strong>🔒 Não compartilhe este código.</strong>
+          Ninguém da CPE vai te pedir esse número por telefone, WhatsApp ou e-mail.
+          Se você não solicitou este cadastro, apenas ignore esta mensagem —
+          nenhuma conta foi criada.
+        </div>
+    """
+    html = _BASE_TEMPLATE.format(title="Código de verificação", tag="Primeiro acesso", body=body)
+    return subject, html
+
+
 def email_reset_senha(
     nome: str,
     link_reset: str,
