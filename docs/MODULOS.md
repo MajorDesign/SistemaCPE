@@ -356,15 +356,33 @@ Ordem alfabética.
 
 ---
 
-## 📧 Pré-cadastro pendente
+## 📧 Primeiro Acesso (auto-cadastro OTP)
 
-**Propósito:** admin autoriza um email pra ele conseguir criar conta (1º acesso).
+**Propósito:** funcionário CPE cria conta sozinho na tela de login usando OTP por email.
+
+**Fluxo atual (desde 2026-09-24):**
+1. Usuário informa email `@cpetecnologia.com.br` no modal "Primeiro Acesso".
+2. `POST /api/pre-cadastro/checar-email` valida o domínio, gera código 6 dígitos, envia por email.
+3. Usuário digita código + nome + CPF + username + senha + grupo + unidade.
+4. `POST /api/pre-cadastro/confirmar-cadastro` valida OTP, cria `users(role='USER', is_active=1)` e retorna cookie de sessão — usuário já entra logado, sem aprovação manual.
 
 **Arquivo:** `server/routes/pre_cadastro.py`
 
-**Tabelas:** `pre_cadastro_pendentes` (com `status='pendente|aprovado|recusado'` + `user_id` após criar)
+**Tabelas:**
+- `pre_cadastro_otp` (migration 103) — email + code_hash sha256 + expires_at + attempts + used_at
+- `pre_cadastro_pendentes`, `pre_cadastro_emails`, `pre_cadastro_solicitacoes` — legado, usado só se admin precisa cadastrar terceirizado externo
 
-**Frontend:** aba dentro de `users.html` ("E-mails Autorizados aguardando 1º Acesso")
+**Frontend:** `web/login.html` (modal `#faOverlay`, 2 passos)
+
+**Segurança OTP:**
+- 6 dígitos aleatórios (`secrets.randbelow`), armazenado como sha256
+- TTL 15 min, 5 tentativas erradas invalidam
+- Cooldown 60s entre emissões pro mesmo email
+- Rate-limit: 3 emissões/email/hora, 10/IP/hora
+- Domínio `@cpetecnologia.com.br` obrigatório (constante `ALLOWED_EMAIL_DOMAIN`)
+- Env `OTP_DEBUG_LOG=1` (dev only) loga o código no stdout do backend
+
+**Admin (legado):** aba `users.html` "E-mails Autorizados aguardando 1º Acesso" continua funcionando pros casos onde alguém foi cadastrado no fluxo antigo — mas ninguém novo entra por lá.
 
 ---
 

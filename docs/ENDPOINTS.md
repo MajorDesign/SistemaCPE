@@ -561,20 +561,33 @@ Query `?scope=all` em `GET /api/groups/` ignora o filtro por role (retorna todos
 
 ## pre-cadastro
 
+Fluxo primário desde 2026-09-24: OTP por e-mail. Usuário com `@cpetecnologia.com.br`
+recebe código de 6 dígitos, confirma e vira `USER` ativo sem passar por aprovação
+manual. Endpoints legados (`/verificar-email`, `/solicitar`, `/aprovar`, `/recusar`,
+`/solicitar-liberacao`) foram mantidos vivos para casos manuais/admin, mas o
+`login.html` não os consome mais.
+
 | Método | Path | Descrição |
 |---|---|---|
-| `GET` | `/api/pre-cadastro/emails` | Listar Emails |
-| `POST` | `/api/pre-cadastro/emails` | Adicionar Email Manual |
-| `DELETE` | `/api/pre-cadastro/emails/{email_id}` | Remover Email |
-| `GET` | `/api/pre-cadastro/grupos-publicos` | Listar Grupos Publicos |
-| `GET` | `/api/pre-cadastro/pendentes` | Listar Pendentes |
-| `POST` | `/api/pre-cadastro/solicitar` | Solicitar Cadastro |
-| `GET` | `/api/pre-cadastro/unidades-publicas` | Listar Unidades Publicas |
-| `POST` | `/api/pre-cadastro/upload-csv` | Upload Csv |
-| `GET` | `/api/pre-cadastro/verificar-email` | Verificar Email |
-| `GET` | `/api/pre-cadastro/verificar-username` | Verificar Username |
-| `POST` | `/api/pre-cadastro/{pendente_id}/aprovar` | Aprovar |
-| `POST` | `/api/pre-cadastro/{pendente_id}/recusar` | Recusar |
+| `POST` | `/api/pre-cadastro/checar-email` | **NOVO** — valida domínio + envia OTP por e-mail |
+| `POST` | `/api/pre-cadastro/confirmar-cadastro` | **NOVO** — valida OTP + cria user ativo + retorna sessão |
+| `GET` | `/api/pre-cadastro/grupos-publicos` | Listar Grupos Publicos (fluxo OTP + legado) |
+| `GET` | `/api/pre-cadastro/unidades-publicas` | Listar Unidades Publicas (fluxo OTP + legado) |
+| `GET` | `/api/pre-cadastro/verificar-username` | Verificar disponibilidade de username em tempo real |
+| `GET` | `/api/pre-cadastro/verificar-email` | *(legado)* Fluxo antigo por whitelist — não usado no login novo |
+| `POST` | `/api/pre-cadastro/solicitar` | *(legado)* Cria pendente aguardando aprovação admin |
+| `POST` | `/api/pre-cadastro/solicitar-liberacao` | *(legado)* Solicita adição de email externo à whitelist |
+| `GET` | `/api/pre-cadastro/pendentes` | Admin — lista pendentes (fluxo legado) |
+| `POST` | `/api/pre-cadastro/{pendente_id}/aprovar` | Admin — aprova pendente legado |
+| `POST` | `/api/pre-cadastro/{pendente_id}/recusar` | Admin — recusa pendente legado |
+| `GET` | `/api/pre-cadastro/emails` | Admin — whitelist emails autorizados (legado) |
+| `POST` | `/api/pre-cadastro/emails` | Admin — adiciona email à whitelist (legado) |
+| `DELETE` | `/api/pre-cadastro/emails/{email_id}` | Admin — remove email da whitelist (legado) |
+| `POST` | `/api/pre-cadastro/upload-csv` | Admin — importa whitelist via CSV (legado) |
+
+**Regras do OTP:** TTL 15 min; 5 tentativas erradas invalidam o código; cooldown
+60s entre emissões pro mesmo email; máx 3 emissões/email/hora e 10/IP/hora.
+Env `OTP_DEBUG_LOG=1` loga o código no stdout do backend (dev only).
 
 ## recepcao
 
