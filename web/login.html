@@ -1054,7 +1054,7 @@
         <div class="fa-step active" id="faStep1">
           <div class="fa-alert info">
             <i class="bi bi-info-circle"></i>
-            <span>Cadastro aberto pra colaboradores CPE com e-mail <strong>@cpetecnologia.com.br</strong>. Vamos te enviar um código de verificação.</span>
+            <span>Cadastro aberto pra e-mail <strong>@cpetecnologia.com.br</strong> ou <strong>@apatsolucoes.com.br</strong>. Vamos te enviar um código de verificação.</span>
           </div>
 
           <div id="faStep1Alert"></div>
@@ -1256,7 +1256,14 @@
     'use strict';
     const API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
     const PRECAD = `${API}/api/pre-cadastro`;
-    const ALLOWED_DOMAIN = '@cpetecnologia.com.br';
+    // 2026-09-25: aceita CPE + APAT (parceira que usa o CPE Control tambem)
+    const ALLOWED_DOMAINS = ['@cpetecnologia.com.br', '@apatsolucoes.com.br'];
+    function isAllowedDomain(email) {
+      return ALLOWED_DOMAINS.some((d) => email.endsWith(d));
+    }
+    function allowedDomainsLabel() {
+      return ALLOWED_DOMAINS.map((d) => `<strong>${d}</strong>`).join(' ou ');
+    }
 
     const overlay   = document.getElementById('faOverlay');
     const subtitle  = document.getElementById('faSubtitle');
@@ -1356,12 +1363,12 @@
       }
 
       // Dominio corporativo
-      if (!raw.endsWith(ALLOWED_DOMAIN)) {
+      if (!isAllowedDomain(raw)) {
         inp.classList.add('is-invalid');
         icon.classList.add('err');
         icon.innerHTML = '<i class="bi bi-x-circle-fill"></i>';
         msg.className = 'fa-inline-msg err';
-        msg.innerHTML = `<i class="bi bi-shield-x"></i> <span>Cadastro restrito a colaboradores CPE (<strong>${ALLOWED_DOMAIN}</strong>). Fale com a T.I. se precisa de acesso externo.</span>`;
+        msg.innerHTML = `<i class="bi bi-shield-x"></i> <span>Cadastro restrito a e-mail ${allowedDomainsLabel()}. Fale com a T.I. se precisa de acesso externo.</span>`;
         msg.style.display = 'flex';
         return;
       }
@@ -1379,7 +1386,7 @@
     async function enviarCodigo() {
       const email = document.getElementById('faEmail').value.trim().toLowerCase();
       clearAlert('faStep1Alert');
-      if (!email.endsWith(ALLOWED_DOMAIN)) return;
+      if (!isAllowedDomain(email)) return;
 
       const btn = document.getElementById('faEnviarCodigo');
       btn.disabled = true;
