@@ -4106,6 +4106,20 @@ async def chat_ws(websocket: WebSocket):
                     user_name=user.get("name"), content=content,
                     reply_to_id=reply_id,
                 )
+                # Auto-unhide DM ocultada — mesmo bloco do POST REST
+                # (chat.py:578). Sem isso, cliente que envia via WS
+                # deixaria a DM oculta pro destinatario.
+                try:
+                    conn = get_chat_db_or_404()
+                    c2 = conn.cursor()
+                    c2.execute(
+                        "UPDATE chat_channel_members SET ocultado_em=NULL "
+                        "WHERE channel_id=%s AND ocultado_em IS NOT NULL",
+                        (channel_id,))
+                    conn.commit()
+                    c2.close(); conn.close()
+                except Exception as e:
+                    logger.warning(f"[chat/ws] falha auto-unhide DM channel={channel_id}: {e}")
             elif msg_type in ("call_invite", "call_accept", "call_reject",
                               "call_cancel", "call_ringing"):
                 target = data.get("to_user_id")
