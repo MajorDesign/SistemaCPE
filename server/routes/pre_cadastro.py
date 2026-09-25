@@ -52,10 +52,28 @@ from services.email_service import (
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/pre-cadastro", tags=["pre-cadastro"])
 
-# Dominio corporativo unico permitido pro auto-cadastro via OTP.
-# Emails fora desse dominio nao passam por esse fluxo — precisam de
-# um admin adicionar manualmente (fluxo legado /solicitar-liberacao).
-ALLOWED_EMAIL_DOMAIN = "@cpetecnologia.com.br"
+# Dominios permitidos pro auto-cadastro via OTP. Emails fora desses
+# dominios nao passam por esse fluxo — precisam de um admin adicionar
+# manualmente (fluxo legado /solicitar-liberacao).
+# 2026-09-25: adicionado apatsolucoes.com.br (parceira APAT usa o CPE
+# Control tambem). Pra adicionar novo dominio, so incluir aqui.
+ALLOWED_EMAIL_DOMAINS = (
+    "@cpetecnologia.com.br",
+    "@apatsolucoes.com.br",
+)
+
+# Mantido pra compat retro (algum codigo externo pode ler)
+ALLOWED_EMAIL_DOMAIN = ALLOWED_EMAIL_DOMAINS[0]
+
+
+def _is_allowed_email_domain(email: str) -> bool:
+    """True se email pertence a algum dominio na whitelist."""
+    return any(email.endswith(d) for d in ALLOWED_EMAIL_DOMAINS)
+
+
+def _dominios_permitidos_str() -> str:
+    """Formata a lista pra mensagem de erro/UX."""
+    return " ou ".join(ALLOWED_EMAIL_DOMAINS)
 
 # Config do OTP de primeiro acesso.
 OTP_TTL_MIN         = 15   # tempo de vida do codigo
@@ -618,11 +636,11 @@ def checar_email(payload: ChecarEmailPayload, request: Request):
     """
     email_norm = payload.email.strip().lower()
 
-    # 1) Dominio corporativo
-    if not email_norm.endswith(ALLOWED_EMAIL_DOMAIN):
+    # 1) Dominio corporativo (whitelist)
+    if not _is_allowed_email_domain(email_norm):
         raise HTTPException(
             status_code=400,
-            detail=f"Cadastro restrito a colaboradores CPE ({ALLOWED_EMAIL_DOMAIN}). Fale com a T.I. se precisa de acesso externo.",
+            detail=f"Cadastro restrito a e-mail {_dominios_permitidos_str()}. Fale com a T.I. se precisa de acesso externo.",
         )
 
     ip = _client_ip(request)
@@ -714,7 +732,7 @@ def confirmar_cadastro(payload: ConfirmarCadastroPayload, request: Request):
     email_norm = payload.email.strip().lower()
 
     # Dominio (defense in depth — o front ja filtra)
-    if not email_norm.endswith(ALLOWED_EMAIL_DOMAIN):
+    if not _is_allowed_email_domain(email_norm):
         raise HTTPException(
             status_code=400,
             detail="E-mail nao permitido pra auto-cadastro.",
