@@ -686,7 +686,16 @@
     animation: slideInDown 0.3s ease;
     display: flex;
     align-items: flex-start;
+    /* 2026-09-25: min-width:0 impede que text-node com strong/link
+       vire coluna estreita quando envolvido junto com <i> no flex.
+       Bug reportado no #membrosGrupoModal — texto virava 3 colunas. */
+    flex-wrap: wrap;
     gap: var(--spacing-md);
+  }
+  /* Text-node solto ao lado do icone: forca a ocupar espaco restante */
+  .alert > *:not(i):not(.alert-close) {
+    flex: 1 1 0;
+    min-width: 0;
   }
   
   @keyframes slideInDown {
