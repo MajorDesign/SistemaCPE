@@ -445,6 +445,40 @@ def _count_participantes_dentro(cursor, meeting_id: int) -> int:
     return int(row[0]) if row else 0
 
 
+def _encerrar_se_ad_hoc_e_vazio(cursor, meeting_id: int) -> bool:
+    """Encerra a sala automaticamente quando ha < 2 participantes 'dentro'
+    E a sala NAO tem `chat_meeting_schedules` associado (i.e. e chamada
+    ad-hoc / DM 1-a-1 — nao reuniao agendada).
+
+    Resolve o bug de "sala orfa": em DM 1-a-1, quando A sai, B ficava
+    sozinho num call morto. Agora o backend detecta e emite `meeting_ended`
+    (via broadcast externo — chamador deve fazer isso apos essa fn devolver
+    True). Reunioes agendadas seguem intactas (podem ficar com 1 pessoa
+    esperando o resto).
+
+    Idempotente: o UPDATE tem `WHERE encerrada_em IS NULL`, entao chamadas
+    concorrentes (2 peers saindo ao mesmo tempo) so uma efetiva.
+
+    Retorna True se marcou encerrada agora, False caso contrario.
+    """
+    n = _count_participantes_dentro(cursor, meeting_id)
+    if n >= 2:
+        return False
+    # Sala tem schedule? Entao e reuniao agendada — deixa aberta.
+    cursor.execute(
+        "SELECT 1 FROM chat_meeting_schedules WHERE meeting_id=%s LIMIT 1",
+        (meeting_id,),
+    )
+    if cursor.fetchone():
+        return False
+    cursor.execute(
+        "UPDATE chat_meeting_rooms SET encerrada_em=NOW() "
+        "WHERE id=%s AND encerrada_em IS NULL",
+        (meeting_id,),
+    )
+    return cursor.rowcount > 0
+
+
 # ---------------------------------------------------------------------
 # Cloudflare Analytics — consumo TURN do mes corrente
 # Usa GraphQL callsTurnUsageAdaptiveGroups (dimensao date, sum egress+ingress).
@@ -1530,10 +1564,15 @@ async def leave_meeting(code: str, peer_id: str, request: Request):
         return {"success": True, "noop": True}
     conn = get_chat_db_or_404()
     cur = conn.cursor()
+    encerrou = False
     try:
         cur.execute(
             "DELETE FROM chat_meeting_participants WHERE meeting_id=%s AND peer_id=%s",
             (m["id"], peer_id))
+        # Se e chamada ad-hoc (DM 1-a-1) e o outro peer ja tinha saido,
+        # marca a sala encerrada — evita que o peer restante fique orfao
+        # numa "sala morta".
+        encerrou = _encerrar_se_ad_hoc_e_vazio(cur, m["id"])
         conn.commit()
     finally:
         cur.close(); conn.close()
@@ -1541,6 +1580,8 @@ async def leave_meeting(code: str, peer_id: str, request: Request):
         "type": "meeting_participant_left",
         "peer_id": peer_id,
     })
+    if encerrou:
+        await manager.broadcast(m["id"], {"type": "meeting_ended"})
     manager.disconnect(m["id"], peer_id)
     return {"success": True}
 
@@ -1790,6 +1831,7 @@ async def meeting_ws(websocket: WebSocket):
         # nao deleta — permite ao guest reabrir aba sem perder o pedido + nao
         # remove do "pending" do host. Pra abandonar de fato, frontend chama
         # POST /leave/{peer_id} explicito.
+        encerrou_ws = False
         try:
             conn = get_chat_db_or_404()
             cur = conn.cursor()
@@ -1797,6 +1839,10 @@ async def meeting_ws(websocket: WebSocket):
                 "DELETE FROM chat_meeting_participants "
                 "WHERE meeting_id=%s AND peer_id=%s AND status='dentro'",
                 (m["id"], peer_id))
+            # Se ficou <2 dentro e a sala e ad-hoc, encerra pra evitar
+            # peer orfao apos o outro fechar app/navegador ou perder rede.
+            if part["status"] == "dentro":
+                encerrou_ws = _encerrar_se_ad_hoc_e_vazio(cur, m["id"])
             conn.commit()
             cur.close(); conn.close()
         except Exception:
@@ -1810,3 +1856,8 @@ async def meeting_ws(websocket: WebSocket):
                 })
             except Exception:
                 pass
+            if encerrou_ws:
+                try:
+                    await manager.broadcast(m["id"], {"type": "meeting_ended"})
+                except Exception:
+                    pass
