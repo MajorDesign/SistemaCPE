@@ -3419,6 +3419,21 @@ def get_all_presence(request: Request):
         cur.close(); conn.close()
 
 
+@router.get("/presence/live")
+def get_live_presence(request: Request):
+    """Presenca REAL agora — lista de user_ids com WS conectado neste
+    momento (autoritativa: manager.online_users()). Diferente de
+    /presence que le do DB (pode ter stale se app crashou sem enviar
+    disconnect). Cliente usa isso no bootstrap pra hidratar presence
+    sem depender do 'hello' inicial do WS ter chegado limpo.
+    """
+    _user_from_request(request)
+    return {
+        "success": True,
+        "online_user_ids": manager.online_users(),
+    }
+
+
 # =====================================================================
 # DEBUG: quem esta conectado no WS agora (uso temporario pra diagnose)
 # =====================================================================
