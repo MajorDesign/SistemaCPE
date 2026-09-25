@@ -2426,9 +2426,10 @@ def ocultar_dm(channel_id: int, request: Request):
             raise HTTPException(status_code=404, detail="Canal nao encontrado")
         if r["tipo"] != "dm":
             raise HTTPException(status_code=400, detail="Apenas DMs podem ser arquivadas por usuario")
-        # user precisa ser membro
+        # user precisa ser membro. chat_channel_members tem PK composta
+        # (channel_id, user_id) — sem coluna `id`. Usa SELECT 1.
         cur.execute(
-            "SELECT id FROM chat_channel_members WHERE channel_id=%s AND user_id=%s",
+            "SELECT 1 FROM chat_channel_members WHERE channel_id=%s AND user_id=%s",
             (channel_id, uid))
         if not cur.fetchone():
             raise HTTPException(status_code=403, detail="Voce nao participa dessa conversa")
