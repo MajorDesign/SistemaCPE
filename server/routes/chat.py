@@ -58,19 +58,47 @@ class ChatConnectionManager:
 
     async def connect(self, user_id: int, ws: WebSocket):
         await ws.accept()
+        first_conn = user_id not in self._conns
         self._conns.setdefault(user_id, set()).add(ws)
         logger.warning(f"[CHAT-WS] +user {user_id} (conexoes_do_user={len(self._conns[user_id])} "
                        f"total_users_online={len(self._conns)})")
         self._set_presence(user_id, "online")
+        # 2026-09-25: broadcast presence_update pros outros users online.
+        # So dispara na PRIMEIRA conexao (abas adicionais nao geram evento
+        # — o user ja estava online). Sem isso, quem abriu o app depois
+        # dele ficava vendo o dot cinza pra sempre (bug reportado da Ana).
+        if first_conn:
+            other_users = [uid for uid in self._conns.keys() if uid != user_id]
+            if other_users:
+                try:
+                    await self.send_to_users(other_users, {
+                        "type": "presence_update",
+                        "user_id": user_id,
+                        "presence": "online",
+                    })
+                except Exception as e:
+                    logger.warning(f"[CHAT-WS] presence broadcast connect falhou: {e}")
 
     def disconnect(self, user_id: int, ws: WebSocket):
+        went_offline = False
         if user_id in self._conns:
             self._conns[user_id].discard(ws)
             if not self._conns[user_id]:
                 del self._conns[user_id]
                 self._set_presence(user_id, "offline")
                 self._cleanup_voice_sessions(user_id)
+                went_offline = True
         logger.warning(f"[CHAT-WS] -user {user_id} total_online={len(self._conns)}")
+        # 2026-09-25: broadcast presence_update pros outros online quando
+        # o user perde a ULTIMA conexao. disconnect e' sincrono, mas o
+        # send_to_users e' async — agenda como task pra nao bloquear.
+        if went_offline and self._conns:
+            other_users = list(self._conns.keys())
+            asyncio.create_task(self.send_to_users(other_users, {
+                "type": "presence_update",
+                "user_id": user_id,
+                "presence": "offline",
+            }))
 
     async def send_to_users(self, user_ids: List[int], payload: dict):
         """Broadcast pra todos os WSs de uma lista de users."""
@@ -3363,9 +3391,13 @@ async def set_status_manual(body: StatusBody, request: Request):
         conn.commit()
     finally:
         cur.close(); conn.close()
+    # Frontend (wsClient.ts) le evt.presence — a chave "status" antiga era
+    # ignorada silenciosamente. Manter "status" tambem por compat com
+    # qualquer cliente antigo que porventura ainda leia (nao ha custo).
     await manager.send_to_users(manager.online_users(), {
         "type": "presence_update",
         "user_id": user["id"],
+        "presence": body.status,
         "status": body.status,
     })
     return {"success": True, "status": body.status}
