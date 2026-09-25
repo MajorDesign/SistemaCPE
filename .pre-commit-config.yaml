@@ -23,3 +23,20 @@ repos:
       - id: ruff-check
         name: ruff (bugs reais — F821/F401/sintaxe)
         args: [--no-cache]
+
+  # 2026-09-25: hook local. Quando alterar server/routes/chat.py ou
+  # server/routes/meetings.py, roda o e2e agente (2 clientes reais
+  # via Playwright em ../cpecontrol-desktop/scripts/e2e-chat-presence.mjs).
+  # Bug do "SELECT id" no /channels/{id}/hide passou 6 releases sem ninguem
+  # notar — teria sido pego imediatamente por esse hook.
+  # Comportamento SOFT: se API dev off ou node ausente, so warna, nao bloqueia
+  # (dev ainda commita, so avisa que teste nao rodou).
+  - repo: local
+    hooks:
+      - id: chat-e2e-agente
+        name: e2e agente chat (2 clientes reais)
+        entry: python server/scripts/hook_chat_e2e.py
+        language: system
+        files: '^server/routes/(chat|meetings)\.py$'
+        pass_filenames: false
+        stages: [pre-commit]
