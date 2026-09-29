@@ -426,6 +426,62 @@ async def get_session_token(
         if conn:   conn.close()
 
 
+@router.delete("/link/{discord_id}")
+async def delete_link(
+    discord_id: str = Path(..., pattern=r"^\d{17,20}$"),
+    x_discord_bot_key: Optional[str] = Header(None),
+):
+    """Remove o vinculo Discord<->CPE.
+
+    Idempotente: retorna 200 mesmo se o discord_id nao estava vinculado
+    (evita enumeration). Tambem limpa qualquer challenge pendente pra
+    esse discord_id (senao ficaria orfao ate expirar).
+
+    Chamado por /desvincular no bot. A autenticacao real vem do proprio
+    Discord — o bot passa o inter.user.id na Path, o que garante que
+    so o dono da conta Discord pode desvincular a si mesmo.
+    """
+    _require_bot_key(x_discord_bot_key)
+
+    conn = get_db_or_404()
+    cursor = None
+    try:
+        cursor = conn.cursor(dictionary=True)
+        # Busca antes pra logar quem foi
+        cursor.execute(
+            "SELECT l.user_id, u.name, u.email FROM discord_links l "
+            "LEFT JOIN users u ON u.id = l.user_id WHERE l.discord_id = %s LIMIT 1",
+            (discord_id,),
+        )
+        row = cursor.fetchone()
+
+        cursor.execute("DELETE FROM discord_links WHERE discord_id = %s", (discord_id,))
+        removed = cursor.rowcount
+        cursor.execute("DELETE FROM discord_link_challenges WHERE discord_id = %s", (discord_id,))
+        conn.commit()
+
+        if row:
+            logger.warning(
+                f"[DISCORD-AUDIT] link_removed user_id={row['user_id']} "
+                f"user_email={row.get('email')} discord_id={discord_id}"
+            )
+        else:
+            logger.info(f"[DISCORD] desvincular chamado pra discord_id={discord_id} sem vinculo")
+
+        return {
+            "unlinked": removed > 0,
+            "was_linked_to": (row.get("email") if row else None),
+        }
+    except HTTPException:
+        raise
+    except Exception as err:
+        logger.error(f"[DISCORD] erro em delete_link: {err}")
+        raise HTTPException(status_code=500, detail="Erro interno ao desvincular")
+    finally:
+        if cursor: cursor.close()
+        if conn:   conn.close()
+
+
 # =========================================
 # NOTIFICACOES PUSH (Fase 4 do bot Discord)
 # =========================================

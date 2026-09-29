@@ -75,6 +75,11 @@ async def get_session(discord_id: str) -> dict:
     return await _request("POST", f"/api/discord/link/{discord_id}/session")
 
 
+async def unlink(discord_id: str) -> dict:
+    """Remove o vinculo Discord<->CPE. Idempotente."""
+    return await _request("DELETE", f"/api/discord/link/{discord_id}")
+
+
 # ---------- CPE Control API (em nome do user vinculado) ------------
 
 async def get_ticket_by_numero(numero: str, token: str, usuario_id: int) -> dict:
