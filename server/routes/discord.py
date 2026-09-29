@@ -188,7 +188,11 @@ async def link_challenge(
         # ramos entao o timing e igual; o email async em background nao afeta
         # a latencia da response.
         if user and user.get("is_active"):
-            assunto = "CPE Control · Código de vinculação Discord"
+            # 2026-09-29: codigo no assunto pra evitar filtro anti-duplicate do
+            # Carbonio quando o mesmo user pede /vincular 2x em intervalo curto
+            # (assunto identico era descartado silenciosamente). Bonus: user ve
+            # o codigo no preview do inbox sem precisar abrir.
+            assunto = f"CPE Control · Código {code} · vinculação Discord"
             html = f"""
               <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
                 <h2 style="color: #f5b342;">Vincular sua conta ao Discord</h2>
