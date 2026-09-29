@@ -1,15 +1,16 @@
 """
 /vincular email:...        -> pede codigo pra CPEControlAPI, backend envia email
 /vincular-confirmar 123456 -> confirma o codigo e cria o vinculo Discord<->CPE
+/desvincular               -> remove o vinculo do proprio Discord id
 
-Ambas respostas sao ephemeral (so o user ve).
+Respostas sao ephemeral (so o user ve).
 """
 
 import logging
 import discord
 from discord import app_commands
 
-from api_client import link_challenge, link_verify, ApiError
+from api_client import link_challenge, link_verify, unlink, ApiError
 
 logger = logging.getLogger("cpe-bot.vincular")
 
@@ -100,3 +101,47 @@ def register(tree: app_commands.CommandTree, guild: discord.Object) -> None:
             f"Já pode usar **`/consultachamado numero:SUP-2026-00178`**.",
             ephemeral=True,
         )
+
+    @tree.command(
+        name="desvincular",
+        description="Remove o vínculo da sua conta Discord com o CPE Control",
+        guild=guild,
+    )
+    async def desvincular(inter: discord.Interaction) -> None:
+        # Segurança: discord_id vem SEMPRE do proprio inter.user, jamais
+        # de input do usuario. Discord ja autentica quem esta chamando.
+        await inter.response.defer(ephemeral=True, thinking=True)
+        discord_id = str(inter.user.id)
+
+        try:
+            r = await unlink(discord_id)
+        except ApiError as e:
+            logger.warning(f"[desvincular] falha did={discord_id}: {e}")
+            await inter.followup.send(
+                f"❌ Não consegui desvincular. Detalhe: {e.detail}",
+                ephemeral=True,
+            )
+            return
+        except Exception as e:
+            logger.error(f"[desvincular] erro inesperado: {e}")
+            await inter.followup.send(
+                "❌ Erro ao contactar o CPE Control. Tente novamente em instantes.",
+                ephemeral=True,
+            )
+            return
+
+        if r.get("unlinked"):
+            email = r.get("was_linked_to") or "?"
+            logger.info(f"[desvincular] OK did={discord_id} era_vinculado_a={email}")
+            await inter.followup.send(
+                f"✅ Vínculo removido. Sua conta Discord não está mais ligada a "
+                f"**{email}** no CPE Control.\n\n"
+                f"Para vincular novamente, use **`/vincular email:seu.email@cpetecnologia.com.br`**.",
+                ephemeral=True,
+            )
+        else:
+            await inter.followup.send(
+                "ℹ️ Sua conta Discord não estava vinculada a nenhum usuário CPE. "
+                "Nada foi alterado.",
+                ephemeral=True,
+            )
