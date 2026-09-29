@@ -17,10 +17,11 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 
 from database import get_db_or_404, convert_datetime_to_string
+from security import get_current_user
 from services.carbonio_service import (
     autenticar,
     listar_eventos,
@@ -173,8 +174,15 @@ async def logout_carbonio(payload: LogoutPayload):
 
 
 @router.get("/status")
-async def status_agenda(usuario_id: int = Query(..., gt=0)):
+async def status_agenda(
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Diz se o usuário está conectado ao Carbonio e até quando."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -208,11 +216,16 @@ async def status_agenda(usuario_id: int = Query(..., gt=0)):
 
 @router.get("/eventos")
 async def eventos_agenda(
-    usuario_id: int = Query(..., gt=0),
+    current_user: dict = Depends(get_current_user),
     inicio:     str = Query(..., description="ISO 8601 — ex: 2026-05-01T00:00:00"),
     fim:        str = Query(..., description="ISO 8601 — ex: 2026-05-31T23:59:59"),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
     """Lista eventos do Carbonio no intervalo dado."""
+    usuario_id = int(current_user["id"])
     # Converte ISO para epoch ms (formato esperado pelo Carbonio)
     try:
         # FullCalendar manda no formato "2026-05-01T00:00:00-03:00" (com TZ)
@@ -312,8 +325,16 @@ async def criar_evento_endpoint(payload: EventoCreate):
 
 
 @router.get("/eventos/{evento_id}/detalhes")
-async def detalhes_evento(evento_id: str, usuario_id: int = Query(..., gt=0)):
+async def detalhes_evento(
+    evento_id: str,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Retorna detalhes completos de um evento (incluindo convidados e RSVP)."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -350,8 +371,16 @@ class ResponderCompartPayload(BaseModel):
 
 
 @router.get("/usuarios/buscar")
-async def buscar_usuarios(q: str = Query(..., min_length=2), usuario_id: int = Query(..., gt=0)):
+async def buscar_usuarios(
+    current_user: dict = Depends(get_current_user),
+    q: str = Query(..., min_length=2),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Busca usuários por nome, email ou email Carbonio (para solicitar compartilhamento)."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -427,8 +456,15 @@ async def solicitar_compartilhamento(payload: SolicitarCompartPayload):
 
 
 @router.get("/compartilhar/pendentes")
-async def compartilhamentos_pendentes(usuario_id: int = Query(..., gt=0)):
+async def compartilhamentos_pendentes(
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Solicitações que EU (como dono) preciso responder."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -495,8 +531,15 @@ async def responder_compartilhamento(comp_id: int, payload: ResponderCompartPayl
 
 
 @router.get("/compartilhar/meus")
-async def meus_compartilhamentos(usuario_id: int = Query(..., gt=0)):
+async def meus_compartilhamentos(
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Agendas que eu tenho acesso (ou solicitações que enviei)."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -520,8 +563,15 @@ async def meus_compartilhamentos(usuario_id: int = Query(..., gt=0)):
 
 
 @router.get("/compartilhar/gerenciar")
-async def gerenciar_compartilhamentos(usuario_id: int = Query(..., gt=0)):
+async def gerenciar_compartilhamentos(
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Quem tem ou pediu acesso à minha agenda."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -544,8 +594,16 @@ async def gerenciar_compartilhamentos(usuario_id: int = Query(..., gt=0)):
 
 
 @router.delete("/compartilhar/{comp_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def revogar_compartilhamento(comp_id: int, usuario_id: int = Query(..., gt=0)):
+async def revogar_compartilhamento(
+    comp_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Remove acesso (dono revoga ou solicitante cancela)."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -570,11 +628,17 @@ async def revogar_compartilhamento(comp_id: int, usuario_id: int = Query(..., gt
 @router.get("/compartilhar/eventos/{dono_id}")
 async def eventos_compartilhados(
     dono_id: int,
-    usuario_id: int = Query(..., gt=0),
+    current_user: dict = Depends(get_current_user),
     inicio:    str = Query(...),
     fim:       str = Query(...),
+    # 2026-09-29 IDOR fix: identidade do solicitante vem SEMPRE do token;
+    # `dono_id` continua na Path (é OUTRO usuário — o dono da agenda). O
+    # param antigo `?usuario_id=` é aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
     """Eventos de uma agenda compartilhada — retorna APENAS título + horário + local."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:

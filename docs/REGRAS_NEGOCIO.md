@@ -553,3 +553,46 @@ Limite: 100MB por arquivo (config no endpoint). Streaming upload no material apo
 | Merge/push pra main | **NÃO** |
 | Restart de serviço em prod | **NÃO** |
 | Enviar email em prod | **NÃO** (mesmo que a lógica esteja pronta) |
+
+---
+
+## Autorização de endpoints (2026-09-29)
+
+**Regra**: nenhum endpoint pode aceitar `usuario_id` (ou similar) como fonte
+de identidade do chamador. A identidade **sempre** vem do session token via
+`Depends(get_current_user)` — cookie `cpe_session`, header `X-Auth-Token` ou
+`Authorization: Bearer`.
+
+Motivo: em 2026-09-29 auditoria confirmou (via curl real) que a API expunha
+qualquer chamado via `GET /api/tickets/by-numero/{numero}` sem autenticação —
+o handler usava `usuario_id: Optional[int] = Query(None)` e pulava a checagem
+quando o param era omitido. Bot Discord, frontend e integrações passaram a
+depender do padrão errado.
+
+**Padrão correto** (R1 — simples):
+```python
+def obter_ticket(
+    ticket_id: int,
+    current_user: dict = Depends(get_current_user),
+    # Compat: aceita o param antigo mas IGNORA. Remover depois que
+    # o frontend parar de mandar (rastreado em docs/PLANO_IDOR.md).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   include_in_schema=False),
+):
+    usuario_id = current_user["id"]
+    ...
+```
+
+**Padrão R3** (admin override legítimo, ex: dashboard SLA de outro user):
+```python
+def dashboard_sla(
+    usuario_id: Optional[int] = Query(None),
+    current_user: dict = Depends(get_current_user),
+):
+    alvo = require_admin_override(current_user, usuario_id)
+    # alvo == current_user['id'] pra USER comum
+    # alvo == usuario_id (query) só se role in ADMIN/TI/MANAGER
+    ...
+```
+
+**Auditoria**: `docs/PLANO_IDOR.md` rastreia o progresso das 5 fases.
