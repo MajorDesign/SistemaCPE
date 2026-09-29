@@ -6,7 +6,8 @@ API de Categorias e Subcategorias
 - Qualquer usuário autenticado pode listar (para uso no form de ticket)
 """
 
-from fastapi import APIRouter, HTTPException, Query, Path, status
+from fastapi import APIRouter, HTTPException, Query, Path, status, Depends
+from security import get_current_user
 from pydantic import BaseModel, Field
 from typing import Optional
 import logging
@@ -25,7 +26,12 @@ _TIPOS_CAMPO = {"texto", "numero", "data"}
 
 # Endpoint extra para verificar permissão no frontend
 @categorias_router.get("/check-permissao")
-async def check_permissao_categorias(usuario_id: int):
+async def check_permissao_categorias(
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: int | None = Query(None, alias="usuario_id",
+                                                 gt=0, include_in_schema=False),
+):
     """
     Retorna se o usuário pode gerenciar categorias e em qual escopo.
 
@@ -37,6 +43,7 @@ async def check_permissao_categorias(usuario_id: int):
     - Exceção MANAGE_CATEGORIES      → scope='all',  group_id=null  (todos os grupos)
     - Demais                         → pode=False
     """
+    usuario_id = int(current_user["id"])
     from database import get_db_or_404
     conn   = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
@@ -309,8 +316,12 @@ async def atualizar_categoria(categoria_id: int = Path(..., gt=0), payload: Cate
 @categorias_router.delete("/{categoria_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def deletar_categoria(
     categoria_id: int = Path(..., gt=0),
-    usuario_id:   int = Query(..., gt=0)
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: int | None = Query(None, alias="usuario_id",
+                                                 gt=0, include_in_schema=False),
 ):
+    usuario_id = int(current_user["id"])
     """Desativa categoria e suas subcategorias (soft-delete).
     ADMIN/TI ou Responsável do próprio grupo.
 
@@ -475,8 +486,12 @@ async def atualizar_subcategoria(subcategoria_id: int = Path(..., gt=0), payload
 @subcategorias_router.delete("/{subcategoria_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def deletar_subcategoria(
     subcategoria_id: int = Path(..., gt=0),
-    usuario_id:      int = Query(..., gt=0)
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: int | None = Query(None, alias="usuario_id",
+                                                 gt=0, include_in_schema=False),
 ):
+    usuario_id = int(current_user["id"])
     """Desativa subcategoria (soft-delete). ADMIN/TI ou Responsável do grupo da categoria pai.
 
     Regra (2026-08-14): bloqueia se algum ticket referencia esta

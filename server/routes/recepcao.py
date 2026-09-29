@@ -27,7 +27,7 @@ import re
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 
@@ -49,6 +49,7 @@ from database import (
     convert_datetime_to_string,
     convert_datetime_list,
 )
+from security import get_current_user, require_admin_override
 from services.seurastreio_service import rastrear as rastrear_seurastreio
 
 logger = logging.getLogger(__name__)
@@ -398,7 +399,15 @@ async def update_escritorio(escritorio_id: int, data: EscritorioUpdate,
 
 
 @router.delete("/escritorios/{escritorio_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_escritorio(escritorio_id: int, usuario_id: int = Query(..., gt=0)):
+async def delete_escritorio(
+    escritorio_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -587,7 +596,15 @@ async def update_sala(sala_id: int, data: SalaUpdate):
 
 
 @router.delete("/salas/{sala_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_sala(sala_id: int, usuario_id: int = Query(..., gt=0)):
+async def delete_sala(
+    sala_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -667,7 +684,12 @@ async def list_reservas(
 
 
 @router.post("/reservas", status_code=status.HTTP_201_CREATED)
-async def create_reserva(data: ReservaCreate):
+async def create_reserva(data: ReservaCreate,
+                         current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: rejeita spoof do usuario_id no body (ADMIN pode
+    # impersonate para reservar em nome de outro usuário; demais roles não).
+    data.usuario_id = require_admin_override(current_user, data.usuario_id)
+
     if data.fim <= data.inicio:
         raise HTTPException(status_code=400, detail="Fim deve ser maior que o início")
 
@@ -740,7 +762,15 @@ async def create_reserva(data: ReservaCreate):
 
 
 @router.post("/reservas/{reserva_id}/confirmar")
-async def confirmar_reserva(reserva_id: int, usuario_id: int = Query(..., gt=0)):
+async def confirmar_reserva(
+    reserva_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:

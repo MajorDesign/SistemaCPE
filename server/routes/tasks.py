@@ -6,7 +6,7 @@ API de Tarefas Diárias (Jira-style)
 - Numeração automática: TASK-0001
 """
 
-from fastapi import APIRouter, HTTPException, Query, status, File, UploadFile
+from fastapi import APIRouter, HTTPException, Query, status, File, UploadFile, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timezone
@@ -18,6 +18,7 @@ import shutil
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import get_db_or_404
+from security import get_current_user, require_admin_override
 
 logger = logging.getLogger(__name__)
 
@@ -337,7 +338,14 @@ class ComentarioCreate(BaseModel):
 # ─── STATUS ───────────────────────────────────────────────────────────────────
 
 @tasks_router.get("/status")
-def listar_status(group_id: int = Query(..., gt=0), usuario_id: int = Query(..., gt=0)):
+def listar_status(
+    group_id: int = Query(..., gt=0),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -357,7 +365,9 @@ def listar_status(group_id: int = Query(..., gt=0), usuario_id: int = Query(...,
 
 
 @tasks_router.post("/status", status_code=201)
-def criar_status(body: StatusCreate):
+def criar_status(body: StatusCreate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -389,7 +399,9 @@ def criar_status(body: StatusCreate):
 
 
 @tasks_router.put("/status/{status_id}")
-def atualizar_status(status_id: int, body: StatusUpdate):
+def atualizar_status(status_id: int, body: StatusUpdate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -432,7 +444,14 @@ def atualizar_status(status_id: int, body: StatusUpdate):
 
 
 @tasks_router.delete("/status/{status_id}", status_code=204)
-def deletar_status(status_id: int, usuario_id: int = Query(..., gt=0)):
+def deletar_status(
+    status_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -509,7 +528,13 @@ class EspacoMembrosAdd(BaseModel):
 
 
 @tasks_router.get("/espacos")
-def listar_espacos(usuario_id: int = Query(..., gt=0)):
+def listar_espacos(
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -551,7 +576,9 @@ def listar_espacos(usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.post("/espacos", status_code=201)
-def criar_espaco(body: EspacoCreate):
+def criar_espaco(body: EspacoCreate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -646,7 +673,14 @@ def criar_espaco(body: EspacoCreate):
 
 
 @tasks_router.get("/espacos/{espaco_id}/membros")
-def listar_membros_espaco(espaco_id: int, usuario_id: int = Query(..., gt=0)):
+def listar_membros_espaco(
+    espaco_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -690,7 +724,15 @@ def adicionar_membro_espaco(espaco_id: int, body: EspacoMembrosAdd):
 
 
 @tasks_router.delete("/espacos/{espaco_id}/membros/{uid}", status_code=204)
-def remover_membro_espaco(espaco_id: int, uid: int, usuario_id: int = Query(..., gt=0)):
+def remover_membro_espaco(
+    espaco_id: int,
+    uid: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -711,8 +753,15 @@ def remover_membro_espaco(espaco_id: int, uid: int, usuario_id: int = Query(...,
 # ─── ESPAÇO: GRUPOS PARTICIPANTES ────────────────────────────────────────────
 
 @tasks_router.delete("/espacos/{espaco_id}", status_code=204)
-def excluir_espaco(espaco_id: int, usuario_id: int = Query(..., gt=0)):
+def excluir_espaco(
+    espaco_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Exclui um espaço inteiro e todos os dados relacionados."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -767,7 +816,14 @@ def excluir_espaco(espaco_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.get("/espacos/{espaco_id}/grupos")
-def listar_grupos_espaco(espaco_id: int, usuario_id: int = Query(..., gt=0)):
+def listar_grupos_espaco(
+    espaco_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -814,8 +870,10 @@ def listar_grupos_espaco(espaco_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.post("/espacos/{espaco_id}/grupos", status_code=201)
-def convidar_grupo_espaco(espaco_id: int, body: EspacoGrupoAdd):
+def convidar_grupo_espaco(espaco_id: int, body: EspacoGrupoAdd, current_user: dict = Depends(get_current_user)):
     """Envia convite para um grupo participar do espaço."""
+    # 2026-09-29 IDOR fix: identidade do convidador vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -879,8 +937,15 @@ def convidar_grupo_espaco(espaco_id: int, body: EspacoGrupoAdd):
 
 
 @tasks_router.get("/espacos/{espaco_id}/convites-pendentes")
-def listar_convites_espaco(espaco_id: int, usuario_id: int = Query(..., gt=0)):
+def listar_convites_espaco(
+    espaco_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Lista convites pendentes enviados para um espaço (visão do gestor)."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -909,8 +974,15 @@ def listar_convites_espaco(espaco_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.delete("/convites/{convite_id}")
-def cancelar_convite(convite_id: int, usuario_id: int = Query(..., gt=0)):
+def cancelar_convite(
+    convite_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Cancela (remove) um convite pendente."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -935,8 +1007,14 @@ def cancelar_convite(convite_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.get("/convites")
-def listar_convites(usuario_id: int = Query(..., gt=0)):
+def listar_convites(
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Lista convites pendentes para o grupo do usuário."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -973,8 +1051,15 @@ def listar_convites(usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.put("/convites/{convite_id}/aceitar")
-def aceitar_convite(convite_id: int, usuario_id: int = Query(..., gt=0)):
+def aceitar_convite(
+    convite_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Aceita um convite — adiciona o grupo ao espaço."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1023,8 +1108,15 @@ def aceitar_convite(convite_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.put("/convites/{convite_id}/recusar")
-def recusar_convite(convite_id: int, usuario_id: int = Query(..., gt=0)):
+def recusar_convite(
+    convite_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Recusa um convite."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1065,7 +1157,15 @@ def recusar_convite(convite_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.delete("/espacos/{espaco_id}/grupos/{group_id}", status_code=204)
-def remover_grupo_espaco(espaco_id: int, group_id: int, usuario_id: int = Query(..., gt=0)):
+def remover_grupo_espaco(
+    espaco_id: int,
+    group_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1093,7 +1193,9 @@ def remover_grupo_espaco(espaco_id: int, group_id: int, usuario_id: int = Query(
 
 
 @tasks_router.put("/espacos/{espaco_id}/grupos/{group_id}/sla")
-def atualizar_sla_grupo(espaco_id: int, group_id: int, body: SlaUpdate):
+def atualizar_sla_grupo(espaco_id: int, group_id: int, body: SlaUpdate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1123,8 +1225,15 @@ def atualizar_sla_grupo(espaco_id: int, group_id: int, body: SlaUpdate):
 
 
 @tasks_router.get("/espacos/{espaco_id}/relatorio-grupos")
-def relatorio_grupos(espaco_id: int, usuario_id: int = Query(..., gt=0)):
+def relatorio_grupos(
+    espaco_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Retorna quanto tempo cada grupo ficou em cada coluna, com breakdown por usuário."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1233,8 +1342,15 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 
 @tasks_router.post("/upload-imagem")
-async def upload_imagem(file: UploadFile = File(...), usuario_id: int = Query(..., gt=0)):
+async def upload_imagem(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Faz upload de uma imagem e retorna a URL pública."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1270,8 +1386,14 @@ async def upload_imagem(file: UploadFile = File(...), usuario_id: int = Query(..
 # ─── TEMPLATES DE ESPAÇO (deve ficar ANTES de /{tarefa_id}) ──────────────────
 
 @tasks_router.get("/templates")
-def listar_templates(usuario_id: int = Query(..., gt=0)):
+def listar_templates(
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Lista todos os templates salvos."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1297,13 +1419,15 @@ def listar_templates(usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.post("/templates", status_code=201)
-def salvar_template(body: dict):
+def salvar_template(body: dict, current_user: dict = Depends(get_current_user)):
     """Salva o espaço atual como template reutilizável."""
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    usuario_id = require_admin_override(current_user, body.get("usuario_id"))
+    body["usuario_id"] = usuario_id
     conn = get_db_or_404()
     cursor = None
     try:
         cursor = conn.cursor(dictionary=True)
-        usuario_id = body.get("usuario_id")
         espaco_id = body.get("espaco_id")
         nome = (body.get("nome") or "").strip()
         descricao = (body.get("descricao") or "").strip() or None
@@ -1348,8 +1472,15 @@ def salvar_template(body: dict):
 
 
 @tasks_router.delete("/templates/{template_id}", status_code=204)
-def deletar_template(template_id: int, usuario_id: int = Query(..., gt=0)):
+def deletar_template(
+    template_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Deleta um template salvo."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1371,8 +1502,12 @@ def deletar_template(template_id: int, usuario_id: int = Query(..., gt=0)):
 @tasks_router.get("/categorias")
 def listar_categorias(
     espaco_id:  Optional[int] = Query(None),
-    usuario_id: int           = Query(..., gt=0),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1394,7 +1529,9 @@ def listar_categorias(
 
 
 @tasks_router.post("/categorias", status_code=201)
-def criar_categoria_route(body: CategoriaCreate):
+def criar_categoria_route(body: CategoriaCreate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1415,7 +1552,14 @@ def criar_categoria_route(body: CategoriaCreate):
 
 
 @tasks_router.delete("/categorias/{cat_id}", status_code=204)
-def deletar_categoria_route(cat_id: int, usuario_id: int = Query(..., gt=0)):
+def deletar_categoria_route(
+    cat_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1435,7 +1579,6 @@ def deletar_categoria_route(cat_id: int, usuario_id: int = Query(..., gt=0)):
 
 @tasks_router.get("")
 def listar_tarefas(
-    usuario_id:  int           = Query(..., gt=0),
     espaco_id:   Optional[int] = Query(None),
     group_id:    Optional[int] = Query(None),
     status_id:   Optional[int] = Query(None),
@@ -1443,7 +1586,12 @@ def listar_tarefas(
     responsavel: Optional[int] = Query(None),
     search:      Optional[str] = Query(None),
     minha_fila:  bool          = Query(False),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1499,7 +1647,9 @@ def listar_tarefas(
 
 
 @tasks_router.post("", status_code=201)
-def criar_tarefa(body: TarefaCreate):
+def criar_tarefa(body: TarefaCreate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1561,7 +1711,14 @@ def criar_tarefa(body: TarefaCreate):
 
 
 @tasks_router.get("/{tarefa_id}")
-def detalhe_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
+def detalhe_tarefa(
+    tarefa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1578,7 +1735,9 @@ def detalhe_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.put("/{tarefa_id}")
-def atualizar_tarefa(tarefa_id: int, body: TarefaUpdate):
+def atualizar_tarefa(tarefa_id: int, body: TarefaUpdate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1708,7 +1867,14 @@ def atualizar_tarefa(tarefa_id: int, body: TarefaUpdate):
 
 
 @tasks_router.delete("/{tarefa_id}", status_code=204)
-def deletar_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
+def deletar_tarefa(
+    tarefa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1733,7 +1899,14 @@ def deletar_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.post("/{tarefa_id}/finalizar")
-def finalizar_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
+def finalizar_tarefa(
+    tarefa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1783,8 +1956,15 @@ def finalizar_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.post("/{tarefa_id}/reabrir")
-def reabrir_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
+def reabrir_tarefa(
+    tarefa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Reabre uma tarefa finalizada, voltando para o penúltimo status."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1870,8 +2050,10 @@ def reabrir_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
 # ─── ENCAMINHAMENTO ENTRE GRUPOS ──────────────────────────────────────────────
 
 @tasks_router.post("/{tarefa_id}/encaminhar")
-def encaminhar_tarefa(tarefa_id: int, body: EncaminharBody):
+def encaminhar_tarefa(tarefa_id: int, body: EncaminharBody, current_user: dict = Depends(get_current_user)):
     """Encaminha a tarefa para outro grupo. A tarefa deve estar em coluna final."""
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -1972,8 +2154,10 @@ def encaminhar_tarefa(tarefa_id: int, body: EncaminharBody):
 
 
 @tasks_router.post("/{tarefa_id}/devolver")
-def devolver_tarefa(tarefa_id: int, body: DevolverBody):
+def devolver_tarefa(tarefa_id: int, body: DevolverBody, current_user: dict = Depends(get_current_user)):
     """Devolve a tarefa ao grupo que a encaminhou, reiniciando o SLA daquele grupo."""
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2066,7 +2250,14 @@ def devolver_tarefa(tarefa_id: int, body: DevolverBody):
 # ─── HISTÓRICO DE STATUS (tempo por coluna) ──────────────────────────────────
 
 @tasks_router.get("/{tarefa_id}/historico-status")
-def historico_status_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
+def historico_status_tarefa(
+    tarefa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2107,8 +2298,15 @@ def historico_status_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
 # ─── TEMPO POR USUÁRIO (tempo como responsável em cada status) ────────────────
 
 @tasks_router.get("/{tarefa_id}/tempo-usuarios")
-def tempo_usuarios_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
+def tempo_usuarios_tarefa(
+    tarefa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Retorna o tempo total que cada usuário ficou como responsável em cada status."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2184,7 +2382,9 @@ def tempo_usuarios_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
 # ─── ETAPAS ───────────────────────────────────────────────────────────────────
 
 @tasks_router.post("/{tarefa_id}/etapas", status_code=201)
-def criar_etapa(tarefa_id: int, body: EtapaCreate):
+def criar_etapa(tarefa_id: int, body: EtapaCreate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2234,7 +2434,9 @@ def criar_etapa(tarefa_id: int, body: EtapaCreate):
 
 
 @tasks_router.put("/{tarefa_id}/etapas/{etapa_id}")
-def atualizar_etapa(tarefa_id: int, etapa_id: int, body: EtapaUpdate):
+def atualizar_etapa(tarefa_id: int, etapa_id: int, body: EtapaUpdate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2286,7 +2488,15 @@ def atualizar_etapa(tarefa_id: int, etapa_id: int, body: EtapaUpdate):
 
 
 @tasks_router.post("/{tarefa_id}/etapas/{etapa_id}/concluir")
-def concluir_etapa(tarefa_id: int, etapa_id: int, usuario_id: int = Query(..., gt=0)):
+def concluir_etapa(
+    tarefa_id: int,
+    etapa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2331,7 +2541,15 @@ def concluir_etapa(tarefa_id: int, etapa_id: int, usuario_id: int = Query(..., g
 
 
 @tasks_router.delete("/{tarefa_id}/etapas/{etapa_id}", status_code=204)
-def deletar_etapa(tarefa_id: int, etapa_id: int, usuario_id: int = Query(..., gt=0)):
+def deletar_etapa(
+    tarefa_id: int,
+    etapa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2360,7 +2578,14 @@ def deletar_etapa(tarefa_id: int, etapa_id: int, usuario_id: int = Query(..., gt
 # ─── COMENTÁRIOS ──────────────────────────────────────────────────────────────
 
 @tasks_router.get("/{tarefa_id}/comentarios")
-def listar_comentarios(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
+def listar_comentarios(
+    tarefa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2383,7 +2608,9 @@ def listar_comentarios(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.post("/{tarefa_id}/comentarios", status_code=201)
-def adicionar_comentario(tarefa_id: int, body: ComentarioCreate):
+def adicionar_comentario(tarefa_id: int, body: ComentarioCreate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.autor_id = require_admin_override(current_user, body.autor_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2422,7 +2649,14 @@ def adicionar_comentario(tarefa_id: int, body: ComentarioCreate):
 # ─── HISTÓRICO ────────────────────────────────────────────────────────────────
 
 @tasks_router.get("/{tarefa_id}/historico")
-def listar_historico(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
+def listar_historico(
+    tarefa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2445,7 +2679,13 @@ def listar_historico(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
 # ─── AUXILIARES ───────────────────────────────────────────────────────────────
 
 @tasks_router.get("/grupos/lista")
-def listar_grupos(usuario_id: int = Query(..., gt=0)):
+def listar_grupos(
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2466,7 +2706,14 @@ def listar_grupos(usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.get("/grupos/{group_id}/membros")
-def membros_grupo(group_id: int, usuario_id: int = Query(..., gt=0)):
+def membros_grupo(
+    group_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2484,7 +2731,15 @@ def membros_grupo(group_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.post("/{tarefa_id}/categorias/{cat_id}", status_code=201)
-def associar_categoria(tarefa_id: int, cat_id: int, usuario_id: int = Query(..., gt=0)):
+def associar_categoria(
+    tarefa_id: int,
+    cat_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2502,7 +2757,15 @@ def associar_categoria(tarefa_id: int, cat_id: int, usuario_id: int = Query(...,
 
 
 @tasks_router.delete("/{tarefa_id}/categorias/{cat_id}", status_code=204)
-def remover_categoria_tarefa(tarefa_id: int, cat_id: int, usuario_id: int = Query(..., gt=0)):
+def remover_categoria_tarefa(
+    tarefa_id: int,
+    cat_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2521,7 +2784,14 @@ def remover_categoria_tarefa(tarefa_id: int, cat_id: int, usuario_id: int = Quer
 # ─── SUBTAREFAS ───────────────────────────────────────────────────────────────
 
 @tasks_router.get("/{tarefa_id}/subtarefas")
-def listar_subtarefas(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
+def listar_subtarefas(
+    tarefa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2541,7 +2811,9 @@ def listar_subtarefas(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.post("/{tarefa_id}/subtarefas", status_code=201)
-def criar_subtarefa(tarefa_id: int, body: SubtarefaCreate):
+def criar_subtarefa(tarefa_id: int, body: SubtarefaCreate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.criador_id = require_admin_override(current_user, body.criador_id)
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2608,7 +2880,15 @@ def atualizar_subtarefa(tarefa_id: int, sub_id: int, body: SubtarefaUpdate):
 
 
 @tasks_router.delete("/{tarefa_id}/subtarefas/{sub_id}", status_code=204)
-def deletar_subtarefa(tarefa_id: int, sub_id: int, usuario_id: int = Query(..., gt=0)):
+def deletar_subtarefa(
+    tarefa_id: int,
+    sub_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2627,7 +2907,14 @@ def deletar_subtarefa(tarefa_id: int, sub_id: int, usuario_id: int = Query(..., 
 # ─── MEMBROS DA TAREFA (TEAM) ─────────────────────────────────────────────────
 
 @tasks_router.get("/{tarefa_id}/membros")
-def listar_membros_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
+def listar_membros_tarefa(
+    tarefa_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2646,7 +2933,15 @@ def listar_membros_tarefa(tarefa_id: int, usuario_id: int = Query(..., gt=0)):
 
 
 @tasks_router.post("/{tarefa_id}/membros/{uid}", status_code=201)
-def adicionar_membro_tarefa(tarefa_id: int, uid: int, usuario_id: int = Query(..., gt=0)):
+def adicionar_membro_tarefa(
+    tarefa_id: int,
+    uid: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2664,7 +2959,15 @@ def adicionar_membro_tarefa(tarefa_id: int, uid: int, usuario_id: int = Query(..
 
 
 @tasks_router.delete("/{tarefa_id}/membros/{uid}", status_code=204)
-def remover_membro_tarefa(tarefa_id: int, uid: int, usuario_id: int = Query(..., gt=0)):
+def remover_membro_tarefa(
+    tarefa_id: int,
+    uid: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -2683,7 +2986,9 @@ def remover_membro_tarefa(tarefa_id: int, uid: int, usuario_id: int = Query(...,
 # ─── CONTROLE DE TEMPO ────────────────────────────────────────────────────────
 
 @tasks_router.put("/{tarefa_id}/tempo")
-def atualizar_tempo(tarefa_id: int, body: TempoUpdate):
+def atualizar_tempo(tarefa_id: int, body: TempoUpdate, current_user: dict = Depends(get_current_user)):
+    # 2026-09-29 IDOR fix: identidade vem do token (ADMIN pode impersonate).
+    body.usuario_id = require_admin_override(current_user, body.usuario_id)
     conn = get_db_or_404()
     cursor = None
     try:

@@ -17,8 +17,9 @@ Alterações v3.3:
 - Notificação de atribuição agora notifica o novo responsável corretamente
  """
 
-from fastapi import APIRouter, HTTPException, status, Query, Path, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, status, Query, Path, UploadFile, File, Form, Depends
 from fastapi.responses import Response
+from security import get_current_user, require_admin_override
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
@@ -841,7 +842,10 @@ def _user_aceita_email(cursor, user_id: Optional[int], tipo_evento: str) -> bool
 
 @tickets_router.get("/", response_model=List[dict])
 async def obter_tickets(
-    usuario_id: int = Query(..., gt=0, description="ID do usuário logado (necessário para filtrar por acesso)"),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
     grupo_id: Optional[int] = Query(None, gt=0),
     status_id: Optional[int] = Query(None, gt=0),
     responsavel_id: Optional[int] = Query(None, gt=0),
@@ -855,6 +859,7 @@ async def obter_tickets(
     limite: int = Query(LIMITE_PADRAO, ge=1, le=500),
     include_timeline: int = Query(0, ge=0, le=1, description="1=inclui campo 'trajeto' (setores por onde passou) em cada ticket. Usado por relatorios."),
 ):
+    usuario_id = int(current_user["id"])
     # ✅ CORRIGIDO: Adicionar filtro de acesso baseado em ROLE + GROUP_ID
     # Data: 06/04/2026 19:45
     log_inicio("obter_tickets", usuario_id=usuario_id, grupo_id=grupo_id, status_id=status_id)
@@ -1161,8 +1166,11 @@ class DashboardSLAResposta(BaseModel):
 
 @tickets_router.get("/dashboard/sla", response_model=DashboardSLAResposta)
 async def dashboard_sla(
-    usuario_id: int = Query(..., gt=0, description="ID do usuário logado para filtrar permissões"),
-    grupo_id: Optional[int] = Query(None, gt=0, description="Filtrar por grupo específico (apenas RESPONSAVEL_GRUPO)")
+    current_user: dict = Depends(get_current_user),
+    grupo_id: Optional[int] = Query(None, gt=0, description="Filtrar por grupo específico (apenas RESPONSAVEL_GRUPO)"),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
     """
     📊 Retorna estatísticas de SLA para o dashboard
@@ -1171,6 +1179,7 @@ async def dashboard_sla(
     ✅ RESPONSAVEL_GRUPO vê desempenho de todos do seu grupo (por membro)
     ✅ ADMIN vê todos
     """
+    usuario_id = int(current_user["id"])
     log_inicio("dashboard_sla", usuario_id=usuario_id, grupo_id=grupo_id)
     conexao = get_db_or_404()
     cursor = None
@@ -1524,8 +1533,13 @@ async def dashboard_sla(
 @tickets_router.get("/by-numero/{numero}", response_model=TicketResposta)
 async def obter_ticket_por_numero(
     numero: str = Path(..., min_length=3, max_length=50),
-    usuario_id: Optional[int] = Query(None, gt=0),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: aceita param antigo mas IGNORA. Frontend legado
+    # continua funcionando; identidade agora vem SEMPRE do session token.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
+    usuario_id = int(current_user["id"])
     log_inicio("obter_ticket_por_numero", numero=numero, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
@@ -1548,13 +1562,27 @@ async def obter_ticket_por_numero(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Chamado {numero} não encontrado.",
         )
-    # Delega pro handler existente — reusa permission check + enrichment
-    return await obter_ticket(ticket_id=row["id"], usuario_id=usuario_id)
+    # Delega pro handler existente — reusa permission check + enrichment.
+    # 2026-09-29: passa o current_user pra evitar re-derivar (e evitar
+    # chamar o dependency 2x na mesma request).
+    return await _obter_ticket_impl(ticket_id=row["id"], usuario_id=usuario_id)
 
 
 @tickets_router.get("/{ticket_id}", response_model=TicketResposta)
-async def obter_ticket(ticket_id: int = Path(..., gt=0),
-                        usuario_id: Optional[int] = Query(None, gt=0)):
+async def obter_ticket(
+    ticket_id: int = Path(..., gt=0),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: ver docstring de by-numero. Compat, ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
+    return await _obter_ticket_impl(ticket_id=ticket_id,
+                                     usuario_id=int(current_user["id"]))
+
+
+async def _obter_ticket_impl(ticket_id: int, usuario_id: int):
+    """Implementacao interna compartilhada por obter_ticket e by-numero.
+    `usuario_id` aqui e SEMPRE o do session token (nunca do cliente)."""
     log_inicio("obter_ticket", ticket_id=ticket_id, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
@@ -1562,15 +1590,13 @@ async def obter_ticket(ticket_id: int = Path(..., gt=0),
         cursor = conexao.cursor(dictionary=True)
         ticket_basico = validar_ticket_existe(cursor, ticket_id)
 
-        # 2026-09-03 PRIVACIDADE: sem usuario_id nao da pra checar quem esta
-        # perguntando — mantem compat com callers antigos (retornar 400
-        # quebraria muita coisa). Frontend NOVO manda usuario_id sempre.
-        if usuario_id is not None:
-            if not user_pode_ver_ticket(cursor, usuario_id, ticket_basico):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Voce nao tem permissao para ver este chamado.",
-                )
+        # 2026-09-29 IDOR fix: usuario_id AGORA e derivado do session token,
+        # entao user_pode_ver_ticket() sempre roda. Antes era condicional.
+        if not user_pode_ver_ticket(cursor, usuario_id, ticket_basico):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Voce nao tem permissao para ver este chamado.",
+            )
 
         cursor.execute(
             """
@@ -1656,7 +1682,13 @@ class AssumiPayload(BaseModel):
     usuario_id: int = Field(..., gt=0)
 
 @tickets_router.post("/{ticket_id}/assumir")
-async def assumir_ticket(ticket_id: int, payload: AssumiPayload):
+async def assumir_ticket(
+    ticket_id: int,
+    payload: AssumiPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    # 2026-09-29 IDOR fix: rejeita spoof do usuario_id no body (ADMIN pode impersonate).
+    payload.usuario_id = require_admin_override(current_user, payload.usuario_id)
     """Qualquer usuário do mesmo grupo pode se auto-atribuir ao ticket."""
     log_inicio("assumir_ticket", ticket_id=ticket_id, usuario_id=payload.usuario_id)
     conexao = get_db_or_404()
@@ -1799,7 +1831,12 @@ class DevolverPayload(BaseModel):
     motivo: Optional[str] = Field(None, max_length=500)
 
 @tickets_router.post("/{ticket_id}/devolver")
-async def devolver_ticket(ticket_id: int, payload: DevolverPayload):
+async def devolver_ticket(
+    ticket_id: int,
+    payload: DevolverPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    payload.usuario_id = require_admin_override(current_user, payload.usuario_id)
     """O usuário atribuído devolve o ticket para a fila do grupo."""
     log_inicio("devolver_ticket", ticket_id=ticket_id, usuario_id=payload.usuario_id)
     conexao = get_db_or_404()
@@ -1968,7 +2005,12 @@ class SLAPausarPayload(BaseModel):
     motivo:     Optional[str] = Field(None, max_length=500)
 
 @tickets_router.post("/{ticket_id}/sla/pausar")
-async def pausar_sla_manual(ticket_id: int, payload: SLAPausarPayload):
+async def pausar_sla_manual(
+    ticket_id: int,
+    payload: SLAPausarPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    payload.usuario_id = require_admin_override(current_user, payload.usuario_id)
     """Responsável do grupo ou admin pausa o SLA manualmente."""
     conexao = get_db_or_404()
     cursor  = None
@@ -2011,7 +2053,12 @@ async def pausar_sla_manual(ticket_id: int, payload: SLAPausarPayload):
 
 
 @tickets_router.post("/{ticket_id}/sla/retomar")
-async def retomar_sla_manual(ticket_id: int, payload: SLAPausarPayload):
+async def retomar_sla_manual(
+    ticket_id: int,
+    payload: SLAPausarPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    payload.usuario_id = require_admin_override(current_user, payload.usuario_id)
     """Responsável do grupo ou admin retoma o SLA pausado manualmente."""
     conexao = get_db_or_404()
     cursor  = None
@@ -2071,7 +2118,12 @@ class EncaminharPayload(BaseModel):
     subcategoria_id: Optional[int] = Field(None, gt=0)
 
 @tickets_router.post("/{ticket_id}/encaminhar")
-async def encaminhar_ticket(ticket_id: int, payload: EncaminharPayload):
+async def encaminhar_ticket(
+    ticket_id: int,
+    payload: EncaminharPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    payload.usuario_id = require_admin_override(current_user, payload.usuario_id)
     log_inicio("encaminhar_ticket", ticket_id=ticket_id, usuario_id=payload.usuario_id, novo_grupo=payload.group_id)
     conexao = get_db_or_404()
     cursor = None
@@ -2332,7 +2384,12 @@ class FinalizarPayload(BaseModel):
                                       description="Resumo da solução / motivo do fechamento")
 
 @tickets_router.post("/{ticket_id}/finalizar")
-async def finalizar_ticket(ticket_id: int, payload: FinalizarPayload):
+async def finalizar_ticket(
+    ticket_id: int,
+    payload: FinalizarPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    payload.usuario_id = require_admin_override(current_user, payload.usuario_id)
     """Finaliza o chamado. Apenas o responsável atual pode executar."""
     log_inicio("finalizar_ticket", ticket_id=ticket_id, usuario_id=payload.usuario_id)
     conexao = get_db_or_404()
@@ -2521,7 +2578,12 @@ class ReopenPayload(BaseModel):
     justificativa: str = Field(..., min_length=5, max_length=500)
 
 @tickets_router.post("/{ticket_id}/reabrir")
-async def reabrir_ticket(ticket_id: int, payload: ReopenPayload):
+async def reabrir_ticket(
+    ticket_id: int,
+    payload: ReopenPayload,
+    current_user: dict = Depends(get_current_user),
+):
+    payload.usuario_id = require_admin_override(current_user, payload.usuario_id)
     """Reabre um chamado resolvido. Só o solicitante pode, dentro de 3
     reaberturas e até 2 meses da última resolução."""
     log_inicio("reabrir_ticket", ticket_id=ticket_id, usuario_id=payload.usuario_id)
@@ -2708,7 +2770,12 @@ async def reabrir_ticket(ticket_id: int, payload: ReopenPayload):
 # ==================================================
 
 @tickets_router.post("/", status_code=status.HTTP_201_CREATED, response_model=TicketResposta)
-async def criar_ticket(payload: TicketCriar):
+async def criar_ticket(
+    payload: TicketCriar,
+    current_user: dict = Depends(get_current_user),
+):
+    # 2026-09-29 IDOR fix: rejeita spoof do solicitante (ADMIN pode abrir em nome de outro).
+    payload.solicitante_id = require_admin_override(current_user, payload.solicitante_id)
     log_inicio(
         "criar_ticket",
         solicitante_id=payload.solicitante_id,
@@ -3024,10 +3091,13 @@ async def criar_ticket(payload: TicketCriar):
 @tickets_router.put("/{ticket_id}", response_model=TicketResposta)
 async def atualizar_ticket(
     ticket_id: int = Path(..., gt=0),
-    # ✅ usuario_id obrigatório para validar permissão de quem está alterando
-    usuario_id: int = Query(..., gt=0, description="ID do usuário que está realizando a alteração"),
-    payload: TicketAtualizar = None
+    payload: TicketAtualizar = None,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
+    usuario_id = int(current_user["id"])
     log_inicio("atualizar_ticket", ticket_id=ticket_id, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
@@ -3397,9 +3467,12 @@ async def atualizar_ticket(
 @tickets_router.delete("/{ticket_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def deletar_ticket(
     ticket_id: int = Path(..., gt=0),
-    # ✅ usuario_id para validar que só o solicitante (ou admin) pode deletar
-    usuario_id: int = Query(..., gt=0, description="ID do usuário que está deletando")
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
+    usuario_id = int(current_user["id"])
     log_inicio("deletar_ticket", ticket_id=ticket_id, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
@@ -3458,7 +3531,10 @@ async def deletar_ticket(
 @tickets_router.get("/{ticket_id}/linha-do-tempo")
 async def obter_linha_do_tempo(
     ticket_id: int = Path(..., gt=0),
-    usuario_id: Optional[int] = Query(None, gt=0),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
     """Retorna a sequencia de setores por onde o ticket passou (migration
     097). Cada linha traz group_id, group_name, entrou_em, saiu_em (NULL
@@ -3467,6 +3543,7 @@ async def obter_linha_do_tempo(
     Autorizacao: mesma regra do detalhe do ticket (user_pode_ver_ticket).
     Frontend consome pra montar a timeline no modal do ticket.
     """
+    usuario_id = int(current_user["id"])
     log_inicio("obter_linha_do_tempo", ticket_id=ticket_id, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
@@ -3480,7 +3557,8 @@ async def obter_linha_do_tempo(
         tk = cursor.fetchone()
         if not tk:
             raise HTTPException(status_code=404, detail="Ticket nao encontrado")
-        if usuario_id and not user_pode_ver_ticket(cursor, usuario_id, tk):
+        # 2026-09-29 IDOR fix: check sempre roda (era condicional em usuario_id).
+        if not user_pode_ver_ticket(cursor, usuario_id, tk):
             raise HTTPException(status_code=403, detail="Sem permissao pra ver este ticket")
 
         cursor.execute(
@@ -3514,16 +3592,22 @@ async def obter_linha_do_tempo(
 
 
 @interacoes_router.get("/{ticket_id}", response_model=List[InteracaoResposta])
-async def obter_interacoes(ticket_id: int = Path(..., gt=0),
-                            usuario_id: Optional[int] = Query(None, gt=0)):
+async def obter_interacoes(
+    ticket_id: int = Path(..., gt=0),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """
     Obtém todas as INTERAÇÕES (comentários) de um TICKET
     ✅ Retorna lista de interações
     ✅ Ordena por data de criação
-    2026-09-03: aceita usuario_id — se informado, checa privacidade
-    (ver docs/REGRAS_NEGOCIO.md "Privacidade de tickets"). USERs do mesmo
-    grupo do ticket, apos alguem assumir, perdem visibilidade.
+    2026-09-29 IDOR fix: identidade e SEMPRE do session token; a checagem de
+    privacidade agora e obrigatoria (antes so rodava se `usuario_id` viesse).
+    USERs do mesmo grupo do ticket, apos alguem assumir, perdem visibilidade.
     """
+    usuario_id = int(current_user["id"])
     log_inicio("obter_interacoes", ticket_id=ticket_id, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
@@ -3545,7 +3629,7 @@ async def obter_interacoes(ticket_id: int = Path(..., gt=0),
                 detail=f"Ticket {ticket_id} não encontrado"
             )
 
-        if usuario_id and not user_pode_ver_ticket(cursor, usuario_id, ticket_row):
+        if not user_pode_ver_ticket(cursor, usuario_id, ticket_row):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Voce nao tem permissao para ver este chamado.",
@@ -3606,7 +3690,12 @@ async def obter_interacoes(ticket_id: int = Path(..., gt=0),
 # até o final do except/finally
 
 @interacoes_router.post("/", status_code=status.HTTP_201_CREATED, response_model=InteracaoResposta)
-async def criar_interacao(payload: InteracaoCriar):
+async def criar_interacao(
+    payload: InteracaoCriar,
+    current_user: dict = Depends(get_current_user),
+):
+    # 2026-09-29 IDOR fix: quem comenta e SEMPRE o dono do token (admin pode override).
+    payload.usuario_id = require_admin_override(current_user, payload.usuario_id)
     """
     Cria uma INTERAÇÃO (comentário/resposta) em um TICKET EXISTENTE
     ✅ Valida permissões por role
@@ -4016,14 +4105,17 @@ ATTACH_MIME_VALIDOS = {
 @tickets_router.post("/{ticket_id}/attachments")
 async def upload_attachment(
     ticket_id: int = Path(..., gt=0),
-    usuario_id: int = Form(..., gt=0),
-    interacao_id: Optional[int] = Form(None, gt=0),
     file: UploadFile = File(...),
+    interacao_id: Optional[int] = Form(None, gt=0),
+    # 2026-09-29 IDOR fix: aceita form legado, mas resolve via token (admin pode override).
+    form_usuario_id: Optional[int] = Form(None, alias="usuario_id", gt=0),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Faz upload de um arquivo anexado ao ticket (ou a uma interação dele).
     Limite: 10 MB. Tipos: imagens (JPG/PNG/WEBP/GIF) e documentos (PDF/Word/Excel).
     """
+    usuario_id = require_admin_override(current_user, form_usuario_id)
     log_inicio("upload_attachment", ticket_id=ticket_id, usuario_id=usuario_id, interacao_id=interacao_id)
 
     # ── Validação de tipo ──
@@ -4165,8 +4257,12 @@ async def baixar_attachment(attach_id: int = Path(..., gt=0)):
 @tickets_router.delete("/attachments/{attach_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def deletar_attachment(
     attach_id: int = Path(..., gt=0),
-    usuario_id: int = Query(..., gt=0),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
+    usuario_id = int(current_user["id"])
     """Remove um anexo. Permitido para quem subiu ou para ADMIN/TI/MANAGER."""
     conexao = get_db_or_404()
     cursor = None

@@ -323,3 +323,42 @@ def _load_user_groups(user_id: int) -> list:
     except Exception as e:
         print(f"[AUTH/GROUPS] erro ao carregar user_groups({user_id}): {e}")
         return []
+
+
+# =========================================
+# AUTHORIZATION HELPERS
+# =========================================
+
+# Roles com permissao de override: podem consultar dados de terceiros em
+# endpoints R3 (dashboard SLA de outro user, notificacoes alheias em modo
+# suporte, etc). Mantido em constante pra facilitar auditoria.
+_ADMIN_OVERRIDE_ROLES = {"ADMIN", "TI", "MANAGER"}
+
+
+def require_admin_override(current_user: Dict[str, Any],
+                           requested_user_id: Optional[int]) -> int:
+    """Resolve o `usuario_id` alvo de um endpoint que aceita override.
+
+    Uso: em handlers onde o cliente PODE passar `?usuario_id=X` pra atuar
+    em nome de outro user (ex: ADMIN vendo dashboard SLA de outro), mas
+    USER comum NAO pode.
+
+    Retorna o `user_id` que deve ser usado. Regras:
+      - Sem `requested_user_id` (None) -> retorna current_user['id'].
+      - Igual ao proprio -> retorna current_user['id'].
+      - Diferente E role em _ADMIN_OVERRIDE_ROLES -> retorna requested.
+      - Diferente E role SEM override -> 403.
+
+    Ex.:
+        alvo = require_admin_override(current_user, usuario_id_query)
+    """
+    own_id = int(current_user["id"])
+    if requested_user_id is None or int(requested_user_id) == own_id:
+        return own_id
+    role = (current_user.get("role") or "").upper()
+    if role in _ADMIN_OVERRIDE_ROLES:
+        return int(requested_user_id)
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Voce nao tem permissao pra atuar em nome de outro usuario.",
+    )

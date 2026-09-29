@@ -17,8 +17,9 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query, Path
+from fastapi import APIRouter, HTTPException, Query, Path, Depends
 from database import get_db_or_404
+from security import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -26,8 +27,14 @@ router = APIRouter(prefix="/api/chamados-antigos", tags=["chamados-antigos"])
 
 
 @router.get("/stats")
-def stats(usuario_id: Optional[int] = Query(None, gt=0)):
+def stats(
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: exige sessao valida. Param antigo aceito e ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Retorna {total, ultimo_import} da base. Tudo zero/None se a tabela não existir."""
+    logger.info(f"[CHAMADOS_ANTIGOS] stats requisitado por user_id={current_user['id']}")
     conn = get_db_or_404()
     cur = None
     try:
@@ -177,7 +184,7 @@ def listar_status(
 @router.get("")
 @router.get("/")
 def listar(
-    usuario_id: Optional[int] = Query(None, gt=0),
+    current_user: dict = Depends(get_current_user),
     q:        Optional[str]   = Query(None, description="Busca em assunto, solicitante, email, mensagem"),
     status:   Optional[str]   = Query(None, description="Filtra por Nome_status"),
     categoria: Optional[str]  = Query(None, description="Filtra por categoria exata"),
@@ -185,8 +192,13 @@ def listar(
     data_fim: Optional[str]   = Query(None, description="YYYY-MM-DD"),
     pagina:   int = Query(1, ge=1),
     por_pagina: int = Query(25, ge=1, le=100),
+    # 2026-09-29 IDOR fix: exige sessao valida. Param antigo aceito e ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
-    """Lista chamados antigos com filtros e paginação."""
+    """Lista chamados antigos com filtros e paginação.
+    2026-09-29: exige autenticacao (antes vazava base legada sem token)."""
+    logger.info(f"[CHAMADOS_ANTIGOS] listar requisitado por user_id={current_user['id']}")
     conn = get_db_or_404()
     cur = None
     try:

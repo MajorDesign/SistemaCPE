@@ -7,7 +7,8 @@ API de Avaliações de Tickets
 - Leitura: RESPONSAVEL_GRUPO (só do seu grupo) e ADMIN
 """
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status, Depends
+from security import get_current_user
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime, timedelta
@@ -138,8 +139,15 @@ def _aplica_filtro_grupo_avaliacoes(cursor, usuario, grupo_id_query):
 
 # ─── POST /api/avaliacoes/popup-visto/{ticket_id} ─────────────────────────────
 @avaliacoes_router.post("/popup-visto/{ticket_id}", status_code=200)
-async def registrar_popup_visto(ticket_id: int, usuario_id: int = Query(..., gt=0)):
+async def registrar_popup_visto(
+    ticket_id: int,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """Incrementa popup_count (máx 2). Chamado pelo frontend ao exibir o popup."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -167,7 +175,12 @@ async def registrar_popup_visto(ticket_id: int, usuario_id: int = Query(..., gt=
 
 # ─── GET /api/avaliacoes/pendentes ────────────────────────────────────────────
 @avaliacoes_router.get("/pendentes")
-async def avaliacoes_pendentes(usuario_id: int = Query(..., gt=0)):
+async def avaliacoes_pendentes(
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
+):
     """
     Retorna avaliações pendentes do solicitante:
     - Não avaliado
@@ -181,6 +194,7 @@ async def avaliacoes_pendentes(usuario_id: int = Query(..., gt=0)):
     FRONT (verificarAvaliacoesPendentes filtra por p.popup_count<2 antes
     de abrir o popup). O campo popup_count continua no response.
     """
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -261,7 +275,10 @@ async def submeter_avaliacao(ticket_id: int, payload: AvaliacaoSubmit):
 # ─── GET /api/avaliacoes ──────────────────────────────────────────────────────
 @avaliacoes_router.get("")
 async def listar_avaliacoes(
-    usuario_id:  int           = Query(..., gt=0),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
     grupo_id:    Optional[int] = Query(None),
     data_inicio: Optional[str] = Query(None),
     data_fim:    Optional[str] = Query(None),
@@ -278,6 +295,7 @@ async def listar_avaliacoes(
     """
     Lista avaliações — acesso: RESPONSAVEL_GRUPO (só grupo) ou ADMIN (todos).
     """
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -381,12 +399,16 @@ async def listar_avaliacoes(
 # ─── GET /api/avaliacoes/resumo ───────────────────────────────────────────────
 @avaliacoes_router.get("/resumo")
 async def resumo_avaliacoes(
-    usuario_id: int           = Query(..., gt=0),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
     grupo_id:   Optional[int] = Query(None),
     q:          Optional[str] = Query(None),
 ):
     """KPIs: média, total, distribuição por estrela — para reports.html.
     2026-09-03: aceita q pra alinhar KPIs com filtro de busca da tabela."""
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -456,7 +478,10 @@ async def resumo_avaliacoes(
 # ─── GET /api/avaliacoes/resumo-por-grupo ────────────────────────────────────
 @avaliacoes_router.get("/resumo-por-grupo")
 async def resumo_avaliacoes_por_grupo(
-    usuario_id: int           = Query(..., gt=0),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
     grupo_id:   Optional[int] = Query(None),
     q:          Optional[str] = Query(None),
 ):
@@ -469,6 +494,7 @@ async def resumo_avaliacoes_por_grupo(
     - Resposta: { grupos: [{group_id, group_name, media, total_avaliados,
       positivas, neutras, negativas, pendentes, expiradas, distribuicao}] }.
     """
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:
@@ -584,7 +610,10 @@ async def resumo_avaliacoes_por_grupo(
 # ─── GET /api/avaliacoes/por-responsavel ─────────────────────────────────────
 @avaliacoes_router.get("/por-responsavel")
 async def avaliacoes_por_responsavel(
-    usuario_id: int           = Query(..., gt=0),
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
     grupo_id:   Optional[int] = Query(None),
     data_inicio:Optional[str] = Query(None),
     data_fim:   Optional[str] = Query(None),
@@ -595,6 +624,7 @@ async def avaliacoes_por_responsavel(
     Acesso: RESPONSAVEL_GRUPO (só grupo) ou ADMIN.
     2026-09-03: aceita q pra alinhar KPIs individuais com filtro da tabela.
     """
+    usuario_id = int(current_user["id"])
     conn = get_db_or_404()
     cursor = None
     try:

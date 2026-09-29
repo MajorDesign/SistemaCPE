@@ -3,7 +3,7 @@ API de Notificações - v1.1 (CORRIGIDA)
 Endpoints para listar, editar e deletar notificações
 """
 
-from fastapi import APIRouter, HTTPException, Query, Path, status
+from fastapi import APIRouter, HTTPException, Query, Path, status, Depends
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
@@ -19,6 +19,7 @@ from database import (
     convert_datetime_list,
     DB_CONFIG
 )
+from security import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -277,12 +278,17 @@ async def contar_nao_lidas(
     description="Obtém notificações do usuário com filtros opcionais"
 )
 async def listar_notificacoes(
-    usuario_id: int = Query(..., gt=0),
+    current_user: dict = Depends(get_current_user),
     lido: Optional[bool] = Query(None),
     tipo: Optional[str] = Query(None),
     limite: int = Query(LIMITE_PADRAO, ge=1, le=LIMITE_MAXIMO),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo
+    # aceito e ignorado (compat frontend legado).
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
+    usuario_id = int(current_user["id"])
     log_inicio("listar_notificacoes", usuario_id=usuario_id, lido=lido, tipo=tipo, limite=limite, offset=offset)
     conexao = get_db_or_404()
     cursor = None
@@ -353,9 +359,13 @@ async def listar_notificacoes(
 )
 async def atualizar_notificacao(
     notificacao_id: int = Path(..., gt=0),
-    usuario_id: int = Query(..., gt=0),
-    notificacao: NotificacaoAtualizar = None
+    notificacao: NotificacaoAtualizar = None,
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
+    usuario_id = int(current_user["id"])
     log_inicio("atualizar_notificacao", notificacao_id=notificacao_id, usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
@@ -421,8 +431,12 @@ async def atualizar_notificacao(
     description="Remove todas as notificações já lidas do usuário"
 )
 async def limpar_notificacoes_lidas(
-    usuario_id: int = Query(..., gt=0, description="ID do usuário")
+    current_user: dict = Depends(get_current_user),
+    # 2026-09-29 IDOR fix: identidade vem SEMPRE do token; param antigo ignorado.
+    _deprecated_usuario_id: Optional[int] = Query(None, alias="usuario_id",
+                                                   gt=0, include_in_schema=False),
 ):
+    usuario_id = int(current_user["id"])
     log_inicio("limpar_notificacoes_lidas", usuario_id=usuario_id)
     conexao = get_db_or_404()
     cursor = None
