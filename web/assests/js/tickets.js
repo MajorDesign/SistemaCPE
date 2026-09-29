@@ -1765,7 +1765,9 @@ function renderTable() {
           <input type="checkbox" class="row-checkbox" value="${t.id}"
                  onchange="toggleRowSelect(${t.id}, this);" ${checked}>
         </td>
-        <td onclick="openTicketDetail(${t.id})">
+        <td class="ticket-id-cell" data-ticket-code="${t.id_alfanumerica || '#' + t.id}"
+            onclick="copyTicketId(event, this)"
+            style="cursor:pointer;" title="Clique para copiar o ID">
           <strong class="text-primary">${t.id_alfanumerica || '#' + t.id}</strong>
           ${isNewTicket(t) ? '<span class="badge bg-danger ms-1" style="font-size:0.65rem;vertical-align:middle;">NOVO</span>' : ''}
         </td>
@@ -1817,6 +1819,57 @@ function updatePagination() {
   document.getElementById("paginationText").textContent = `${start} a ${end} de ${total}`;
   document.getElementById("currentPage").value         = currentPage;
 }
+
+// 2026-09-29: clique na celula do ID copia o codigo pro clipboard.
+// stopPropagation evita abrir o modal de detalhe; abertura do modal
+// continua funcionando pelas outras colunas da linha.
+function copyTicketId(event, cell) {
+  if (event) event.stopPropagation();
+  if (!cell) return;
+  const code = (cell.dataset && cell.dataset.ticketCode) ? cell.dataset.ticketCode.trim() : '';
+  if (!code) return;
+
+  const strong = cell.querySelector('strong');
+  const showFeedback = () => {
+    if (!strong) return;
+    if (strong.dataset.copyingBusy === '1') return;
+    strong.dataset.copyingBusy = '1';
+    const originalHTML = strong.innerHTML;
+    const hadPrimary   = strong.classList.contains('text-primary');
+    strong.innerHTML = '<i class="bi bi-check2"></i> Copiado';
+    strong.classList.remove('text-primary');
+    strong.classList.add('text-success');
+    setTimeout(() => {
+      strong.innerHTML = originalHTML;
+      strong.classList.remove('text-success');
+      if (hadPrimary) strong.classList.add('text-primary');
+      delete strong.dataset.copyingBusy;
+    }, 1200);
+  };
+
+  const fallbackCopy = () => {
+    const ta = document.createElement('textarea');
+    ta.value = code;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (_) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(showFeedback).catch(() => {
+      if (fallbackCopy()) showFeedback();
+    });
+  } else if (fallbackCopy()) {
+    showFeedback();
+  }
+}
+window.copyTicketId = copyTicketId;
 
 function updateStatistics() {
   document.getElementById("totalTickets").textContent      = tickets.length;
