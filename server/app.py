@@ -1312,19 +1312,37 @@ async def health():
 # 🔑 ESQUECI MINHA SENHA — fluxo completo (forgot / validate / reset)
 # Definido aqui (não em routes/auth.py) porque o auth_router está no app.py.
 # =========================================================================
-import uuid as _uuid_fp
+import hashlib as _hashlib_fp
+import secrets as _secrets_fp
 import datetime as _dt_fp
 from pydantic import BaseModel as _BaseModelFP, Field as _FieldFP
-from config import PUBLIC_BASE_URL as _PUB_URL_FP
 
-_RESET_TTL_MIN = 60  # link válido por 1 hora
+# 2026-09-30: fluxo migrado de "link 64 chars por email" pra OTP 6 digitos
+# (mesmo padrao do /primeiro-acesso). User digita o codigo direto na tela
+# de login, sem sair. Ver docs/REGRAS_NEGOCIO.md.
+_RESET_OTP_TTL_MIN     = 15   # tempo de vida do codigo
+_RESET_OTP_MAX_PER_HR  = 3    # rate limit por email por hora
+_RESET_OTP_MAX_IP_HR   = 10   # rate limit por IP por hora
+
+
+def _hash_reset_otp(codigo: str) -> str:
+    """SHA-256 hex do codigo. Cabe em CHAR(64) da tabela password_reset_tokens."""
+    return _hashlib_fp.sha256(codigo.encode("ascii")).hexdigest()
+
+
+def _gerar_reset_otp() -> str:
+    """Gera codigo numerico de 6 digitos usando secrets (CSPRNG)."""
+    return f"{_secrets_fp.randbelow(1_000_000):06d}"
+
 
 class _ForgotBody(_BaseModelFP):
     email: str = _FieldFP(..., min_length=3, max_length=190)
 
 class _ResetBody(_BaseModelFP):
-    token: str = _FieldFP(..., min_length=10, max_length=64)
+    email:    str = _FieldFP(..., min_length=3, max_length=190)
+    codigo:   str = _FieldFP(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
     password: str = _FieldFP(..., min_length=8, max_length=72)
+
 
 def _client_ip_fp(request: Request) -> str:
     fwd = request.headers.get("X-Forwarded-For", "")
@@ -1334,15 +1352,19 @@ def _client_ip_fp(request: Request) -> str:
 
 @auth_router.post("/forgot-password")
 def forgot_password(body: _ForgotBody, request: Request):
-    """Solicita reset de senha: gera token, salva no banco, envia email.
+    """Solicita reset de senha: gera OTP 6 digitos, salva hash no banco, envia por email.
 
     SEMPRE retorna 200 OK mesmo se o email não existir — evita enumeração
-    de contas válidas (prática padrão de segurança).
+    de contas válidas (anti-enumeration).
+
+    Rate-limit:
+      - Max 3 codigos por email por hora
+      - Max 10 codigos por IP por hora
     """
-    from services.email_service import email_reset_senha, enviar_email
+    from services.email_service import email_reset_senha_otp, enviar_email
     email = (body.email or "").strip().lower()
     ip = _client_ip_fp(request)
-    mensagem = "Se este e-mail estiver cadastrado, você receberá o link em instantes."
+    mensagem = "Se este e-mail estiver cadastrado, você receberá o código em instantes."
 
     if not email or "@" not in email:
         return {"ok": True, "message": mensagem}
@@ -1356,29 +1378,52 @@ def forgot_password(body: _ForgotBody, request: Request):
         )
         user = cursor.fetchone()
 
+        # Rate-limit por IP: conta pedidos nao usados na ultima hora (independente do email).
+        # Feito antes do lookup pra proteger tambem contra scan de emails inexistentes.
+        cursor.execute("""
+            SELECT COUNT(*) AS n FROM password_reset_tokens
+             WHERE ip_origem = %s AND criado_em > (NOW() - INTERVAL 1 HOUR)
+        """, (ip[:45],))
+        ip_hits = (cursor.fetchone() or {}).get("n", 0)
+        if ip_hits >= _RESET_OTP_MAX_IP_HR:
+            logger.warning(f"[AUTH/FORGOT] rate-limit por IP={ip} hits={ip_hits}")
+            # Retorna 429 pra sinalizar excesso — o frontend pode mostrar msg
+            raise HTTPException(status_code=429, detail="Muitos pedidos deste IP. Tente novamente em 1h.")
+
         if user and user.get("is_active"):
-            token = _uuid_fp.uuid4().hex + _uuid_fp.uuid4().hex  # 64 chars
-            expires_at = _dt_fp.datetime.utcnow() + _dt_fp.timedelta(minutes=_RESET_TTL_MIN)
+            # Rate-limit por email: max 3 pedidos ativos na ultima hora.
+            cursor.execute("""
+                SELECT COUNT(*) AS n FROM password_reset_tokens
+                 WHERE user_id = %s AND criado_em > (NOW() - INTERVAL 1 HOUR)
+            """, (user["id"],))
+            email_hits = (cursor.fetchone() or {}).get("n", 0)
+            if email_hits >= _RESET_OTP_MAX_PER_HR:
+                logger.warning(f"[AUTH/FORGOT] rate-limit por email={email} hits={email_hits}")
+                # Nao vaza que o email existe — resposta identica ao caso "email nao existe".
+                return {"ok": True, "message": mensagem}
+
+            codigo = _gerar_reset_otp()
+            token_hash = _hash_reset_otp(codigo)
+            expires_at = _dt_fp.datetime.utcnow() + _dt_fp.timedelta(minutes=_RESET_OTP_TTL_MIN)
             cursor.execute("""
                 INSERT INTO password_reset_tokens (user_id, token, expires_at, ip_origem)
                 VALUES (%s, %s, %s, %s)
-            """, (user["id"], token, expires_at, ip[:45]))
+            """, (user["id"], token_hash, expires_at, ip[:45]))
             conn.commit()
 
-            link = f"{_PUB_URL_FP}/SistemaCPE/web/reset-senha.html?token={token}"
             try:
-                assunto, html = email_reset_senha(
+                assunto, html = email_reset_senha_otp(
                     nome=user["name"] or "Usuário",
-                    link_reset=link,
+                    codigo=codigo,
                     ip_origem=ip,
-                    minutos_validade=_RESET_TTL_MIN,
+                    minutos_validade=_RESET_OTP_TTL_MIN,
                 )
                 enviar_email(para=user["email"], assunto=assunto, html=html)
-                logger.info(f"[AUTH/FORGOT] 📧 reset enviado para {user['email']} (token={token[:8]}...) ip={ip}")
+                logger.info(f"[AUTH/FORGOT] codigo enviado user_id={user['id']} email={user['email']} ip={ip}")
             except Exception as err:
-                logger.error(f"[AUTH/FORGOT] ⚠️ email pra {user['email']} falhou: {err}")
+                logger.error(f"[AUTH/FORGOT] email pra {user['email']} falhou: {err}")
         else:
-            logger.info(f"[AUTH/FORGOT] tentativa pra '{email}' (não existe ou inativo) ip={ip}")
+            logger.info(f"[AUTH/FORGOT] tentativa pra '{email}' (nao existe ou inativo) ip={ip}")
 
         return {"ok": True, "message": mensagem}
     finally:
@@ -1388,80 +1433,58 @@ def forgot_password(body: _ForgotBody, request: Request):
         except: pass
 
 
-@auth_router.get("/reset-password/validate")
-def reset_password_validate(token: str):
-    """Valida se o token existe, não expirou e ainda não foi usado."""
-    if not token or len(token) < 10 or len(token) > 64:
-        raise HTTPException(status_code=400, detail="Token inválido")
-
-    conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
-    try:
-        cursor.execute("""
-            SELECT t.id, t.user_id, t.expires_at, t.used_at,
-                   u.name, u.email
-              FROM password_reset_tokens t
-              JOIN users u ON u.id = t.user_id
-             WHERE t.token = %s LIMIT 1
-        """, (token,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Link inválido ou expirado")
-        if row["used_at"] is not None:
-            raise HTTPException(status_code=410, detail="Este link já foi usado")
-        if row["expires_at"] < _dt_fp.datetime.utcnow():
-            raise HTTPException(status_code=410, detail="Este link expirou. Solicite um novo.")
-        return {
-            "ok": True,
-            "email": row["email"],
-            "nome": row["name"],
-            "expira_em_segundos": int((row["expires_at"] - _dt_fp.datetime.utcnow()).total_seconds()),
-        }
-    finally:
-        try: cursor.close()
-        except: pass
-        try: conn.close()
-        except: pass
-
-
 @auth_router.post("/reset-password")
 def reset_password(body: _ResetBody, request: Request):
-    """Troca a senha do usuário associado ao token. Token vira inválido após uso."""
+    """Troca a senha do usuario. Recebe {email, codigo, password}, valida
+    hash do codigo no banco, aplica nova senha. Codigo vira invalido apos uso.
+    Fluxo em 1 request (sem endpoint /validate intermediario)."""
     from utils import hash_password
-    if not body.token or len(body.token) > 64:
-        raise HTTPException(status_code=400, detail="Token inválido")
+    email = (body.email or "").strip().lower()
+    ip = _client_ip_fp(request)
+
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Email invalido")
     if not body.password or len(body.password) < 8:
         raise HTTPException(status_code=400, detail="Senha precisa ter ao menos 8 caracteres")
 
-    ip = _client_ip_fp(request)
+    token_hash = _hash_reset_otp(body.codigo)
+
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
+        # Busca token pelo hash + junta com user pra validar email.
         cursor.execute("""
-            SELECT id, user_id, expires_at, used_at
-              FROM password_reset_tokens WHERE token = %s LIMIT 1
-        """, (body.token,))
+            SELECT t.id, t.user_id, t.expires_at, t.used_at, u.email, u.is_active
+              FROM password_reset_tokens t
+              JOIN users u ON u.id = t.user_id
+             WHERE t.token = %s AND LOWER(u.email) = %s
+             LIMIT 1
+        """, (token_hash, email))
         row = cursor.fetchone()
+
+        # Msg generica pra nao vazar se e "codigo errado" ou "email errado".
         if not row:
-            raise HTTPException(status_code=404, detail="Link inválido")
+            raise HTTPException(status_code=404, detail="Codigo invalido ou expirado")
         if row["used_at"] is not None:
-            raise HTTPException(status_code=410, detail="Este link já foi usado")
+            raise HTTPException(status_code=410, detail="Este codigo ja foi usado")
         if row["expires_at"] < _dt_fp.datetime.utcnow():
-            raise HTTPException(status_code=410, detail="Este link expirou. Solicite um novo.")
+            raise HTTPException(status_code=410, detail="Este codigo expirou. Solicite um novo.")
+        if not row.get("is_active"):
+            raise HTTPException(status_code=403, detail="Usuario inativo")
 
         new_hash = hash_password(body.password)
         cursor.execute("UPDATE users SET password_hash = %s WHERE id = %s",
                        (new_hash, row["user_id"]))
         cursor.execute("UPDATE password_reset_tokens SET used_at = NOW() WHERE id = %s",
                        (row["id"],))
-        # Invalida outros tokens pendentes do mesmo usuário (segurança)
+        # Invalida outros codigos pendentes do mesmo usuario (seguranca).
         cursor.execute("""
             UPDATE password_reset_tokens
                SET used_at = NOW()
              WHERE user_id = %s AND used_at IS NULL AND id != %s
         """, (row["user_id"], row["id"]))
         conn.commit()
-        logger.info(f"[AUTH/RESET] ✅ senha trocada user_id={row['user_id']} ip={ip}")
+        logger.info(f"[AUTH/RESET] senha trocada user_id={row['user_id']} ip={ip}")
         return {"ok": True, "message": "Senha redefinida com sucesso. Faça login com a nova senha."}
     finally:
         try: cursor.close()
