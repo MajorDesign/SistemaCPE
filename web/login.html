@@ -699,7 +699,9 @@
       overflow-y: auto !important;
       overflow-x: hidden !important;
       margin: 0 !important;
-      padding: 20px 32px !important;
+      /* padding-top maior pra descer o logo/form do topo, preenche o espaco
+         vazio que ficava embaixo (footer fica no fundo via margin-top:auto). */
+      padding: clamp(6vh, 12vh, 15vh) 32px 20px 32px !important;
       display: flex !important;
       flex-direction: column !important;
       justify-content: flex-start !important;
@@ -711,14 +713,16 @@
     body.login-split-v2 .login-container::-webkit-scrollbar-thumb {
       background: #E5E7EB; border-radius: 3px;
     }
-    /* Logo menor + header compacto (reduz altura total) */
+    /* Header + logo — sem margin-top:auto porque nao empurra (header e o
+       primeiro filho, nao ha nada pra empurrar acima). O padding-top do
+       container cuida do "descer os elementos pra baixo do topo". */
     body.login-split-v2 .login-header {
-      margin-bottom: 8px !important;
+      margin-bottom: 12px !important;
       flex-shrink: 0;
     }
     body.login-page.login-split-v2 .login-header::before {
-      height: clamp(80px, 11vh, 120px) !important;
-      margin-bottom: 4px !important;
+      height: clamp(120px, 16vh, 180px) !important;   /* logo maior */
+      margin-bottom: 6px !important;
     }
     body.login-split-v2 .login-subtitle {
       font-size: 0.82rem !important;
