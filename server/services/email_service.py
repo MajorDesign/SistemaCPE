@@ -1404,6 +1404,60 @@ def email_otp_primeiro_acesso(
     return subject, html
 
 
+def email_reset_senha_otp(
+    nome: str,
+    codigo: str,
+    ip_origem: str,
+    minutos_validade: int = 15,
+) -> tuple[str, str]:
+    """E-mail com CODIGO OTP de 6 digitos pra redefinir a senha.
+
+    Substitui o fluxo antigo de "link 64 chars" — user digita o codigo
+    direto na tela de login, sem sair. Mesmo padrao do primeiro-acesso.
+
+    Inclui IP que solicitou (audit) — se nao foi o proprio usuario, ele
+    sabe que alguem tentou comprometer a conta.
+    """
+    subject = f"[CPE Control] Codigo {codigo} - Redefinir senha"
+    codigo_html = _escape(codigo)
+    body = f"""
+        <p>Ola <strong>{_escape(nome)}</strong>,</p>
+        <p>Recebemos uma solicitacao para <strong>redefinir a senha</strong>
+        da sua conta no <strong>CPE Control</strong>.</p>
+
+        <div style="margin:24px auto;padding:20px 24px;background:#111827;
+                    border-radius:10px;text-align:center;max-width:280px;">
+          <div style="font-size:11px;letter-spacing:2px;color:#9CA3AF;
+                      text-transform:uppercase;margin-bottom:8px;">
+            Codigo de redefinicao
+          </div>
+          <div style="font-family:'Courier New',monospace;font-size:38px;
+                      font-weight:700;color:#FFC107;letter-spacing:12px;
+                      padding-left:12px;">
+            {codigo_html}
+          </div>
+        </div>
+
+        <p style="text-align:center;font-size:13px;color:#6B7280;margin:0 0 20px;">
+          Digite este codigo na tela de login. Expira em
+          <strong>{minutos_validade} minutos</strong>.
+        </p>
+
+        <div style="margin:20px 0 6px;padding:14px 16px;background:#fef2f2;
+                    border-left:4px solid #DC2626;border-radius:6px;font-size:13px;">
+          <strong>Atencao:</strong>
+          <ul style="margin:6px 0 0;padding-left:18px;color:#7f1d1d;">
+            <li>Se <strong>voce nao solicitou</strong>, ignore este e-mail —
+                sua senha atual continua valida.</li>
+            <li>Nunca compartilhe este codigo com ninguem.</li>
+            <li>Solicitado a partir do IP: <code>{_escape(ip_origem)}</code></li>
+          </ul>
+        </div>
+    """
+    html = _BASE_TEMPLATE.format(title="Redefinir senha", tag="Seguranca", body=body)
+    return subject, html
+
+
 def email_reset_senha(
     nome: str,
     link_reset: str,

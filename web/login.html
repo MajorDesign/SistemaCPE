@@ -990,14 +990,14 @@
   </div>
 
   <!-- ============================================================ -->
-  <!-- MODAL DE ESQUECI MINHA SENHA                                  -->
+  <!-- MODAL DE ESQUECI MINHA SENHA (OTP 6 digitos, 2026-09-30)     -->
   <!-- ============================================================ -->
   <div class="fa-overlay" id="fpOverlay" role="dialog" aria-modal="true">
-    <div class="fa-modal" style="max-width:480px;">
+    <div class="fa-modal" style="max-width:520px;">
       <div class="fa-header">
         <div>
           <h3><i class="bi bi-key"></i> Esqueci minha senha</h3>
-          <p>Vamos enviar um link de redefinição pro seu e-mail</p>
+          <p id="fpSubtitle">Digite seu e-mail pra receber o código de redefinição</p>
         </div>
         <button class="fa-close" id="fpClose" type="button" aria-label="Fechar">
           <i class="bi bi-x-lg"></i>
@@ -1005,25 +1005,74 @@
       </div>
 
       <div class="fa-body">
-        <div id="fpAlert"></div>
-
-        <div class="fa-alert info">
-          <i class="bi bi-info-circle"></i>
-          <span>Digite o e-mail cadastrado no sistema. Você receberá um link com validade
-            de <strong>1 hora</strong> para definir uma nova senha.</span>
+        <div class="fa-stepper">
+          <div class="fa-stepper-item active" data-step="1"></div>
+          <div class="fa-stepper-item" data-step="2"></div>
         </div>
 
-        <div class="fa-field">
-          <label for="fpEmail"><i class="bi bi-envelope"></i> E-mail cadastrado</label>
-          <input type="email" id="fpEmail" placeholder="seu.email@cpe.com.br"
-                 maxlength="190" autocomplete="email">
+        <!-- ============ STEP 1: EMAIL + envio de codigo ============ -->
+        <div class="fa-step active" id="fpStep1">
+          <div id="fpStep1Alert"></div>
+
+          <div class="fa-alert info">
+            <i class="bi bi-info-circle"></i>
+            <span>Digite o e-mail cadastrado no sistema. Vamos enviar um
+              <strong>código de 6 dígitos</strong> válido por
+              <strong>15 minutos</strong>.</span>
+          </div>
+
+          <div class="fa-field">
+            <label for="fpEmail"><i class="bi bi-envelope"></i> E-mail cadastrado</label>
+            <input type="email" id="fpEmail" placeholder="seu.email@cpetecnologia.com.br"
+                   maxlength="190" autocomplete="email">
+          </div>
+
+          <div class="fa-actions">
+            <button type="button" class="fa-btn fa-btn-secondary" id="fpCancel1">Cancelar</button>
+            <button type="button" class="fa-btn fa-btn-primary" id="fpEnviarCodigo">
+              <i class="bi bi-send"></i> Enviar código
+            </button>
+          </div>
         </div>
 
-        <div class="fa-actions">
-          <button type="button" class="fa-btn fa-btn-secondary" id="fpCancel">Cancelar</button>
-          <button type="button" class="fa-btn fa-btn-primary" id="fpEnviar">
-            <i class="bi bi-send"></i> Enviar link
-          </button>
+        <!-- ============ STEP 2: CODIGO + NOVA SENHA + APLICAR ============ -->
+        <div class="fa-step" id="fpStep2">
+          <div id="fpStep2Alert"></div>
+
+          <div class="fa-alert info" style="align-items:flex-start">
+            <i class="bi bi-envelope-check"></i>
+            <span>Enviamos um código de 6 dígitos pra <strong id="fpEmailDisplay"></strong>.
+              Digite o código e a nova senha abaixo. Se não recebeu, verifique
+              a caixa de spam ou <a href="#" id="fpReenviar">solicite um novo código</a>.</span>
+          </div>
+
+          <div class="fa-field">
+            <label for="fpCodigo"><i class="bi bi-shield-lock"></i> Código recebido</label>
+            <input type="text" id="fpCodigo" placeholder="000000"
+                   maxlength="6" inputmode="numeric" autocomplete="one-time-code"
+                   style="letter-spacing:.4em; font-size:1.4rem; text-align:center; font-family:'Courier New',monospace;">
+          </div>
+
+          <div class="fa-field">
+            <label for="fpNovaSenha"><i class="bi bi-lock"></i> Nova senha</label>
+            <input type="password" id="fpNovaSenha" placeholder="Mínimo 8 caracteres"
+                   minlength="8" maxlength="72" autocomplete="new-password">
+          </div>
+
+          <div class="fa-field">
+            <label for="fpConfirmSenha"><i class="bi bi-lock-fill"></i> Confirmar nova senha</label>
+            <input type="password" id="fpConfirmSenha" placeholder="Repita a senha"
+                   minlength="8" maxlength="72" autocomplete="new-password">
+          </div>
+
+          <div class="fa-actions">
+            <button type="button" class="fa-btn fa-btn-secondary" id="fpVoltar">
+              <i class="bi bi-arrow-left"></i> Voltar
+            </button>
+            <button type="button" class="fa-btn fa-btn-primary" id="fpAplicar">
+              <i class="bi bi-check-circle"></i> Redefinir senha
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -1836,43 +1885,138 @@
   <!-- LÓGICA DO ESQUECI MINHA SENHA                                 -->
   <!-- ============================================================ -->
   <script>
+  // 2026-09-30: fluxo migrado de "link 64 chars por email" pra OTP 6 digitos
+  // (mesmo padrao do /primeiro-acesso). User digita o codigo direto na
+  // tela de login, sem sair. Backend: server/app.py /forgot-password + /reset-password.
   (function () {
     'use strict';
     const API = (typeof API_BASE_URL !== 'undefined' ? API_BASE_URL : `http://${window.location.hostname || '127.0.0.1'}:8000`);
-    const fpOverlay = document.getElementById('fpOverlay');
-    const fpAlert   = document.getElementById('fpAlert');
-    const fpEmail   = document.getElementById('fpEmail');
-    const fpEnviar  = document.getElementById('fpEnviar');
 
-    function mostrarAlerta(tipo, msg) {
-      const icones = { danger: 'exclamation-circle', success: 'check-circle', warning: 'exclamation-triangle', info: 'info-circle' };
-      fpAlert.innerHTML = `<div class="fa-alert ${tipo}"><i class="bi bi-${icones[tipo] || 'info-circle'}"></i><span>${msg}</span></div>`;
+    const fpOverlay      = document.getElementById('fpOverlay');
+    const fpSubtitle     = document.getElementById('fpSubtitle');
+    const fpStep1        = document.getElementById('fpStep1');
+    const fpStep2        = document.getElementById('fpStep2');
+    const fpStep1Alert   = document.getElementById('fpStep1Alert');
+    const fpStep2Alert   = document.getElementById('fpStep2Alert');
+    const fpEmail        = document.getElementById('fpEmail');
+    const fpEmailDisplay = document.getElementById('fpEmailDisplay');
+    const fpCodigo       = document.getElementById('fpCodigo');
+    const fpNovaSenha    = document.getElementById('fpNovaSenha');
+    const fpConfirmSenha = document.getElementById('fpConfirmSenha');
+    const fpEnviarCodigo = document.getElementById('fpEnviarCodigo');
+    const fpAplicar      = document.getElementById('fpAplicar');
+    const fpReenviar     = document.getElementById('fpReenviar');
+    const fpVoltar       = document.getElementById('fpVoltar');
+    const stepper        = fpOverlay.querySelectorAll('.fa-stepper-item');
+
+    let emailAtual = '';
+    // Cooldown pra reenvio de codigo (evita spam + bater no rate-limit
+    // do backend de 3/hora por email).
+    const RESEND_COOLDOWN_SEC = 60;
+    let resendTimerId = null;
+    let resendUntilTs = 0;
+
+    const icones = { danger: 'exclamation-circle', success: 'check-circle', warning: 'exclamation-triangle', info: 'info-circle' };
+    // FastAPI as vezes devolve detail como array (validation errors) ou dict.
+    // Normaliza pra string legivel antes de exibir.
+    function _fmtDetail(d, fallback) {
+      if (!d) return fallback;
+      if (typeof d === 'string') return d;
+      if (Array.isArray(d)) return d.map(e => e && e.msg ? e.msg : JSON.stringify(e)).join('; ');
+      if (typeof d === 'object' && d.msg) return d.msg;
+      try { return JSON.stringify(d); } catch (_) { return fallback; }
     }
-    function limparAlerta() { fpAlert.innerHTML = ''; }
+    function alerta(container, tipo, msg) {
+      const texto = _fmtDetail(msg, 'Erro desconhecido');
+      container.innerHTML = `<div class="fa-alert ${tipo}"><i class="bi bi-${icones[tipo] || 'info-circle'}"></i><span>${texto}</span></div>`;
+    }
+    function limpar(container) { container.innerHTML = ''; }
+
+    // ---- Cooldown do reenvio ----
+    function _remainingSec() {
+      return Math.max(0, Math.ceil((resendUntilTs - Date.now()) / 1000));
+    }
+    function _renderReenvioLink() {
+      const sec = _remainingSec();
+      if (sec > 0) {
+        fpReenviar.textContent = `aguarde ${sec}s pra reenviar`;
+        fpReenviar.style.pointerEvents = 'none';
+        fpReenviar.style.opacity = '0.55';
+      } else {
+        fpReenviar.textContent = 'solicite um novo código';
+        fpReenviar.style.pointerEvents = '';
+        fpReenviar.style.opacity = '';
+      }
+    }
+    function _renderEnviarBtn() {
+      const sec = _remainingSec();
+      if (sec > 0) {
+        fpEnviarCodigo.disabled = true;
+        fpEnviarCodigo.innerHTML = `<i class="bi bi-clock"></i> Aguarde ${sec}s pra reenviar`;
+      } else {
+        fpEnviarCodigo.disabled = false;
+        fpEnviarCodigo.innerHTML = '<i class="bi bi-send"></i> Enviar código';
+      }
+    }
+    function startResendCooldown() {
+      resendUntilTs = Date.now() + RESEND_COOLDOWN_SEC * 1000;
+      if (resendTimerId) clearInterval(resendTimerId);
+      _renderReenvioLink(); _renderEnviarBtn();
+      resendTimerId = setInterval(() => {
+        _renderReenvioLink(); _renderEnviarBtn();
+        if (_remainingSec() <= 0) { clearInterval(resendTimerId); resendTimerId = null; }
+      }, 1000);
+    }
+    function stopResendCooldown() {
+      resendUntilTs = 0;
+      if (resendTimerId) { clearInterval(resendTimerId); resendTimerId = null; }
+      _renderReenvioLink(); _renderEnviarBtn();
+    }
+
+    function irParaStep(n) {
+      fpStep1.classList.toggle('active', n === 1);
+      fpStep2.classList.toggle('active', n === 2);
+      stepper.forEach((el) => {
+        const s = parseInt(el.dataset.step, 10);
+        el.classList.toggle('active', s <= n);
+      });
+      if (n === 1) {
+        fpSubtitle.textContent = 'Digite seu e-mail pra receber o código de redefinição';
+        setTimeout(() => fpEmail.focus(), 100);
+      } else {
+        fpSubtitle.textContent = 'Digite o código e a nova senha';
+        setTimeout(() => fpCodigo.focus(), 100);
+      }
+    }
 
     function abrir() {
+      // reset dos campos
       fpEmail.value = '';
-      // Pré-preenche se já tem algo no campo de credencial do login
+      fpCodigo.value = '';
+      fpNovaSenha.value = '';
+      fpConfirmSenha.value = '';
+      emailAtual = '';
+      limpar(fpStep1Alert); limpar(fpStep2Alert);
+      // Pre-preenche se ja tem algo no campo de credencial do login
       const credEl = document.getElementById('credential');
       if (credEl && credEl.value && credEl.value.includes('@')) fpEmail.value = credEl.value.trim();
-      limparAlerta();
+      stopResendCooldown();
+      fpAplicar.disabled = false;
+      fpAplicar.innerHTML = '<i class="bi bi-check-circle"></i> Redefinir senha';
+      irParaStep(1);
       fpOverlay.classList.add('show');
-      setTimeout(() => fpEmail.focus(), 100);
     }
     function fechar() { fpOverlay.classList.remove('show'); }
 
-    async function enviarLink() {
+    async function enviarCodigo() {
       const email = (fpEmail.value || '').trim().toLowerCase();
-      limparAlerta();
-
+      limpar(fpStep1Alert);
       if (!email || !email.includes('@')) {
-        mostrarAlerta('danger', 'Informe um e-mail válido.');
+        alerta(fpStep1Alert, 'danger', 'Informe um e-mail válido.');
         return;
       }
-
-      fpEnviar.disabled = true;
-      fpEnviar.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando...';
-
+      fpEnviarCodigo.disabled = true;
+      fpEnviarCodigo.innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando...';
       try {
         const r = await fetch(`${API}/api/auth/forgot-password`, {
           method: 'POST',
@@ -1880,34 +2024,113 @@
           body: JSON.stringify({ email }),
         });
         const data = await r.json().catch(() => ({}));
-
         if (!r.ok) {
-          mostrarAlerta('danger', data.detail || 'Erro ao solicitar o link.');
+          alerta(fpStep1Alert, 'danger', data.detail || 'Erro ao solicitar o código.');
+          fpEnviarCodigo.disabled = false;
+          fpEnviarCodigo.innerHTML = '<i class="bi bi-send"></i> Enviar código';
           return;
         }
-
-        mostrarAlerta('success',
-          '<strong>Pronto!</strong> Se este e-mail estiver cadastrado, você receberá o link em alguns minutos. ' +
-          'Verifique também sua caixa de spam. O link vale por 1 hora.');
-        fpEnviar.innerHTML = '<i class="bi bi-check-lg"></i> Enviado';
-        setTimeout(() => {
-          fechar();
-          fpEnviar.disabled = false;
-          fpEnviar.innerHTML = '<i class="bi bi-send"></i> Enviar link';
-        }, 4000);
+        emailAtual = email;
+        fpEmailDisplay.textContent = email;
+        irParaStep(2);
+        startResendCooldown();
       } catch (err) {
-        mostrarAlerta('danger', 'Erro de conexão: ' + err.message);
-        fpEnviar.disabled = false;
-        fpEnviar.innerHTML = '<i class="bi bi-send"></i> Enviar link';
+        alerta(fpStep1Alert, 'danger', 'Erro de conexão: ' + err.message);
+        fpEnviarCodigo.disabled = false;
+        fpEnviarCodigo.innerHTML = '<i class="bi bi-send"></i> Enviar código';
       }
     }
 
+    async function aplicarSenha() {
+      const codigo = (fpCodigo.value || '').trim();
+      const senha  = fpNovaSenha.value || '';
+      const conf   = fpConfirmSenha.value || '';
+      limpar(fpStep2Alert);
+      if (!/^\d{6}$/.test(codigo)) {
+        alerta(fpStep2Alert, 'danger', 'O código precisa ter exatamente 6 dígitos numéricos.');
+        return;
+      }
+      if (senha.length < 8) {
+        alerta(fpStep2Alert, 'danger', 'A nova senha precisa ter ao menos 8 caracteres.');
+        return;
+      }
+      if (senha !== conf) {
+        alerta(fpStep2Alert, 'danger', 'As senhas não coincidem.');
+        return;
+      }
+      fpAplicar.disabled = true;
+      fpAplicar.innerHTML = '<i class="bi bi-hourglass-split"></i> Aplicando...';
+      try {
+        const r = await fetch(`${API}/api/auth/reset-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailAtual, codigo, password: senha }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          alerta(fpStep2Alert, 'danger', data.detail || 'Não foi possível redefinir a senha.');
+          fpAplicar.disabled = false;
+          fpAplicar.innerHTML = '<i class="bi bi-check-circle"></i> Redefinir senha';
+          return;
+        }
+        alerta(fpStep2Alert, 'success',
+          '<strong>Senha redefinida!</strong> Já pode entrar com a nova senha.');
+        fpAplicar.innerHTML = '<i class="bi bi-check-lg"></i> Aplicado';
+        // Pre-preenche o campo de login com o email pra facilitar
+        const credEl = document.getElementById('credential');
+        if (credEl) credEl.value = emailAtual;
+        setTimeout(fechar, 2500);
+      } catch (err) {
+        alerta(fpStep2Alert, 'danger', 'Erro de conexão: ' + err.message);
+        fpAplicar.disabled = false;
+        fpAplicar.innerHTML = '<i class="bi bi-check-circle"></i> Redefinir senha';
+      }
+    }
+
+    // Handlers
     document.getElementById('btnForgotPassword').addEventListener('click', abrir);
     document.getElementById('fpClose').addEventListener('click', fechar);
-    document.getElementById('fpCancel').addEventListener('click', fechar);
-    fpEnviar.addEventListener('click', enviarLink);
+    document.getElementById('fpCancel1').addEventListener('click', fechar);
+    fpVoltar.addEventListener('click', () => irParaStep(1));
+    fpEnviarCodigo.addEventListener('click', enviarCodigo);
+    fpAplicar.addEventListener('click', aplicarSenha);
+    // Link "solicite um novo codigo" no step 2: dispara reenvio imediato
+    // sem sair do step 2. Respeita o cooldown de RESEND_COOLDOWN_SEC.
+    fpReenviar.addEventListener('click', async (e) => {
+      e.preventDefault();
+      if (_remainingSec() > 0) return;   // ainda em cooldown
+      if (!emailAtual) { irParaStep(1); return; }
+      limpar(fpStep2Alert);
+      try {
+        const r = await fetch(`${API}/api/auth/forgot-password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: emailAtual }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          alerta(fpStep2Alert, 'danger', data.detail || 'Erro ao reenviar codigo.');
+          return;
+        }
+        alerta(fpStep2Alert, 'success',
+          `<strong>Novo codigo enviado!</strong> Verifique a caixa de ${emailAtual}.`);
+        startResendCooldown();
+      } catch (err) {
+        alerta(fpStep2Alert, 'danger', 'Erro de conexão: ' + err.message);
+      }
+    });
     fpEmail.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); enviarLink(); }
+      if (e.key === 'Enter') { e.preventDefault(); enviarCodigo(); }
+    });
+    // Enter em qualquer campo do step 2 aplica
+    [fpCodigo, fpNovaSenha, fpConfirmSenha].forEach(el => {
+      el.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); aplicarSenha(); }
+      });
+    });
+    // So aceita digitos no campo codigo
+    fpCodigo.addEventListener('input', e => {
+      e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
     });
     fpOverlay.addEventListener('click', e => { if (e.target === fpOverlay) fechar(); });
   })();
