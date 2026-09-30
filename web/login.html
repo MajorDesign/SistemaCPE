@@ -4,6 +4,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- 2026-09-30: no-cache pra Cloudflare/browser nao servirem HTML velho
+       apos deploy. Assets externos (css/js/imagens) ja tem cache-buster
+       via ?v= — so o proprio login.html precisa dessa protecao. -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
     <link rel="icon" type="image/svg+xml" href="/SistemaCPE/web/favicon.svg?v=2026-07-02b">
   <title>CPE Control - Login</title>
 
@@ -677,10 +683,14 @@
       margin-top: auto;  /* empurra pro rodape do painel */
     }
     /* Painel ESQUERDO (form) — grid column 1, ocupa TODA a coluna.
-       2026-09-30 fix prod: trocado justify-content de "center" pra
-       "flex-start" + gap real entre form e footer. O "center" com
-       min-height 100vh + logo grande (220px) sobrepunha o footer no
-       botao "esqueci senha" em viewports de laptop. */
+       2026-09-30 fix definitivo:
+       - height fixo em 100vh + overflow-y auto: se o conteudo passar
+         (viewports curtos < 800px altura), scroll interno em vez de
+         sobreposicao visual do rodape.
+       - flex-column com margin-top:auto no footer garante rodape no fim
+         quando ha espaco sobrando.
+       - Media queries por altura (mais abaixo) encolhem logo/header
+         em viewports pequenos pra reduzir necessidade de scroll. */
     body.login-split-v2 .login-container {
       grid-column: 1;
       grid-row: 1;
@@ -690,15 +700,45 @@
       box-shadow: none !important;
       width: 100% !important;
       max-width: 100% !important;
-      max-height: none !important;
+      height: 100vh !important;
+      max-height: 100vh !important;
       min-height: 100vh;
-      overflow: visible !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
       margin: 0 !important;
-      padding: clamp(1.5rem, 4vh, 2.5rem) clamp(1.5rem, 4vw, 3rem) !important;
+      padding: clamp(1rem, 3vh, 2rem) clamp(1.5rem, 4vw, 3rem) !important;
       display: flex !important;
       flex-direction: column !important;
       justify-content: flex-start !important;
-      gap: 12px;
+      gap: 10px;
+      scrollbar-width: thin;
+      scrollbar-color: #E5E7EB transparent;
+    }
+    body.login-split-v2 .login-container::-webkit-scrollbar { width: 6px; }
+    body.login-split-v2 .login-container::-webkit-scrollbar-thumb {
+      background: #E5E7EB; border-radius: 3px;
+    }
+    /* Viewports curtos: encolhe o logo pra caber sem forcar scroll */
+    @media (max-height: 850px) {
+      body.login-page .login-header::before {
+        height: clamp(100px, 14vh, 150px) !important;
+      }
+      body.login-split-v2 .login-header { margin-bottom: 8px !important; }
+    }
+    @media (max-height: 720px) {
+      body.login-page .login-header::before {
+        height: 80px !important;
+      }
+      body.login-split-v2 .login-title,
+      body.login-split-v2 .login-subtitle { font-size: 0.8rem !important; }
+      body.login-split-v2 .login-container {
+        padding: 1rem 1.5rem !important;
+        gap: 6px;
+      }
+      body.login-split-v2 .login-footer {
+        padding-top: 0.75rem !important;
+      }
+      body.login-split-v2 .login-footer p { font-size: 11px !important; margin: 0.1rem 0 !important; }
     }
     /* No split, header pequeno no form (redundancia visual com o hero) */
     body.login-split-v2 .login-header {
