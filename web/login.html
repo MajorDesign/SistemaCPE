@@ -682,15 +682,9 @@
       opacity: .85;
       margin-top: auto;  /* empurra pro rodape do painel */
     }
-    /* Painel ESQUERDO (form) — grid column 1, ocupa TODA a coluna.
-       2026-09-30 fix definitivo:
-       - height fixo em 100vh + overflow-y auto: se o conteudo passar
-         (viewports curtos < 800px altura), scroll interno em vez de
-         sobreposicao visual do rodape.
-       - flex-column com margin-top:auto no footer garante rodape no fim
-         quando ha espaco sobrando.
-       - Media queries por altura (mais abaixo) encolhem logo/header
-         em viewports pequenos pra reduzir necessidade de scroll. */
+    /* 2026-09-30 REFACTOR DEFINITIVO — pedido user: campos menores,
+       padding menor, logo menor, footer subido, elementos com espaco
+       claro pra nao embolar em nenhuma altura de viewport. */
     body.login-split-v2 .login-container {
       grid-column: 1;
       grid-row: 1;
@@ -700,17 +694,16 @@
       box-shadow: none !important;
       width: 100% !important;
       max-width: 100% !important;
-      height: 100vh !important;
-      max-height: 100vh !important;
       min-height: 100vh;
+      max-height: 100vh !important;
       overflow-y: auto !important;
       overflow-x: hidden !important;
       margin: 0 !important;
-      padding: clamp(1rem, 3vh, 2rem) clamp(1.5rem, 4vw, 3rem) !important;
+      padding: 20px 32px !important;
       display: flex !important;
       flex-direction: column !important;
       justify-content: flex-start !important;
-      gap: 10px;
+      gap: 0;
       scrollbar-width: thin;
       scrollbar-color: #E5E7EB transparent;
     }
@@ -718,27 +711,76 @@
     body.login-split-v2 .login-container::-webkit-scrollbar-thumb {
       background: #E5E7EB; border-radius: 3px;
     }
-    /* Viewports curtos: encolhe o logo pra caber sem forcar scroll */
-    @media (max-height: 850px) {
-      body.login-page .login-header::before {
-        height: clamp(100px, 14vh, 150px) !important;
-      }
-      body.login-split-v2 .login-header { margin-bottom: 8px !important; }
+    /* Logo menor + header compacto (reduz altura total) */
+    body.login-split-v2 .login-header {
+      margin-bottom: 8px !important;
+      flex-shrink: 0;
     }
-    @media (max-height: 720px) {
-      body.login-page .login-header::before {
-        height: 80px !important;
+    body.login-page.login-split-v2 .login-header::before {
+      height: clamp(80px, 11vh, 120px) !important;
+      margin-bottom: 4px !important;
+    }
+    body.login-split-v2 .login-subtitle {
+      font-size: 0.82rem !important;
+      margin: 0 !important;
+    }
+    /* Form compacto: gap menor entre campos, padding dos inputs reduzido */
+    body.login-split-v2 .login-form {
+      gap: 10px !important;
+      flex-shrink: 0;
+    }
+    body.login-split-v2 .form-group {
+      margin-bottom: 0 !important;
+    }
+    body.login-split-v2 .form-input {
+      padding: 0.55rem 0.9rem !important;
+      font-size: 15px !important;
+      border-radius: 8px !important;
+    }
+    body.login-split-v2 .form-label {
+      font-size: 0.68rem !important;
+      margin-bottom: 4px !important;
+    }
+    body.login-split-v2 .input-helper {
+      font-size: 11px !important;
+      margin-top: 2px !important;
+    }
+    body.login-split-v2 .login-button {
+      min-height: 42px !important;
+      padding: 10px !important;
+      font-size: 14px !important;
+      margin-top: 4px !important;
+    }
+    /* Links "Primeiro acesso" e "Esqueci senha" — bloco compacto, colado
+       no form, com pequena margem pra respirar do footer. */
+    body.login-split-v2 .fa-link {
+      padding: 4px 6px !important;
+      font-size: 13px !important;
+      margin: 0 !important;
+    }
+    /* Footer: SEPARADOR VISUAL forte pra nunca ser confundido com o form
+       acima. margin-top:auto empurra pro fundo; flex-shrink:0 impede
+       compressao. Border-top divide claramente do resto. */
+    body.login-split-v2 .login-footer {
+      margin-top: auto !important;
+      padding-top: 12px !important;
+      padding-bottom: 0 !important;
+      border-top: 1px solid #E5E7EB !important;
+      flex-shrink: 0;
+    }
+    body.login-split-v2 .login-footer p {
+      font-size: 11px !important;
+      margin: 2px 0 !important;
+      line-height: 1.3 !important;
+    }
+
+    /* Viewports muito curtos: media query final de emergencia */
+    @media (max-height: 700px) {
+      body.login-page.login-split-v2 .login-header::before {
+        height: 70px !important;
       }
-      body.login-split-v2 .login-title,
-      body.login-split-v2 .login-subtitle { font-size: 0.8rem !important; }
-      body.login-split-v2 .login-container {
-        padding: 1rem 1.5rem !important;
-        gap: 6px;
-      }
-      body.login-split-v2 .login-footer {
-        padding-top: 0.75rem !important;
-      }
-      body.login-split-v2 .login-footer p { font-size: 11px !important; margin: 0.1rem 0 !important; }
+      body.login-split-v2 .form-input { padding: 0.45rem 0.75rem !important; font-size: 14px !important; }
+      body.login-split-v2 .login-container { padding: 14px 24px !important; }
     }
     /* No split, header pequeno no form (redundancia visual com o hero) */
     body.login-split-v2 .login-header {
