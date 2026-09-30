@@ -676,7 +676,11 @@
       opacity: .85;
       margin-top: auto;  /* empurra pro rodape do painel */
     }
-    /* Painel ESQUERDO (form) — grid column 1, ocupa TODA a coluna */
+    /* Painel ESQUERDO (form) — grid column 1, ocupa TODA a coluna.
+       2026-09-30 fix prod: trocado justify-content de "center" pra
+       "flex-start" + gap real entre form e footer. O "center" com
+       min-height 100vh + logo grande (220px) sobrepunha o footer no
+       botao "esqueci senha" em viewports de laptop. */
     body.login-split-v2 .login-container {
       grid-column: 1;
       grid-row: 1;
@@ -690,10 +694,11 @@
       min-height: 100vh;
       overflow: visible !important;
       margin: 0 !important;
-      padding: clamp(2rem, 5vh, 3.5rem) clamp(1.5rem, 4vw, 3rem) !important;
+      padding: clamp(1.5rem, 4vh, 2.5rem) clamp(1.5rem, 4vw, 3rem) !important;
       display: flex !important;
       flex-direction: column !important;
-      justify-content: center;
+      justify-content: flex-start !important;
+      gap: 12px;
     }
     /* No split, header pequeno no form (redundancia visual com o hero) */
     body.login-split-v2 .login-header {
@@ -713,11 +718,15 @@
       color: #6B7280 !important;
       margin: 0 !important;
     }
-    /* Rodape do form: mais discreto no split */
+    /* Rodape do form: empurrado pro fundo com margin-top auto,
+       garantindo separacao real do botao "esqueci senha" independente
+       do tamanho do viewport. Antes usava center + margem fixa, o que
+       causava sobreposicao em telas curtas em prod. */
     body.login-split-v2 .login-footer {
-      margin-top: 1.25rem !important;
-      padding-top: 1rem !important;
+      margin-top: auto !important;
+      padding-top: 1.5rem !important;
       border-top: 1px solid #E5E7EB;
+      flex-shrink: 0;
     }
     /* Mobile / tablet: hero some, form ocupa 100% (volta ao empilhado) */
     @media (max-width: 900px) {
