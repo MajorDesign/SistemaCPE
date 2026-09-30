@@ -309,19 +309,33 @@
     }
 
     /* ─── Links "Primeiro acesso" e "Esqueci minha senha" ─── */
+    /* 2026-09-30: os dois links agora ficam lado-a-lado numa unica
+       linha (fa-links-row) pra economizar altura vertical no card e
+       nao forcar scroll interno que escondia o segundo botao em
+       viewports de laptop (~800px). */
+    body.login-page .fa-links-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 6px;
+      flex-wrap: wrap;
+    }
+    body.login-page .fa-links-row .fa-links-sep {
+      color: #D1D5DB;
+      font-size: 12px;
+      user-select: none;
+    }
     body.login-page .fa-link {
       font-family: 'DM Sans', system-ui, sans-serif !important;
-      font-size: 13.5px !important;
+      font-size: 13px !important;
       color: #5C6370 !important;
       transition: color .15s;
       border-radius: 3px !important;
-      /* 2026-09-30: padding reduzido pra caber no card em viewports de
-         laptop (~800px altura) sem forcar scroll interno que escondia
-         o botao esqueci-senha no fold. */
-      padding: 6px 8px !important;
-      display: block;
-      width: 100%;
-      text-align: center;
+      padding: 4px 6px !important;
+      background: transparent !important;
+      border: 0 !important;
+      cursor: pointer;
     }
     body.login-page .fa-link:hover {
       color: #0F1419 !important;
@@ -965,15 +979,16 @@
           </span>
         </button>
 
-        <!-- ✅ PRIMEIRO ACESSO -->
-        <button type="button" class="fa-link" id="btnFirstAccess">
-          É seu <strong>primeiro acesso</strong>? Solicite seu cadastro aqui.
-        </button>
-
-        <!-- ✅ ESQUECI MINHA SENHA -->
-        <button type="button" class="fa-link" id="btnForgotPassword">
-          <strong>Esqueci minha senha</strong> — receber código por e-mail
-        </button>
+        <!-- ✅ Links auxiliares (primeiro acesso + esqueci senha) — lado-a-lado -->
+        <div class="fa-links-row">
+          <button type="button" class="fa-link" id="btnFirstAccess" title="Solicite seu cadastro">
+            <strong>Primeiro acesso</strong>
+          </button>
+          <span class="fa-links-sep">•</span>
+          <button type="button" class="fa-link" id="btnForgotPassword" title="Receber código por e-mail">
+            <strong>Esqueci minha senha</strong>
+          </button>
+        </div>
 
       </form>
 
