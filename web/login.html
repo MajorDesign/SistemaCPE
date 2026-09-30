@@ -311,11 +311,17 @@
     /* ─── Links "Primeiro acesso" e "Esqueci minha senha" ─── */
     body.login-page .fa-link {
       font-family: 'DM Sans', system-ui, sans-serif !important;
-      font-size: 14px !important;
+      font-size: 13.5px !important;
       color: #5C6370 !important;
       transition: color .15s;
       border-radius: 3px !important;
-      padding: 10px 8px !important;
+      /* 2026-09-30: padding reduzido pra caber no card em viewports de
+         laptop (~800px altura) sem forcar scroll interno que escondia
+         o botao esqueci-senha no fold. */
+      padding: 6px 8px !important;
+      display: block;
+      width: 100%;
+      text-align: center;
     }
     body.login-page .fa-link:hover {
       color: #0F1419 !important;
@@ -965,8 +971,8 @@
         </button>
 
         <!-- ✅ ESQUECI MINHA SENHA -->
-        <button type="button" class="fa-link" id="btnForgotPassword" style="margin-top:4px;">
-          <strong>Esqueci minha senha</strong> — receber link por e-mail
+        <button type="button" class="fa-link" id="btnForgotPassword">
+          <strong>Esqueci minha senha</strong> — receber código por e-mail
         </button>
 
       </form>
