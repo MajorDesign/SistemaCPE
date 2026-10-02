@@ -1853,6 +1853,19 @@ except Exception as err:
     import traceback
     logger.error(traceback.format_exc())
 
+# =================================================================
+# 2026-10-01: Modulo Assistencia Tecnica — Certificados
+# =================================================================
+try:
+    from routes.assistencia import router as assistencia_router, public_router as assistencia_public_router
+    app.include_router(assistencia_router)
+    app.include_router(assistencia_public_router)
+    logger.info("✅ Router de Assistencia Tecnica registrado: /api/assistencia + /cert publico")
+except Exception as err:
+    logger.error(f"❌ Erro ao registrar router de Assistencia Tecnica: {str(err)}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ✅ INICIA SCHEDULER DE FROTAS (jobs de lembrete/escalada/cleanup)
 # Desabilitado quando TESTING=1 (evita side effects em pytest).
 if os.getenv("TESTING") != "1":
