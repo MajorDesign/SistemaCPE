@@ -324,3 +324,6 @@ web/favicon-opcoes/
 
 # Scripts de teste soltos que ficam no server
 server/test_*.py
+
+# Uploads do modulo Assistencia Tecnica (certificados xlsx/pdf + anexo)
+server/uploads/

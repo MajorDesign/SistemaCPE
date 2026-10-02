@@ -1,0 +1,1685 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/SistemaCPE/web/favicon.svg?v=2026-07-02b">
+  <title>Assistência Técnica — CPE</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+  <!-- 2026-10-01: reusa o CSS do modulo Equipe de Suporte (mesma linguagem
+       visual: paleta preto+amarelo CPE, sidebar colapsavel, cards). Se um
+       dia precisar diferenciar visualmente, fazer assistencia-tecnica.css
+       separado. -->
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/equipe-suporte.css?v=2026-09-04-vinc-agenda">
+
+  <script src="/SistemaCPE/web/assests/js/config.js"></script>
+  <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-08-24-fetch-auth"></script>
+  <script>pageGuard('ASSISTENCIA_TECNICA');</script>
+
+  <style>
+    /* Overrides locais pra identificar visualmente que e outro modulo */
+    .sup-sidebar-logo-text strong { color: #FFC107; }
+    .ast-empty {
+      background: #fff;
+      border: 1px dashed var(--sup-border);
+      border-radius: 12px;
+      padding: 56px 32px;
+      text-align: center;
+      color: var(--sup-muted);
+    }
+    .ast-empty i {
+      font-size: 56px;
+      color: var(--sup-primary-d);
+      display: block;
+      margin-bottom: 16px;
+      opacity: .6;
+    }
+    .ast-empty h2 {
+      font-family: var(--ff-display);
+      font-weight: 700;
+      font-size: 1.5rem;
+      color: var(--sup-ink);
+      margin: 0 0 8px;
+    }
+    .ast-empty p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 420px;
+      margin: 0 auto;
+    }
+
+    /* ========== Certificados ========== */
+    .ast-cert-toolbar {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .ast-cert-toolbar-actions {
+      display: inline-flex; align-items: center; gap: 8px; margin-left: auto;
+    }
+    .ast-anexo-info {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; background: var(--sup-bg-strong); border: 1px solid var(--sup-border);
+      border-radius: 10px; font-size: 13px; color: var(--sup-text);
+    }
+    .ast-anexo-info.vazio { background: #fef9c3; border-color: #fde68a; color: #713f12; }
+    .ast-anexo-meta { color: var(--sup-muted); font-size: 12px; margin-top: 4px; }
+
+    /* ---------- QR novo (nunca impresso) ---------- */
+    .ast-btn-icon.ast-qr-novo {
+      position: relative;
+      background: #dcfce7; border-color: #86efac; color: #15803d;
+      animation: qrNovoPulse 2s ease-in-out infinite;
+    }
+    .ast-btn-icon.ast-qr-novo:hover { background: #bbf7d0; }
+    @keyframes qrNovoPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.5); }
+      50% { box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+    }
+    .ast-qr-novo-badge {
+      position: absolute; top: -6px; right: -10px;
+      background: #16a34a; color: #fff; font-size: 9px; font-weight: 700;
+      padding: 2px 5px; border-radius: 8px; letter-spacing: .3px;
+      box-shadow: 0 0 0 2px #fff;
+    }
+
+    /* ---------- Banner "QR novo" dentro do modal QR ---------- */
+    .ast-qr-banner {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 14px; margin-bottom: 12px;
+      background: #dcfce7; border: 1px solid #86efac; border-radius: 10px;
+      color: #166534; font-size: 13px;
+    }
+    .ast-qr-banner i { font-size: 20px; }
+
+    /* ---------- Historico de versoes ---------- */
+    .ast-hist-list { display: flex; flex-direction: column; gap: 10px; }
+    .ast-hist-item {
+      border: 1px solid var(--sup-border); border-radius: 10px;
+      padding: 12px 14px; background: #fff;
+    }
+    .ast-hist-item.ativo { border-left: 4px solid #16a34a; background: #f0fdf4; }
+    .ast-hist-item.inativo { opacity: .85; }
+    .ast-hist-head {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+    }
+    .ast-hist-ver {
+      font-weight: 700; font-size: 15px; color: var(--sup-ink);
+      background: #e5e7eb; padding: 2px 8px; border-radius: 6px;
+    }
+    .ast-hist-item.ativo .ast-hist-ver { background: #16a34a; color: #fff; }
+    .ast-hist-tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; }
+    .ast-hist-tag.ok { background: #16a34a; color: #fff; }
+    .ast-hist-tag.muted { background: #e5e7eb; color: #4b5563; }
+    .ast-hist-meta { font-size: 13px; color: var(--sup-text); display: flex; flex-direction: column; gap: 3px; margin: 6px 0; }
+    .ast-hist-meta i { color: var(--sup-muted); margin-right: 4px; }
+    .ast-hist-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+    /* ---------- Relatorio ---------- */
+    .ast-rel-filtro {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      padding: 10px 12px; background: var(--sup-bg-strong); border-radius: 10px;
+      margin-bottom: 16px; font-size: 13px;
+    }
+    .ast-rel-filtro label { display: flex; align-items: center; gap: 6px; }
+    .ast-rel-filtro input[type="date"] {
+      padding: 6px 8px; border: 1px solid var(--sup-border); border-radius: 6px;
+      font-family: inherit; font-size: 13px;
+    }
+    .ast-rel-cards {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;
+      margin-bottom: 20px;
+    }
+    .ast-rel-card {
+      padding: 14px 16px; border: 1px solid var(--sup-border); border-radius: 10px;
+      background: #fff; display: flex; flex-direction: column; gap: 4px;
+    }
+    .ast-rel-card .n { font-size: 28px; font-weight: 800; line-height: 1; }
+    .ast-rel-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--sup-muted); }
+    .ast-rel-card.ok { border-left: 4px solid #16a34a; } .ast-rel-card.ok .n { color: #16a34a; }
+    .ast-rel-card.alerta { border-left: 4px solid #dc2626; } .ast-rel-card.alerta .n { color: #dc2626; }
+    .ast-rel-card.info { border-left: 4px solid #2563eb; } .ast-rel-card.info .n { color: #2563eb; }
+    .ast-rel-card.sucesso { border-left: 4px solid #059669; background: #ecfdf5; } .ast-rel-card.sucesso .n { color: #047857; }
+
+    .ast-rel-sec-title {
+      font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--sup-muted);
+      margin: 18px 0 8px; font-weight: 600;
+    }
+    .ast-rel-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+      background: #fff; border: 1px solid var(--sup-border); border-radius: 10px; overflow: hidden;
+    }
+    .ast-rel-table th, .ast-rel-table td {
+      padding: 8px 12px; text-align: left; border-bottom: 1px solid #f1f5f9;
+    }
+    .ast-rel-table th { background: var(--sup-bg-strong); font-weight: 600; font-size: 12px; }
+    .ast-rel-table tr:last-child td { border-bottom: none; }
+    .ast-rel-table td.n { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* ------- Sino de notificacoes (vencimentos) ------- */
+    .ast-bell {
+      position: relative; width: 36px; height: 36px; border-radius: 50%;
+      background: #fff; border: 1px solid var(--sup-border);
+      display: inline-flex; align-items: center; justify-content: center;
+      cursor: pointer; color: var(--sup-text); transition: background .15s;
+      margin-right: 8px;
+    }
+    .ast-bell:hover { background: var(--sup-bg-strong); }
+    .ast-bell i { font-size: 18px; }
+    .ast-bell.has-alerts { color: #b91c1c; }
+    .ast-bell.has-alerts i { animation: astBellRing 2.6s ease-in-out infinite; transform-origin: top center; }
+    @keyframes astBellRing {
+      0%, 85%, 100% { transform: rotate(0); }
+      88% { transform: rotate(-14deg); }
+      92% { transform: rotate(10deg); }
+      96% { transform: rotate(-6deg); }
+    }
+    .ast-bell-badge {
+      position: absolute; top: -4px; right: -4px;
+      min-width: 18px; height: 18px; padding: 0 5px;
+      border-radius: 9px; background: #dc2626; color: #fff;
+      font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
+      box-shadow: 0 0 0 2px #fff;
+    }
+    .ast-bell-dropdown {
+      position: absolute; top: calc(100% + 8px); right: 0;
+      width: 380px; max-height: 480px; overflow: auto;
+      background: #fff; border: 1px solid var(--sup-border); border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+      padding: 8px 0; z-index: 200;
+      display: none;
+    }
+    .ast-bell-dropdown.show { display: block; }
+    .ast-bell-dropdown header {
+      font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
+      color: var(--sup-muted); padding: 8px 14px 10px; border-bottom: 1px solid var(--sup-border);
+    }
+    .ast-bell-item {
+      display: block; padding: 10px 14px; border-bottom: 1px solid #f1f5f9;
+      cursor: pointer; transition: background .12s;
+    }
+    .ast-bell-item:hover { background: #fef2f2; }
+    .ast-bell-item .serie { font-weight: 600; font-size: 13px; }
+    .ast-bell-item .meta { color: var(--sup-muted); font-size: 12px; margin-top: 2px; }
+    .ast-bell-item .dias { color: #dc2626; font-weight: 600; }
+    .ast-bell-empty { padding: 24px 14px; text-align: center; color: var(--sup-muted); font-size: 13px; }
+
+    /* ------- Dashboard - card de vencimentos ------- */
+    .ast-dash-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+    @media (min-width: 980px) { .ast-dash-grid { grid-template-columns: 1fr 1fr; } }
+    .ast-card {
+      background: #fff; border: 1px solid var(--sup-border); border-radius: 12px;
+      padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
+    }
+    .ast-card-head { display: flex; align-items: center; gap: 10px; }
+    .ast-card-head i { font-size: 22px; }
+    .ast-card-head h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--sup-ink); }
+    .ast-card.alert { border-left: 4px solid #dc2626; }
+    .ast-card.alert .ast-card-head i { color: #dc2626; }
+    .ast-card.ok { border-left: 4px solid #16a34a; }
+    .ast-card.ok .ast-card-head i { color: #16a34a; }
+    .ast-card .big-number { font-size: 42px; font-weight: 800; line-height: 1; color: var(--sup-ink); }
+    .ast-dash-list { max-height: 260px; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+    .ast-dash-list a {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 10px; border-radius: 8px; background: #fef2f2; color: var(--sup-text);
+      text-decoration: none; font-size: 13px; border: 1px solid #fecaca;
+    }
+    .ast-dash-list a:hover { background: #fee2e2; }
+    .ast-dash-list .d-serie { font-weight: 600; }
+    .ast-dash-list .d-dias { color: #b91c1c; font-weight: 600; font-size: 12px; }
+    .ast-cert-search {
+      flex: 1; min-width: 240px; max-width: 420px;
+      position: relative; background: #fff;
+      border: 1px solid var(--sup-border); border-radius: 10px;
+      display: flex; align-items: center; padding: 0 12px;
+    }
+    .ast-cert-search i { color: var(--sup-muted); margin-right: 8px; }
+    .ast-cert-search input {
+      flex: 1; border: none; outline: none; background: transparent;
+      padding: 10px 0; font-size: 14px; font-family: inherit;
+    }
+    .ast-btn-primary, .ast-btn-secondary {
+      border: none; border-radius: 10px; padding: 10px 16px;
+      font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+      display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+      transition: filter .15s, transform .05s;
+    }
+    .ast-btn-primary { background: var(--sup-primary); color: var(--sup-ink); }
+    .ast-btn-primary:hover:not(:disabled) { filter: brightness(0.94); }
+    .ast-btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+    .ast-btn-secondary { background: #fff; color: var(--sup-text); border: 1px solid var(--sup-border); }
+    .ast-btn-secondary:hover { background: var(--sup-bg-strong); }
+    .ast-btn-danger {
+      background: #fef2f2; color: var(--sup-danger); border: 1px solid #fecaca;
+      border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .ast-btn-danger:hover { background: #fee2e2; }
+    .ast-btn-icon {
+      background: #fff; color: var(--sup-text); border: 1px solid var(--sup-border);
+      border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .ast-btn-icon:hover { background: var(--sup-bg-strong); }
+
+    .ast-cert-table-wrap { background:#fff; border:1px solid var(--sup-border); border-radius:12px; overflow:hidden; }
+    .ast-cert-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ast-cert-table thead th {
+      background: var(--sup-bg-strong); color: var(--sup-text);
+      font-weight: 700; text-align: left; padding: 10px 14px;
+      border-bottom: 1px solid var(--sup-border); letter-spacing: .02em;
+    }
+    .ast-cert-table tbody td {
+      padding: 10px 14px; border-bottom: 1px solid #f0ede3; vertical-align: middle;
+    }
+    .ast-cert-table tbody tr:last-child td { border-bottom: none; }
+    .ast-cert-table tbody tr:hover { background: #fafaf5; }
+    .ast-cert-empty-row { text-align: center; color: var(--sup-muted); padding: 32px !important; }
+    .ast-cert-serie { font-weight: 700; color: var(--sup-ink); }
+    .ast-cert-actions { display: flex; gap: 6px; justify-content: flex-end; }
+
+    /* ========== Modal ========== */
+    .ast-modal-overlay {
+      position: fixed; inset: 0; background: rgba(10,10,10,.55); backdrop-filter: blur(4px);
+      z-index: 9000; display: none; align-items: center; justify-content: center; padding: 20px;
+    }
+    .ast-modal-overlay.show { display: flex; }
+    .ast-modal {
+      background: #fff; border-radius: 14px; max-width: 560px; width: 100%;
+      max-height: calc(100vh - 40px); overflow: hidden; display: flex; flex-direction: column;
+      box-shadow: 0 24px 60px rgba(0,0,0,.25);
+    }
+    .ast-modal-header {
+      background: var(--sup-dark); color: #fff; padding: 16px 20px;
+      display: flex; justify-content: space-between; align-items: center;
+      position: relative;
+    }
+    .ast-modal-header::after {
+      content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+      background: linear-gradient(90deg, var(--sup-primary) 0%, var(--sup-primary) 20%, transparent 20%, transparent 100%);
+    }
+    .ast-modal-header h3 { font-size: 16px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px; }
+    .ast-modal-header h3 i { color: var(--sup-primary); }
+    .ast-modal-close {
+      background: #C0392B; color: #fff; border: none; width: 26px; height: 26px;
+      border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: filter .15s;
+    }
+    .ast-modal-close:hover { filter: brightness(1.1); }
+    .ast-modal-close i { font-size: 12px; }
+    .ast-modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+    .ast-modal-footer {
+      padding: 14px 20px; background: var(--sup-bg); border-top: 1px solid var(--sup-border);
+      display: flex; gap: 10px; justify-content: flex-end;
+    }
+    .ast-field { margin-bottom: 16px; }
+    .ast-field label {
+      display: block; font-weight: 600; font-size: 12px;
+      color: var(--sup-text); margin-bottom: 6px;
+      letter-spacing: .05em; text-transform: uppercase;
+    }
+    .ast-field label i { color: var(--sup-primary-d); margin-right: 4px; }
+    .ast-field .req { color: var(--sup-danger); }
+    .ast-field input {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--sup-border);
+      border-radius: 8px; font-size: 14px; font-family: inherit; background: #f9fafb;
+      transition: border-color .15s, background .15s;
+    }
+    .ast-field input:focus {
+      outline: none; border-color: var(--sup-primary); background: #fff;
+      box-shadow: 0 0 0 3px rgba(255,193,7,.15);
+    }
+    .ast-field small { display: block; color: var(--sup-muted); font-size: 11px; margin-top: 4px; }
+
+    .ast-alert {
+      padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-bottom: 12px; display: none;
+      align-items: flex-start; gap: 8px;
+    }
+    .ast-alert.show { display: flex; }
+    .ast-alert.danger  { background: #fef2f2; color: #991b1b; border-left: 4px solid var(--sup-danger); }
+    .ast-alert.success { background: #ecfdf5; color: #065f46; border-left: 4px solid var(--sup-success); }
+    .ast-alert.info    { background: #eff6ff; color: #1e40af; border-left: 4px solid var(--sup-info); }
+
+    .ast-qr-body { text-align: center; }
+    .ast-qr-serie { margin-bottom: 10px; color: var(--sup-muted); font-size: 13px; }
+    .ast-qr-img { width: 260px; height: 260px; border: 1px solid var(--sup-border); border-radius: 8px; }
+    .ast-qr-url { margin-top: 10px; font-size: 11px; word-break: break-all; }
+    .ast-qr-url a { color: var(--sup-primary-d); text-decoration: underline; }
+
+    /* Toast simples (reusa #supToast do CSS global) */
+  </style>
+</head>
+<body class="sup-body">
+
+  <!-- LOADING -->
+  <div id="supLoading">
+    <div class="sup-spinner"></div>
+    <p>Carregando módulo de Assistência Técnica…</p>
+  </div>
+
+  <!-- TOAST -->
+  <div id="supToast"></div>
+
+  <div class="sup-wrapper">
+
+    <!-- ============ SIDEBAR INTERNA ============ -->
+    <aside class="sup-sidebar" id="supSidebar">
+      <div class="sup-sidebar-logo">
+        <img src="/SistemaCPE/web/assests/images/logocpe.png" alt="CPE">
+        <span class="sup-sidebar-logo-text">
+          <strong>Assistência</strong>
+          <small>Painel interno</small>
+        </span>
+      </div>
+      <a href="/SistemaCPE/index.html" class="sup-back-link">
+        <i class="bi bi-arrow-left-circle"></i><span>Voltar ao Sistema</span>
+      </a>
+      <nav class="sup-nav">
+        <div class="sup-nav-item active" data-section="dashboard" onclick="showSection('dashboard')">
+          <i class="bi bi-speedometer2"></i><span class="sup-nav-label">Dashboard</span>
+        </div>
+        <div class="sup-nav-item" data-section="certificados" onclick="showSection('certificados')">
+          <i class="bi bi-patch-check"></i><span class="sup-nav-label">Certificados</span>
+        </div>
+      </nav>
+      <button class="sup-sidebar-toggle"
+              onclick="document.getElementById('supSidebar').classList.toggle('collapsed')"
+              title="Expandir/recolher menu">
+        <i class="bi bi-list"></i>
+      </button>
+    </aside>
+
+    <!-- ============ CONTEÚDO ============ -->
+    <div class="sup-content">
+      <div class="sup-topbar">
+        <button class="sup-burger"
+                onclick="document.getElementById('supSidebar').classList.toggle('show')">
+          <i class="bi bi-list"></i>
+        </button>
+        <span class="sup-topbar-title" id="topbarTitle">Dashboard</span>
+        <span class="sup-badge-mod">ASSISTÊNCIA · TÉCNICA</span>
+        <div class="sup-topbar-actions" style="position:relative">
+          <div class="ast-bell" id="astBell" onclick="toggleBellDropdown()" title="Vencimentos de calibração">
+            <i class="bi bi-bell"></i>
+            <span class="ast-bell-badge" id="astBellBadge" style="display:none">0</span>
+          </div>
+          <div class="ast-bell-dropdown" id="astBellDropdown">
+            <header><i class="bi bi-exclamation-triangle"></i> Calibrações vencidas (6+ meses)</header>
+            <div id="astBellList"><div class="ast-bell-empty">Carregando…</div></div>
+          </div>
+          <span class="sup-topbar-user" id="topbarUser"></span>
+        </div>
+      </div>
+
+      <!-- ====== DASHBOARD ====== -->
+      <section class="sup-page active" id="page-dashboard">
+        <div class="ast-dash-grid">
+          <div class="ast-card" id="dashCardVenc">
+            <div class="ast-card-head">
+              <i class="bi bi-exclamation-triangle-fill"></i>
+              <h3>Calibrações vencidas (6+ meses)</h3>
+            </div>
+            <div class="big-number" id="dashVencNum">—</div>
+            <div style="font-size:12px;color:var(--sup-muted)" id="dashVencSub">Clique num item pra ver o certificado.</div>
+            <div class="ast-dash-list" id="dashVencList"></div>
+          </div>
+
+          <div class="ast-card">
+            <div class="ast-card-head">
+              <i class="bi bi-info-circle"></i>
+              <h3>Como funciona</h3>
+            </div>
+            <p style="font-size:13px;color:var(--sup-muted);margin:0;line-height:1.5">
+              A data de calibração é lida automaticamente do xlsx do certificado.
+              Quando passa de <strong>6 meses</strong>, aparece aqui e no sino 🔔.
+              Use pra ligar pro cliente e oferecer uma nova calibração.
+              <br><br>
+              Se o xlsx estiver em layout diferente e a data não for detectada,
+              edite manualmente pelo botão <i class="bi bi-pencil"></i> na lista de certificados.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ====== CERTIFICADOS ====== -->
+      <section class="sup-page" id="page-certificados">
+        <div class="ast-cert-toolbar">
+          <div class="ast-cert-search">
+            <i class="bi bi-search"></i>
+            <input id="certSearch" type="text" placeholder="Buscar por número de série…">
+          </div>
+          <div class="ast-cert-toolbar-actions">
+            <button class="ast-btn-secondary" onclick="abrirModalRelatorio()" title="Relatório de vencidos e renovações por período">
+              <i class="bi bi-graph-up"></i> Relatório
+            </button>
+            <button class="ast-btn-secondary" id="btnAnexoAnual" onclick="abrirModalAnexo()" style="display:none" title="Anexo PDF anexado em todo certificado baixado">
+              <i class="bi bi-paperclip"></i> Anexo Anual
+            </button>
+            <button class="ast-btn-primary" onclick="abrirModalNovoCert()">
+              <i class="bi bi-plus-lg"></i> Novo certificado
+            </button>
+          </div>
+        </div>
+
+        <div class="ast-cert-table-wrap">
+          <table class="ast-cert-table" id="certTable">
+            <thead>
+              <tr>
+                <th>Nº Série <small style="font-weight:400;color:var(--sup-muted)">(duplo clique → histórico)</small></th>
+                <th>Versão</th>
+                <th>Data calibração</th>
+                <th>Arquivo</th>
+                <th>QR</th>
+                <th>Criado em</th>
+                <th>Criado por</th>
+                <th style="width:110px">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="certTbody">
+              <tr><td colspan="8" class="ast-cert-empty-row">Carregando…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Modal: Novo / Editar Certificado                                  -->
+  <!-- ================================================================ -->
+  <div class="ast-modal-overlay" id="certModal" aria-hidden="true">
+    <div class="ast-modal">
+      <div class="ast-modal-header">
+        <h3 id="certModalTitle"><i class="bi bi-patch-check"></i> Novo Certificado</h3>
+        <button class="ast-modal-close" onclick="fecharModalCert()" aria-label="Fechar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="ast-modal-body">
+        <div class="ast-alert" id="certModalAlert"></div>
+        <form id="certForm" onsubmit="return false">
+          <div class="ast-field">
+            <label for="fieldArquivo">
+              <i class="bi bi-file-earmark-excel"></i>
+              <span id="fieldArquivoLabel">Arquivo Excel (.xlsx ou .xls) <span class="req">*</span></span>
+            </label>
+            <input type="file" id="fieldArquivo" accept=".xlsx,.xls" onchange="onCertFileSelecionado(event)">
+            <small id="fieldArquivoHelp">Excel .xlsx ou .xls. Será convertido em PDF automaticamente. Máx 10 MB.<br>
+              <strong>Dica:</strong> se o nome seguir o padrão <code>XXXX_YYY_SERIE.xlsx</code>, o número de série é preenchido sozinho.
+            </small>
+          </div>
+          <div class="ast-field">
+            <label for="fieldSerie">
+              <i class="bi bi-hash"></i> Número de série <span class="req">*</span>
+            </label>
+            <input type="text" id="fieldSerie" required maxlength="100"
+                   placeholder="Ex.: 296750 (lido do nome do arquivo)" autocomplete="off">
+            <small id="fieldSerieHelp">Alfanumérico, 2–100 caracteres. Permite espaço, _ - . /</small>
+          </div>
+          <div class="ast-field">
+            <label>
+              <i class="bi bi-calendar-event"></i> Data de calibração
+            </label>
+            <div id="fieldDataCalPreview" style="padding:10px 12px; border:1px solid var(--sup-border); border-radius:8px; background:#f9fafb; font-size:13px; color:var(--sup-muted); min-height:42px; display:flex; align-items:center; gap:8px;">
+              <i class="bi bi-upload"></i> Escolha um arquivo para ler a data automaticamente.
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="ast-modal-footer">
+        <button class="ast-btn-secondary" onclick="fecharModalCert()">Cancelar</button>
+        <button class="ast-btn-primary" id="certBtnSalvar" onclick="salvarCert()">
+          <i class="bi bi-check-lg"></i> <span id="certBtnSalvarText">Salvar</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Modal: QR do certificado                                          -->
+  <!-- ================================================================ -->
+  <div class="ast-modal-overlay" id="qrModal" aria-hidden="true">
+    <div class="ast-modal" style="max-width:420px">
+      <div class="ast-modal-header">
+        <h3><i class="bi bi-qr-code"></i> QR do certificado</h3>
+        <button class="ast-modal-close" onclick="fecharModalQR()" aria-label="Fechar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="ast-modal-body ast-qr-body">
+        <div id="qrModalBanner" class="ast-qr-banner" style="display:none"></div>
+        <p class="ast-qr-serie">Nº Série: <strong id="qrModalSerie"></strong></p>
+        <img id="qrModalImg" src="" alt="QR Code" class="ast-qr-img">
+        <p class="ast-qr-url"><a id="qrModalLink" href="#" target="_blank" rel="noopener"></a></p>
+        <small style="color:var(--sup-muted)">
+          Imprima e cole no equipamento. Qualquer pessoa com acesso ao QR pode
+          baixar o PDF, portanto não divulgue publicamente a URL.
+        </small>
+      </div>
+      <div class="ast-modal-footer">
+        <a id="qrModalDownload" class="ast-btn-secondary" download>
+          <i class="bi bi-download"></i> Baixar PNG
+        </a>
+        <button id="qrModalPrintZebra" class="ast-btn-secondary" onclick="imprimirEtiquetaZebra()">
+          <i class="bi bi-printer"></i> Imprimir etiqueta (Zebra ZD230)
+        </button>
+        <button class="ast-btn-primary" onclick="window.open(document.getElementById('qrModalLink').href, '_blank')">
+          <i class="bi bi-box-arrow-up-right"></i> Abrir PDF
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Modal: Historico de versoes de uma serie                          -->
+  <!-- ================================================================ -->
+  <div class="ast-modal-overlay" id="histModal" aria-hidden="true">
+    <div class="ast-modal" style="max-width:640px">
+      <div class="ast-modal-header">
+        <h3 id="histModalTitle"><i class="bi bi-clock-history"></i> Histórico</h3>
+        <button class="ast-modal-close" onclick="fecharHistorico()" aria-label="Fechar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="ast-modal-body" id="histModalBody"></div>
+      <div class="ast-modal-footer">
+        <button class="ast-btn-secondary" onclick="fecharHistorico()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Modal: Relatorio                                                  -->
+  <!-- ================================================================ -->
+  <div class="ast-modal-overlay" id="relModal" aria-hidden="true">
+    <div class="ast-modal" style="max-width:860px">
+      <div class="ast-modal-header">
+        <h3><i class="bi bi-graph-up"></i> Relatório de Certificados</h3>
+        <button class="ast-modal-close" onclick="fecharModalRelatorio()" aria-label="Fechar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="ast-modal-body">
+        <div class="ast-rel-filtro">
+          <label>De: <input type="date" id="relDesde"></label>
+          <label>Até: <input type="date" id="relAte"></label>
+          <button class="ast-btn-secondary" onclick="carregarRelatorio()">
+            <i class="bi bi-arrow-clockwise"></i> Atualizar
+          </button>
+          <button class="ast-btn-secondary" onclick="exportarRelatorioCsv()">
+            <i class="bi bi-filetype-csv"></i> Exportar CSV
+          </button>
+        </div>
+        <div id="relConteudo">
+          <div style="padding:30px;text-align:center;color:var(--sup-muted)">
+            <i class="bi bi-hourglass-split"></i> Carregando…
+          </div>
+        </div>
+      </div>
+      <div class="ast-modal-footer">
+        <button class="ast-btn-secondary" onclick="fecharModalRelatorio()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- Modal: Anexo Anual Global (singleton)                             -->
+  <!-- ================================================================ -->
+  <div class="ast-modal-overlay" id="anexoModal" aria-hidden="true">
+    <div class="ast-modal">
+      <div class="ast-modal-header">
+        <h3><i class="bi bi-paperclip"></i> Anexo Anual</h3>
+        <button class="ast-modal-close" onclick="fecharModalAnexo()" aria-label="Fechar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <div class="ast-modal-body">
+        <div class="ast-alert" id="anexoModalAlert"></div>
+
+        <p style="font-size:13px;color:var(--sup-muted);margin:0 0 14px">
+          Este PDF é anexado automaticamente ao final de <strong>todo certificado</strong>
+          baixado por QR Code. É substituído uma vez por ano. Somente o Responsável do
+          grupo pode atualizar.
+        </p>
+
+        <div id="anexoInfoBox" class="ast-anexo-info vazio">
+          <i class="bi bi-exclamation-triangle"></i>
+          <div>
+            <strong>Nenhum anexo cadastrado.</strong>
+            <div class="ast-anexo-meta">
+              É obrigatório ter um anexo antes de cadastrar certificados.
+            </div>
+          </div>
+        </div>
+
+        <div class="ast-field" style="margin-top:16px">
+          <label for="fieldAnexoPdf">
+            <i class="bi bi-file-earmark-pdf"></i>
+            <span>Novo anexo PDF <span class="req">*</span></span>
+          </label>
+          <input type="file" id="fieldAnexoPdf" accept="application/pdf,.pdf">
+          <small>Apenas .pdf. Máx 10 MB. Substitui o anexo atual (não é possível manter histórico).</small>
+        </div>
+      </div>
+      <div class="ast-modal-footer">
+        <button class="ast-btn-secondary" onclick="fecharModalAnexo()">Cancelar</button>
+        <a id="anexoBtnPreview" class="ast-btn-secondary" href="#" target="_blank" style="display:none">
+          <i class="bi bi-eye"></i> Ver atual
+        </a>
+        <button class="ast-btn-primary" id="anexoBtnSalvar" onclick="salvarAnexo()">
+          <i class="bi bi-upload"></i> <span id="anexoBtnSalvarText">Enviar</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ================================================================
+       Navegacao interna (section switcher) — mesmo padrao do
+       equipe-suporte: muda classe .active no sup-nav-item e na section
+       correspondente, atualiza topbar title.
+       ================================================================ */
+    function showSection(key) {
+      document.querySelectorAll('.sup-nav-item').forEach(el => {
+        el.classList.toggle('active', el.dataset.section === key);
+      });
+      document.querySelectorAll('.sup-page').forEach(el => {
+        el.classList.toggle('active', el.id === `page-${key}`);
+      });
+      const navItem = document.querySelector(`.sup-nav-item[data-section="${key}"]`);
+      const label = navItem?.querySelector('.sup-nav-label')?.textContent?.trim();
+      if (label) document.getElementById('topbarTitle').textContent = label;
+      // Fecha sidebar mobile
+      document.getElementById('supSidebar')?.classList.remove('show');
+    }
+
+    /* ================================================================
+       Boot: tira loading, mostra nome do user na topbar
+       ================================================================ */
+    (async function boot() {
+      const loading = document.getElementById('supLoading');
+      try {
+        // Pega user atual do localStorage (page-guard ja validou sessao)
+        const u = JSON.parse(localStorage.getItem('cpe_user') || '{}');
+        const nome = u.name || u.email || '';
+        const el = document.getElementById('topbarUser');
+        if (el && nome) el.textContent = nome;
+      } catch (_) {}
+      // Esconde loading suave
+      setTimeout(() => { if (loading) loading.style.display = 'none'; }, 150);
+    })();
+
+    /* ================================================================
+       CERTIFICADOS — CRUD + QR
+       ================================================================ */
+    const API_BASE = (typeof API_BASE_URL !== 'undefined')
+      ? API_BASE_URL
+      : `http://${location.hostname||'127.0.0.1'}:8000`;
+    const API_CERT = API_BASE + '/api/assistencia/certificados';
+
+    function _authHeaders() {
+      const t = localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token') || '';
+      return t ? { 'X-Auth-Token': t } : {};
+    }
+    async function _apiFetch(path, opts = {}) {
+      const r = await fetch(API_CERT + path, {
+        credentials: 'include',
+        ...opts,
+        headers: { ..._authHeaders(), ...(opts.headers || {}) },
+      });
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`;
+        try { const j = await r.json(); detail = j.detail || detail; } catch (_) {}
+        throw new Error(detail);
+      }
+      // 204 No Content
+      if (r.status === 204) return null;
+      const ct = r.headers.get('content-type') || '';
+      if (ct.includes('application/json')) return r.json();
+      return r.blob();
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }); }
+      catch { return iso; }
+    }
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+    }
+    function toast(msg, tipo = 'info') {
+      const el = document.getElementById('supToast');
+      if (!el) { alert(msg); return; }
+      el.textContent = msg;
+      el.className = 'show ' + tipo;
+      setTimeout(() => { el.className = ''; }, 3200);
+    }
+
+    let _certs = [];
+    let _searchTimer = null;
+
+    async function carregarCerts(q = '') {
+      const tbody = document.getElementById('certTbody');
+      tbody.innerHTML = `<tr><td colspan="7" class="ast-cert-empty-row"><i class="bi bi-hourglass-split"></i> Carregando…</td></tr>`;
+      try {
+        const qs = q ? '?q=' + encodeURIComponent(q) : '';
+        _certs = await _apiFetch(qs);
+        renderCerts();
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="7" class="ast-cert-empty-row" style="color:var(--sup-danger)">Erro: ${esc(e.message)}</td></tr>`;
+      }
+    }
+
+    function renderCerts() {
+      const tbody = document.getElementById('certTbody');
+      if (!_certs.length) {
+        tbody.innerHTML = `<tr><td colspan="8" class="ast-cert-empty-row">Nenhum certificado cadastrado ainda. Clique em "Novo certificado" pra começar.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = _certs.map(c => `
+        <tr${c.vencido ? ' style="background:#fef2f2"' : ''}>
+          <td>
+            <span class="ast-cert-serie" ondblclick="abrirHistoricoSerie('${esc(c.numero_serie)}')"
+                  style="cursor:pointer" title="Duplo clique para ver histórico de versões">
+              ${esc(c.numero_serie)}
+            </span>
+          </td>
+          <td style="font-size:12px">
+            <span style="font-weight:600">v${c.versao}</span>
+          </td>
+          <td style="font-size:12px">${renderDataCal(c)}</td>
+          <td>
+            <i class="bi bi-file-earmark-excel" style="color:#166534"></i>
+            ${esc(c.arquivo_xlsx_nome || '—')}
+          </td>
+          <td>
+            <button class="ast-btn-icon${c.qr_novo ? ' ast-qr-novo' : ''}"
+                    onclick="verQR(${c.id}, '${esc(c.numero_serie)}', '${c.qr_url_publica}', ${c.qr_novo ? 'true' : 'false'})"
+                    title="${c.qr_novo ? 'QR novo — ainda não impresso!' : 'Ver QR'}">
+              <i class="bi bi-qr-code"></i>
+              ${c.qr_novo ? '<span class="ast-qr-novo-badge">NOVO</span>' : ''}
+            </button>
+          </td>
+          <td style="color:var(--sup-muted);font-size:12px">${esc(fmtDate(c.criado_em))}</td>
+          <td>${esc(c.criado_por_nome || '—')}</td>
+          <td class="ast-cert-actions">
+            <button class="ast-btn-danger" onclick="deletarCert(${c.id})" title="Excluir">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function renderDataCal(c) {
+      if (!c.data_calibracao) {
+        return `<span style="color:#b45309" title="Não foi possível ler a data no xlsx — edite manualmente"><i class="bi bi-question-circle"></i> sem data</span>`;
+      }
+      const d = new Date(c.data_calibracao + 'T00:00:00');
+      const txt = d.toLocaleDateString('pt-BR');
+      if (c.vencido) {
+        return `<div style="color:#b91c1c;font-weight:600">${esc(txt)}</div>
+                <div style="color:#b91c1c;font-size:11px">${c.dias_desde_calibracao} dias atrás · <strong>vencido</strong></div>`;
+      }
+      return `<div>${esc(txt)}</div><div style="color:var(--sup-muted);font-size:11px">${c.dias_desde_calibracao} dias atrás</div>`;
+    }
+
+const _HELP_SERIE_DEFAULT = 'Alfanumérico, 2–100 caracteres. Permite espaço, _ - . /';
+    const _HELP_ARQ_NOVO = 'Excel .xlsx ou .xls. Será convertido em PDF automaticamente. Máx 10 MB.<br><strong>Dica:</strong> se o nome seguir o padrão <code>XXXX_YYY_SERIE.xlsx</code>, o número de série é preenchido sozinho.';
+    const _HELP_ARQ_EDIT = 'Deixe vazio para manter o arquivo atual. Se trocar, o QR continua o mesmo e a série é atualizada automaticamente pelo nome do arquivo.';
+
+    function abrirModalNovoCert() {
+      document.getElementById('certModalTitle').innerHTML = '<i class="bi bi-patch-check"></i> Novo Certificado';
+      document.getElementById('fieldSerie').value = '';
+      document.getElementById('fieldArquivo').value = '';
+      document.getElementById('fieldArquivoLabel').innerHTML = 'Arquivo Excel (.xlsx ou .xls) <span class="req">*</span>';
+      document.getElementById('fieldArquivoHelp').innerHTML = _HELP_ARQ_NOVO;
+      document.getElementById('fieldSerieHelp').textContent = _HELP_SERIE_DEFAULT;
+      document.getElementById('fieldArquivo').required = true;
+      document.getElementById('certBtnSalvarText').textContent = 'Salvar';
+      _limparAlerta();
+      _resetPreviewArquivo();
+      document.getElementById('certBtnSalvar').disabled = false;
+      document.getElementById('certModal').classList.add('show');
+      // Foco no input de arquivo (fluxo: escolhe arquivo -> serie preenche sozinha)
+      document.getElementById('fieldArquivo').focus();
+    }
+
+    function fecharModalCert() {
+      document.getElementById('certModal').classList.remove('show');
+    }
+    function _alerta(msg, tipo = 'danger') {
+      const el = document.getElementById('certModalAlert');
+      el.className = 'ast-alert show ' + tipo;
+      el.innerHTML = `<i class="bi bi-${tipo==='danger'?'exclamation-circle':'info-circle'}"></i><span>${esc(msg)}</span>`;
+    }
+    function _limparAlerta() {
+      const el = document.getElementById('certModalAlert');
+      el.className = 'ast-alert';
+      el.innerHTML = '';
+    }
+
+    /* ----------------------------------------------------------------
+       Extrai o numero de serie do nome do arquivo. Padrao esperado:
+         XXXX_YYY_SERIE.xlsx  (ultima parte apos '_' = serie)
+       Exemplo: '0001_GD2i-8_296750.xlsx' -> '296750'
+       Retorna string vazia se nao conseguir extrair algo valido
+       (minimo 2 chars, alfanumerico/._-/ permitido).
+       Exposto no window pra ser testavel.
+       ---------------------------------------------------------------- */
+    function _extrairSerieDoNomeArquivo(nomeArquivo) {
+      if (!nomeArquivo) return '';
+      const nome = String(nomeArquivo).trim();
+      if (!nome) return '';
+      // Remove extensao conhecida (.xlsx ou .xls) — case insensitive
+      const stem = nome.replace(/\.(xlsx|xls)$/i, '');
+      if (!stem) return '';
+      // Split por '_' e pega ultimo segmento nao vazio
+      const partes = stem.split('_').map(p => p.trim()).filter(Boolean);
+      if (!partes.length) return '';
+      const candidato = partes[partes.length - 1];
+      // Valida contra regex do backend: comeca e termina alfanumerico,
+      // 2-100 chars, miolo [A-Za-z0-9 _\-./]
+      const re = /^[A-Za-z0-9][A-Za-z0-9 _\-./]{0,98}[A-Za-z0-9]$/;
+      return re.test(candidato) ? candidato : '';
+    }
+    // Exposto pra testes de node
+    window._extrairSerieDoNomeArquivo = _extrairSerieDoNomeArquivo;
+
+    // Estado do preview atual (data + flag duplicata). Zerado ao abrir modal.
+    let _previewData = null;
+    let _previewDuplicata = null;
+
+    function _resetPreviewArquivo() {
+      _previewData = null;
+      _previewDuplicata = null;
+      const box = document.getElementById('fieldDataCalPreview');
+      if (box) {
+        box.style.background = '#f9fafb';
+        box.style.borderColor = 'var(--sup-border)';
+        box.style.color = 'var(--sup-muted)';
+        box.innerHTML = `<i class="bi bi-upload"></i> Escolha um arquivo para ler a data automaticamente.`;
+      }
+    }
+
+    async function onCertFileSelecionado(ev) {
+      const f = ev.target.files && ev.target.files[0];
+      if (!f) { _resetPreviewArquivo(); return; }
+
+      // 1) Serie do nome do arquivo (sincrono)
+      const serieExtraida = _extrairSerieDoNomeArquivo(f.name);
+      const campoSerie = document.getElementById('fieldSerie');
+      const helpSerie = document.getElementById('fieldSerieHelp');
+      if (serieExtraida) {
+        campoSerie.value = serieExtraida;
+        if (helpSerie) helpSerie.innerHTML = `<i class="bi bi-magic" style="color:#059669"></i> Série <strong>${esc(serieExtraida)}</strong> lida automaticamente do nome do arquivo.`;
+      } else if (!campoSerie.value) {
+        if (helpSerie) helpSerie.innerHTML = `<i class="bi bi-info-circle" style="color:#b45309"></i> Nome do arquivo fora do padrão — digite o número de série manualmente.`;
+      }
+
+      // 2) Data de calibracao via parse-preview no backend (precisa ler o xlsx)
+      const box = document.getElementById('fieldDataCalPreview');
+      box.innerHTML = `<i class="bi bi-hourglass-split"></i> Lendo arquivo...`;
+      box.style.color = 'var(--sup-muted)';
+
+      try {
+        const fd = new FormData();
+        fd.append('arquivo', f);
+        const r = await fetch(API_CERT + '/parse-preview', {
+          method: 'POST',
+          credentials: 'include',
+          headers: _authHeaders(),
+          body: fd,
+        });
+        if (!r.ok) {
+          let msg = 'HTTP ' + r.status;
+          try { msg = (await r.json()).detail || msg; } catch (_) {}
+          throw new Error(msg);
+        }
+        const j = await r.json();
+        _previewData = j.data_calibracao;          // 'YYYY-MM-DD' ou null
+        _previewDuplicata = (j.status === 'duplicata' || j.status === 'mais_antiga') ? j.versao_atual : null;
+
+        // Monta UI do preview da DATA
+        if (_previewData) {
+          const d = new Date(_previewData + 'T00:00:00').toLocaleDateString('pt-BR');
+          box.innerHTML = `<i class="bi bi-check-circle" style="color:#059669"></i> Data de calibração: <strong>${esc(d)}</strong>`;
+          box.style.background = '#f0fdf4';
+          box.style.borderColor = '#86efac';
+          box.style.color = '#166534';
+        } else {
+          box.innerHTML = `<i class="bi bi-exclamation-triangle" style="color:#b45309"></i> Não foi possível ler a data no arquivo. Verifique o modelo.`;
+          box.style.background = '#fef9c3';
+          box.style.borderColor = '#fde68a';
+          box.style.color = '#713f12';
+        }
+
+        // Status da versao: nova_serie | nova_versao | duplicata | mais_antiga | sem_data_nova | sem_serie
+        const btn = document.getElementById('certBtnSalvar');
+        const btnText = document.getElementById('certBtnSalvarText');
+        if (j.status === 'nova_serie') {
+          _alerta(j.mensagem, 'info');
+          btn.disabled = false;
+          btnText.textContent = 'Salvar';
+        } else if (j.status === 'nova_versao') {
+          _alerta(j.mensagem + ' O QR anterior deixará de funcionar.', 'info');
+          btn.disabled = false;
+          btnText.textContent = `Substituir (criar v${j.versao_prevista})`;
+        } else if (j.status === 'sem_data_nova') {
+          _alerta(j.mensagem, 'info');
+          btn.disabled = false;
+          btnText.textContent = `Salvar (v${j.versao_prevista})`;
+        } else if (j.status === 'duplicata' || j.status === 'mais_antiga') {
+          _alerta(j.mensagem, 'danger');
+          btn.disabled = true;
+          btnText.textContent = 'Bloqueado';
+        } else {
+          _limparAlerta();
+          btn.disabled = false;
+          btnText.textContent = 'Salvar';
+        }
+      } catch (e) {
+        box.innerHTML = `<i class="bi bi-x-circle" style="color:#b91c1c"></i> Falha ao ler o arquivo: ${esc(e.message)}`;
+        box.style.color = '#b91c1c';
+        document.getElementById('certBtnSalvar').disabled = false;
+      }
+    }
+
+    async function salvarCert() {
+      const serie = document.getElementById('fieldSerie').value.trim();
+      const file = document.getElementById('fieldArquivo').files[0];
+      _limparAlerta();
+
+      if (!serie) { _alerta('Informe o número de série.'); return; }
+      if (!file) { _alerta('Selecione um arquivo Excel (.xlsx ou .xls).'); return; }
+      const n = file.name.toLowerCase();
+      if (!(n.endsWith('.xlsx') || n.endsWith('.xls'))) {
+        _alerta('Apenas arquivos Excel (.xlsx ou .xls) são aceitos.'); return;
+      }
+      if (file.size > 10 * 1024 * 1024) {
+        _alerta('Arquivo maior que 10 MB.'); return;
+      }
+
+      const btn = document.getElementById('certBtnSalvar');
+      btn.disabled = true;
+      document.getElementById('certBtnSalvarText').innerHTML = '<i class="bi bi-hourglass-split"></i> Processando…';
+
+      try {
+        const fd = new FormData();
+        fd.append('numero_serie', serie);
+        fd.append('arquivo', file);
+        const resultado = await _apiFetch('', { method: 'POST', body: fd });
+        const msg = resultado.versao > 1
+          ? `Nova versão (v${resultado.versao}) criada — QR anterior foi substituído.`
+          : 'Certificado criado com sucesso.';
+        toast(msg, 'success');
+        fecharModalCert();
+        await carregarCerts(document.getElementById('certSearch').value.trim());
+        atualizarVencimentos();
+      } catch (e) {
+        _alerta('Falha: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        document.getElementById('certBtnSalvarText').textContent = 'Salvar';
+      }
+    }
+
+    async function deletarCert(id) {
+      const c = _certs.find(x => x.id === id);
+      if (!c) return;
+      if (!confirm(`Excluir o certificado da série "${c.numero_serie}"?\n\nA ação move pra lixeira (soft delete) e invalida o QR imediatamente.`)) return;
+      try {
+        await _apiFetch('/' + id, { method: 'DELETE' });
+        toast('Certificado excluído.', 'success');
+        await carregarCerts(document.getElementById('certSearch').value.trim());
+        atualizarVencimentos();
+      } catch (e) {
+        toast('Falha ao excluir: ' + e.message, 'danger');
+      }
+    }
+
+    let _qrAtualId = null;
+    let _qrAtualSerie = '';
+
+    function verQR(id, serie, urlPublica, qrNovo) {
+      _qrAtualId = id;
+      _qrAtualSerie = serie;
+      // IMPORTANTE: a URL publica (/cert/<token>) e servida pelo FastAPI,
+      // nao pelo Apache/XAMPP que serve as paginas estaticas. Por isso
+      // apontamos pra API_BASE (porta 8000/8001 em dev; dominio publico
+      // via tunnel Caddy em prod). O proprio backend ja retorna o
+      // qr_url_publica como path relativo (/cert/<token>) — so montamos
+      // o host aqui no front.
+      const urlAbs = API_BASE + urlPublica;
+      document.getElementById('qrModalSerie').textContent = serie;
+      document.getElementById('qrModalLink').href = urlAbs;
+      document.getElementById('qrModalLink').textContent = urlAbs;
+      // PNG do QR: endpoint autenticado via <img> precisa de cookie — como usamos cookie HttpOnly, funciona.
+      const qrSrc = API_BASE + `/api/assistencia/certificados/${id}/qr.png?t=${Date.now()}`;
+      document.getElementById('qrModalImg').src = qrSrc;
+      const dl = document.getElementById('qrModalDownload');
+      dl.href = qrSrc;
+      dl.setAttribute('download', `qr-${serie}.png`);
+      dl.onclick = null;
+      // Banner "QR novo" no modal
+      const banner = document.getElementById('qrModalBanner');
+      if (banner) {
+        if (qrNovo) {
+          banner.style.display = 'flex';
+          banner.innerHTML = `<i class="bi bi-stars" style="color:#059669"></i>
+            <span><strong>QR novo!</strong> Baixe e cole no equipamento — o QR anterior deixou de funcionar.</span>`;
+        } else {
+          banner.style.display = 'none';
+        }
+      }
+      document.getElementById('qrModal').classList.add('show');
+      // Marca como impresso ja na abertura (user viu o QR = suficiente pra parar
+      // de alertar). Rodadas futuras na mesma linha mostram botao sem badge NOVO.
+      if (qrNovo) {
+        _marcarQrImpresso(id);
+      }
+    }
+
+    async function _marcarQrImpresso(id) {
+      try {
+        await _apiFetch('/' + id + '/mark-printed', { method: 'POST' });
+        // Atualiza a tabela em segundo plano
+        setTimeout(() => carregarCerts(document.getElementById('certSearch').value.trim()), 500);
+      } catch (e) {
+        console.warn('[verQR] mark-printed falhou:', e.message);
+      }
+    }
+
+    /* ----------------------------------------------------------------
+       Impressao em etiqueta Zebra ZD230, 30x50mm (retrato).
+       Fluxo: baixa o PNG do QR autenticado -> converte pra data URL
+       -> injeta HTML num iframe oculto com CSS @page 30mm 50mm
+       -> dispara window.print() dentro do iframe.
+       O user escolhe a Zebra ZD230 no dialogo do navegador. Nao
+       precisa instalar nenhum driver JS/SDK extra.
+       ---------------------------------------------------------------- */
+    function _etiquetaHtml(serie, qrDataUrl) {
+      // CSS @page define o tamanho da pagina na impressao. 30mm x 50mm
+      // casa com etiqueta Zebra ZD230 configurada em 30x50 retrato.
+      // Margens zeradas pra o label aproveitar o espaco todo.
+      const serieEsc = String(serie).replace(/[&<>"']/g,
+        c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+      return `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<title>Etiqueta ${serieEsc}</title>
+<style>
+  @page { size: 30mm 50mm; margin: 0; }
+  html, body { margin: 0; padding: 0; }
+  body { width: 30mm; height: 50mm; font-family: Arial, Helvetica, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .lbl { width: 30mm; height: 50mm; box-sizing: border-box; padding: 1.2mm 1mm; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+  .lbl .top { font-size: 2mm; line-height: 1; color: #000; margin-bottom: 0.8mm; letter-spacing: 0.2mm; }
+  .lbl .qr { width: 27mm; height: 27mm; display: block; image-rendering: pixelated; }
+  .lbl .serie { font-size: 3mm; font-weight: 700; margin-top: 1.5mm; text-align: center; max-width: 28mm; word-break: break-all; line-height: 1.05; color: #000; }
+  .lbl .sub { font-size: 1.8mm; margin-top: auto; color: #333; text-align: center; }
+</style></head>
+<body>
+  <div class="lbl">
+    <div class="top">CPE Assist. Tecnica</div>
+    <img class="qr" src="${qrDataUrl}" alt="QR">
+    <div class="serie">${serieEsc}</div>
+    <div class="sub">Escaneie para o certificado</div>
+  </div>
+</body></html>`;
+    }
+    // Exposto pra teste unitario via node
+    window._etiquetaHtml = _etiquetaHtml;
+
+    async function imprimirEtiquetaZebra() {
+      if (!_qrAtualId) { toast('Abra o QR primeiro.', 'danger'); return; }
+      const btn = document.getElementById('qrModalPrintZebra');
+      const originalLabel = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Preparando…';
+      try {
+        // 1) Baixa o PNG autenticado como blob
+        const r = await fetch(API_BASE + `/api/assistencia/certificados/${_qrAtualId}/qr.png?t=${Date.now()}`, {
+          credentials: 'include',
+          headers: _authHeaders(),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' ao gerar QR');
+        const blob = await r.blob();
+        // 2) Converte pra data URL (evita cross-origin dentro do iframe)
+        const dataUrl = await new Promise((res, rej) => {
+          const fr = new FileReader();
+          fr.onload = () => res(fr.result);
+          fr.onerror = () => rej(new Error('falha ao ler blob'));
+          fr.readAsDataURL(blob);
+        });
+        // 3) Monta HTML da etiqueta
+        const html = _etiquetaHtml(_qrAtualSerie, dataUrl);
+        // 4) Injeta em iframe oculto e imprime
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:fixed; left:-9999px; top:-9999px; width:60mm; height:80mm; border:0;';
+        document.body.appendChild(iframe);
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.open(); doc.write(html); doc.close();
+        // Espera a imagem carregar antes de imprimir
+        const w = iframe.contentWindow;
+        const chamarPrint = () => {
+          try {
+            w.focus();
+            w.print();
+          } catch (e) {
+            console.error('print falhou', e);
+            toast('Falha ao abrir diálogo de impressão: ' + e.message, 'danger');
+          }
+          // Marca o cert como impresso (acao explicita do user)
+          _marcarQrImpresso(_qrAtualId);
+          // Remove o iframe depois de 3s (depois do dialogo)
+          setTimeout(() => { try { iframe.remove(); } catch(_){} }, 3000);
+        };
+        const img = doc.querySelector('img.qr');
+        if (img && !img.complete) {
+          img.onload = () => setTimeout(chamarPrint, 50);
+          img.onerror = () => {
+            toast('Falha ao renderizar QR na etiqueta', 'danger');
+            try { iframe.remove(); } catch(_){}
+          };
+        } else {
+          setTimeout(chamarPrint, 100);
+        }
+      } catch (e) {
+        toast('Falha ao imprimir: ' + e.message, 'danger');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalLabel;
+      }
+    }
+
+    function fecharModalQR() { document.getElementById('qrModal').classList.remove('show'); }
+
+    /* ================================================================
+       HISTORICO DE VERSOES (duplo clique no nº serie)
+       ================================================================ */
+    async function abrirHistoricoSerie(serie) {
+      const modal = document.getElementById('histModal');
+      const body = document.getElementById('histModalBody');
+      const title = document.getElementById('histModalTitle');
+      title.innerHTML = `<i class="bi bi-clock-history"></i> Histórico — <code>${esc(serie)}</code>`;
+      body.innerHTML = `<div style="padding:20px;text-align:center;color:var(--sup-muted)"><i class="bi bi-hourglass-split"></i> Carregando…</div>`;
+      modal.classList.add('show');
+      try {
+        const path = '/by-serie/' + encodeURIComponent(serie) + '/historico';
+        const j = await _apiFetch(path);
+        if (!j.versoes || !j.versoes.length) {
+          body.innerHTML = `<div style="padding:24px;text-align:center;color:var(--sup-muted)">Nenhuma versão encontrada.</div>`;
+          return;
+        }
+        body.innerHTML = `
+          <div style="font-size:12px;color:var(--sup-muted);margin-bottom:10px">
+            ${j.versoes.length} versão(ões). A versão <strong>ativa</strong> (verde) é a que o QR público resolve. As anteriores ficam no histórico.
+          </div>
+          <div class="ast-hist-list">
+            ${j.versoes.map(v => `
+              <div class="ast-hist-item ${v.ativo ? 'ativo' : 'inativo'}">
+                <div class="ast-hist-head">
+                  <span class="ast-hist-ver">v${v.versao}</span>
+                  ${v.ativo
+                    ? '<span class="ast-hist-tag ok"><i class="bi bi-check-circle"></i> ATIVA</span>'
+                    : `<span class="ast-hist-tag muted"><i class="bi bi-archive"></i> substituída ${esc(fmtDate(v.substituido_em))}</span>`}
+                </div>
+                <div class="ast-hist-meta">
+                  <div><i class="bi bi-calendar-event"></i> Calibração: <strong>${v.data_calibracao ? esc(new Date(v.data_calibracao+'T00:00:00').toLocaleDateString('pt-BR')) : '—'}</strong></div>
+                  <div><i class="bi bi-file-earmark-excel"></i> ${esc(v.arquivo_xlsx_nome || '—')}</div>
+                  <div><i class="bi bi-person"></i> ${esc(v.criado_por_nome || '—')} em ${esc(fmtDate(v.criado_em))}</div>
+                </div>
+                <div class="ast-hist-actions">
+                  <a class="ast-btn-secondary" href="${API_BASE}${v.qr_url_publica}" target="_blank" rel="noopener">
+                    <i class="bi bi-download"></i> Baixar PDF
+                  </a>
+                  ${v.ativo
+                    ? `<button class="ast-btn-secondary" onclick="verQR(${v.id}, '${esc(serie)}', '${v.qr_url_publica}', ${v.qr_novo ? 'true' : 'false'})">
+                         <i class="bi bi-qr-code"></i> Ver QR
+                       </button>`
+                    : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>`;
+      } catch (e) {
+        body.innerHTML = `<div style="padding:20px;color:#b91c1c">Erro: ${esc(e.message)}</div>`;
+      }
+    }
+    function fecharHistorico() {
+      document.getElementById('histModal').classList.remove('show');
+    }
+
+    // Busca por digitação (debounce 300ms)
+    document.addEventListener('DOMContentLoaded', () => {
+      const search = document.getElementById('certSearch');
+      if (search) {
+        search.addEventListener('input', e => {
+          clearTimeout(_searchTimer);
+          _searchTimer = setTimeout(() => carregarCerts(e.target.value.trim()), 300);
+        });
+      }
+    });
+
+    // Hook no showSection pra carregar quando entrar na section
+    const _originalShow = showSection;
+    showSection = function(key) {
+      _originalShow(key);
+      if (key === 'certificados') {
+        carregarCerts();
+        atualizarVisibilidadeAnexo();
+      }
+    };
+
+    /* ================================================================
+       ANEXO ANUAL GLOBAL — upload singleton + preview
+       ================================================================ */
+    const API_ANEXO = API_BASE + '/api/assistencia/anexo-global';
+    let _anexoAtual = null;
+
+    function _ehRespOuAdmin() {
+      try {
+        const u = JSON.parse(localStorage.getItem('cpe_user') || '{}');
+        const role = String(u.role || '').toUpperCase();
+        return role === 'ADMIN' || role === 'RESPONSAVEL_GRUPO';
+      } catch (_) { return false; }
+    }
+
+    function atualizarVisibilidadeAnexo() {
+      const btn = document.getElementById('btnAnexoAnual');
+      if (!btn) return;
+      btn.style.display = _ehRespOuAdmin() ? 'inline-flex' : 'none';
+    }
+
+    async function _anexoFetch(opts = {}) {
+      const r = await fetch(API_ANEXO, {
+        credentials: 'include',
+        ...opts,
+        headers: { ..._authHeaders(), ...(opts.headers || {}) },
+      });
+      if (!r.ok) {
+        let detail = `HTTP ${r.status}`;
+        try { const j = await r.json(); detail = j.detail || detail; } catch (_) {}
+        throw new Error(detail);
+      }
+      if (r.status === 204) return null;
+      return r.json();
+    }
+
+    async function abrirModalAnexo() {
+      _limparAlertaAnexo();
+      document.getElementById('fieldAnexoPdf').value = '';
+      try {
+        _anexoAtual = await _anexoFetch();
+      } catch (e) {
+        _alertaAnexo('Falha ao buscar anexo atual: ' + e.message);
+        _anexoAtual = null;
+      }
+      _renderAnexoInfo();
+      document.getElementById('anexoModal').classList.add('show');
+    }
+
+    function _renderAnexoInfo() {
+      const box = document.getElementById('anexoInfoBox');
+      const preview = document.getElementById('anexoBtnPreview');
+      if (_anexoAtual && _anexoAtual.arquivo_nome) {
+        box.className = 'ast-anexo-info';
+        box.innerHTML = `
+          <i class="bi bi-file-earmark-pdf" style="color:#b91c1c;font-size:20px"></i>
+          <div>
+            <strong>${esc(_anexoAtual.arquivo_nome)}</strong>
+            <div class="ast-anexo-meta">
+              ${_anexoAtual.arquivo_size ? (Math.round(_anexoAtual.arquivo_size/1024) + ' KB · ') : ''}atualizado ${esc(fmtDate(_anexoAtual.atualizado_em))}
+              ${_anexoAtual.atualizado_por_nome ? ' por ' + esc(_anexoAtual.atualizado_por_nome) : ''}
+            </div>
+          </div>`;
+        preview.style.display = 'inline-flex';
+        preview.href = API_BASE + '/api/assistencia/anexo-global/preview?t=' + Date.now();
+      } else {
+        box.className = 'ast-anexo-info vazio';
+        box.innerHTML = `
+          <i class="bi bi-exclamation-triangle"></i>
+          <div>
+            <strong>Nenhum anexo cadastrado.</strong>
+            <div class="ast-anexo-meta">É obrigatório ter um anexo antes de cadastrar certificados.</div>
+          </div>`;
+        preview.style.display = 'none';
+      }
+    }
+
+    function fecharModalAnexo() {
+      document.getElementById('anexoModal').classList.remove('show');
+    }
+    function _alertaAnexo(msg, tipo = 'danger') {
+      const el = document.getElementById('anexoModalAlert');
+      el.className = 'ast-alert show ' + tipo;
+      el.innerHTML = `<i class="bi bi-${tipo==='danger'?'exclamation-circle':'info-circle'}"></i><span>${esc(msg)}</span>`;
+    }
+    function _limparAlertaAnexo() {
+      const el = document.getElementById('anexoModalAlert');
+      el.className = 'ast-alert';
+      el.innerHTML = '';
+    }
+
+    async function salvarAnexo() {
+      const file = document.getElementById('fieldAnexoPdf').files[0];
+      _limparAlertaAnexo();
+      if (!file) { _alertaAnexo('Selecione um arquivo PDF.'); return; }
+      const n = file.name.toLowerCase();
+      if (!n.endsWith('.pdf')) { _alertaAnexo('Apenas .pdf é aceito.'); return; }
+      if (file.size > 10 * 1024 * 1024) { _alertaAnexo('Arquivo maior que 10 MB.'); return; }
+
+      const btn = document.getElementById('anexoBtnSalvar');
+      btn.disabled = true;
+      document.getElementById('anexoBtnSalvarText').innerHTML = '<i class="bi bi-hourglass-split"></i> Enviando…';
+      try {
+        const fd = new FormData();
+        fd.append('arquivo', file);
+        _anexoAtual = await _anexoFetch({ method: 'POST', body: fd });
+        toast('Anexo anual atualizado.', 'success');
+        _renderAnexoInfo();
+        document.getElementById('fieldAnexoPdf').value = '';
+      } catch (e) {
+        _alertaAnexo('Falha: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        document.getElementById('anexoBtnSalvarText').textContent = 'Enviar';
+      }
+    }
+
+    // Garante visibilidade correta no boot (caso user ja entre direto na section certificados)
+    document.addEventListener('DOMContentLoaded', atualizarVisibilidadeAnexo);
+
+    /* ================================================================
+       VENCIMENTOS — sino + dashboard card
+       ================================================================ */
+    const API_VENCIMENTOS = API_BASE + '/api/assistencia/vencimentos';
+    let _vencimentos = { total: 0, itens: [] };
+
+    async function atualizarVencimentos() {
+      try {
+        const r = await fetch(API_VENCIMENTOS, {
+          credentials: 'include',
+          headers: _authHeaders(),
+        });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        _vencimentos = await r.json();
+      } catch (e) {
+        _vencimentos = { total: 0, itens: [], erro: e.message };
+      }
+      renderBell();
+      renderDashVencimentos();
+    }
+
+    function renderBell() {
+      const bell = document.getElementById('astBell');
+      const badge = document.getElementById('astBellBadge');
+      const list = document.getElementById('astBellList');
+      const n = _vencimentos.total || 0;
+      if (n > 0) {
+        bell.classList.add('has-alerts');
+        badge.textContent = n > 99 ? '99+' : String(n);
+        badge.style.display = 'inline-block';
+      } else {
+        bell.classList.remove('has-alerts');
+        badge.style.display = 'none';
+      }
+      if (!_vencimentos.itens || !_vencimentos.itens.length) {
+        list.innerHTML = `<div class="ast-bell-empty"><i class="bi bi-check-circle"></i> Nenhuma calibração vencida 🎉</div>`;
+        return;
+      }
+      list.innerHTML = _vencimentos.itens.map(c => `
+        <div class="ast-bell-item" onclick="irParaCert('${esc(c.numero_serie)}')">
+          <div class="serie">${esc(c.numero_serie)}</div>
+          <div class="meta">
+            Calibrado em ${esc(new Date(c.data_calibracao + 'T00:00:00').toLocaleDateString('pt-BR'))}
+            · <span class="dias">${c.dias_desde_calibracao} dias atrás</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderDashVencimentos() {
+      const card = document.getElementById('dashCardVenc');
+      const num = document.getElementById('dashVencNum');
+      const sub = document.getElementById('dashVencSub');
+      const list = document.getElementById('dashVencList');
+      const n = _vencimentos.total || 0;
+      num.textContent = n;
+      if (n === 0) {
+        card.classList.remove('alert'); card.classList.add('ok');
+        sub.innerHTML = `<i class="bi bi-check-circle" style="color:#16a34a"></i> Nenhuma calibração vencida.`;
+        list.innerHTML = '';
+        return;
+      }
+      card.classList.remove('ok'); card.classList.add('alert');
+      sub.innerHTML = `Clique num item pra ver o certificado — tempo de contatar o cliente.`;
+      list.innerHTML = _vencimentos.itens.slice(0, 20).map(c => `
+        <a onclick="irParaCert('${esc(c.numero_serie)}')" style="cursor:pointer">
+          <span class="d-serie">${esc(c.numero_serie)}</span>
+          <span class="d-dias">${c.dias_desde_calibracao}d · ${esc(new Date(c.data_calibracao + 'T00:00:00').toLocaleDateString('pt-BR'))}</span>
+        </a>
+      `).join('');
+      if (_vencimentos.itens.length > 20) {
+        list.innerHTML += `<div style="text-align:center;color:var(--sup-muted);font-size:12px;padding:6px">+ ${_vencimentos.itens.length - 20} mais na aba Certificados</div>`;
+      }
+    }
+
+    function toggleBellDropdown() {
+      const dd = document.getElementById('astBellDropdown');
+      dd.classList.toggle('show');
+    }
+    // Fecha dropdown ao clicar fora
+    document.addEventListener('click', (e) => {
+      const dd = document.getElementById('astBellDropdown');
+      const bell = document.getElementById('astBell');
+      if (!dd || !bell) return;
+      if (!dd.contains(e.target) && !bell.contains(e.target)) dd.classList.remove('show');
+    });
+
+    function irParaCert(serie) {
+      showSection('certificados');
+      const search = document.getElementById('certSearch');
+      if (search) { search.value = serie; search.dispatchEvent(new Event('input')); }
+      document.getElementById('astBellDropdown').classList.remove('show');
+    }
+
+    // Boot: carrega vencimentos + poll a cada 5min
+    document.addEventListener('DOMContentLoaded', () => {
+      atualizarVencimentos();
+      setInterval(atualizarVencimentos, 5 * 60 * 1000);
+    });
+
+    /* ================================================================
+       RELATORIO
+       ================================================================ */
+    const API_REL = API_BASE + '/api/assistencia/relatorio';
+    let _relUltimo = null;
+
+    function abrirModalRelatorio() {
+      // Default: ultimos 90 dias
+      const hoje = new Date();
+      const d90 = new Date(hoje); d90.setDate(d90.getDate() - 90);
+      const toISO = d => d.toISOString().slice(0, 10);
+      document.getElementById('relDesde').value = toISO(d90);
+      document.getElementById('relAte').value = toISO(hoje);
+      document.getElementById('relModal').classList.add('show');
+      carregarRelatorio();
+    }
+    function fecharModalRelatorio() {
+      document.getElementById('relModal').classList.remove('show');
+    }
+
+    async function carregarRelatorio() {
+      const box = document.getElementById('relConteudo');
+      const desde = document.getElementById('relDesde').value;
+      const ate = document.getElementById('relAte').value;
+      box.innerHTML = `<div style="padding:30px;text-align:center;color:var(--sup-muted)">
+                        <i class="bi bi-hourglass-split"></i> Carregando…</div>`;
+      try {
+        const r = await fetch(`${API_REL}?desde=${encodeURIComponent(desde)}&ate=${encodeURIComponent(ate)}`, {
+          credentials: 'include', headers: _authHeaders(),
+        });
+        if (!r.ok) {
+          let msg = 'HTTP ' + r.status;
+          try { msg = (await r.json()).detail || msg; } catch(_){}
+          throw new Error(msg);
+        }
+        _relUltimo = await r.json();
+        renderRelatorio();
+      } catch (e) {
+        box.innerHTML = `<div style="padding:30px;color:#b91c1c">Erro: ${esc(e.message)}</div>`;
+      }
+    }
+
+    function renderRelatorio() {
+      const j = _relUltimo;
+      if (!j) return;
+      const snap = j.snapshot;
+      const np = j.no_periodo;
+      const periodoStr = `${new Date(j.periodo.desde+'T00:00:00').toLocaleDateString('pt-BR')} a ${new Date(j.periodo.ate+'T00:00:00').toLocaleDateString('pt-BR')}`;
+
+      const porUsuarioRows = (j.por_usuario || []).length
+        ? j.por_usuario.map(u => `
+            <tr>
+              <td>${esc(u.usuario_nome || '—')}</td>
+              <td class="n">${u.novas_series}</td>
+              <td class="n">${u.renovacoes}</td>
+              <td class="n" style="color:#059669;font-weight:600">${u.renovacoes_de_vencidos}</td>
+              <td class="n"><strong>${u.total}</strong></td>
+            </tr>`).join('')
+        : `<tr><td colspan="5" style="text-align:center;color:var(--sup-muted);padding:14px">Nenhum movimento no período.</td></tr>`;
+
+      const porMesRows = (j.por_mes || []).length
+        ? j.por_mes.map(m => {
+            const [ano, mes] = m.mes.split('-');
+            const label = new Date(parseInt(ano), parseInt(mes)-1, 1).toLocaleDateString('pt-BR', { month:'short', year:'numeric' });
+            return `
+              <tr>
+                <td>${esc(label)}</td>
+                <td class="n">${m.novas_series}</td>
+                <td class="n">${m.renovacoes}</td>
+                <td class="n" style="color:#059669;font-weight:600">${m.renovacoes_de_vencidos}</td>
+                <td class="n"><strong>${m.total}</strong></td>
+              </tr>`;
+          }).join('')
+        : `<tr><td colspan="5" style="text-align:center;color:var(--sup-muted);padding:14px">—</td></tr>`;
+
+      document.getElementById('relConteudo').innerHTML = `
+        <div class="ast-rel-sec-title">Snapshot — hoje (${esc(new Date(j.hoje+'T00:00:00').toLocaleDateString('pt-BR'))})</div>
+        <div class="ast-rel-cards">
+          <div class="ast-rel-card info">
+            <div class="n">${snap.total_series_ativas}</div>
+            <div class="label">Séries ativas</div>
+          </div>
+          <div class="ast-rel-card ok">
+            <div class="n">${snap.vigentes_ok}</div>
+            <div class="label">Vigentes OK</div>
+          </div>
+          <div class="ast-rel-card alerta">
+            <div class="n">${snap.vigentes_vencidos}</div>
+            <div class="label">Vencidos (6+ meses)</div>
+          </div>
+        </div>
+
+        <div class="ast-rel-sec-title">Período — ${esc(periodoStr)}</div>
+        <div class="ast-rel-cards">
+          <div class="ast-rel-card info">
+            <div class="n">${np.total_criados}</div>
+            <div class="label">Total criados</div>
+          </div>
+          <div class="ast-rel-card">
+            <div class="n">${np.novas_series}</div>
+            <div class="label">Novas séries</div>
+          </div>
+          <div class="ast-rel-card ok">
+            <div class="n">${np.renovacoes}</div>
+            <div class="label">Renovações</div>
+          </div>
+          <div class="ast-rel-card sucesso">
+            <div class="n">${np.renovacoes_de_vencidos}</div>
+            <div class="label">Salvamentos (vencidos renovados)</div>
+          </div>
+        </div>
+
+        <div class="ast-rel-sec-title">Por usuário</div>
+        <table class="ast-rel-table">
+          <thead><tr>
+            <th>Usuário</th>
+            <th class="n">Novas</th>
+            <th class="n">Renovações</th>
+            <th class="n">Salvamentos</th>
+            <th class="n">Total</th>
+          </tr></thead>
+          <tbody>${porUsuarioRows}</tbody>
+        </table>
+
+        <div class="ast-rel-sec-title">Por mês</div>
+        <table class="ast-rel-table">
+          <thead><tr>
+            <th>Mês</th>
+            <th class="n">Novas</th>
+            <th class="n">Renovações</th>
+            <th class="n">Salvamentos</th>
+            <th class="n">Total</th>
+          </tr></thead>
+          <tbody>${porMesRows}</tbody>
+        </table>
+      `;
+    }
+
+    function exportarRelatorioCsv() {
+      const j = _relUltimo;
+      if (!j) { toast('Carregue o relatório primeiro.', 'danger'); return; }
+      const rows = [];
+      rows.push(['Secao','Chave','Valor']);
+      rows.push(['periodo','desde', j.periodo.desde]);
+      rows.push(['periodo','ate',   j.periodo.ate]);
+      rows.push(['snapshot','total_series_ativas', j.snapshot.total_series_ativas]);
+      rows.push(['snapshot','vigentes_ok', j.snapshot.vigentes_ok]);
+      rows.push(['snapshot','vigentes_vencidos', j.snapshot.vigentes_vencidos]);
+      rows.push(['periodo','total_criados', j.no_periodo.total_criados]);
+      rows.push(['periodo','novas_series', j.no_periodo.novas_series]);
+      rows.push(['periodo','renovacoes', j.no_periodo.renovacoes]);
+      rows.push(['periodo','renovacoes_de_vencidos', j.no_periodo.renovacoes_de_vencidos]);
+      rows.push([]);
+      rows.push(['Por usuario']);
+      rows.push(['usuario_id','usuario_nome','novas_series','renovacoes','renovacoes_de_vencidos','total']);
+      (j.por_usuario||[]).forEach(u => {
+        rows.push([u.usuario_id, u.usuario_nome, u.novas_series, u.renovacoes, u.renovacoes_de_vencidos, u.total]);
+      });
+      rows.push([]);
+      rows.push(['Por mes']);
+      rows.push(['mes','novas_series','renovacoes','renovacoes_de_vencidos','total']);
+      (j.por_mes||[]).forEach(m => {
+        rows.push([m.mes, m.novas_series, m.renovacoes, m.renovacoes_de_vencidos, m.total]);
+      });
+      rows.push([]);
+      rows.push(['Detalhes dos movimentos no periodo']);
+      rows.push(['id','numero_serie','versao','criado_em','usuario_nome','data_calibracao','renovacao','salvou_vencido']);
+      (j.detalhes||[]).forEach(d => {
+        rows.push([d.id, d.numero_serie, d.versao, d.criado_em, d.usuario_nome, d.data_calibracao, d.renovacao, d.salvou_vencido]);
+      });
+      const csv = rows.map(r => r.map(c => {
+        const s = c === undefined || c === null ? '' : String(c);
+        return /[",\n;]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+      }).join(';')).join('\r\n');
+      // UTF-8 BOM pra Excel abrir com acentos corretos
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio-assistencia-${j.periodo.desde}_${j.periodo.ate}.csv`;
+      document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+    }
+  </script>
+
+</body>
+</html>
