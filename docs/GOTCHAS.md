@@ -313,6 +313,16 @@ Pode fechar o painel.
 
 ---
 
+## Login sem `cpe_token` no navegador = volta pro login
+
+`page-guard.js` exige `cpe_user` **e** `cpe_token` no storage (`if (!user || !token) redirectToLogin`). O cookie de sessão sozinho não basta: as páginas mandam o token no header `X-Auth-Token`.
+
+**Caso real (2026-10-06):** o Primeiro Acesso (`/api/pre-cadastro/confirmar-cadastro`) criava o usuário e setava só o cookie, sem devolver `access_token`; o `login.html` gravava só `cpe_user` e redirecionava pra `pages/dashboard.html`, que **não existe** (o painel é `/SistemaCPE/index.html`). Resultado: tela de erro logo após concluir o cadastro, embora a conta tivesse sido criada.
+
+**Regra:** qualquer fluxo novo que "loga" o usuário deve devolver `access_token` e gravar a sessão no mesmo formato do `assests/js/login.js` (`cpe_user`, `cpe_token` em local+sessionStorage, mais o formato antigo `user`/`token`), e redirecionar pra `/SistemaCPE/index.html`.
+
+---
+
 ## Deleção de user com FK
 
 **Sintoma:** `DELETE FROM users WHERE id=X` falha com `Cannot delete or update a parent row: a foreign key constraint fails`.
