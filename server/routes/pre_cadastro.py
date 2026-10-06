@@ -859,6 +859,9 @@ def confirmar_cadastro(payload: ConfirmarCadastroPayload, request: Request):
         response = JSONResponse({
             "success": True,
             "ok": True,
+            # Mesmo token do cookie: o frontend guarda em cpe_token (igual ao
+            # /login), senao as paginas que mandam X-Auth-Token voltam pro login.
+            "access_token": token,
             "id": user_id,
             "name": nome,
             "email": email_norm,

@@ -2061,17 +2061,29 @@
           return;
         }
 
-        // Sucesso — salva token + user no storage e vai pro dashboard
-        // (mesmo padrao usado pelo login normal em web/login.html).
+        // Sucesso — grava a sessao no mesmo formato do login normal
+        // (assests/js/login.js) e vai pro painel. Sem o cpe_token as paginas
+        // que mandam X-Auth-Token devolvem o usuario pro login.
         try {
           const persist = { id: data.id, name: data.name, email: data.email,
                             username: data.username, role: data.role,
-                            group_id: data.group_id, groups: data.groups };
-          localStorage.setItem('cpe_user', JSON.stringify(persist));
+                            group_id: data.group_id, groups: data.groups || [] };
+          const userJson = JSON.stringify(persist);
+          localStorage.setItem('cpe_user', userJson);
+          sessionStorage.setItem('cpe_user', userJson);
+          localStorage.setItem('user', userJson);
+          localStorage.setItem('user_id', String(data.id));
+          localStorage.setItem('logged_in', 'true');
+          localStorage.setItem('login_time', new Date().toISOString());
+          if (data.access_token) {
+            localStorage.setItem('cpe_token', data.access_token);
+            sessionStorage.setItem('cpe_token', data.access_token);
+            localStorage.setItem('token', data.access_token);
+          }
         } catch {}
 
         alert('faStep2Alert', 'success', 'Cadastro concluído! Redirecionando...');
-        setTimeout(() => { window.location.href = 'pages/dashboard.html'; }, 800);
+        setTimeout(() => { window.location.href = '/SistemaCPE/index.html'; }, 800);
       } catch (err) {
         alert('faStep2Alert', 'danger', 'Erro de conexão: ' + err.message);
       } finally {
