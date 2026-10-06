@@ -191,19 +191,20 @@ def _criar_notificacao(cursor, usuario_id: int, mensagem: str, tipo: str = "info
 
 def _convidar_usuarios(cursor, reserva_id: int, convidador_id: int,
                        convidados_ids: List[int], titulo_reserva: str,
-                       inicio_reserva: datetime) -> int:
+                       inicio_reserva: datetime) -> List[int]:
     """
-    Cria convites e dispara notificações.
+    Cria convites e dispara notificações no sino.
     Idempotente — usa INSERT IGNORE; se já houver convite, não duplica.
-    Retorna quantos convites novos foram criados.
+    Retorna os IDs dos usuários convidados agora (sem os que já estavam),
+    pra quem chama mandar o e-mail depois do commit.
     """
     if not convidados_ids:
-        return 0
+        return []
 
     # filtra IDs duplicados e o próprio dono (não convida a si mesmo)
     ids = sorted({int(i) for i in convidados_ids if i and i != convidador_id})
     if not ids:
-        return 0
+        return []
 
     # valida que são usuários ativos
     fmt = ",".join(["%s"] * len(ids))
@@ -213,9 +214,9 @@ def _convidar_usuarios(cursor, reserva_id: int, convidador_id: int,
     )
     validos = [row["id"] for row in cursor.fetchall()]
     if not validos:
-        return 0
+        return []
 
-    novos = 0
+    novos: List[int] = []
     quando = inicio_reserva.strftime("%d/%m %H:%M") if inicio_reserva else ""
     msg = (
         f'Você foi convidado para a reunião "{titulo_reserva}" em {quando}. '
@@ -230,7 +231,7 @@ def _convidar_usuarios(cursor, reserva_id: int, convidador_id: int,
             (reserva_id, uid, convidador_id),
         )
         if cursor.rowcount > 0:
-            novos += 1
+            novos.append(uid)
             try:
                 # ticket_id é reaproveitado para guardar reserva_id (sem migration);
                 # tipo 'convite_reuniao' é o que o front (nav.js) reconhece.
@@ -243,6 +244,58 @@ def _convidar_usuarios(cursor, reserva_id: int, convidador_id: int,
             except Exception as err:
                 logger.warning(f"[RECEPCAO/CONVIDAR] notif fail uid={uid}: {err}")
     return novos
+
+
+def _enviar_emails_convite(reserva_id: int, usuarios_ids: List[int]) -> None:
+    """Manda o e-mail de convite pra cada usuário recém-convidado.
+
+    Roda depois do commit da reserva/convite, com conexão própria. Falha de
+    e-mail não desfaz o convite (o sino já foi gravado) — só loga.
+    """
+    if not usuarios_ids:
+        return
+    from services.email_service import email_convite_reserva_sala, enviar_email
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_or_404()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT r.titulo, r.descricao, r.inicio, r.fim, s.nome AS sala_nome, "
+            "       u.name AS organizador_nome "
+            "FROM recepcao_reservas r "
+            "JOIN recepcao_salas s ON s.id = r.sala_id "
+            "JOIN users u ON u.id = r.usuario_id "
+            "WHERE r.id = %s",
+            (reserva_id,),
+        )
+        rv = cursor.fetchone()
+        if not rv:
+            return
+        fmt = ",".join(["%s"] * len(usuarios_ids))
+        cursor.execute(
+            f"SELECT id, name, email FROM users WHERE id IN ({fmt}) AND is_active = 1",
+            list(usuarios_ids),
+        )
+        for u in cursor.fetchall():
+            if not u.get("email"):
+                continue
+            assunto, html = email_convite_reserva_sala(
+                dest_nome=u.get("name") or "Colaborador",
+                organizador_nome=rv.get("organizador_nome") or "",
+                titulo=rv["titulo"],
+                sala_nome=rv.get("sala_nome") or "",
+                inicio=rv["inicio"],
+                fim=rv["fim"],
+                descricao=rv.get("descricao"),
+            )
+            enviar_email(u["email"], assunto, html)  # assincrono, perfil default (noreply@)
+        logger.info(f"[RECEPCAO/CONVIDAR] e-mail de convite disparado reserva={reserva_id} usuarios={usuarios_ids}")
+    except Exception as err:
+        logger.error(f"[RECEPCAO/CONVIDAR] falha ao enviar e-mails reserva={reserva_id}: {err}")
+    finally:
+        if cursor: cursor.close()
+        if conn: conn.close()
 
 
 def _conflito_de_horario(cursor, sala_id: int, inicio: datetime, fim: datetime,
@@ -734,13 +787,15 @@ async def create_reserva(data: ReservaCreate,
         )
 
         # Convida os usuários (se houver) — gera notificações para cada um
+        convidados_novos: List[int] = []
         if data.convidados_ids:
-            _convidar_usuarios(
+            convidados_novos = _convidar_usuarios(
                 cursor, new_id, data.usuario_id,
                 data.convidados_ids, data.titulo, data.inicio,
             )
 
         conn.commit()
+        _enviar_emails_convite(new_id, convidados_novos)
 
         cursor.execute(
             "SELECT r.*, s.nome AS sala_nome, s.cor AS sala_cor, u.name AS usuario_nome "
@@ -917,7 +972,8 @@ async def convidar_para_reserva(reserva_id: int, body: ConvidarBody):
             body.convidados_ids, reserva["titulo"], reserva["inicio"],
         )
         conn.commit()
-        return {"ok": True, "novos": novos}
+        _enviar_emails_convite(reserva_id, novos)
+        return {"ok": True, "novos": len(novos)}
     except HTTPException:
         raise
     except Exception as err:

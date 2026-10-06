@@ -162,11 +162,13 @@ async function loadUsuarios() {
   }
 }
 
+// Convidados da reserva em edição (ids, na ordem em que foram adicionados).
+// Fica fora do <select> porque a lista é refeita a cada busca.
+let convidadosSelecionados = new Set();
+
 function filtrarConvidados() {
   const q = ($('resvConvidadosBusca').value || '').toLowerCase().trim();
   const sel = $('resvConvidados');
-  // preserva já selecionados
-  const selecionados = new Set(Array.from(sel.selectedOptions).map(o => o.value));
   const filtrados = !q ? usuariosAtivos
     : usuariosAtivos.filter(u =>
         u.nome.toLowerCase().includes(q) ||
@@ -176,10 +178,67 @@ function filtrarConvidados() {
   sel.innerHTML = filtrados
     .filter(u => u.id !== currentUser.id)        // não convida a si mesmo
     .map(u => {
-      const sel_attr = selecionados.has(String(u.id)) ? ' selected' : '';
+      const convidado = convidadosSelecionados.has(u.id);
       const sub = u.email ? ` — ${escHtml(u.email)}` : '';
-      return `<option value="${u.id}"${sel_attr}>${escHtml(u.nome)}${sub}</option>`;
+      const cls = convidado ? ' class="fw-semibold text-success"' : '';
+      return `<option value="${u.id}"${cls}>${convidado ? '✓ ' : ''}${escHtml(u.nome)}${sub}</option>`;
     }).join('');
+  renderConvidadosLista();
+}
+
+function alternarConvidado(id) {
+  if (!id) return;
+  if (convidadosSelecionados.has(id)) convidadosSelecionados.delete(id);
+  else convidadosSelecionados.add(id);
+  const sel = $('resvConvidados');
+  const topo = sel.scrollTop;             // não pular pro topo da lista
+  filtrarConvidados();
+  sel.scrollTop = topo;
+  // Sem destaque azul: quem está convidado é indicado só pelo ✓ verde
+  // (o azul do item clicado confundia, parecendo convidado após remover).
+  sel.selectedIndex = -1;
+}
+
+// Convidados viram etiquetas (chips) dentro do campo de busca; clicar remove.
+function renderConvidadosLista() {
+  const box = $('resvConvidadosChips');
+  if (!box) return;
+  const convidados = Array.from(convidadosSelecionados)
+    .map(id => usuariosAtivos.find(u => u.id === id))
+    .filter(Boolean);
+  box.innerHTML = convidados.map(u => `
+    <button type="button" class="recep-chip" onclick="alternarConvidado(${u.id})"
+            title="Remover ${escHtml(u.nome)}" aria-label="Remover ${escHtml(u.nome)} dos convidados">
+      ${escHtml(u.nome)} <i class="bi bi-x" aria-hidden="true"></i>
+    </button>`).join('');
+  const busca = $('resvConvidadosBusca');
+  if (busca) busca.placeholder = convidados.length ? 'Adicionar mais…' : 'Buscar por nome, e-mail ou username...';
+}
+
+function limparConvidados() {
+  convidadosSelecionados.clear();
+  filtrarConvidados();
+}
+
+function initConvidadosPicker() {
+  const sel = $('resvConvidados');
+  if (!sel || sel.dataset.pickerOk) return;
+  sel.dataset.pickerOk = '1';
+  sel.addEventListener('dblclick', e => {
+    const opt = (e.target && e.target.closest) ? e.target.closest('option') : null;
+    alternarConvidado(parseInt((opt || sel.options[sel.selectedIndex] || {}).value));
+  });
+  // Teclado: Enter no item focado também convida/remove
+  sel.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); alternarConvidado(parseInt(sel.value)); }
+  });
+  // Backspace com a busca vazia remove o último convidado (padrão de campo com etiquetas)
+  const busca = $('resvConvidadosBusca');
+  busca?.addEventListener('keydown', e => {
+    if (e.key === 'Backspace' && !busca.value && convidadosSelecionados.size) {
+      alternarConvidado(Array.from(convidadosSelecionados).pop());
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', bootRecepcao);
@@ -291,11 +350,11 @@ function renderSalas() {
           <i class="bi bi-calendar-plus"></i> Agendar
         </button>
         ${podeGerenciarSala() ? `
-          <button class="btn-recep btn-recep-secondary" onclick="openSalaModal(${s.id})">
-            <i class="bi bi-pencil"></i>
+          <button class="btn-recep btn-recep-secondary" onclick="openSalaModal(${s.id})" aria-label="Editar sala ${escHtml(s.nome)}" title="Editar sala">
+            <i class="bi bi-pencil" aria-hidden="true"></i>
           </button>
-          <button class="btn-recep btn-recep-secondary" onclick="deletarSala(${s.id}, '${escHtml(s.nome).replace(/'/g, "\\'")}')" style="color:#ef4444">
-            <i class="bi bi-trash"></i>
+          <button class="btn-recep btn-recep-secondary" onclick="deletarSala(${s.id}, '${escHtml(s.nome).replace(/'/g, "\\'")}')" style="color:#b91c1c" aria-label="Excluir sala ${escHtml(s.nome)}" title="Excluir sala">
+            <i class="bi bi-trash" aria-hidden="true"></i>
           </button>` : ''}
       </div>
     </div>
@@ -558,6 +617,18 @@ function initCalendar() {
       prev:    'Anterior',
       next:    'Próximo',
     },
+    // Dicas de acessibilidade (title/aria) — sem isso o FC mistura "Previous Semana"
+    buttonHints: {
+      prev:  'Anterior',
+      next:  'Próximo',
+      today: 'Hoje',
+    },
+    viewHint:    'Ver $0',
+    navLinkHint: 'Ir para $0',
+    moreLinkHint: n => `Mostrar mais ${n} reserva${n === 1 ? '' : 's'}`,
+    closeHint:   'Fechar',
+    timeHint:    'Horário',
+    eventHint:   'Reserva',
     allDayText: 'Dia todo',
     moreLinkText: n => `+${n} mais`,
     noEventsText: 'Nenhuma reserva no período',
@@ -584,8 +655,14 @@ function initCalendar() {
     eventContent(arg) {
       const rv     = arg.event.extendedProps?.reserva || {};
       const status = rv.status || 'pendente';
-      const ICONS  = { pendente: '⏳', confirmada: '✔', concluida: '●', cancelada: '✗', expirada: '⚠' };
-      const icon   = ICONS[status] || '';
+      const ICONS  = {
+        pendente:   'bi-hourglass-split',
+        confirmada: 'bi-check-circle-fill',
+        concluida:  'bi-check2-all',
+        cancelada:  'bi-x-circle-fill',
+        expirada:   'bi-exclamation-triangle-fill',
+      };
+      const icon   = ICONS[status] ? `<i class="bi ${ICONS[status]}" aria-hidden="true"></i>` : '';
       const titulo = escHtml(rv.titulo || arg.event.title || '');
       const sala   = escHtml(rv.sala_nome || '');
 
@@ -744,6 +821,8 @@ function openReservaModal() {
   $('resvTitulo').value    = '';
   $('resvDescricao').value = '';
   $('resvConvidadosBusca').value = '';
+  convidadosSelecionados = new Set();
+  initConvidadosPicker();
   filtrarConvidados();             // popula select de convidados
   // preenche com "agora" arredondado pra próxima meia hora
   const now = new Date();
@@ -788,8 +867,7 @@ async function submitReserva() {
     erro.classList.remove('d-none'); return;
   }
 
-  const convidados_ids = Array.from($('resvConvidados').selectedOptions)
-    .map(o => parseInt(o.value)).filter(Boolean);
+  const convidados_ids = Array.from(convidadosSelecionados);
 
   const payload = {
     sala_id,
@@ -1091,32 +1169,32 @@ function renderEnvios() {
       : '<span style="color:#9ca3af">—</span>';
     return `
     <tr>
-      <td>#${e.id}</td>
-      <td>${escHtml(e.remetente_nome || '—')}</td>
-      <td>${escHtml(e.destino)}</td>
-      <td>${escHtml(e.destinatario)}</td>
-      <td>${brl(e.valor_mercadoria)}</td>
-      <td>${codigoCell}</td>
-      <td>${e.status_correios
+      <td data-label="#">#${e.id}</td>
+      <td data-label="Remetente">${escHtml(e.remetente_nome || '—')}</td>
+      <td data-label="Destino">${escHtml(e.destino)}</td>
+      <td data-label="Destinatário">${escHtml(e.destinatario)}</td>
+      <td data-label="Valor">${brl(e.valor_mercadoria)}</td>
+      <td data-label="Código">${codigoCell}</td>
+      <td data-label="Status">${e.status_correios
             ? `<span class="badge-status" style="background:#dbeafe;color:#1e40af">${escHtml(e.status_correios)}</span>`
-            : '<span style="color:#9ca3af;font-size:.85rem">Não rastreado</span>'}</td>
-      <td style="font-size:.85rem;color:#6b7280">${e.ultima_atualizacao ? dtPt(e.ultima_atualizacao) : '—'}</td>
-      <td style="white-space:nowrap;text-align:center">
+            : '<span style="color:#6b7280;font-size:.85rem">Não rastreado</span>'}</td>
+      <td data-label="Atualizado" style="font-size:.85rem;color:#6b7280">${e.ultima_atualizacao ? dtPt(e.ultima_atualizacao) : '—'}</td>
+      <td data-label="Ações" class="recep-td-acoes" style="white-space:nowrap;text-align:center">
         ${e.codigo_correios ? `
           <button class="btn btn-sm btn-outline-primary" onclick="abrirRastreio(${e.id})" title="Rastrear via API">
-            <i class="bi bi-geo-alt"></i> Rastrear
+            <i class="bi bi-geo-alt" aria-hidden="true"></i> Rastrear
           </button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="atualizarStatusManual(${e.id})" title="Atualizar status manualmente">
-            <i class="bi bi-pencil-square"></i>
+          <button class="btn btn-sm btn-outline-secondary" onclick="atualizarStatusManual(${e.id})" title="Atualizar status manualmente" aria-label="Atualizar status do envio #${e.id}">
+            <i class="bi bi-pencil-square" aria-hidden="true"></i>
           </button>` : `
           <button class="btn btn-sm btn-outline-secondary" disabled title="Cadastre o código dos Correios para habilitar">
-            <i class="bi bi-geo-alt"></i> Sem código
+            <i class="bi bi-geo-alt" aria-hidden="true"></i> Sem código
           </button>`}
-        <button class="btn btn-sm btn-outline-secondary" onclick="openEnvioModal(${e.id})" title="Editar envio">
-          <i class="bi bi-pencil"></i>
+        <button class="btn btn-sm btn-outline-secondary" onclick="openEnvioModal(${e.id})" title="Editar envio" aria-label="Editar envio #${e.id}">
+          <i class="bi bi-pencil" aria-hidden="true"></i>
         </button>
-        <button class="btn btn-sm btn-outline-danger" onclick="deletarEnvio(${e.id})" title="Excluir">
-          <i class="bi bi-trash"></i>
+        <button class="btn btn-sm btn-outline-danger" onclick="deletarEnvio(${e.id})" title="Excluir envio" aria-label="Excluir envio #${e.id}">
+          <i class="bi bi-trash" aria-hidden="true"></i>
         </button>
       </td>
     </tr>`;
@@ -1606,3 +1684,4 @@ window.renderEnvios        = renderEnvios;
 window.abrirReservaPorId   = abrirReservaPorId;
 window.responderConvite    = responderConvite;
 window.filtrarConvidados   = filtrarConvidados;
+window.limparConvidados    = limparConvidados;

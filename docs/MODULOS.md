@@ -210,6 +210,7 @@ Ordem alfabética.
 - Qualquer USER agenda sala/cadastra envio
 - Só ADMIN/RESPONSAVEL_GRUPO cria sala
 - Reserva de sala tem `confirmacao_prazo` — visitante confirma via link em email
+- **Convidados (2026-10-06):** na Nova Reserva o organizador escolhe convidados com **duplo clique** (ou Enter) na lista; os escolhidos aparecem com ✓ na lista e como **etiquetas (chips) dentro do campo de busca** — clicar na etiqueta (×) remove; Backspace com a busca vazia remove o último. Cada convidado novo recebe aviso no sino (`notificacoes.tipo='convite_reuniao'`, `ticket_id` = id da reserva) **e e-mail** (`email_convite_reserva_sala`, perfil SMTP default). `_convidar_usuarios` devolve só os IDs convidados agora (não duplica); `_enviar_emails_convite` roda depois do commit — falha de e-mail não desfaz o convite. Vale pra `POST /reservas` e `POST /reservas/{id}/convidar`.
 
 ---
 

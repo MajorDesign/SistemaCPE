@@ -1989,6 +1989,38 @@ def email_meeting_convite(dest_nome: str, host_nome: str, titulo: str,
     return subject, html
 
 
+def email_convite_reserva_sala(dest_nome: str, organizador_nome: str, titulo: str,
+                               sala_nome: str, inicio, fim, descricao: str | None = None):
+    """Convite pra reuniao presencial em sala reservada no modulo Recepcao.
+
+    O convidado aceita/recusa pelo sino do CPE Control; o e-mail so avisa e
+    leva pra pagina de Recepcao.
+    """
+    from config import PUBLIC_BASE_URL
+    link = f"{PUBLIC_BASE_URL}/SistemaCPE/web/pages/recepcao.html"
+    subject = f"📅 Convite: {titulo} — {_fmt_dt_br(inicio)}"
+    rows = (
+        _info_box("Reunião", titulo)
+        + _info_box("Sala", sala_nome or "—")
+        + _info_box("Início", _fmt_dt_br(inicio))
+        + _info_box("Término", _fmt_hora_br(fim))
+        + _info_box("Organizador", organizador_nome or "—")
+    )
+    body = f"""
+        <p>Olá <strong>{_escape(dest_nome)}</strong>,</p>
+        <p><strong>{_escape(organizador_nome)}</strong> convidou você para uma
+        reunião presencial.</p>
+        {_info_table(rows)}
+        {_quote_box("Descrição", descricao) if descricao else ""}
+        {_callout("info", "Confirme sua presença",
+                  "Abra o CPE Control e responda o convite pelo sino de notificações "
+                  "ou na página de Recepção.")}
+        {_cta_button("Abrir Recepção", link)}
+    """
+    html = _BASE_TEMPLATE.format(title="Convite para reunião", tag="Reserva de sala", body=body)
+    return subject, html
+
+
 def email_meeting_cancelamento(dest_nome: str, host_nome: str, titulo: str,
                                 start_at, motivo: str):
     subject = f"❌ Reunião cancelada: {titulo}"
