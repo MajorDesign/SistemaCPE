@@ -246,14 +246,14 @@ def enviar_convite_agenda(
         try:
             if cfg["use_ssl"]:
                 with smtplib.SMTP_SSL(cfg["host"], cfg["port"],
-                                      context=_make_ssl_context(), timeout=30) as smtp:
+                                      context=_make_ssl_context(cfg["host"]), timeout=30) as smtp:
                     smtp.login(cfg["user"], cfg["password"])
                     smtp.send_message(msg)
             else:
                 with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as smtp:
                     smtp.ehlo()
                     if cfg["use_tls"]:
-                        smtp.starttls(context=_make_ssl_context())
+                        smtp.starttls(context=_make_ssl_context(cfg["host"]))
                         smtp.ehlo()
                     if cfg["user"] and cfg["password"]:
                         smtp.login(cfg["user"], cfg["password"])

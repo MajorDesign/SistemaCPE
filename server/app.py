@@ -1418,7 +1418,7 @@ def forgot_password(body: _ForgotBody, request: Request):
                     ip_origem=ip,
                     minutos_validade=_RESET_OTP_TTL_MIN,
                 )
-                enviar_email(para=user["email"], assunto=assunto, html=html)
+                enviar_email(para=user["email"], assunto=assunto, html=html, perfil="codigos")
                 logger.info(f"[AUTH/FORGOT] codigo enviado user_id={user['id']} email={user['email']} ip={ip}")
             except Exception as err:
                 logger.error(f"[AUTH/FORGOT] email pra {user['email']} falhou: {err}")
