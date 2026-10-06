@@ -198,7 +198,24 @@
     .ast-bell-dropdown header {
       font-size: 12px; text-transform: uppercase; letter-spacing: .5px;
       color: var(--sup-muted); padding: 8px 14px 10px; border-bottom: 1px solid var(--sup-border);
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
     }
+    .ast-bell-clear {
+      background: #fff; border: 1px solid var(--sup-border); border-radius: 6px;
+      padding: 3px 8px; font-size: 11px; cursor: pointer; color: var(--sup-text);
+      display: inline-flex; align-items: center; gap: 4px; text-transform: none; letter-spacing: 0;
+    }
+    .ast-bell-clear:hover { background: var(--sup-bg-strong); }
+    .ast-bell-clear[disabled] { opacity: .35; cursor: not-allowed; }
+    .ast-bell-muted {
+      padding: 10px 14px; font-size: 12px; color: #713f12; background: #fef9c3;
+      border-top: 1px solid #fde68a; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    }
+    .ast-bell-muted button {
+      background: #fff; border: 1px solid #d97706; color: #92400e; border-radius: 6px;
+      padding: 3px 8px; font-size: 11px; cursor: pointer; font-weight: 600;
+    }
+    .ast-bell-muted button:hover { background: #fef3c7; }
     .ast-bell-item {
       display: block; padding: 10px 14px; border-bottom: 1px solid #f1f5f9;
       cursor: pointer; transition: background .12s;
@@ -209,30 +226,88 @@
     .ast-bell-item .dias { color: #dc2626; font-weight: 600; }
     .ast-bell-empty { padding: 24px 14px; text-align: center; color: var(--sup-muted); font-size: 13px; }
 
-    /* ------- Dashboard - card de vencimentos ------- */
-    .ast-dash-grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
-    @media (min-width: 980px) { .ast-dash-grid { grid-template-columns: 1fr 1fr; } }
+    /* ------- Dashboard - card de vencimentos (escalavel) ------- */
     .ast-card {
       background: #fff; border: 1px solid var(--sup-border); border-radius: 12px;
-      padding: 18px 20px; display: flex; flex-direction: column; gap: 10px;
+      padding: 18px 20px; display: flex; flex-direction: column; gap: 12px;
     }
-    .ast-card-head { display: flex; align-items: center; gap: 10px; }
-    .ast-card-head i { font-size: 22px; }
-    .ast-card-head h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--sup-ink); }
     .ast-card.alert { border-left: 4px solid #dc2626; }
-    .ast-card.alert .ast-card-head i { color: #dc2626; }
-    .ast-card.ok { border-left: 4px solid #16a34a; }
-    .ast-card.ok .ast-card-head i { color: #16a34a; }
-    .ast-card .big-number { font-size: 42px; font-weight: 800; line-height: 1; color: var(--sup-ink); }
-    .ast-dash-list { max-height: 260px; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
-    .ast-dash-list a {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 8px 10px; border-radius: 8px; background: #fef2f2; color: var(--sup-text);
-      text-decoration: none; font-size: 13px; border: 1px solid #fecaca;
+    .ast-card.ok    { border-left: 4px solid #16a34a; }
+
+    .ast-dash-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .ast-dash-title { display: flex; align-items: center; gap: 10px; }
+    .ast-dash-title i { font-size: 22px; color: #dc2626; }
+    .ast-card.ok .ast-dash-title i { color: #16a34a; }
+    .ast-dash-title h3 { margin: 0; font-size: 16px; font-weight: 700; color: var(--sup-ink); }
+    .ast-dash-help {
+      width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--sup-border);
+      background: #fff; color: var(--sup-muted); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background .15s, color .15s;
     }
-    .ast-dash-list a:hover { background: #fee2e2; }
-    .ast-dash-list .d-serie { font-weight: 600; }
-    .ast-dash-list .d-dias { color: #b91c1c; font-weight: 600; font-size: 12px; }
+    .ast-dash-help:hover { background: var(--sup-bg-strong); color: var(--sup-ink); }
+    .ast-dash-help i { font-size: 18px; }
+
+    /* Buckets por severidade */
+    .ast-dash-buckets {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px;
+    }
+    .ast-bucket {
+      padding: 12px 14px; border-radius: 10px; display: flex; flex-direction: column; gap: 2px;
+      border: 1px solid var(--sup-border); background: #fff;
+    }
+    .ast-bucket .n { font-size: 24px; font-weight: 800; line-height: 1; }
+    .ast-bucket .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--sup-muted); }
+    .ast-bucket.total   { border-left: 4px solid #4b5563; }
+    .ast-bucket.amarela { border-left: 4px solid #f59e0b; background: #fffbeb; }
+    .ast-bucket.amarela .n { color: #b45309; }
+    .ast-bucket.laranja { border-left: 4px solid #ea580c; background: #fff7ed; }
+    .ast-bucket.laranja .n { color: #c2410c; }
+    .ast-bucket.vermelha { border-left: 4px solid #dc2626; background: #fef2f2; }
+    .ast-bucket.vermelha .n { color: #b91c1c; }
+
+    /* Toolbar */
+    .ast-dash-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .ast-dash-search {
+      flex: 1; min-width: 220px; max-width: 420px;
+      position: relative; background: #fff; border: 1px solid var(--sup-border);
+      border-radius: 8px; display: flex; align-items: center; padding: 0 10px;
+    }
+    .ast-dash-search i { color: var(--sup-muted); margin-right: 6px; }
+    .ast-dash-search input {
+      flex: 1; border: none; background: transparent; padding: 8px 0; outline: none;
+      font-size: 13px; font-family: inherit;
+    }
+    .ast-dash-select {
+      padding: 8px 10px; border: 1px solid var(--sup-border); border-radius: 8px;
+      background: #fff; font-size: 13px; font-family: inherit; cursor: pointer;
+    }
+    .ast-dash-count { font-size: 12px; color: var(--sup-muted); margin-left: auto; }
+
+    /* Lista */
+    .ast-dash-list { max-height: 420px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+    .ast-dash-list .item {
+      display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px; background: #fff; border: 1px solid var(--sup-border);
+      text-decoration: none; color: var(--sup-text); cursor: pointer;
+      transition: background .12s, border-color .12s;
+    }
+    .ast-dash-list .item:hover { background: var(--sup-bg-strong); border-color: var(--sup-muted); }
+    .ast-dash-list .item .d-serie { font-weight: 600; font-size: 13px; }
+    .ast-dash-list .item .d-data  { font-size: 12px; color: var(--sup-muted); }
+    .ast-dash-list .item .d-dias  { font-weight: 600; font-size: 12px; text-align: right; }
+
+    .ast-badge-faixa {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px;
+      min-width: 72px; text-align: center;
+    }
+    .ast-badge-faixa.amarela  { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .ast-badge-faixa.laranja  { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+    .ast-badge-faixa.vermelha { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+    .ast-dash-empty { padding: 30px; text-align: center; color: var(--sup-muted); font-size: 14px; }
+    .ast-dash-empty i { font-size: 32px; color: #16a34a; display: block; margin-bottom: 8px; }
     .ast-cert-search {
       flex: 1; min-width: 240px; max-width: 420px;
       position: relative; background: #fff;
@@ -269,6 +344,34 @@
     .ast-btn-icon:hover { background: var(--sup-bg-strong); }
 
     .ast-cert-table-wrap { background:#fff; border:1px solid var(--sup-border); border-radius:12px; overflow:hidden; }
+
+    /* ---------- Paginador da tabela ---------- */
+    .ast-cert-pager {
+      display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+      padding: 8px 12px; background: var(--sup-bg-strong);
+      border: 1px solid var(--sup-border); border-radius: 10px;
+      font-size: 13px; margin-bottom: 10px;
+    }
+    .ast-cert-pager-size { display: flex; align-items: center; gap: 6px; color: var(--sup-muted); }
+    .ast-cert-pager-size select {
+      padding: 4px 8px; border: 1px solid var(--sup-border); border-radius: 6px;
+      font-family: inherit; font-size: 13px; cursor: pointer; background: #fff;
+    }
+    .ast-cert-pager-info { color: var(--sup-muted); }
+    .ast-cert-pager-nav { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+    .ast-cert-pager-nav button {
+      min-width: 32px; height: 30px; padding: 0 8px;
+      border: 1px solid var(--sup-border); background: #fff;
+      border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--sup-text);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .ast-cert-pager-nav button:hover:not(:disabled) { background: var(--sup-bg-strong); }
+    .ast-cert-pager-nav button:disabled { opacity: .4; cursor: not-allowed; }
+    .ast-cert-pager-nav button.active {
+      background: var(--sup-primary); color: var(--sup-ink); border-color: var(--sup-primary);
+      font-weight: 700;
+    }
+    .ast-cert-pager-nav .ellipsis { padding: 0 4px; color: var(--sup-muted); }
     .ast-cert-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .ast-cert-table thead th {
       background: var(--sup-bg-strong); color: var(--sup-text);
@@ -352,7 +455,9 @@
     .ast-qr-url { margin-top: 10px; font-size: 11px; word-break: break-all; }
     .ast-qr-url a { color: var(--sup-primary-d); text-decoration: underline; }
 
-    /* Toast simples (reusa #supToast do CSS global) */
+    /* Toast: fora do topbar (default do CSS global sobrepoe o sino + nome do user).
+       Deslocamos pra ~70px pra baixo pra ficar logo embaixo da topbar (~56px). */
+    #supToast { top: 72px !important; right: 18px; }
   </style>
 </head>
 <body class="sup-body">
@@ -410,7 +515,13 @@
             <span class="ast-bell-badge" id="astBellBadge" style="display:none">0</span>
           </div>
           <div class="ast-bell-dropdown" id="astBellDropdown">
-            <header><i class="bi bi-exclamation-triangle"></i> Calibrações vencidas (6+ meses)</header>
+            <header>
+              <span><i class="bi bi-exclamation-triangle"></i> Calibrações vencidas (6+ meses)</span>
+              <button class="ast-bell-clear" id="astBellClear" onclick="limparVencimentos(event)"
+                      title="Silencia os alertas por 24h (volta amanhã)">
+                <i class="bi bi-check2-all"></i> Limpar
+              </button>
+            </header>
             <div id="astBellList"><div class="ast-bell-empty">Carregando…</div></div>
           </div>
           <span class="sup-topbar-user" id="topbarUser"></span>
@@ -419,33 +530,64 @@
 
       <!-- ====== DASHBOARD ====== -->
       <section class="sup-page active" id="page-dashboard">
-        <div class="ast-dash-grid">
-          <div class="ast-card" id="dashCardVenc">
-            <div class="ast-card-head">
+        <div class="ast-card" id="dashCardVenc">
+          <div class="ast-dash-header">
+            <div class="ast-dash-title">
               <i class="bi bi-exclamation-triangle-fill"></i>
-              <h3>Calibrações vencidas (6+ meses)</h3>
+              <h3>Calibrações vencidas <span style="font-weight:400;color:var(--sup-muted);font-size:13px">(6+ meses)</span></h3>
             </div>
-            <div class="big-number" id="dashVencNum">—</div>
-            <div style="font-size:12px;color:var(--sup-muted)" id="dashVencSub">Clique num item pra ver o certificado.</div>
-            <div class="ast-dash-list" id="dashVencList"></div>
+            <button class="ast-dash-help" onclick="abrirDashHelp()" title="Como funciona?" aria-label="Ajuda">
+              <i class="bi bi-question-circle"></i>
+            </button>
           </div>
 
-          <div class="ast-card">
-            <div class="ast-card-head">
-              <i class="bi bi-info-circle"></i>
-              <h3>Como funciona</h3>
+          <!-- Resumo por faixa de severidade -->
+          <div class="ast-dash-buckets" id="dashBuckets"></div>
+
+          <!-- Toolbar: busca + ordem -->
+          <div class="ast-dash-toolbar">
+            <div class="ast-dash-search">
+              <i class="bi bi-search"></i>
+              <input type="text" id="dashVencSearch" placeholder="Filtrar por número de série…">
             </div>
-            <p style="font-size:13px;color:var(--sup-muted);margin:0;line-height:1.5">
-              A data de calibração é lida automaticamente do xlsx do certificado.
-              Quando passa de <strong>6 meses</strong>, aparece aqui e no sino 🔔.
-              Use pra ligar pro cliente e oferecer uma nova calibração.
-              <br><br>
-              Se o xlsx estiver em layout diferente e a data não for detectada,
-              edite manualmente pelo botão <i class="bi bi-pencil"></i> na lista de certificados.
-            </p>
+            <select id="dashVencSort" class="ast-dash-select">
+              <option value="dias_desc">Mais antigos primeiro</option>
+              <option value="dias_asc">Mais recentes primeiro</option>
+              <option value="serie">Nº série (A→Z)</option>
+            </select>
+            <span class="ast-dash-count" id="dashVencCount"></span>
           </div>
+
+          <!-- Lista scrollavel com altura maxima -->
+          <div class="ast-dash-list" id="dashVencList"></div>
         </div>
       </section>
+
+      <!-- Modal: Como funciona (acionado pelo icone de help do dashboard) -->
+      <div class="ast-modal-overlay" id="dashHelpModal" aria-hidden="true">
+        <div class="ast-modal" style="max-width:520px">
+          <div class="ast-modal-header">
+            <h3><i class="bi bi-info-circle"></i> Como funciona</h3>
+            <button class="ast-modal-close" onclick="fecharDashHelp()" aria-label="Fechar">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+          <div class="ast-modal-body" style="font-size:14px;line-height:1.6;color:var(--sup-text)">
+            <p>A data de calibração é lida automaticamente do xlsx do certificado.
+               Quando passa de <strong>6 meses</strong>, aparece aqui e no sino 🔔.</p>
+            <p>Use pra ligar pro cliente e oferecer uma nova calibração.</p>
+            <p><strong>Legenda das faixas:</strong></p>
+            <ul style="margin:0;padding-left:20px">
+              <li><span class="ast-badge-faixa amarela">6–12 meses</span> — pouco atraso, contato preventivo.</li>
+              <li><span class="ast-badge-faixa laranja">1–2 anos</span> — atraso considerável.</li>
+              <li><span class="ast-badge-faixa vermelha">2+ anos</span> — equipamento provavelmente fora de uso ou com cliente perdido.</li>
+            </ul>
+          </div>
+          <div class="ast-modal-footer">
+            <button class="ast-btn-primary" onclick="fecharDashHelp()">Entendi</button>
+          </div>
+        </div>
+      </div>
 
       <!-- ====== CERTIFICADOS ====== -->
       <section class="sup-page" id="page-certificados">
@@ -467,12 +609,27 @@
           </div>
         </div>
 
+        <div class="ast-cert-pager" id="certPagerTop">
+          <label class="ast-cert-pager-size">
+            Exibir
+            <select id="certPerPage">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="all">Todos</option>
+            </select>
+            por página
+          </label>
+          <span class="ast-cert-pager-info" id="certPagerInfo"></span>
+          <div class="ast-cert-pager-nav" id="certPagerNav"></div>
+        </div>
+
         <div class="ast-cert-table-wrap">
           <table class="ast-cert-table" id="certTable">
             <thead>
               <tr>
                 <th>Nº Série <small style="font-weight:400;color:var(--sup-muted)">(duplo clique → histórico)</small></th>
-                <th>Versão</th>
                 <th>Data calibração</th>
                 <th>Arquivo</th>
                 <th>QR</th>
@@ -482,7 +639,7 @@
               </tr>
             </thead>
             <tbody id="certTbody">
-              <tr><td colspan="8" class="ast-cert-empty-row">Carregando…</td></tr>
+              <tr><td colspan="7" class="ast-cert-empty-row">Carregando…</td></tr>
             </tbody>
           </table>
         </div>
@@ -764,6 +921,22 @@
 
     let _certs = [];
     let _searchTimer = null;
+    let _certPage = 1;
+    const _CERT_PER_PAGE_KEY = 'ast_cert_per_page';
+
+    function _getPerPage() {
+      // Lembra escolha do user via localStorage
+      try {
+        const v = localStorage.getItem(_CERT_PER_PAGE_KEY);
+        if (v) {
+          const sel = document.getElementById('certPerPage');
+          if (sel && sel.value !== v) sel.value = v;
+          return v === 'all' ? Infinity : parseInt(v, 10);
+        }
+      } catch (_) {}
+      const sel = document.getElementById('certPerPage');
+      return sel && sel.value === 'all' ? Infinity : parseInt(sel?.value || '50', 10);
+    }
 
     async function carregarCerts(q = '') {
       const tbody = document.getElementById('certTbody');
@@ -771,28 +944,39 @@
       try {
         const qs = q ? '?q=' + encodeURIComponent(q) : '';
         _certs = await _apiFetch(qs);
+        _certPage = 1;  // volta pra pagina 1 em cada busca nova
         renderCerts();
       } catch (e) {
         tbody.innerHTML = `<tr><td colspan="7" class="ast-cert-empty-row" style="color:var(--sup-danger)">Erro: ${esc(e.message)}</td></tr>`;
+        _renderPager(0, 0, 0);
       }
     }
 
     function renderCerts() {
       const tbody = document.getElementById('certTbody');
-      if (!_certs.length) {
-        tbody.innerHTML = `<tr><td colspan="8" class="ast-cert-empty-row">Nenhum certificado cadastrado ainda. Clique em "Novo certificado" pra começar.</td></tr>`;
+      const total = _certs.length;
+      if (!total) {
+        tbody.innerHTML = `<tr><td colspan="7" class="ast-cert-empty-row">Nenhum certificado cadastrado ainda. Clique em "Novo certificado" pra começar.</td></tr>`;
+        _renderPager(0, 0, 0);
         return;
       }
-      tbody.innerHTML = _certs.map(c => `
+      const perPage = _getPerPage();
+      const isAll = !isFinite(perPage);
+      const totalPages = isAll ? 1 : Math.max(1, Math.ceil(total / perPage));
+      if (_certPage > totalPages) _certPage = totalPages;
+      const start = isAll ? 0 : (_certPage - 1) * perPage;
+      const end   = isAll ? total : Math.min(start + perPage, total);
+      const slice = _certs.slice(start, end);
+
+      _renderPager(start + 1, end, total);
+
+      tbody.innerHTML = slice.map(c => `
         <tr${c.vencido ? ' style="background:#fef2f2"' : ''}>
           <td>
             <span class="ast-cert-serie" ondblclick="abrirHistoricoSerie('${esc(c.numero_serie)}')"
                   style="cursor:pointer" title="Duplo clique para ver histórico de versões">
               ${esc(c.numero_serie)}
             </span>
-          </td>
-          <td style="font-size:12px">
-            <span style="font-weight:600">v${c.versao}</span>
           </td>
           <td style="font-size:12px">${renderDataCal(c)}</td>
           <td>
@@ -810,12 +994,61 @@
           <td style="color:var(--sup-muted);font-size:12px">${esc(fmtDate(c.criado_em))}</td>
           <td>${esc(c.criado_por_nome || '—')}</td>
           <td class="ast-cert-actions">
-            <button class="ast-btn-danger" onclick="deletarCert(${c.id})" title="Excluir">
-              <i class="bi bi-trash"></i>
-            </button>
+            ${_ehRespOuAdmin()
+              ? `<button class="ast-btn-danger" onclick="deletarCert(${c.id})" title="Excluir">
+                   <i class="bi bi-trash"></i>
+                 </button>`
+              : `<span style="color:var(--sup-muted);font-size:11px">—</span>`}
           </td>
         </tr>
       `).join('');
+    }
+
+    function _renderPager(from, to, total) {
+      const info = document.getElementById('certPagerInfo');
+      const nav = document.getElementById('certPagerNav');
+      if (!info || !nav) return;
+      if (total === 0) { info.textContent = ''; nav.innerHTML = ''; return; }
+      info.textContent = `Mostrando ${from}–${to} de ${total}`;
+
+      const perPage = _getPerPage();
+      if (!isFinite(perPage)) { nav.innerHTML = ''; return; }  // "Todos" não tem nav
+      const totalPages = Math.max(1, Math.ceil(total / perPage));
+      if (totalPages <= 1) { nav.innerHTML = ''; return; }
+
+      // Gera lista compacta: 1 ... (p-1) p (p+1) ... N
+      const paginas = [];
+      const push = (v) => { if (!paginas.length || paginas[paginas.length-1] !== v) paginas.push(v); };
+      push(1);
+      for (let i = _certPage - 1; i <= _certPage + 1; i++) {
+        if (i > 1 && i < totalPages) {
+          if (paginas[paginas.length - 1] !== i - 1) paginas.push('…');
+          push(i);
+        }
+      }
+      if (totalPages > 1) {
+        if (paginas[paginas.length - 1] !== totalPages - 1 && paginas[paginas.length - 1] !== totalPages) paginas.push('…');
+        push(totalPages);
+      }
+
+      const btn = (label, pg, opts = {}) => {
+        if (label === '…') return '<span class="ellipsis">…</span>';
+        const active = pg === _certPage ? ' active' : '';
+        const dis = opts.disabled ? ' disabled' : '';
+        return `<button class="${active}"${dis} onclick="irParaPaginaCert(${pg})" title="Página ${pg}">${label}</button>`;
+      };
+      let html = '';
+      html += btn('‹', Math.max(1, _certPage - 1), { disabled: _certPage === 1 });
+      paginas.forEach(p => { html += p === '…' ? '<span class="ellipsis">…</span>' : btn(p, p); });
+      html += btn('›', Math.min(totalPages, _certPage + 1), { disabled: _certPage === totalPages });
+      nav.innerHTML = html;
+    }
+
+    function irParaPaginaCert(pg) {
+      _certPage = pg;
+      renderCerts();
+      // scroll pro topo da tabela
+      document.getElementById('certTable')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function renderDataCal(c) {
@@ -1240,10 +1473,12 @@ const _HELP_SERIE_DEFAULT = 'Alfanumérico, 2–100 caracteres. Permite espaço,
                     <i class="bi bi-download"></i> Baixar PDF
                   </a>
                   ${v.ativo
-                    ? `<button class="ast-btn-secondary" onclick="verQR(${v.id}, '${esc(serie)}', '${v.qr_url_publica}', ${v.qr_novo ? 'true' : 'false'})">
+                    ? `<button class="ast-btn-secondary" onclick="fecharHistorico(); verQR(${v.id}, '${esc(serie)}', '${v.qr_url_publica}', ${v.qr_novo ? 'true' : 'false'})">
                          <i class="bi bi-qr-code"></i> Ver QR
                        </button>`
-                    : ''}
+                    : `<button class="ast-btn-secondary" disabled title="Versão substituída — QR não é mais ativo" style="opacity:.55; cursor:not-allowed">
+                         <i class="bi bi-qr-code"></i> QR substituído
+                       </button>`}
                 </div>
               </div>
             `).join('')}
@@ -1256,13 +1491,26 @@ const _HELP_SERIE_DEFAULT = 'Alfanumérico, 2–100 caracteres. Permite espaço,
       document.getElementById('histModal').classList.remove('show');
     }
 
-    // Busca por digitação (debounce 300ms)
+    // Busca por digitação (debounce 300ms) + hook do seletor de paginação
     document.addEventListener('DOMContentLoaded', () => {
       const search = document.getElementById('certSearch');
       if (search) {
         search.addEventListener('input', e => {
           clearTimeout(_searchTimer);
           _searchTimer = setTimeout(() => carregarCerts(e.target.value.trim()), 300);
+        });
+      }
+      const perPage = document.getElementById('certPerPage');
+      if (perPage) {
+        // Restaura preferencia salva
+        try {
+          const saved = localStorage.getItem(_CERT_PER_PAGE_KEY);
+          if (saved) perPage.value = saved;
+        } catch (_) {}
+        perPage.addEventListener('change', () => {
+          try { localStorage.setItem(_CERT_PER_PAGE_KEY, perPage.value); } catch (_) {}
+          _certPage = 1;
+          renderCerts();
         });
       }
     });
@@ -1398,9 +1646,20 @@ const _HELP_SERIE_DEFAULT = 'Alfanumérico, 2–100 caracteres. Permite espaço,
 
     /* ================================================================
        VENCIMENTOS — sino + dashboard card
+       Snooze local (24h) via localStorage: user clica "Limpar", alertas
+       somem ate o timestamp. Reaparecem no proximo refresh/poll apos o fim.
        ================================================================ */
     const API_VENCIMENTOS = API_BASE + '/api/assistencia/vencimentos';
+    const _SNOOZE_KEY = 'ast_vencimentos_snooze_ate';
     let _vencimentos = { total: 0, itens: [] };
+
+    function _snoozeAte() {
+      try {
+        const v = parseInt(localStorage.getItem(_SNOOZE_KEY) || '0', 10);
+        return v && v > Date.now() ? v : 0;
+      } catch (_) { return 0; }
+    }
+    function _snoozeAtivo() { return _snoozeAte() > 0; }
 
     async function atualizarVencimentos() {
       try {
@@ -1417,12 +1676,33 @@ const _HELP_SERIE_DEFAULT = 'Alfanumérico, 2–100 caracteres. Permite espaço,
       renderDashVencimentos();
     }
 
+    function limparVencimentos(ev) {
+      if (ev) { ev.stopPropagation(); }
+      try {
+        const ate = Date.now() + 24 * 60 * 60 * 1000;
+        localStorage.setItem(_SNOOZE_KEY, String(ate));
+      } catch (_) {}
+      renderBell();
+      renderDashVencimentos();
+      toast('Alertas silenciados por 24h. Clique no sino amanhã.', 'success');
+      document.getElementById('astBellDropdown')?.classList.remove('show');
+    }
+    function reativarVencimentos() {
+      try { localStorage.removeItem(_SNOOZE_KEY); } catch (_) {}
+      renderBell();
+      renderDashVencimentos();
+    }
+
     function renderBell() {
       const bell = document.getElementById('astBell');
       const badge = document.getElementById('astBellBadge');
       const list = document.getElementById('astBellList');
+      const btnClear = document.getElementById('astBellClear');
       const n = _vencimentos.total || 0;
-      if (n > 0) {
+      const silenciado = _snoozeAtivo();
+
+      // Badge e animacao: respeita snooze
+      if (n > 0 && !silenciado) {
         bell.classList.add('has-alerts');
         badge.textContent = n > 99 ? '99+' : String(n);
         badge.style.display = 'inline-block';
@@ -1430,6 +1710,20 @@ const _HELP_SERIE_DEFAULT = 'Alfanumérico, 2–100 caracteres. Permite espaço,
         bell.classList.remove('has-alerts');
         badge.style.display = 'none';
       }
+      // Botao "Limpar" so faz sentido se tem alerta e nao esta silenciado
+      if (btnClear) btnClear.disabled = (n === 0) || silenciado;
+
+      if (silenciado) {
+        const dt = new Date(_snoozeAte()).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+        list.innerHTML = `
+          <div class="ast-bell-empty"><i class="bi bi-volume-mute"></i> Alertas silenciados</div>
+          <div class="ast-bell-muted">
+            <span>Volta em ${esc(dt)}</span>
+            <button onclick="reativarVencimentos()">Reativar agora</button>
+          </div>`;
+        return;
+      }
+
       if (!_vencimentos.itens || !_vencimentos.itens.length) {
         list.innerHTML = `<div class="ast-bell-empty"><i class="bi bi-check-circle"></i> Nenhuma calibração vencida 🎉</div>`;
         return;
@@ -1445,31 +1739,91 @@ const _HELP_SERIE_DEFAULT = 'Alfanumérico, 2–100 caracteres. Permite espaço,
       `).join('');
     }
 
+    // Faixa visual de severidade por dias vencidos
+    function _faixaVencido(dias) {
+      if (dias >= 730) return 'vermelha';   // 2+ anos
+      if (dias >= 365) return 'laranja';    // 1-2 anos
+      return 'amarela';                     // 6-12 meses
+    }
+    function _faixaLabel(f) {
+      return f === 'vermelha' ? '2+ anos' : (f === 'laranja' ? '1-2 anos' : '6-12 meses');
+    }
+
     function renderDashVencimentos() {
       const card = document.getElementById('dashCardVenc');
-      const num = document.getElementById('dashVencNum');
-      const sub = document.getElementById('dashVencSub');
+      const buckets = document.getElementById('dashBuckets');
       const list = document.getElementById('dashVencList');
-      const n = _vencimentos.total || 0;
-      num.textContent = n;
+      const count = document.getElementById('dashVencCount');
+      const itens = _vencimentos.itens || [];
+      const n = itens.length;
+
       if (n === 0) {
         card.classList.remove('alert'); card.classList.add('ok');
-        sub.innerHTML = `<i class="bi bi-check-circle" style="color:#16a34a"></i> Nenhuma calibração vencida.`;
-        list.innerHTML = '';
+        buckets.innerHTML = `
+          <div class="ast-bucket total"><div class="n">0</div><div class="lbl">Total vencidas</div></div>
+          <div class="ast-bucket amarela"><div class="n">0</div><div class="lbl">6-12 meses</div></div>
+          <div class="ast-bucket laranja"><div class="n">0</div><div class="lbl">1-2 anos</div></div>
+          <div class="ast-bucket vermelha"><div class="n">0</div><div class="lbl">2+ anos</div></div>
+        `;
+        list.innerHTML = `<div class="ast-dash-empty"><i class="bi bi-check-circle"></i>Nenhuma calibração vencida 🎉</div>`;
+        count.textContent = '';
         return;
       }
       card.classList.remove('ok'); card.classList.add('alert');
-      sub.innerHTML = `Clique num item pra ver o certificado — tempo de contatar o cliente.`;
-      list.innerHTML = _vencimentos.itens.slice(0, 20).map(c => `
-        <a onclick="irParaCert('${esc(c.numero_serie)}')" style="cursor:pointer">
-          <span class="d-serie">${esc(c.numero_serie)}</span>
-          <span class="d-dias">${c.dias_desde_calibracao}d · ${esc(new Date(c.data_calibracao + 'T00:00:00').toLocaleDateString('pt-BR'))}</span>
-        </a>
-      `).join('');
-      if (_vencimentos.itens.length > 20) {
-        list.innerHTML += `<div style="text-align:center;color:var(--sup-muted);font-size:12px;padding:6px">+ ${_vencimentos.itens.length - 20} mais na aba Certificados</div>`;
-      }
+
+      const porFaixa = { amarela: 0, laranja: 0, vermelha: 0 };
+      itens.forEach(c => { porFaixa[_faixaVencido(c.dias_desde_calibracao)]++; });
+      buckets.innerHTML = `
+        <div class="ast-bucket total"><div class="n">${n}</div><div class="lbl">Total vencidas</div></div>
+        <div class="ast-bucket amarela"><div class="n">${porFaixa.amarela}</div><div class="lbl">6-12 meses</div></div>
+        <div class="ast-bucket laranja"><div class="n">${porFaixa.laranja}</div><div class="lbl">1-2 anos</div></div>
+        <div class="ast-bucket vermelha"><div class="n">${porFaixa.vermelha}</div><div class="lbl">2+ anos</div></div>
+      `;
+
+      _renderDashListaFiltrada();
     }
+
+    function _renderDashListaFiltrada() {
+      const list = document.getElementById('dashVencList');
+      const count = document.getElementById('dashVencCount');
+      const search = (document.getElementById('dashVencSearch')?.value || '').trim().toLowerCase();
+      const sort = document.getElementById('dashVencSort')?.value || 'dias_desc';
+      let itens = (_vencimentos.itens || []).slice();
+
+      if (search) itens = itens.filter(c => String(c.numero_serie || '').toLowerCase().includes(search));
+      itens.sort((a, b) => {
+        if (sort === 'serie')     return String(a.numero_serie).localeCompare(String(b.numero_serie));
+        if (sort === 'dias_asc')  return (a.dias_desde_calibracao || 0) - (b.dias_desde_calibracao || 0);
+        return (b.dias_desde_calibracao || 0) - (a.dias_desde_calibracao || 0);  // dias_desc (default)
+      });
+
+      count.textContent = search
+        ? `${itens.length} de ${_vencimentos.itens.length} vencidos`
+        : `${itens.length} vencidos`;
+
+      if (!itens.length) {
+        list.innerHTML = `<div class="ast-dash-empty" style="padding:20px"><i class="bi bi-search" style="color:var(--sup-muted)"></i>Nenhum resultado pra "${esc(search)}"</div>`;
+        return;
+      }
+      list.innerHTML = itens.map(c => {
+        const f = _faixaVencido(c.dias_desde_calibracao);
+        const data = new Date(c.data_calibracao + 'T00:00:00').toLocaleDateString('pt-BR');
+        return `
+          <div class="item" onclick="irParaCert('${esc(c.numero_serie)}')" title="Abrir certificado ${esc(c.numero_serie)}">
+            <span class="ast-badge-faixa ${f}">${_faixaLabel(f)}</span>
+            <div>
+              <div class="d-serie">${esc(c.numero_serie)}</div>
+              <div class="d-data">Calibrado em ${esc(data)}</div>
+            </div>
+            <div class="d-dias" style="color:${f==='vermelha'?'#991b1b':(f==='laranja'?'#9a3412':'#92400e')}">
+              ${c.dias_desde_calibracao}d atrás
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    function abrirDashHelp() { document.getElementById('dashHelpModal').classList.add('show'); }
+    function fecharDashHelp() { document.getElementById('dashHelpModal').classList.remove('show'); }
 
     function toggleBellDropdown() {
       const dd = document.getElementById('astBellDropdown');
@@ -1490,10 +1844,18 @@ const _HELP_SERIE_DEFAULT = 'Alfanumérico, 2–100 caracteres. Permite espaço,
       document.getElementById('astBellDropdown').classList.remove('show');
     }
 
-    // Boot: carrega vencimentos + poll a cada 5min
+    // Boot: carrega vencimentos + poll a cada 5min + hooks de busca/sort do dashboard
     document.addEventListener('DOMContentLoaded', () => {
       atualizarVencimentos();
       setInterval(atualizarVencimentos, 5 * 60 * 1000);
+
+      const s = document.getElementById('dashVencSearch');
+      if (s) {
+        let t;
+        s.addEventListener('input', () => { clearTimeout(t); t = setTimeout(_renderDashListaFiltrada, 150); });
+      }
+      const ord = document.getElementById('dashVencSort');
+      if (ord) ord.addEventListener('change', _renderDashListaFiltrada);
     });
 
     /* ================================================================

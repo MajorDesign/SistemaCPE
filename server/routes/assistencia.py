@@ -121,20 +121,21 @@ def _client_ip(req: Request) -> str:
 
 
 def _assert_can_manage(current_user: dict) -> None:
-    """Garante que o user pode gerenciar certificados: ADMIN OU grupo
-    assistencia (id=3) OU user_groups inclui 3."""
-    role = (current_user.get("role") or "").upper()
-    if role == "ADMIN":
-        return
-    if current_user.get("group_id") == 3:
-        return
-    gids = current_user.get("group_ids") or []
-    if 3 in gids:
-        return
-    raise HTTPException(
-        status_code=403,
-        detail="Apenas ADMIN ou usuarios do grupo Assistencia podem gerenciar certificados.",
-    )
+    """Acesso de visualizacao/criacao de certificados: TODOS os usuarios
+    autenticados da CPE (decisao de produto 2026-10-05).
+
+    - Visualizar lista, abrir QR, ver historico, dashboard, relatorios: todos.
+    - Criar novo certificado (upload xlsx): todos.
+    - Deletar: so ADMIN ou RESPONSAVEL_GRUPO do grupo assistencia
+      (ver _assert_can_manage_anexo).
+    - Upload do anexo anual global: so ADMIN ou RESPONSAVEL_GRUPO do grupo
+      (ver _assert_can_manage_anexo).
+
+    O proprio Depends(get_current_user) ja garante que o user esta logado,
+    entao essa funcao e um no-op intencional. Mantida pra deixar explicito
+    o ponto de autorizacao e facilitar restricao futura se necessario.
+    """
+    return
 
 
 def _assert_can_manage_anexo(current_user: dict) -> None:
@@ -531,7 +532,9 @@ async def obter_certificado(cert_id: int, current_user: dict = Depends(get_curre
 # -------------------------------------------------------------------------
 @router.delete("/certificados/{cert_id}", status_code=204)
 async def deletar_certificado(cert_id: int, current_user: dict = Depends(get_current_user)):
-    _assert_can_manage(current_user)
+    # Exclusao e acao sensivel (perde historico, invalida QR) — so ADMIN ou
+    # RESPONSAVEL_GRUPO do grupo assistencia (mesma regra do anexo anual).
+    _assert_can_manage_anexo(current_user)
     row = _fetch_cert(cert_id)
     if not row:
         raise HTTPException(status_code=404, detail="Certificado nao encontrado.")
