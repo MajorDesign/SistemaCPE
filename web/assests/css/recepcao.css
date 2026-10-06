@@ -1500,3 +1500,15 @@ body.recep-body video { height: auto; }
 .recep-chip:hover { background: #FDECEA; border-color: #E74C3C; }
 .recep-chip:hover i { color: #B91C1C; }
 .recep-chip:focus-visible { outline: 2px solid #1F2937; outline-offset: 2px; }
+
+/* Etiqueta de quem já estava convidado (Adicionar participantes): sem ×, não remove */
+.recep-chip.recep-chip-travado {
+  cursor: default;
+  padding: 3px 10px;
+  background: #ECFDF5;
+  border-color: #A7F3D0;
+  color: #065F46;
+}
+.recep-chip.recep-chip-travado i { color: #065F46; font-size: .9rem; }
+.recep-chip.recep-chip-travado:hover { background: #ECFDF5; border-color: #A7F3D0; }
+.recep-body .modal-body span.form-label { display: block !important; }

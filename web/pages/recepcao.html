@@ -15,7 +15,7 @@
   <!-- FullCalendar (gratuito) -->
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
 
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/recepcao.css?v=2026-10-06-chips">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/recepcao.css?v=2026-10-06-participantes">
 
   <script src="/SistemaCPE/web/assests/js/config.js"></script>
   <script src="/SistemaCPE/web/assests/js/page-guard.js?v=2026-08-24-fetch-auth"></script>
@@ -288,6 +288,53 @@
 </div>
 
 <!-- ============================================================ -->
+<!-- MODAL: Adicionar participantes (reserva já criada) -->
+<!-- ============================================================ -->
+<div class="modal fade" id="addParticipantesModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-person-plus"></i> Adicionar participantes</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger d-none" id="addPartErr"></div>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <span class="form-label">Reunião</span>
+            <div class="fw-semibold" id="addPartTitulo"></div>
+          </div>
+          <div class="col-md-6">
+            <span class="form-label">Quando / sala</span>
+            <div id="addPartQuando"></div>
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="addPartBusca">
+              <i class="bi bi-people-fill" aria-hidden="true"></i> Participantes
+            </label>
+            <div class="form-control recep-tokens mb-2" id="addPartTokens" onclick="if(event.target===this)document.getElementById('addPartBusca').focus()">
+              <span id="addPartChips" class="recep-tokens-chips" aria-live="polite"></span>
+              <input type="text" class="recep-tokens-input" id="addPartBusca"
+                     placeholder="Buscar por nome, e-mail ou username..." oninput="filtrarConvidados(PICKER_ADD)" autocomplete="off" data-lpignore="true" data-1p-ignore="true">
+            </div>
+            <select class="form-select" id="addPartLista" size="7" aria-label="Usuários disponíveis para convite"></select>
+            <small class="form-text text-muted">
+              Dê <strong>dois cliques</strong> no nome para incluir. Quem já estava convidado aparece com <i class="bi bi-check2" aria-hidden="true"></i> e não recebe nada de novo — <strong>só os novos participantes</strong> recebem o convite por e-mail e no sino.
+            </small>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button class="btn btn-primary" onclick="salvarParticipantes()" id="btnSalvarParticipantes">
+          <i class="bi bi-send" aria-hidden="true"></i> Enviar convites
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
 <!-- MODAL: Nova/Editar Sala -->
 <!-- ============================================================ -->
 <div class="modal fade" id="salaModal" tabindex="-1" aria-hidden="true">
@@ -514,7 +561,7 @@
 <!-- ============================================================ -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales/pt-br.global.min.js"></script><script src="/SistemaCPE/web/assests/js/recepcao.js?v=2026-10-06-chips"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales/pt-br.global.min.js"></script><script src="/SistemaCPE/web/assests/js/recepcao.js?v=2026-10-06-participantes"></script>
 
 <!-- ============================================================ -->
 <!-- MOBILE SIDEBAR (overlay com backdrop)                         -->

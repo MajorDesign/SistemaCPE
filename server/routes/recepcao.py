@@ -124,7 +124,8 @@ class ReservaCancel(BaseModel):
 
 
 class ConvidarBody(BaseModel):
-    convidador_id: int = Field(..., gt=0)
+    # 2026-10-06: identidade vem do token; campo antigo aceito e ignorado.
+    convidador_id: Optional[int] = Field(None, gt=0)
     convidados_ids: List[int] = Field(..., min_length=1)
 
 
@@ -950,25 +951,38 @@ async def list_convidados(reserva_id: int):
 
 
 @router.post("/reservas/{reserva_id}/convidar")
-async def convidar_para_reserva(reserva_id: int, body: ConvidarBody):
+async def convidar_para_reserva(reserva_id: int, body: ConvidarBody,
+                                current_user: dict = Depends(get_current_user)):
+    """Adiciona participantes a uma reserva existente (organizador ou admin).
+
+    Só os usuários que ainda não estavam convidados recebem sino + e-mail.
+    """
+    convidador_id = int(current_user["id"])  # nunca o do body (IDOR)
     conn = get_db_or_404()
     cursor = None
     try:
         cursor = conn.cursor(dictionary=True)
         cursor.execute(
-            "SELECT id, usuario_id, titulo, inicio FROM recepcao_reservas WHERE id = %s",
+            "SELECT id, usuario_id, titulo, inicio, fim, status FROM recepcao_reservas WHERE id = %s",
             (reserva_id,),
         )
         reserva = cursor.fetchone()
         if not reserva:
             raise HTTPException(status_code=404, detail="Reserva não encontrada")
 
-        role = _get_user_role(cursor, body.convidador_id)
-        if reserva["usuario_id"] != body.convidador_id and role not in {"ADMIN", "TI", "MANAGER"}:
+        role = _get_user_role(cursor, convidador_id)
+        if reserva["usuario_id"] != convidador_id and role not in {"ADMIN", "TI", "MANAGER"}:
             raise HTTPException(status_code=403, detail="Apenas o autor da reserva pode convidar")
 
+        if reserva["status"] not in {"pendente", "confirmada"}:
+            raise HTTPException(status_code=409, detail="Reserva encerrada — não aceita novos participantes")
+        if reserva["fim"] and reserva["fim"] <= datetime.now():
+            raise HTTPException(status_code=409, detail="Reunião já terminou — não aceita novos participantes")
+
+        # convidador = organizador: o convite sai em nome dele e o próprio dono
+        # nunca vira convidado, mesmo quando é um admin que está adicionando.
         novos = _convidar_usuarios(
-            cursor, reserva_id, body.convidador_id,
+            cursor, reserva_id, reserva["usuario_id"],
             body.convidados_ids, reserva["titulo"], reserva["inicio"],
         )
         conn.commit()

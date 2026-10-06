@@ -162,13 +162,25 @@ async function loadUsuarios() {
   }
 }
 
-// Convidados da reserva em edição (ids, na ordem em que foram adicionados).
-// Fica fora do <select> porque a lista é refeita a cada busca.
-let convidadosSelecionados = new Set();
+// Seletor de convidados (campo com etiquetas + lista com duplo clique).
+// Usado em 2 lugares: Nova Reserva e "Adicionar participantes" (reserva já criada).
+// Cada um tem seu estado: sel = escolhidos agora (ordem de inclusão);
+// travados = já convidados antes (etiqueta sem ×, não dá pra tirar daqui);
+// excluir = quem não pode ser convidado (eu / o organizador).
+let convidadosSelecionados = new Set();   // Nova Reserva (lido por submitReserva)
+const PICKER_RESERVA = {
+  busca: 'resvConvidadosBusca', lista: 'resvConvidados', chips: 'resvConvidadosChips',
+  sel: convidadosSelecionados, travados: new Set(), excluir: new Set(),
+};
+const PICKER_ADD = {
+  busca: 'addPartBusca', lista: 'addPartLista', chips: 'addPartChips',
+  sel: new Set(), travados: new Set(), excluir: new Set(),
+};
+const PLACEHOLDER_BUSCA = 'Buscar por nome, e-mail ou username...';
 
-function filtrarConvidados() {
-  const q = ($('resvConvidadosBusca').value || '').toLowerCase().trim();
-  const sel = $('resvConvidados');
+function filtrarConvidados(P = PICKER_RESERVA) {
+  const q = ($(P.busca).value || '').toLowerCase().trim();
+  const sel = $(P.lista);
   const filtrados = !q ? usuariosAtivos
     : usuariosAtivos.filter(u =>
         u.nome.toLowerCase().includes(q) ||
@@ -176,23 +188,26 @@ function filtrarConvidados() {
         u.username.toLowerCase().includes(q));
 
   sel.innerHTML = filtrados
-    .filter(u => u.id !== currentUser.id)        // não convida a si mesmo
+    .filter(u => u.id !== currentUser.id && !P.excluir.has(u.id))   // não convida a si mesmo / o dono
     .map(u => {
-      const convidado = convidadosSelecionados.has(u.id);
+      const travado   = P.travados.has(u.id);
+      const convidado = travado || P.sel.has(u.id);
       const sub = u.email ? ` — ${escHtml(u.email)}` : '';
-      const cls = convidado ? ' class="fw-semibold text-success"' : '';
-      return `<option value="${u.id}"${cls}>${convidado ? '✓ ' : ''}${escHtml(u.nome)}${sub}</option>`;
+      const cls = travado ? ' class="text-success"' : (convidado ? ' class="fw-semibold text-success"' : '');
+      const sufixo = travado ? ' (já convidado)' : '';
+      return `<option value="${u.id}"${cls}>${convidado ? '✓ ' : ''}${escHtml(u.nome)}${sub}${sufixo}</option>`;
     }).join('');
-  renderConvidadosLista();
+  renderConvidadosLista(P);
 }
 
-function alternarConvidado(id) {
-  if (!id) return;
-  if (convidadosSelecionados.has(id)) convidadosSelecionados.delete(id);
-  else convidadosSelecionados.add(id);
-  const sel = $('resvConvidados');
+function alternarConvidado(id, P = PICKER_RESERVA) {
+  if (!id || P.travados.has(id)) return;   // já convidado antes: não sai por aqui
+  if (P.sel.has(id)) P.sel.delete(id);
+  else P.sel.add(id);
+  if (P === PICKER_ADD) $('addPartErr').classList.add('d-none');   // some o "escolha alguém"
+  const sel = $(P.lista);
   const topo = sel.scrollTop;             // não pular pro topo da lista
-  filtrarConvidados();
+  filtrarConvidados(P);
   sel.scrollTop = topo;
   // Sem destaque azul: quem está convidado é indicado só pelo ✓ verde
   // (o azul do item clicado confundia, parecendo convidado após remover).
@@ -200,43 +215,49 @@ function alternarConvidado(id) {
 }
 
 // Convidados viram etiquetas (chips) dentro do campo de busca; clicar remove.
-function renderConvidadosLista() {
-  const box = $('resvConvidadosChips');
+function renderConvidadosLista(P = PICKER_RESERVA) {
+  const box = $(P.chips);
   if (!box) return;
-  const convidados = Array.from(convidadosSelecionados)
-    .map(id => usuariosAtivos.find(u => u.id === id))
-    .filter(Boolean);
-  box.innerHTML = convidados.map(u => `
-    <button type="button" class="recep-chip" onclick="alternarConvidado(${u.id})"
-            title="Remover ${escHtml(u.nome)}" aria-label="Remover ${escHtml(u.nome)} dos convidados">
-      ${escHtml(u.nome)} <i class="bi bi-x" aria-hidden="true"></i>
-    </button>`).join('');
-  const busca = $('resvConvidadosBusca');
-  if (busca) busca.placeholder = convidados.length ? 'Adicionar mais…' : 'Buscar por nome, e-mail ou username...';
+  const nomeDe = id => usuariosAtivos.find(u => u.id === id);
+  const travados = Array.from(P.travados).map(nomeDe).filter(Boolean);
+  const novos    = Array.from(P.sel).map(nomeDe).filter(Boolean);
+  const ref = P === PICKER_ADD ? 'PICKER_ADD' : 'PICKER_RESERVA';
+  box.innerHTML =
+    travados.map(u => `
+      <span class="recep-chip recep-chip-travado" title="${escHtml(u.nome)} já foi convidado">
+        <i class="bi bi-check2" aria-hidden="true"></i> ${escHtml(u.nome)}
+      </span>`).join('') +
+    novos.map(u => `
+      <button type="button" class="recep-chip" onclick="alternarConvidado(${u.id}, ${ref})"
+              title="Remover ${escHtml(u.nome)}" aria-label="Remover ${escHtml(u.nome)} dos convidados">
+        ${escHtml(u.nome)} <i class="bi bi-x" aria-hidden="true"></i>
+      </button>`).join('');
+  const busca = $(P.busca);
+  if (busca) busca.placeholder = (travados.length || novos.length) ? 'Adicionar mais…' : PLACEHOLDER_BUSCA;
 }
 
-function limparConvidados() {
-  convidadosSelecionados.clear();
-  filtrarConvidados();
+function limparConvidados(P = PICKER_RESERVA) {
+  P.sel.clear();
+  filtrarConvidados(P);
 }
 
-function initConvidadosPicker() {
-  const sel = $('resvConvidados');
+function initConvidadosPicker(P = PICKER_RESERVA) {
+  const sel = $(P.lista);
   if (!sel || sel.dataset.pickerOk) return;
   sel.dataset.pickerOk = '1';
   sel.addEventListener('dblclick', e => {
     const opt = (e.target && e.target.closest) ? e.target.closest('option') : null;
-    alternarConvidado(parseInt((opt || sel.options[sel.selectedIndex] || {}).value));
+    alternarConvidado(parseInt((opt || sel.options[sel.selectedIndex] || {}).value), P);
   });
   // Teclado: Enter no item focado também convida/remove
   sel.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); alternarConvidado(parseInt(sel.value)); }
+    if (e.key === 'Enter') { e.preventDefault(); alternarConvidado(parseInt(sel.value), P); }
   });
   // Backspace com a busca vazia remove o último convidado (padrão de campo com etiquetas)
-  const busca = $('resvConvidadosBusca');
+  const busca = $(P.busca);
   busca?.addEventListener('keydown', e => {
-    if (e.key === 'Backspace' && !busca.value && convidadosSelecionados.size) {
-      alternarConvidado(Array.from(convidadosSelecionados).pop());
+    if (e.key === 'Backspace' && !busca.value && P.sel.size) {
+      alternarConvidado(Array.from(P.sel).pop(), P);
     }
   });
 }
@@ -821,7 +842,7 @@ function openReservaModal() {
   $('resvTitulo').value    = '';
   $('resvDescricao').value = '';
   $('resvConvidadosBusca').value = '';
-  convidadosSelecionados = new Set();
+  convidadosSelecionados.clear();
   initConvidadosPicker();
   filtrarConvidados();             // popula select de convidados
   // preenche com "agora" arredondado pra próxima meia hora
@@ -1054,6 +1075,15 @@ async function openReservaDetalhe(rv) {
     btn.onclick = () => confirmarReserva(rv.id);
     acts.appendChild(btn);
   }
+  // Organizador (ou admin) inclui mais gente enquanto a reunião não terminou
+  if (['pendente', 'confirmada'].includes(rv.status) && (dono || podeAdmin) && new Date(rv.fim) > new Date()) {
+    const btnAdd = document.createElement('button');
+    btnAdd.className = 'btn btn-outline-primary';
+    btnAdd.id = 'btnAddParticipantes';
+    btnAdd.innerHTML = '<i class="bi bi-person-plus" aria-hidden="true"></i> Adicionar participantes';
+    btnAdd.onclick = () => abrirAdicionarParticipantes(rv, convidados);
+    acts.appendChild(btnAdd);
+  }
   if (['pendente', 'confirmada'].includes(rv.status) && (dono || podeAdmin)) {
     const btnCanc = document.createElement('button');
     btnCanc.className = 'btn btn-outline-danger';
@@ -1068,6 +1098,59 @@ async function openReservaDetalhe(rv) {
   acts.appendChild(btnFechar);
 
   new bootstrap.Modal($('reservaDetalhe')).show();
+}
+
+/* Adicionar participantes a uma reserva já criada: quem já estava convidado
+   aparece travado; só os novos são enviados (e só eles recebem e-mail/sino). */
+let addPartReserva = null;
+
+function abrirAdicionarParticipantes(rv, convidados) {
+  addPartReserva = rv;
+  PICKER_ADD.sel.clear();
+  PICKER_ADD.travados = new Set((convidados || []).map(c => c.usuario_id));
+  PICKER_ADD.excluir  = new Set([rv.usuario_id]);
+  $('addPartErr').classList.add('d-none');
+  $('addPartTitulo').textContent = rv.titulo || '';
+  $('addPartQuando').textContent = `${dtPt(rv.inicio)} · ${rv.sala_nome || ''}`;
+  $(PICKER_ADD.busca).value = '';
+  initConvidadosPicker(PICKER_ADD);
+  filtrarConvidados(PICKER_ADD);
+  bootstrap.Modal.getInstance($('reservaDetalhe'))?.hide();
+  new bootstrap.Modal($('addParticipantesModal')).show();
+}
+
+async function salvarParticipantes() {
+  const erro = $('addPartErr');
+  erro.classList.add('d-none');
+  const ids = Array.from(PICKER_ADD.sel);
+  if (!ids.length) {
+    erro.textContent = 'Escolha pelo menos um participante novo (dois cliques no nome).';
+    erro.classList.remove('d-none'); return;
+  }
+  const btn = $('btnSalvarParticipantes');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando convites...';
+  try {
+    const r = await fetch(`${API.reservas}/${addPartReserva.id}/convidar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ convidados_ids: ids }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || 'HTTP ' + r.status);
+    bootstrap.Modal.getInstance($('addParticipantesModal')).hide();
+    const n = j.novos ?? ids.length;
+    toast(n
+      ? `${n} participante(s) adicionado(s) — convite enviado por e-mail e no sino.`
+      : 'Esses participantes já estavam convidados.', 'success');
+    abrirReservaPorId(addPartReserva.id);   // volta pro detalhe já atualizado
+  } catch (err) {
+    erro.textContent = err.message;
+    erro.classList.remove('d-none');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send" aria-hidden="true"></i> Enviar convites';
+  }
 }
 
 async function responderConvite(conviteId, aceitar, reservaId) {
@@ -1685,3 +1768,5 @@ window.abrirReservaPorId   = abrirReservaPorId;
 window.responderConvite    = responderConvite;
 window.filtrarConvidados   = filtrarConvidados;
 window.limparConvidados    = limparConvidados;
+window.abrirAdicionarParticipantes = abrirAdicionarParticipantes;
+window.salvarParticipantes = salvarParticipantes;
