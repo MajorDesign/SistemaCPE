@@ -489,9 +489,10 @@ Sistema refatorado em 2026-05 (`docs/PLANO_PERMISSOES.md`). Fonte da verdade é 
 
 ## E-mail transacional
 
-### Dois perfis SMTP (necessário nos .env)
-- `SMTP_*` — transacional default (reset senha, notificações de ticket/frota)
-- `AGENDA_SMTP_*` — agendamento (convites de reunião via módulo Agenda)
+### Perfis SMTP (.env)
+- `SMTP_*` — transacional default (notificações de ticket/frota, aprovação de cadastro) — obrigatório
+- `AGENDA_SMTP_*` — agendamento (convites de reunião via módulo Agenda) — obrigatório
+- `CODIGOS_SMTP_*` — códigos de Primeiro Acesso e Esqueci minha senha, via Gmail (decisão 2026-10-06: OTPs do noreply@ sumiam em caixas internas). Opcional; vazio = usa `SMTP_*`.
 
 ### Regra rígida de teste
 - Emails de teste vão **SEMPRE** pra `jonathan.lopes@cpetecnologia.com.br`

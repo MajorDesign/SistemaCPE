@@ -297,12 +297,19 @@ Pode fechar o painel.
 
 ---
 
-## SMTP: 2 perfis obrigatórios
+## SMTP: 3 perfis
 
-- `SMTP_*` — transacional default (reset senha, tickets, frota, etc.)
+- `SMTP_*` — transacional default (tickets, frota, aprovação de cadastro, etc.) — `noreply@` no Carbonio
 - `AGENDA_SMTP_*` — módulo agenda (convites de reunião via Carbonio)
+- `CODIGOS_SMTP_*` — **só** os códigos de Primeiro Acesso e Esqueci minha senha (Gmail `cpecpecontrol@`). Opcional: vazio = sai pelo `SMTP_*`.
 
-Ambos precisam estar preenchidos em `.env` de prod. Conferir antes de deployar nova feature de email.
+`SMTP_*` e `AGENDA_SMTP_*` precisam estar preenchidos em `.env` de prod. Conferir antes de deployar nova feature de email.
+
+**OTP sumindo da caixa (2026-10-06):** códigos de cadastro vindos do `noreply@` eram aceitos pelo Carbonio (log `✅ Enviado`, sem bounce) mas não apareciam na caixa `marketing.bh3@` — nem inbox nem spam — enquanto outros e-mails do noreply chegavam. Enviado pelo Gmail, chegou. Por isso o perfil `codigos`. Se um OTP "não chega": o código está no log (`[EMAIL] ✅ Enviado ... assunto='... <codigo> ...'`) e dá pra destravar o usuário.
+
+**`SMTP_ALLOW_EXPIRED_CERT=1`** só desliga a validação do cert pro host igual ao `SMTP_HOST`. Quem montar conexão SMTP deve chamar `_make_ssl_context(cfg["host"])` passando o host (sem host = valida sempre e quebra no Carbonio com cert vencido).
+
+**Volume:** o sistema manda ~130 e-mails/dia útil (pico 193). Gmail gratuito aguenta ~500/dia — não mover os transacionais pro perfil `codigos`.
 
 ---
 

@@ -680,7 +680,7 @@ def checar_email(payload: ChecarEmailPayload, request: Request):
 
         subject, html = email_otp_primeiro_acesso(codigo, expira_min=OTP_TTL_MIN)
         try:
-            enviar_email(email_norm, subject, html, async_send=False, raise_on_error=True)
+            enviar_email(email_norm, subject, html, async_send=False, raise_on_error=True, perfil="codigos")
         except Exception as err:
             logger.error(f"[PRECAD/CHECAR] ❌ SMTP: {err}")
             if debug_mode:

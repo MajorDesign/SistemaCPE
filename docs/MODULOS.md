@@ -16,7 +16,7 @@ Ordem alfabética.
 **Endpoints principais:**
 - `POST /login` — body `{credential, password}` → `{success, user, access_token}` + cookie `cpe_session`
 - `GET /me` — devolve user atual (id/name/email/role/group_id) — usado pra revalidar role após admin promover
-- `POST /forgot-password` — dispara email com link (via `AGENDA_SMTP_*` ou `SMTP_*`)
+- `POST /forgot-password` — gera código de 6 dígitos e envia por e-mail via perfil SMTP `codigos` (`CODIGOS_SMTP_*`, Gmail; cai pro `SMTP_*` se vazio). Fica em `server/app.py`.
 - `POST /reset-password` + `GET /reset-password/validate` — fluxo de link em email
 
 **Detalhes:**

@@ -14,6 +14,13 @@ Configuração via .env:
                               servidor SMTP. Workaround temporario enquanto
                               o cert do mail.cpetecnologia.com.br nao e
                               renovado. RENOVE o cert e volte pra "0" ASAP.
+                              Vale so pro host de SMTP_HOST (outros perfis,
+                              como o Gmail, sempre validam o cert).
+
+Perfil "codigos" (OTP de Primeiro Acesso e Esqueci minha senha):
+    CODIGOS_SMTP_HOST / _PORT / _USER / _PASSWORD / _FROM / _FROM_NAME /
+    _USE_TLS / _USE_SSL — mesmo formato das SMTP_*. Se CODIGOS_SMTP_HOST
+    estiver vazio, esses e-mails saem pelo SMTP_* geral.
 
 Envio sempre acontece em uma thread separada — a requisição HTTP não bloqueia
 esperando o SMTP responder. Falhas são logadas mas NÃO derrubam o endpoint.
@@ -64,6 +71,22 @@ def _get_cfg(perfil: str = "default") -> dict:
                 "from_addr": from_addr, "from_name": from_name,
                 "use_tls": use_tls, "use_ssl": use_ssl}
 
+    # "codigos": OTP de Primeiro Acesso / Esqueci minha senha. Sem fallback
+    # campo a campo (misturar host Gmail com usuario do Carbonio quebraria o
+    # login): ou usa o conjunto CODIGOS_SMTP_* inteiro, ou o SMTP_* geral.
+    if perfil == "codigos" and os.getenv("CODIGOS_SMTP_HOST", "").strip():
+        user = os.getenv("CODIGOS_SMTP_USER", "").strip()
+        return {
+            "host":      os.getenv("CODIGOS_SMTP_HOST", "").strip(),
+            "port":      int(os.getenv("CODIGOS_SMTP_PORT", "587") or "587"),
+            "user":      user,
+            "password":  os.getenv("CODIGOS_SMTP_PASSWORD", ""),
+            "from_addr": (os.getenv("CODIGOS_SMTP_FROM") or user).strip(),
+            "from_name": os.getenv("CODIGOS_SMTP_FROM_NAME", "CPE Control").strip(),
+            "use_tls":   os.getenv("CODIGOS_SMTP_USE_TLS", "1").strip() == "1",
+            "use_ssl":   os.getenv("CODIGOS_SMTP_USE_SSL", "0").strip() == "1",
+        }
+
     return {
         "host":      os.getenv("SMTP_HOST", "").strip(),
         "port":      int(os.getenv("SMTP_PORT", "587") or "587"),
@@ -81,11 +104,16 @@ def smtp_configurado(perfil: str = "default") -> bool:
     return bool(cfg["host"] and cfg["user"] and cfg["from_addr"])
 
 
-def _make_ssl_context() -> ssl.SSLContext:
+_PREFIXO_ENV = {"agenda": "AGENDA_", "codigos": "CODIGOS_"}
+
+
+def _make_ssl_context(host: str = "") -> ssl.SSLContext:
     """Cria SSLContext pro SMTP. Se SMTP_ALLOW_EXPIRED_CERT=1, ignora
-    validacao do cert do servidor (workaround temporario pra cert expirado).
+    validacao do cert do servidor (workaround temporario pra cert expirado)
+    — mas so quando o host e o do SMTP_HOST (o Carbonio com cert vencido).
     """
-    if os.getenv("SMTP_ALLOW_EXPIRED_CERT", "0").strip() == "1":
+    allow = os.getenv("SMTP_ALLOW_EXPIRED_CERT", "0").strip() == "1"
+    if allow and host.lower() == os.getenv("SMTP_HOST", "").strip().lower():
         logger.warning(
             "[EMAIL] SMTP_ALLOW_EXPIRED_CERT=1 — aceitando cert TLS invalido "
             "do servidor SMTP. RENOVE o cert do host e desligue esse flag."
@@ -110,7 +138,7 @@ def _enviar_sync(
     if not smtp_configurado(perfil):
         msg_cfg = (
             f"SMTP ({perfil}) nao configurado — defina "
-            f"{'AGENDA_' if perfil == 'agenda' else ''}SMTP_HOST/USER/FROM no .env"
+            f"{_PREFIXO_ENV.get(perfil, '')}SMTP_HOST/USER/FROM no .env"
         )
         logger.warning(f"[EMAIL] {msg_cfg} — assunto='{assunto}' destinatarios={para}")
         if raise_on_error:
@@ -130,19 +158,19 @@ def _enviar_sync(
 
     try:
         if cfg["use_ssl"]:
-            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=_make_ssl_context(), timeout=30) as smtp:
+            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=_make_ssl_context(cfg["host"]), timeout=30) as smtp:
                 smtp.login(cfg["user"], cfg["password"])
                 smtp.send_message(msg)
         else:
             with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as smtp:
                 smtp.ehlo()
                 if cfg["use_tls"]:
-                    smtp.starttls(context=_make_ssl_context())
+                    smtp.starttls(context=_make_ssl_context(cfg["host"]))
                     smtp.ehlo()
                 if cfg["user"] and cfg["password"]:
                     smtp.login(cfg["user"], cfg["password"])
                 smtp.send_message(msg)
-        logger.info(f"[EMAIL] ✅ Enviado: assunto='{assunto}' → {para}")
+        logger.info(f"[EMAIL] ✅ Enviado ({perfil} via {cfg['from_addr']}): assunto='{assunto}' → {para}")
     except Exception as err:
         logger.error(f"[EMAIL] ❌ Falha ao enviar para {para}: {err}")
         if raise_on_error:
@@ -163,7 +191,8 @@ def enviar_email(
 
     `para` pode ser uma string ou lista de strings. E-mails inválidos/vazios são
     descartados silenciosamente. `perfil` escolhe o conjunto de variáveis SMTP
-    do .env: "default" usa SMTP_*, "agenda" usa AGENDA_SMTP_* (com fallback).
+    do .env: "default" usa SMTP_*, "agenda" usa AGENDA_SMTP_* (com fallback),
+    "codigos" usa CODIGOS_SMTP_* (OTPs; cai pro SMTP_* se nao configurado).
 
     `raise_on_error=True` faz o envio SÍNCRONO propagar exceção se SMTP falhar
     (default False mantém o comportamento historico — engole erro). Use quando
@@ -238,7 +267,7 @@ def _enviar_sync_bcc(
         logger.warning(
             f"[EMAIL-BCC] SMTP ({perfil}) nao configurado — assunto='{assunto}' "
             f"destinatarios={len(destinatarios)} (defina "
-            f"{'AGENDA_' if perfil == 'agenda' else ''}SMTP_HOST/USER/FROM no .env)"
+            f"{_PREFIXO_ENV.get(perfil, '')}SMTP_HOST/USER/FROM no .env)"
         )
         return
 
@@ -255,7 +284,7 @@ def _enviar_sync_bcc(
 
     try:
         if cfg["use_ssl"]:
-            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=_make_ssl_context(), timeout=30) as smtp:
+            with smtplib.SMTP_SSL(cfg["host"], cfg["port"], context=_make_ssl_context(cfg["host"]), timeout=30) as smtp:
                 smtp.login(cfg["user"], cfg["password"])
                 # send_message com to_addrs explicito faz BCC real (RCPT TO sem expor)
                 smtp.send_message(msg, from_addr=cfg["from_addr"], to_addrs=destinatarios)
@@ -263,7 +292,7 @@ def _enviar_sync_bcc(
             with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as smtp:
                 smtp.ehlo()
                 if cfg["use_tls"]:
-                    smtp.starttls(context=_make_ssl_context())
+                    smtp.starttls(context=_make_ssl_context(cfg["host"]))
                     smtp.ehlo()
                 if cfg["user"] and cfg["password"]:
                     smtp.login(cfg["user"], cfg["password"])

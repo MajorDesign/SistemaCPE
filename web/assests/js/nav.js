@@ -253,18 +253,15 @@ const globalMenu = [
   },
   // ==================================================
   // ✨ MENU: Módulo Assistência Técnica (equipe de reparo/manutenção)
-  // Data: 2026-10-01
-  // Acesso real vem do backend (ADMIN role + grupo assistencia).
-  // MANAGER NAO esta no enum users.role (bug conhecido doc PLANO_PERMISSOES.md
-  // item 8) — se um dia incluir no enum, somar aqui em requiredRoles.
-  // Icone: PNG custom estacao-total (web/assests/images/menu-assistencia-tecnica.png)
-  // 1em x 1em pra alinhar com os bi-* do menu.
+  // Data: 2026-10-01 (acesso 2026-10-05: todos os users da CPE podem ver/criar;
+  // deletar + anexo anual continua ADMIN/RESPONSAVEL_GRUPO do grupo assistencia).
+  // Icone: PNG custom estacao-total (web/assests/images/menu-assistencia-tecnica.png).
   // ==================================================
   {
     path: "/SistemaCPE/web/pages/assistencia-tecnica.html",
     label: "Assistência Técnica",
     icon: '<img src="/SistemaCPE/web/assests/images/menu-assistencia-tecnica.png" alt="" style="width:1em;height:1em;vertical-align:-.125em;object-fit:contain" aria-hidden="true">',
-    requiredRoles: ["ADMIN"],
+    requiredRoles: ["USER", "RESPONSAVEL_GRUPO", "ADMIN", "TI", "MANAGER"],
     external: true
   },
   // ==================================================
