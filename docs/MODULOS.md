@@ -83,6 +83,7 @@ Ordem alfabética.
 - Reserva aprovada + condutor não fez checklist em 4h após horário → cancela + email
 - RESPONSAVEL_GRUPO Frotas aprova/rejeita reservas + inicia viagem em nome do condutor
 - Condutor precisa fazer checklist DE SAÍDA e DEVOLUÇÃO com **7 fotos obrigatórias**
+- **Devolução de emergência (sem fotos)** — ADMIN/TI/Resp. Frotas, botão no card do veículo; encerra checklist + reserva e libera o veículo (ver `REGRAS_NEGOCIO.md#frotas`)
   (6 ângulos do carro + painel mostrando KM). Backend valida (v083, 2026-08-05).
 - **Anti-burla**: SHA-256 impede reusar a mesma foto em ângulos diferentes.
   Foto do painel confere se o KM digitado bate com o mostrador.

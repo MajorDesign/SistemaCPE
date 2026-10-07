@@ -1675,6 +1675,33 @@ def devolver_veiculo(checklist_id: int, request: Request, data: dict):
         conn.close()
 
 
+def _concluir_reservas_do_checklist(cursor, checklist_id: int) -> int:
+    """Marca como 'concluido' a(s) reserva(s) aprovada(s) do condutor/veículo
+    cujo intervalo cobre a data_saida do checklist (suporta multi-dia).
+
+    Sem isso o gerador de alertas de /notifications continua achando a reserva
+    do dia pendente e re-dispara "Faça o checklist de saída" DEPOIS da
+    devolução (bug da SYD4H96 em 2026-07-09, checklists 13→14 duplicados).
+    Retorna quantas reservas foram concluídas.
+    """
+    cursor.execute(
+        "SELECT vehicle_id, condutor_id, data_saida FROM fleet_checklists WHERE id=%s",
+        (checklist_id,)
+    )
+    ck = cursor.fetchone()
+    if not ck or ck["data_saida"] is None:
+        return 0
+    cursor.execute("""
+        UPDATE fleet_reservations
+        SET status='concluido'
+        WHERE vehicle_id=%s AND solicitante_id=%s
+          AND status='aprovado'
+          AND data_reserva <= %s
+          AND COALESCE(data_fim, data_reserva) >= %s
+    """, (ck["vehicle_id"], ck["condutor_id"], ck["data_saida"], ck["data_saida"]))
+    return cursor.rowcount
+
+
 @router.post("/checklists/{checklist_id}/vistoriar-retorno")
 def vistoriar_retorno(checklist_id: int, request: Request, data: dict):
     """Vistoriador inspeciona o retorno do veículo.
@@ -1732,28 +1759,8 @@ def vistoriar_retorno(checklist_id: int, request: Request, data: dict):
             checklist_id,
         ))
 
-        # Fecha a(s) reserva(s) desse condutor/veiculo cujo intervalo cobre
-        # a data_saida do checklist. Sem isso, o gerador de alertas em
-        # /notifications (linha ~3076) continua achando que a reserva do
-        # dia esta pendente (status='aprovado') e re-dispara "Faca o
-        # checklist de saida" DEPOIS da devolucao — provoca o bug reportado
-        # em 2026-07-09 na SYD4H96 (checklists 13→14 duplicados no mesmo
-        # dia). Suporta reservas multi-dia via (data_reserva <= data_saida
-        # <= COALESCE(data_fim, data_reserva)).
-        cursor.execute(
-            "SELECT data_saida FROM fleet_checklists WHERE id=%s",
-            (checklist_id,)
-        )
-        ck_data = cursor.fetchone()["data_saida"]
-        if ck_data is not None:
-            cursor.execute("""
-                UPDATE fleet_reservations
-                SET status='concluido'
-                WHERE vehicle_id=%s AND solicitante_id=%s
-                  AND status='aprovado'
-                  AND data_reserva <= %s
-                  AND COALESCE(data_fim, data_reserva) >= %s
-            """, (row["vehicle_id"], row["condutor_id"], ck_data, ck_data))
+        # Fecha a(s) reserva(s) da viagem (ver docstring do helper)
+        _concluir_reservas_do_checklist(cursor, checklist_id)
 
         if tem_avaria:
             # Salvar descrição da avaria no veículo
@@ -1794,31 +1801,60 @@ def vistoriar_retorno(checklist_id: int, request: Request, data: dict):
 
 @router.post("/vehicles/{vehicle_id}/forcar-vistoria")
 def forcar_vistoria_admin(vehicle_id: int, request: Request, data: dict = None):
-    """ADMIN/TI/MANAGER podem forcar a finalizacao de vistoria em casos
-    excepcionais (condutor sumiu, sistema travado, etc). Registra no
-    historico com quem forcou e motivo. Nao pula problemas de retorno —
-    veiculo vai pra 'ativo' se motivo simples, 'manutencao' se admin
-    marcar 'com avaria'.
+    """Devolução de emergência (sem fotos) — ADMIN, TI ou Responsável do
+    grupo Frotas encerram a viagem/devolução quando o fluxo normal travou
+    (condutor sem celular, sem foto, sumiu, sistema travado).
 
-    Fecha o caso onde reserva vencida sem devolucao/vistoria trava o
-    veiculo em 'aguardando_vistoria' indefinidamente.
+    Aceita veículo 'em_viagem' (condutor nem devolveu) ou 'aguardando_vistoria'
+    (devolveu e ninguém vistoriou). Faz o mesmo fechamento da vistoria normal:
+      - checklist → 'retornado' (ou 'retornado_com_avaria'), com data/hora de
+        retorno, KM e combustível informados + auditoria liberacao_admin_*
+      - reserva(s) da viagem → 'concluido' (senão o sistema volta a cobrar
+        checklist de saída do condutor)
+      - veículo → 'ativo' (ou 'manutencao' com avaria registrada) + KM atual
+      - histórico do veículo, aviso pro condutor e pra quem pediu "avise-me"
+    Não promove fotos a referência (não há fotos de retorno).
+    Body: motivo (obrigatório, min 5), com_avaria (bool), km_retorno (opcional,
+    >= KM de saída), nivel_combustivel_retorno (opcional, 0-8).
     """
     user = _get_user_role(request)
     if not _can_manage_fleet(user):
         raise HTTPException(
             status_code=403,
-            detail="Apenas Administrador, T.I. ou Responsavel do grupo Frotas podem forcar vistoria."
+            detail="Apenas Administrador, T.I. ou Responsavel do grupo Frotas podem registrar devolucao de emergencia."
         )
     data = data or {}
     motivo = (data.get("motivo") or "").strip()
     com_avaria = bool(data.get("com_avaria"))
     if len(motivo) < 5:
-        raise HTTPException(status_code=400, detail="Informe o motivo (min 5 caracteres) da vistoria forcada.")
+        raise HTTPException(status_code=400, detail="Informe o motivo (min 5 caracteres) da devolucao de emergencia.")
+
+    km_retorno = data.get("km_retorno")
+    if km_retorno in ("", None):
+        km_retorno = None
+    else:
+        try:
+            km_retorno = int(km_retorno)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="KM de retorno invalido.")
+        if km_retorno < 0:
+            raise HTTPException(status_code=400, detail="KM de retorno invalido.")
+
+    nivel_comb = data.get("nivel_combustivel_retorno")
+    if nivel_comb in ("", None):
+        nivel_comb = None
+    else:
+        try:
+            nivel_comb = int(nivel_comb)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="Nivel de combustivel invalido.")
+        if not 0 <= nivel_comb <= 8:
+            raise HTTPException(status_code=400, detail="Nivel de combustivel invalido (0 a 8).")
 
     conn = get_db_or_404()
     cursor = conn.cursor(dictionary=True)
     try:
-        cursor.execute("SELECT id, status FROM fleet_vehicles WHERE id=%s", (vehicle_id,))
+        cursor.execute("SELECT id, status, km_atual FROM fleet_vehicles WHERE id=%s", (vehicle_id,))
         veh = cursor.fetchone()
         if not veh:
             raise HTTPException(status_code=404, detail="Veiculo nao encontrado")
@@ -1828,48 +1864,103 @@ def forcar_vistoria_admin(vehicle_id: int, request: Request, data: dict = None):
                 detail=f"Veiculo nao esta em uso nem aguardando vistoria (status={veh['status']}). Nada a forcar."
             )
 
-        # Fecha checklist ativo (se houver)
+        # Checklist da viagem em aberto (se houver)
         cursor.execute(
-            """SELECT id, status FROM fleet_checklists
+            """SELECT id, status, condutor_id, km_saida FROM fleet_checklists
                 WHERE vehicle_id=%s AND status IN ('em_viagem','devolvido')
                 ORDER BY id DESC LIMIT 1""",
             (vehicle_id,)
         )
         ck = cursor.fetchone()
+
+        if km_retorno is not None and ck and ck.get("km_saida") and km_retorno < int(ck["km_saida"]):
+            raise HTTPException(
+                status_code=400,
+                detail=f"KM de retorno ({km_retorno}) nao pode ser menor que KM de saida ({ck['km_saida']})."
+            )
+
         novo_status_ck = "retornado_com_avaria" if com_avaria else "retornado"
+        reservas_concluidas = 0
         if ck:
+            agora = datetime.now()
+            # COALESCE: se o condutor já tinha preenchido a devolução (status
+            # 'devolvido'), mantém o que ele informou e só completa o que falta.
             cursor.execute(
-                "UPDATE fleet_checklists SET status=%s, recebedor_id=%s, "
-                "retorno_obs=CONCAT(COALESCE(retorno_obs,''), '\\n[FORCADO] ', %s) "
-                "WHERE id=%s",
-                (novo_status_ck, user["id"], motivo, ck["id"])
+                """UPDATE fleet_checklists SET
+                       status=%s, recebedor_id=%s,
+                       data_retorno=COALESCE(data_retorno, %s),
+                       horario_retorno=COALESCE(horario_retorno, %s),
+                       km_retorno=COALESCE(%s, km_retorno),
+                       nivel_combustivel_retorno=COALESCE(%s, nivel_combustivel_retorno),
+                       retorno_obs=CONCAT(COALESCE(retorno_obs,''), %s),
+                       liberacao_admin_por=%s, liberacao_admin_em=NOW(),
+                       liberacao_admin_motivo=%s, liberacao_admin_from_status=%s
+                   WHERE id=%s""",
+                (
+                    novo_status_ck, user["id"],
+                    agora.date(), agora.strftime("%H:%M"),
+                    km_retorno, nivel_comb,
+                    f"\n[DEVOLUCAO DE EMERGENCIA - sem fotos] {motivo}",
+                    user["id"], f"Devolucao de emergencia (sem fotos): {motivo}", ck["status"],
+                    ck["id"],
+                )
             )
+            reservas_concluidas = _concluir_reservas_do_checklist(cursor, ck["id"])
 
-        # Libera veiculo (ou manda pra manutencao)
+        # Libera veiculo (ou manda pra manutencao com a avaria registrada,
+        # pra aparecer o "Corrigir Avaria" no card)
         novo_status_veh = "manutencao" if com_avaria else "ativo"
-        cursor.execute(
-            "UPDATE fleet_vehicles SET status=%s WHERE id=%s",
-            (novo_status_veh, vehicle_id)
+        if com_avaria:
+            avaria_txt = ("Devolucao de emergencia"
+                          + (f" - checklist #{ck['id']}" if ck else "")
+                          + f": {motivo}")[:255]
+            cursor.execute(
+                """UPDATE fleet_vehicles SET status=%s, avaria_descricao=%s, avaria_em=NOW(),
+                          avaria_corrigida_em=NULL, avaria_corrigida_por=NULL, avaria_correcao_obs=NULL
+                   WHERE id=%s""",
+                (novo_status_veh, avaria_txt, vehicle_id)
+            )
+        else:
+            cursor.execute("UPDATE fleet_vehicles SET status=%s WHERE id=%s", (novo_status_veh, vehicle_id))
+        if km_retorno is not None:
+            cursor.execute(
+                "UPDATE fleet_vehicles SET km_atual=%s WHERE id=%s AND (km_atual IS NULL OR km_atual < %s)",
+                (km_retorno, vehicle_id, km_retorno)
+            )
+
+        _log_vehicle_history(
+            cursor, vehicle_id, "Devolucao de emergencia",
+            (f"Checklist #{ck['id']} encerrado sem fotos. " if ck else "Sem checklist em aberto. ")
+            + f"Motivo: {motivo}. Com avaria: {'sim' if com_avaria else 'nao'}"
+            + (f". KM retorno: {km_retorno}" if km_retorno is not None else ""),
+            veh["status"], novo_status_veh, user["id"],
         )
 
-        # Historico
-        cursor.execute(
-            """INSERT INTO fleet_vehicle_history
-                 (vehicle_id, evento, descricao, status_anterior, status_novo, user_id)
-               VALUES (%s, 'vistoria_forcada', %s, %s, %s, %s)""",
-            (
-                vehicle_id,
-                f"Vistoria forcada por admin. Motivo: {motivo}. Com avaria: {com_avaria}",
-                veh["status"],
-                novo_status_veh,
-                user["id"],
-            )
-        )
+        # Avisos (best-effort): condutor + quem pediu "avise-me quando voltar"
+        if ck and ck.get("condutor_id") and ck["condutor_id"] != user["id"]:
+            try:
+                cursor.execute(
+                    "INSERT INTO notificacoes (usuario_id, mensagem, tipo, lido) "
+                    "VALUES (%s, %s, 'fleet_liberacao_admin', 0)",
+                    (ck["condutor_id"],
+                     (f"Sua devolucao (checklist #{ck['id']}) foi registrada em carater de emergencia "
+                      f"por {user.get('name') or 'gestor da frota'}. Motivo: {motivo[:150]}")[:255]),
+                )
+            except Exception as ne:
+                logger.warning(f"[FLEET/DEV-EMERG] Falha notif condutor: {ne}")
+        _notify_return_subscribers(cursor, vehicle_id)
+
         conn.commit()
+        logger.info(
+            f"[FLEET/DEV-EMERG] veiculo={vehicle_id} checklist={ck['id'] if ck else None} "
+            f"{veh['status']}->{novo_status_veh} reservas_concluidas={reservas_concluidas} "
+            f"km={km_retorno} por user {user['id']}. Motivo: {motivo}"
+        )
         return {
             "success": True,
             "vehicle_status": novo_status_veh,
             "checklist_id": ck["id"] if ck else None,
+            "reservas_concluidas": reservas_concluidas,
         }
     except HTTPException:
         raise
