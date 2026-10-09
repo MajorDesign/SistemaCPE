@@ -1162,6 +1162,12 @@
     </div>
     <div class="fleet-modal-footer">
       <button class="btn-fleet btn-fleet-secondary" onclick="closeModal('modalRetorno')">Cancelar</button>
+      <!-- Só ADMIN/TI/Resp. Frotas (exibido em openRetorno) -->
+      <button class="btn-fleet" id="btnRetEmergencia" style="display:none;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B"
+              onclick="abrirDevolucaoEmergenciaChecklist(document.getElementById('retornoChecklistId').value, true)"
+              title="Encerra a devolução sem fotos e libera o veículo">
+        <i class="bi bi-shield-fill-exclamation"></i> Devolver sem fotos (emergência)
+      </button>
       <button class="btn-fleet btn-fleet-primary" onclick="saveDevolver()">
         <i class="bi bi-send-fill"></i> Registrar Devolução
       </button>
@@ -1407,6 +1413,88 @@
       <button class="btn-fleet btn-fleet-secondary" onclick="closeModal('modalRecusarSaida')">Cancelar</button>
       <button class="btn-fleet btn-fleet-danger" onclick="confirmarRecusaSaida()">
         <i class="bi bi-x-circle"></i> Recusar checklist
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Devolução de emergência (sem fotos) — ADMIN / TI / Resp. Frotas, a partir do card do veículo -->
+<div class="fleet-modal-overlay" id="modalDevEmergencia" style="z-index:1100">
+  <div class="fleet-modal" style="max-width:640px">
+    <div class="fleet-modal-header" style="background:#FEF3C7;border-bottom:2px solid #F59E0B">
+      <span class="fleet-modal-title" style="color:#92400E">
+        <i class="bi bi-shield-fill-exclamation"></i> Devolução de emergência
+      </span>
+      <button class="fleet-modal-close" onclick="closeModal('modalDevEmergencia')" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="fleet-modal-body">
+      <input type="hidden" id="devEmergVehicleId">
+
+      <div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:13px;color:#7F1D1D">
+        <div style="font-weight:700;margin-bottom:4px">
+          <i class="bi bi-exclamation-triangle-fill"></i> Liberação de emergência — devolução sem fotos
+        </div>
+        Encerra a viagem e a reserva sem o checklist de fotos e deixa o veículo
+        <strong>disponível para uma nova viagem</strong> (ou em manutenção, se houver avaria).
+        O condutor é avisado e a ação fica registrada com seu nome, data e motivo.
+      </div>
+
+      <div id="devEmergErr" role="alert" style="display:none;background:#FEE2E2;border:1px solid #FCA5A5;color:#991B1B;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px"></div>
+
+      <div class="fleet-grid-2">
+        <div class="fleet-form-group">
+          <span class="fleet-label">Veículo</span>
+          <div id="devEmergVeiculo" style="font-weight:700;color:#111827;padding-top:4px"></div>
+        </div>
+        <div class="fleet-form-group">
+          <span class="fleet-label">Situação atual</span>
+          <div id="devEmergSituacao" style="color:#374151;padding-top:4px"></div>
+        </div>
+      </div>
+      <div class="fleet-grid-2">
+        <div class="fleet-form-group">
+          <label class="fleet-label" for="devEmergKm">KM de retorno</label>
+          <input class="fleet-input" type="number" id="devEmergKm" min="0" inputmode="numeric">
+        </div>
+        <div class="fleet-form-group">
+          <label class="fleet-label" for="devEmergComb">Combustível no retorno</label>
+          <select class="fleet-select" id="devEmergComb">
+            <option value="">Não informado</option>
+            <option value="0">E (Vazio)</option>
+            <option value="1">1/8</option>
+            <option value="2">2/8 (1/4)</option>
+            <option value="3">3/8</option>
+            <option value="4">4/8 (1/2)</option>
+            <option value="5">5/8</option>
+            <option value="6">6/8 (3/4)</option>
+            <option value="7">7/8</option>
+            <option value="8">F (Cheio)</option>
+          </select>
+        </div>
+      </div>
+      <div class="fleet-form-group">
+        <span class="fleet-label">O veículo voltou com avaria / dano?</span>
+        <div class="fleet-grid-2" role="radiogroup" aria-label="O veículo voltou com avaria?">
+          <label style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid #E5E7EB;border-radius:8px;cursor:pointer;margin:0;background:#F9FAFB;min-height:44px">
+            <input type="radio" name="devEmergAvaria" id="devEmergAvariaNao" checked style="width:18px;height:18px">
+            <span style="font-size:13px;font-weight:500;color:#374151">Não — liberar para nova viagem</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid #E5E7EB;border-radius:8px;cursor:pointer;margin:0;background:#F9FAFB;min-height:44px">
+            <input type="radio" name="devEmergAvaria" id="devEmergAvariaSim" style="width:18px;height:18px">
+            <span style="font-size:13px;font-weight:500;color:#374151">Sim — enviar para manutenção</span>
+          </label>
+        </div>
+      </div>
+      <div class="fleet-form-group">
+        <label class="fleet-label" for="devEmergMotivo">Motivo da liberação <span class="req">*</span></label>
+        <textarea class="fleet-textarea" id="devEmergMotivo" rows="3" maxlength="500"
+                  placeholder="Ex: Condutor ficou sem celular e devolveu a chave na recepção; veículo conferido no pátio."></textarea>
+      </div>
+    </div>
+    <div class="fleet-modal-footer">
+      <button class="btn-fleet btn-fleet-secondary" onclick="closeModal('modalDevEmergencia')">Cancelar</button>
+      <button class="btn-fleet btn-fleet-danger" id="btnDevEmergConfirmar" onclick="confirmarDevolucaoEmergencia()">
+        <i class="bi bi-check-lg"></i> Encerrar devolução e liberar
       </button>
     </div>
   </div>
@@ -1997,10 +2085,11 @@ function renderVehicles(vehicles) {
           <div style="margin-top:6px;padding:6px 10px;background:#FEF9C3;border-left:3px solid #F59E0B;border-radius:4px;font-size:11px;color:#92400E">
             <i class="bi bi-lock-fill"></i> ${v.motivo_bloqueio}
           </div>` : ''}
-        ${(canManageFleet() && v.status === 'aguardando_vistoria') ? `
-          <button class="btn-fleet btn-fleet-sm" style="margin-top:6px;width:100%;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;font-size:11px"
-                  onclick="event.stopPropagation();forcarVistoriaVeiculo(${v.id}, '${(v.placa || '').replace(/'/g, '&#39;')}')">
-            <i class="bi bi-shield-exclamation"></i> Forçar vistoria (admin)
+        ${(canManageFleet() && ['em_viagem','aguardando_vistoria'].includes(v.status)) ? `
+          <button class="btn-fleet btn-fleet-sm btn-dev-emergencia" style="margin-top:6px;width:100%;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B;font-size:11px"
+                  title="Encerra a devolução sem fotos e libera o veículo (ADMIN / Resp. Frotas)"
+                  onclick="event.stopPropagation();abrirDevolucaoEmergencia(${v.id})">
+            <i class="bi bi-shield-fill-exclamation"></i> Devolução de emergência
           </button>` : ''}
         ${v.manutencao_proxima ? '<div style="font-size:10px;color:#D97706;margin-top:4px"><i class="bi bi-tools"></i> '+v.manutencao_proxima+'</div>' : ''}
         ${v.status === 'manutencao' && canManageFleet() && v.avaria_descricao && !v.avaria_corrigida_em ? `
@@ -2097,39 +2186,98 @@ async function deleteVehicle(vehicleId, placa) {
 /* ============================================================
    REATIVAR VEÍCULO — desfaz o soft-delete (volta status pra 'ativo')
    ============================================================ */
-async function forcarVistoriaVeiculo(vehicleId, placa) {
+/* ============================================================
+   DEVOLUÇÃO DE EMERGÊNCIA (sem fotos) — ADMIN / TI / Resp. Frotas
+   Encerra a viagem/devolução travada e libera o veículo pra nova viagem.
+   Backend: POST /vehicles/{id}/forcar-vistoria (fecha checklist + reserva,
+   KM, histórico, avisa condutor e "avise-me").
+   ============================================================ */
+// info (opcional) vem da aba Checklist: { placa, modelo, status, km_ref, km, comb }
+function abrirDevolucaoEmergencia(vehicleId, info = null) {
   if (!canManageFleet()) {
-    showToast('Você não tem permissão para forçar vistoria.', 'error');
+    showToast('Você não tem permissão para registrar devolução de emergência.', 'error');
     return;
   }
-  const motivo = prompt(
-    `Forçar vistoria do veículo "${placa}"?\n\n` +
-    'Use APENAS em emergências (condutor sumiu, sistema travado).\n' +
-    'Informe o motivo (mín 5 caracteres):'
-  );
-  if (motivo === null) return;
-  if ((motivo || '').trim().length < 5) {
-    showToast('Motivo obrigatório (mín 5 caracteres).', 'error');
-    return;
+  const veic = allVehicles.find(x => x.id === vehicleId) || {};
+  const v = { placa: veic.placa, modelo: veic.modelo, status: veic.status, km_ref: veic.km_atual, ...(info || {}) };
+  document.getElementById('devEmergVehicleId').value = vehicleId;
+  document.getElementById('devEmergVeiculo').textContent =
+    [v.placa, v.modelo].filter(Boolean).join(' — ') || `Veículo #${vehicleId}`;
+  document.getElementById('devEmergSituacao').textContent =
+    v.status === 'em_viagem' ? 'Em viagem — condutor ainda não devolveu'
+                             : 'Aguardando vistoria de retorno';
+  const km = document.getElementById('devEmergKm');
+  km.value = v.km ? String(v.km) : '';
+  km.placeholder = v.km_ref ? `KM de saída / último: ${Number(v.km_ref).toLocaleString('pt-BR')}` : 'Ex: 45230';
+  km.min = v.km_ref || 0;
+  document.getElementById('devEmergComb').value = (v.comb ?? '') === '' ? '' : String(v.comb);
+  document.getElementById('devEmergAvariaNao').checked = true;
+  document.getElementById('devEmergMotivo').value = '';
+  document.getElementById('devEmergErr').style.display = 'none';
+  openModal('modalDevEmergencia');
+  setTimeout(() => document.getElementById('devEmergMotivo').focus(), 100);
+}
+
+// Aba Checklist (linha da lista ou rodapé do formulário de devolução):
+// busca o checklist pra saber veículo/KM de saída e abre o mesmo modal.
+// Do formulário de devolução, reaproveita KM e combustível já preenchidos.
+async function abrirDevolucaoEmergenciaChecklist(checklistId, doFormRetorno = false) {
+  const data = await apiFetch(`/checklists/${checklistId}`);
+  const c = data?.checklist;
+  if (!c) { showToast(data?.detail || 'Checklist não encontrado', 'error'); return; }
+  const info = {
+    placa: c.placa, modelo: c.modelo,
+    status: c.status === 'em_viagem' ? 'em_viagem' : 'aguardando_vistoria',
+    km_ref: c.km_saida,
+  };
+  if (doFormRetorno) {
+    const kmDig = parseInt(document.getElementById('retKm')?.value);
+    if (kmDig > 0) info.km = kmDig;
+    const comb = parseInt(document.getElementById('retNivelComb')?.value);
+    if (comb > 0) info.comb = comb;   // 0 = não tocou no medidor
+    closeModal('modalRetorno');
   }
-  const comAvaria = confirm(
-    'O veículo apresenta avaria/dano?\n\n' +
-    'OK = SIM (vai pra manutenção)\n' +
-    'Cancelar = NÃO (volta pra ativo)'
-  );
+  abrirDevolucaoEmergencia(c.vehicle_id, info);
+}
+
+async function confirmarDevolucaoEmergencia() {
+  const err = document.getElementById('devEmergErr');
+  const falha = msg => { err.textContent = msg; err.style.display = 'block'; };
+  err.style.display = 'none';
+
+  const vehicleId = parseInt(document.getElementById('devEmergVehicleId').value);
+  const motivo = document.getElementById('devEmergMotivo').value.trim();
+  const kmTxt  = document.getElementById('devEmergKm').value.trim();
+  const comb   = document.getElementById('devEmergComb').value;
+  const comAvaria = document.getElementById('devEmergAvariaSim').checked;
+  if (motivo.length < 5) { falha('Informe o motivo (mínimo 5 caracteres).'); document.getElementById('devEmergMotivo').focus(); return; }
+  if (kmTxt && !(parseInt(kmTxt) >= 0)) { falha('KM de retorno inválido.'); return; }
+
+  const btn = document.getElementById('btnDevEmergConfirmar');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Registrando...';
   try {
     const res = await apiFetch(`/vehicles/${vehicleId}/forcar-vistoria`, {
       method: 'POST',
-      body: JSON.stringify({ motivo: motivo.trim(), com_avaria: comAvaria }),
+      body: JSON.stringify({
+        motivo,
+        com_avaria: comAvaria,
+        km_retorno: kmTxt ? parseInt(kmTxt) : null,
+        nivel_combustivel_retorno: comb === '' ? null : parseInt(comb),
+      }),
     });
-    if (!res?.success) {
-      showToast(res?.detail || 'Erro ao forçar vistoria', 'error');
-      return;
-    }
-    showToast(`Vistoria forçada. Veículo agora: ${res.vehicle_status}`, 'success');
+    if (!res?.success) { falha(res?.detail || 'Erro ao registrar a devolução.'); return; }
+    closeModal('modalDevEmergencia');
+    showToast(res.vehicle_status === 'ativo'
+      ? 'Devolução registrada. Veículo liberado para nova viagem.'
+      : 'Devolução registrada com avaria. Veículo enviado para manutenção.', 'success');
     await loadVehicles();
-  } catch (err) {
-    showToast('Erro de conexão: ' + err.message, 'error');
+    if (typeof loadChecklists === 'function') loadChecklists();
+  } catch (e) {
+    falha('Erro de conexão: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check-lg"></i> Encerrar devolução e liberar';
   }
 }
 
@@ -2787,6 +2935,11 @@ async function loadChecklists() {
         ${(c.status === 'devolvido' && currentUser?.id !== c.condutor_id) ? `
           <button class="btn-fleet btn-fleet-sm" style="background:#DBEAFE;color:#1D4ED8;border:1px solid #93C5FD" onclick="openVistoriaRetorno(${c.id})" title="Vistoriar retorno">
             <i class="bi bi-shield-check"></i>
+          </button>` : ''}
+        ${(['em_viagem','devolvido'].includes(c.status) && canManageFleet()) ? `
+          <button class="btn-fleet btn-fleet-sm btn-dev-emergencia-ck" style="background:#FEF3C7;color:#92400E;border:1px solid #F59E0B"
+                  onclick="abrirDevolucaoEmergenciaChecklist(${c.id})" title="Devolução de emergência (sem fotos)" aria-label="Devolução de emergência sem fotos — checklist #${c.id}">
+            <i class="bi bi-shield-fill-exclamation"></i>
           </button>` : ''}
       </td>
     </tr>
@@ -3994,7 +4147,7 @@ async function viewChecklist(id) {
     ${c.liberacao_admin_por ? `
     <div style="background:#FEF3C7;border:2px solid #F59E0B;border-radius:8px;padding:12px;margin-bottom:8px">
       <div style="font-weight:700;font-size:13px;color:#92400E;margin-bottom:6px">
-        <i class="bi bi-shield-fill-exclamation"></i> Liberação de emergência por ADMIN
+        <i class="bi bi-shield-fill-exclamation"></i> Liberação de emergência
       </div>
       <div style="font-size:13px;color:#78350F">
         <strong>Estado original:</strong> ${c.liberacao_admin_from_status || '—'}<br>
@@ -4216,6 +4369,7 @@ async function openRetorno(checklistId) {
   if (!c) return;
 
   document.getElementById('retornoChecklistId').value = checklistId;
+  document.getElementById('btnRetEmergencia').style.display = canManageFleet() ? '' : 'none';
   // Guardar KM de saída para validação
   _retKmSaida = c.km_saida || 0;
 

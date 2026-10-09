@@ -23,7 +23,7 @@
        ======================================== -->
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/global.css">
   <link rel="stylesheet" href="/SistemaCPE/web/assests/css/layout.css?v=2026-09-03-login-height">
-  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css?v=2026-09-21-avatar-foto">
+  <link rel="stylesheet" href="/SistemaCPE/web/assests/css/tickets.css?v=2026-10-09-scroll">
   
     <link rel="icon" type="image/svg+xml" href="/SistemaCPE/web/favicon.svg?v=2026-07-02b">
   <title>Tickets - CPE Control</title>
@@ -478,33 +478,23 @@
         </div>
 
         <!-- ========================================
-             PAGINATION
+             RODAPÉ DA LISTA — rolagem infinita (2026-10-09)
+             Sem limite: chamados chegam em blocos em segundo plano e a
+             tabela acrescenta linhas quando o rodapé entra na tela.
+             Classe pagination-bar mantida (setTicketsVista esconde na aba antigos).
              ======================================== -->
-        <div class="pagination-bar mt-3">
-          <div>
-            <span>Mostrando</span>
-            <select id="itemsPerPage" class="form-select form-select-sm d-inline-block w-auto"
-              onchange="changeItemsPerPage(this.value)">
-              <option value="10">10</option>
-              <option value="25" selected>25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
-            <span>de <strong id="totalItems">0</strong></span>
-          </div>
-          <div class="page-controls">
-            <button class="btn btn-sm btn-outline-secondary" onclick="previousPage()">
-              <i class="bi bi-chevron-left"></i>
+        <div class="pagination-bar mt-3" id="ticketsRodapeLista" style="flex-direction:column;gap:0;padding:.25rem 1rem">
+          <div id="ticketsSentinel" aria-hidden="true" style="height:1px;width:100%"></div>
+          <div class="d-flex flex-wrap align-items-center justify-content-center gap-3 w-100 py-2" style="font-size:.85rem;color:#4B5563">
+            <span id="paginationText" aria-live="polite"></span>
+            <span id="ticketsCarregandoMais" class="d-none">
+              <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+              Carregando chamados mais antigos…
+            </span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="mostrarMaisTickets()" id="btnMostrarMaisTickets">
+              <i class="bi bi-chevron-down" aria-hidden="true"></i> Mostrar mais
             </button>
-            <input type="number" id="currentPage" class="form-control form-control-sm text-center" value="1" min="1"
-              onchange="goToPage(this.value)" style="width:60px;">
-            <span>/ <span id="totalPages">1</span></span>
-            <button class="btn btn-sm btn-outline-secondary" onclick="nextPage()">
-              <i class="bi bi-chevron-right"></i>
-            </button>
-          </div>
-          <div>
-            <span id="paginationText">1 a 25 de 0</span>
+            <span id="ticketsFimLista" class="d-none"><i class="bi bi-check2-circle" aria-hidden="true"></i> Fim da lista</span>
           </div>
         </div>
 
@@ -1637,7 +1627,7 @@
        ======================================== -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="/SistemaCPE/web/assests/js/nav.js?v=2026-10-05-assist-all"></script>
-  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-09-29-copy-id"></script>
+  <script src="/SistemaCPE/web/assests/js/tickets.js?v=2026-10-09-scroll2"></script>
 
 <script id="cpe-autofill-guard-v1">
 /* Bloqueia autofill do Chrome/Edge em inputs de busca.

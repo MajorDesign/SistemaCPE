@@ -162,11 +162,25 @@ async function loadUsuarios() {
   }
 }
 
-function filtrarConvidados() {
-  const q = ($('resvConvidadosBusca').value || '').toLowerCase().trim();
-  const sel = $('resvConvidados');
-  // preserva já selecionados
-  const selecionados = new Set(Array.from(sel.selectedOptions).map(o => o.value));
+// Seletor de convidados (campo com etiquetas + lista com duplo clique).
+// Usado em 2 lugares: Nova Reserva e "Adicionar participantes" (reserva já criada).
+// Cada um tem seu estado: sel = escolhidos agora (ordem de inclusão);
+// travados = já convidados antes (etiqueta sem ×, não dá pra tirar daqui);
+// excluir = quem não pode ser convidado (eu / o organizador).
+let convidadosSelecionados = new Set();   // Nova Reserva (lido por submitReserva)
+const PICKER_RESERVA = {
+  busca: 'resvConvidadosBusca', lista: 'resvConvidados', chips: 'resvConvidadosChips',
+  sel: convidadosSelecionados, travados: new Set(), excluir: new Set(),
+};
+const PICKER_ADD = {
+  busca: 'addPartBusca', lista: 'addPartLista', chips: 'addPartChips',
+  sel: new Set(), travados: new Set(), excluir: new Set(),
+};
+const PLACEHOLDER_BUSCA = 'Buscar por nome, e-mail ou username...';
+
+function filtrarConvidados(P = PICKER_RESERVA) {
+  const q = ($(P.busca).value || '').toLowerCase().trim();
+  const sel = $(P.lista);
   const filtrados = !q ? usuariosAtivos
     : usuariosAtivos.filter(u =>
         u.nome.toLowerCase().includes(q) ||
@@ -174,12 +188,78 @@ function filtrarConvidados() {
         u.username.toLowerCase().includes(q));
 
   sel.innerHTML = filtrados
-    .filter(u => u.id !== currentUser.id)        // não convida a si mesmo
+    .filter(u => u.id !== currentUser.id && !P.excluir.has(u.id))   // não convida a si mesmo / o dono
     .map(u => {
-      const sel_attr = selecionados.has(String(u.id)) ? ' selected' : '';
+      const travado   = P.travados.has(u.id);
+      const convidado = travado || P.sel.has(u.id);
       const sub = u.email ? ` — ${escHtml(u.email)}` : '';
-      return `<option value="${u.id}"${sel_attr}>${escHtml(u.nome)}${sub}</option>`;
+      const cls = travado ? ' class="text-success"' : (convidado ? ' class="fw-semibold text-success"' : '');
+      const sufixo = travado ? ' (já convidado)' : '';
+      return `<option value="${u.id}"${cls}>${convidado ? '✓ ' : ''}${escHtml(u.nome)}${sub}${sufixo}</option>`;
     }).join('');
+  renderConvidadosLista(P);
+}
+
+function alternarConvidado(id, P = PICKER_RESERVA) {
+  if (!id || P.travados.has(id)) return;   // já convidado antes: não sai por aqui
+  if (P.sel.has(id)) P.sel.delete(id);
+  else P.sel.add(id);
+  if (P === PICKER_ADD) $('addPartErr').classList.add('d-none');   // some o "escolha alguém"
+  const sel = $(P.lista);
+  const topo = sel.scrollTop;             // não pular pro topo da lista
+  filtrarConvidados(P);
+  sel.scrollTop = topo;
+  // Sem destaque azul: quem está convidado é indicado só pelo ✓ verde
+  // (o azul do item clicado confundia, parecendo convidado após remover).
+  sel.selectedIndex = -1;
+}
+
+// Convidados viram etiquetas (chips) dentro do campo de busca; clicar remove.
+function renderConvidadosLista(P = PICKER_RESERVA) {
+  const box = $(P.chips);
+  if (!box) return;
+  const nomeDe = id => usuariosAtivos.find(u => u.id === id);
+  const travados = Array.from(P.travados).map(nomeDe).filter(Boolean);
+  const novos    = Array.from(P.sel).map(nomeDe).filter(Boolean);
+  const ref = P === PICKER_ADD ? 'PICKER_ADD' : 'PICKER_RESERVA';
+  box.innerHTML =
+    travados.map(u => `
+      <span class="recep-chip recep-chip-travado" title="${escHtml(u.nome)} já foi convidado">
+        <i class="bi bi-check2" aria-hidden="true"></i> ${escHtml(u.nome)}
+      </span>`).join('') +
+    novos.map(u => `
+      <button type="button" class="recep-chip" onclick="alternarConvidado(${u.id}, ${ref})"
+              title="Remover ${escHtml(u.nome)}" aria-label="Remover ${escHtml(u.nome)} dos convidados">
+        ${escHtml(u.nome)} <i class="bi bi-x" aria-hidden="true"></i>
+      </button>`).join('');
+  const busca = $(P.busca);
+  if (busca) busca.placeholder = (travados.length || novos.length) ? 'Adicionar mais…' : PLACEHOLDER_BUSCA;
+}
+
+function limparConvidados(P = PICKER_RESERVA) {
+  P.sel.clear();
+  filtrarConvidados(P);
+}
+
+function initConvidadosPicker(P = PICKER_RESERVA) {
+  const sel = $(P.lista);
+  if (!sel || sel.dataset.pickerOk) return;
+  sel.dataset.pickerOk = '1';
+  sel.addEventListener('dblclick', e => {
+    const opt = (e.target && e.target.closest) ? e.target.closest('option') : null;
+    alternarConvidado(parseInt((opt || sel.options[sel.selectedIndex] || {}).value), P);
+  });
+  // Teclado: Enter no item focado também convida/remove
+  sel.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); alternarConvidado(parseInt(sel.value), P); }
+  });
+  // Backspace com a busca vazia remove o último convidado (padrão de campo com etiquetas)
+  const busca = $(P.busca);
+  busca?.addEventListener('keydown', e => {
+    if (e.key === 'Backspace' && !busca.value && P.sel.size) {
+      alternarConvidado(Array.from(P.sel).pop(), P);
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', bootRecepcao);
@@ -291,11 +371,11 @@ function renderSalas() {
           <i class="bi bi-calendar-plus"></i> Agendar
         </button>
         ${podeGerenciarSala() ? `
-          <button class="btn-recep btn-recep-secondary" onclick="openSalaModal(${s.id})">
-            <i class="bi bi-pencil"></i>
+          <button class="btn-recep btn-recep-secondary" onclick="openSalaModal(${s.id})" aria-label="Editar sala ${escHtml(s.nome)}" title="Editar sala">
+            <i class="bi bi-pencil" aria-hidden="true"></i>
           </button>
-          <button class="btn-recep btn-recep-secondary" onclick="deletarSala(${s.id}, '${escHtml(s.nome).replace(/'/g, "\\'")}')" style="color:#ef4444">
-            <i class="bi bi-trash"></i>
+          <button class="btn-recep btn-recep-secondary" onclick="deletarSala(${s.id}, '${escHtml(s.nome).replace(/'/g, "\\'")}')" style="color:#b91c1c" aria-label="Excluir sala ${escHtml(s.nome)}" title="Excluir sala">
+            <i class="bi bi-trash" aria-hidden="true"></i>
           </button>` : ''}
       </div>
     </div>
@@ -558,6 +638,18 @@ function initCalendar() {
       prev:    'Anterior',
       next:    'Próximo',
     },
+    // Dicas de acessibilidade (title/aria) — sem isso o FC mistura "Previous Semana"
+    buttonHints: {
+      prev:  'Anterior',
+      next:  'Próximo',
+      today: 'Hoje',
+    },
+    viewHint:    'Ver $0',
+    navLinkHint: 'Ir para $0',
+    moreLinkHint: n => `Mostrar mais ${n} reserva${n === 1 ? '' : 's'}`,
+    closeHint:   'Fechar',
+    timeHint:    'Horário',
+    eventHint:   'Reserva',
     allDayText: 'Dia todo',
     moreLinkText: n => `+${n} mais`,
     noEventsText: 'Nenhuma reserva no período',
@@ -584,8 +676,14 @@ function initCalendar() {
     eventContent(arg) {
       const rv     = arg.event.extendedProps?.reserva || {};
       const status = rv.status || 'pendente';
-      const ICONS  = { pendente: '⏳', confirmada: '✔', concluida: '●', cancelada: '✗', expirada: '⚠' };
-      const icon   = ICONS[status] || '';
+      const ICONS  = {
+        pendente:   'bi-hourglass-split',
+        confirmada: 'bi-check-circle-fill',
+        concluida:  'bi-check2-all',
+        cancelada:  'bi-x-circle-fill',
+        expirada:   'bi-exclamation-triangle-fill',
+      };
+      const icon   = ICONS[status] ? `<i class="bi ${ICONS[status]}" aria-hidden="true"></i>` : '';
       const titulo = escHtml(rv.titulo || arg.event.title || '');
       const sala   = escHtml(rv.sala_nome || '');
 
@@ -744,6 +842,8 @@ function openReservaModal() {
   $('resvTitulo').value    = '';
   $('resvDescricao').value = '';
   $('resvConvidadosBusca').value = '';
+  convidadosSelecionados.clear();
+  initConvidadosPicker();
   filtrarConvidados();             // popula select de convidados
   // preenche com "agora" arredondado pra próxima meia hora
   const now = new Date();
@@ -788,8 +888,7 @@ async function submitReserva() {
     erro.classList.remove('d-none'); return;
   }
 
-  const convidados_ids = Array.from($('resvConvidados').selectedOptions)
-    .map(o => parseInt(o.value)).filter(Boolean);
+  const convidados_ids = Array.from(convidadosSelecionados);
 
   const payload = {
     sala_id,
@@ -976,6 +1075,15 @@ async function openReservaDetalhe(rv) {
     btn.onclick = () => confirmarReserva(rv.id);
     acts.appendChild(btn);
   }
+  // Organizador (ou admin) inclui mais gente enquanto a reunião não terminou
+  if (['pendente', 'confirmada'].includes(rv.status) && (dono || podeAdmin) && new Date(rv.fim) > new Date()) {
+    const btnAdd = document.createElement('button');
+    btnAdd.className = 'btn btn-outline-primary';
+    btnAdd.id = 'btnAddParticipantes';
+    btnAdd.innerHTML = '<i class="bi bi-person-plus" aria-hidden="true"></i> Adicionar participantes';
+    btnAdd.onclick = () => abrirAdicionarParticipantes(rv, convidados);
+    acts.appendChild(btnAdd);
+  }
   if (['pendente', 'confirmada'].includes(rv.status) && (dono || podeAdmin)) {
     const btnCanc = document.createElement('button');
     btnCanc.className = 'btn btn-outline-danger';
@@ -990,6 +1098,59 @@ async function openReservaDetalhe(rv) {
   acts.appendChild(btnFechar);
 
   new bootstrap.Modal($('reservaDetalhe')).show();
+}
+
+/* Adicionar participantes a uma reserva já criada: quem já estava convidado
+   aparece travado; só os novos são enviados (e só eles recebem e-mail/sino). */
+let addPartReserva = null;
+
+function abrirAdicionarParticipantes(rv, convidados) {
+  addPartReserva = rv;
+  PICKER_ADD.sel.clear();
+  PICKER_ADD.travados = new Set((convidados || []).map(c => c.usuario_id));
+  PICKER_ADD.excluir  = new Set([rv.usuario_id]);
+  $('addPartErr').classList.add('d-none');
+  $('addPartTitulo').textContent = rv.titulo || '';
+  $('addPartQuando').textContent = `${dtPt(rv.inicio)} · ${rv.sala_nome || ''}`;
+  $(PICKER_ADD.busca).value = '';
+  initConvidadosPicker(PICKER_ADD);
+  filtrarConvidados(PICKER_ADD);
+  bootstrap.Modal.getInstance($('reservaDetalhe'))?.hide();
+  new bootstrap.Modal($('addParticipantesModal')).show();
+}
+
+async function salvarParticipantes() {
+  const erro = $('addPartErr');
+  erro.classList.add('d-none');
+  const ids = Array.from(PICKER_ADD.sel);
+  if (!ids.length) {
+    erro.textContent = 'Escolha pelo menos um participante novo (dois cliques no nome).';
+    erro.classList.remove('d-none'); return;
+  }
+  const btn = $('btnSalvarParticipantes');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando convites...';
+  try {
+    const r = await fetch(`${API.reservas}/${addPartReserva.id}/convidar`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ convidados_ids: ids }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || 'HTTP ' + r.status);
+    bootstrap.Modal.getInstance($('addParticipantesModal')).hide();
+    const n = j.novos ?? ids.length;
+    toast(n
+      ? `${n} participante(s) adicionado(s) — convite enviado por e-mail e no sino.`
+      : 'Esses participantes já estavam convidados.', 'success');
+    abrirReservaPorId(addPartReserva.id);   // volta pro detalhe já atualizado
+  } catch (err) {
+    erro.textContent = err.message;
+    erro.classList.remove('d-none');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-send" aria-hidden="true"></i> Enviar convites';
+  }
 }
 
 async function responderConvite(conviteId, aceitar, reservaId) {
@@ -1091,32 +1252,32 @@ function renderEnvios() {
       : '<span style="color:#9ca3af">—</span>';
     return `
     <tr>
-      <td>#${e.id}</td>
-      <td>${escHtml(e.remetente_nome || '—')}</td>
-      <td>${escHtml(e.destino)}</td>
-      <td>${escHtml(e.destinatario)}</td>
-      <td>${brl(e.valor_mercadoria)}</td>
-      <td>${codigoCell}</td>
-      <td>${e.status_correios
+      <td data-label="#">#${e.id}</td>
+      <td data-label="Remetente">${escHtml(e.remetente_nome || '—')}</td>
+      <td data-label="Destino">${escHtml(e.destino)}</td>
+      <td data-label="Destinatário">${escHtml(e.destinatario)}</td>
+      <td data-label="Valor">${brl(e.valor_mercadoria)}</td>
+      <td data-label="Código">${codigoCell}</td>
+      <td data-label="Status">${e.status_correios
             ? `<span class="badge-status" style="background:#dbeafe;color:#1e40af">${escHtml(e.status_correios)}</span>`
-            : '<span style="color:#9ca3af;font-size:.85rem">Não rastreado</span>'}</td>
-      <td style="font-size:.85rem;color:#6b7280">${e.ultima_atualizacao ? dtPt(e.ultima_atualizacao) : '—'}</td>
-      <td style="white-space:nowrap;text-align:center">
+            : '<span style="color:#6b7280;font-size:.85rem">Não rastreado</span>'}</td>
+      <td data-label="Atualizado" style="font-size:.85rem;color:#6b7280">${e.ultima_atualizacao ? dtPt(e.ultima_atualizacao) : '—'}</td>
+      <td data-label="Ações" class="recep-td-acoes" style="white-space:nowrap;text-align:center">
         ${e.codigo_correios ? `
           <button class="btn btn-sm btn-outline-primary" onclick="abrirRastreio(${e.id})" title="Rastrear via API">
-            <i class="bi bi-geo-alt"></i> Rastrear
+            <i class="bi bi-geo-alt" aria-hidden="true"></i> Rastrear
           </button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="atualizarStatusManual(${e.id})" title="Atualizar status manualmente">
-            <i class="bi bi-pencil-square"></i>
+          <button class="btn btn-sm btn-outline-secondary" onclick="atualizarStatusManual(${e.id})" title="Atualizar status manualmente" aria-label="Atualizar status do envio #${e.id}">
+            <i class="bi bi-pencil-square" aria-hidden="true"></i>
           </button>` : `
           <button class="btn btn-sm btn-outline-secondary" disabled title="Cadastre o código dos Correios para habilitar">
-            <i class="bi bi-geo-alt"></i> Sem código
+            <i class="bi bi-geo-alt" aria-hidden="true"></i> Sem código
           </button>`}
-        <button class="btn btn-sm btn-outline-secondary" onclick="openEnvioModal(${e.id})" title="Editar envio">
-          <i class="bi bi-pencil"></i>
+        <button class="btn btn-sm btn-outline-secondary" onclick="openEnvioModal(${e.id})" title="Editar envio" aria-label="Editar envio #${e.id}">
+          <i class="bi bi-pencil" aria-hidden="true"></i>
         </button>
-        <button class="btn btn-sm btn-outline-danger" onclick="deletarEnvio(${e.id})" title="Excluir">
-          <i class="bi bi-trash"></i>
+        <button class="btn btn-sm btn-outline-danger" onclick="deletarEnvio(${e.id})" title="Excluir envio" aria-label="Excluir envio #${e.id}">
+          <i class="bi bi-trash" aria-hidden="true"></i>
         </button>
       </td>
     </tr>`;
@@ -1606,3 +1767,6 @@ window.renderEnvios        = renderEnvios;
 window.abrirReservaPorId   = abrirReservaPorId;
 window.responderConvite    = responderConvite;
 window.filtrarConvidados   = filtrarConvidados;
+window.limparConvidados    = limparConvidados;
+window.abrirAdicionarParticipantes = abrirAdicionarParticipantes;
+window.salvarParticipantes = salvarParticipantes;

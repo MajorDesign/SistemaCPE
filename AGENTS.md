@@ -128,6 +128,7 @@ Este é o passo-a-passo que a regra de ouro #9 exige. Não pular.
 - **Se descobrir um gotcha novo**: adiciona em `docs/GOTCHAS.md` no mesmo PR.
 - **Se adicionar/mudar módulo, regra ou convenção**: atualize o `.md` correspondente **no mesmo commit** — evita drift entre código e doc.
 - **Windows shell**: use PowerShell pra operações no CPEDC22 (WinRM). Bash pra scripts locais.
+- **Skill `ui-ux-pro-max`** (`.claude/skills/ui-ux-pro-max/`, terceiros, MIT — upstream `nextlevelbuilder/ui-ux-pro-max-skill`): use pra diretrizes de UX/acessibilidade. Paleta, fontes e estilos que ela sugere são **genéricos** — a identidade do CPE Control prevalece (amarelo `#FFC107` + preto, Bootstrap 5, ícones Bootstrap Icons/iconify, modais em grid). Nunca rodar `--persist` sem pedir. Pra atualizar: copiar de novo do upstream (sem `scripts/tests`) e revisar os scripts antes.
 - **Emojis nos commits/docs**: OK e usado (padrão do repo).
 
 ### Regras de negócio destacadas (as que mais afetam decisões técnicas)

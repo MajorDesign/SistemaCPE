@@ -83,6 +83,7 @@ Ordem alfabética.
 - Reserva aprovada + condutor não fez checklist em 4h após horário → cancela + email
 - RESPONSAVEL_GRUPO Frotas aprova/rejeita reservas + inicia viagem em nome do condutor
 - Condutor precisa fazer checklist DE SAÍDA e DEVOLUÇÃO com **7 fotos obrigatórias**
+- **Devolução de emergência (sem fotos)** — ADMIN/TI/Resp. Frotas, botão no card do veículo; encerra checklist + reserva e libera o veículo (ver `REGRAS_NEGOCIO.md#frotas`)
   (6 ângulos do carro + painel mostrando KM). Backend valida (v083, 2026-08-05).
 - **Anti-burla**: SHA-256 impede reusar a mesma foto em ângulos diferentes.
   Foto do painel confere se o KM digitado bate com o mostrador.
@@ -210,6 +211,7 @@ Ordem alfabética.
 - Qualquer USER agenda sala/cadastra envio
 - Só ADMIN/RESPONSAVEL_GRUPO cria sala
 - Reserva de sala tem `confirmacao_prazo` — visitante confirma via link em email
+- **Convidados (2026-10-06):** na Nova Reserva o organizador escolhe convidados com **duplo clique** (ou Enter) na lista; os escolhidos aparecem com ✓ na lista e como **etiquetas (chips) dentro do campo de busca** — clicar na etiqueta (×) remove; Backspace com a busca vazia remove o último. Cada convidado novo recebe aviso no sino (`notificacoes.tipo='convite_reuniao'`, `ticket_id` = id da reserva) **e e-mail** (`email_convite_reserva_sala`, perfil SMTP default). `_convidar_usuarios` devolve só os IDs convidados agora (não duplica); `_enviar_emails_convite` roda depois do commit — falha de e-mail não desfaz o convite. Vale pra `POST /reservas` e `POST /reservas/{id}/convidar`. **Adicionar participantes depois (2026-10-06):** no detalhe da reserva, organizador (ou ADMIN/TI/MANAGER) tem o botão "Adicionar participantes" enquanto a reserva está pendente/confirmada e não terminou; quem já estava convidado aparece travado e só os novos recebem sino + e-mail. `POST /reservas/{id}/convidar` agora pega a identidade do token (`convidador_id` do body é ignorado), responde 409 se a reserva estiver encerrada/terminada e grava `convidado_por` = organizador.
 
 ---
 
