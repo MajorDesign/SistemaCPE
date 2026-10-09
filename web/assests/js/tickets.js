@@ -226,8 +226,15 @@ let filteredTickets = [];
 let selectedTickets = new Set();
 let users           = [];
 let groups          = [];
-let currentPage     = 1;
-let itemsPerPage    = 25;
+// 2026-10-09: lista SEM LIMITE. Dados chegam em blocos de TICKETS_BLOCO
+// (ativos primeiro) e continuam carregando em segundo plano; a tabela mostra
+// RENDER_PASSO linhas e acrescenta mais a cada vez que a rolagem chega no fim.
+const TICKETS_BLOCO   = 200;
+const RENDER_PASSO    = 50;
+let renderLimit       = RENDER_PASSO;
+let ticketsCarregandoMais = false;   // ainda buscando blocos antigos
+let _ticketsLoadGen   = 0;           // nova carga cancela a anterior
+let _setPendAval      = new Set();   // ids com avaliacao pendente
 let selectedTicketId = null;
 let viewingTicketId  = null;
 let isLoadingTickets = false;
@@ -1160,41 +1167,78 @@ function resetCategoriaSubcategoria() {
 // =========================================
 
 async function loadTickets() {
-  if (isLoadingTickets) return;
+  // Cada chamada cancela uma carga em andamento (ex: user assumiu um chamado
+  // enquanto os blocos antigos ainda chegavam) — a mais nova vale.
+  const gen = ++_ticketsLoadGen;
   isLoadingTickets = true;
   console.log("[TICKETS] 📥 Carregando tickets...");
 
-  try {
-    // ✅ CORRIGIDO: Adicionar usuario_id obrigatório na requisição
-    const userId = getCurrentUserId();
-    if (!userId) {
-      console.error('[TICKETS] ❌ usuario_id não encontrado!');
-      showError('❌ Erro: usuário não identificado. Faça login novamente.');
-      return;
-    }
+  const userId = getCurrentUserId();
+  if (!userId) {
+    console.error('[TICKETS] ❌ usuario_id não encontrado!');
+    showError('❌ Erro: usuário não identificado. Faça login novamente.');
+    isLoadingTickets = false;
+    return;
+  }
+  // ativos_primeiro=1: TODOS os ativos vêm nos primeiros blocos (a vista
+  // padrão fica completa já no 1º bloco); encerrados antigos chegam depois.
+  const urlBloco = pular =>
+    `/tickets?usuario_id=${userId}&limite=${TICKETS_BLOCO}&pular=${pular}&ativos_primeiro=1`;
+  const porData = (a, b) => String(b.createdAtFull || '').localeCompare(String(a.createdAtFull || ''))
+                            || (b.id - a.id);
 
-    console.log(`[TICKETS] 📤 Enviando usuario_id=${userId} para backend...`);
-    // 2026-08-25: busca tickets + avaliacoes pendentes em paralelo.
-    // Vou usar o Set de ticket_ids pendentes pra marcar cada linha da tabela
-    // com um botao amarelo pulsante "Avaliar" — pra o solicitante lembrar
-    // caso tenha fechado o popup automatico.
-    // limite=500 pra pegar todos (backend default e so 25 — cortava listagem
-    // pra admin/manager e distorcia os KPIs "TOTAL/Abertos/Andamento/Resolvidos"
-    // que somam com base no que o front recebeu). 500 e o max aceito pelo backend.
-    const [data, pendentesAval] = await Promise.all([
-      apiRequest('GET', `/tickets?usuario_id=${userId}&limite=500`),
+  try {
+    // Avaliacoes pendentes marcam a linha com o botao amarelo "Avaliar".
+    const [primeiro, pendentesAval] = await Promise.all([
+      apiRequest('GET', urlBloco(0)),
       apiRequest('GET', `/avaliacoes/pendentes?usuario_id=${userId}`).catch(() => []),
     ]);
-    const setPendAval = new Set(
-      (Array.isArray(pendentesAval) ? pendentesAval : [])
-        .map(p => Number(p.ticket_id))
-    );
+    if (gen !== _ticketsLoadGen) return;
+    _setPendAval = new Set((Array.isArray(pendentesAval) ? pendentesAval : []).map(p => Number(p.ticket_id)));
 
-    if (!data || !Array.isArray(data)) {
+    if (!Array.isArray(primeiro)) {
       console.warn('[TICKETS] ⚠️ Resposta inválida');
       tickets = [];
-    } else {
-      tickets = data.map(t => ({
+      return;
+    }
+    tickets = primeiro.map(t => mapTicketFromApi(t, _setPendAval)).sort(porData);
+    ticketsCarregandoMais = primeiro.length === TICKETS_BLOCO;
+    applyFilters();
+    updateStatistics();
+
+    // Demais blocos em segundo plano, até acabar (sem limite).
+    let pular = primeiro.length;
+    let ultimo = primeiro.length;
+    while (ultimo === TICKETS_BLOCO) {
+      const bloco = await apiRequest('GET', urlBloco(pular));
+      if (gen !== _ticketsLoadGen) return;
+      if (!Array.isArray(bloco) || !bloco.length) break;
+      const ja = new Set(tickets.map(t => t.id));
+      const novos = bloco.filter(t => !ja.has(t.id)).map(t => mapTicketFromApi(t, _setPendAval));
+      pular += bloco.length;
+      ultimo = bloco.length;
+      if (!novos.length) continue;   // bloco todo repetido (chamado novo deslocou a janela)
+      tickets = tickets.concat(novos).sort(porData);
+      applyFilters({ manterScroll: true });
+      updateStatistics();
+    }
+    console.log(`[TICKETS] ✅ ${tickets.length} ticket(s) carregado(s) — lista completa`);
+  } catch (error) {
+    console.error('[TICKETS] ❌ Erro ao carregar:', error);
+    if (gen === _ticketsLoadGen && !tickets.length) tickets = [];
+  } finally {
+    if (gen === _ticketsLoadGen) {
+      isLoadingTickets = false;
+      ticketsCarregandoMais = false;
+      renderTable({ modo: 'silencioso' });
+    }
+  }
+}
+
+// Converte um ticket da API no formato da tabela. Usado pela carga da lista e
+// pela busca no servidor (chamado encerrado antigo que não veio nos 500).
+function mapTicketFromApi(t, setPendAval = new Set()) {
+  return {
         precisaAvaliar:  setPendAval.has(Number(t.id)),
         id:              t.id,
         numero:          t.numero || `#${t.id}`,
@@ -1223,25 +1267,7 @@ async function loadTickets() {
         updatedAtFull:   t.updated_at,
         description:     t.descricao_inicial || 'Sem descrição',
         sla:             t.sla || null
-      }));
-
-      // O backend já filtra corretamente por role:
-      // - ADMIN/TI/MANAGER → todos os tickets
-      // - RESPONSAVEL_GRUPO → tickets do seu grupo
-      // - USER → tickets que criou ou foram atribuídos a ele
-      console.log(`[TICKETS] ✅ ${tickets.length} ticket(s) carregado(s)`);
-    }
-
-    applyFilters();
-    updateStatistics();
-
-  } catch (error) {
-    console.error('[TICKETS] ❌ Erro ao carregar:', error);
-    tickets = [];
-  } finally {
-    isLoadingTickets = false;
-    renderTable();
-  }
+  };
 }
 
 // =========================================
@@ -1321,7 +1347,7 @@ function clearStatusFilter() {
   applyFilters();
 }
 
-function applyFilters() {
+function applyFilters(opts) {
   const search    = document.getElementById("searchInput")?.value?.toLowerCase().trim() || "";
   const statuses  = getStatusFilterValues();  // array (vazio = todos)
   const priority  = document.getElementById("priorityFilter")?.value || "";
@@ -1397,11 +1423,53 @@ function applyFilters() {
   if (hintEl) hintEl.style.display = semFiltroStatus ? '' : 'none';
 
   updateVistaCounts();
-  currentPage = 1;
-  renderTable();
+  // Filtro/busca novos voltam pro topo da rolagem; blocos chegando em segundo
+  // plano (manterScroll) não mexem no quanto o usuário já rolou.
+  const manterScroll = !!(opts && opts.manterScroll === true);
+  if (!manterScroll) renderLimit = RENDER_PASSO;
+  renderTable(manterScroll ? { modo: 'silencioso' } : undefined);
+
+  // Nada na lista carregada? Pode ser chamado encerrado antigo que ficou fora
+  // dos 500 — pergunta ao servidor pelo número/código exato.
+  if (buscaAtiva && filteredTickets.length === 0) buscarTicketNoServidor(buscaCanonica);
 
   // Depois de renderizar, decide se abre banner "salvar como padrão"
   atualizarBannerFiltroPref();
+}
+
+// 2026-10-09: busca no servidor por número (SUP-2026-00101) ou código
+// (SU0271N6T0) quando a lista local não tem o chamado. Usa GET /tickets/by-numero
+// (mesma checagem de permissão do detalhe). Silenciosa: 404/403 só não acham.
+// Tolera "O" digitado no lugar de zero (a fonte deixa 0 e O parecidos).
+const _buscaServidorTentadas = new Set();
+let _buscaServidorTimer = null;
+function buscarTicketNoServidor(termo) {
+  const t = (termo || '').toUpperCase();
+  if (t.length < 6 || !/\d/.test(t) || _buscaServidorTentadas.has(t)) return;
+  clearTimeout(_buscaServidorTimer);
+  _buscaServidorTimer = setTimeout(async () => {
+    _buscaServidorTentadas.add(t);
+    const candidatos = [...new Set([t, t.slice(0, 2) + t.slice(2).replace(/O/g, '0')])];
+    const token = localStorage.getItem('cpe_token') || sessionStorage.getItem('cpe_token') || '';
+    for (const c of candidatos) {
+      try {
+        const r = await fetch(`${API_BASE}/tickets/by-numero/${encodeURIComponent(c)}`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!r.ok) continue;
+        const tk = await r.json();
+        if (!tk || !tk.id) continue;
+        if (!tickets.some(x => x.id === tk.id)) tickets.push(mapTicketFromApi(tk));
+        // Só reaplica se o usuário ainda está buscando a mesma coisa
+        const atual = (document.getElementById('searchInput')?.value || '').toUpperCase().replace(/[#\s]/g, '');
+        if (atual === t) {
+          if (c !== t) document.getElementById('searchInput').value = c;   // mostra o código certo
+          applyFilters();
+        }
+        return;
+      } catch (_) { /* rede: segue sem achar */ }
+    }
+  }, 400);
 }
 
 /** Atalho: abre painel de filtros avançados e marca status Resolvido+Fechado
@@ -1689,14 +1757,17 @@ async function _aplicarFiltrosPrefSeExiste() {
 // 12. RENDERIZAR TABELA E PAGINAÇÃO
 // =========================================
 
-function renderTable() {
+// opts.modo:
+//   (nada)        — redesenha tudo com a animação de entrada (filtro/busca novos)
+//   'acrescentar' — rolagem infinita: só adiciona as linhas novas no fim
+//   'silencioso'  — redesenha tudo SEM animação (bloco antigo chegou em segundo
+//                   plano). Sem isso todas as linhas "piscavam" a cada passo.
+function renderTable(opts) {
   const body = document.getElementById("ticketsBody");
   if (!body) return;
+  const modo = opts && opts.modo;
 
-  const pageTickets = filteredTickets.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const pageTickets = filteredTickets.slice(0, renderLimit);
 
   if (pageTickets.length === 0) {
     // 2026-08-24: quando lista vazia mas ha filtros ativos, checar se
@@ -1746,7 +1817,8 @@ function renderTable() {
   const admin  = isAdmin();
   const gestor = isGestor();
 
-  body.innerHTML = pageTickets.map(t => {
+  const semAnim = modo === 'silencioso' || modo === 'acrescentar';
+  const linhaHtml = t => {
     const initial = t.userName.charAt(0).toUpperCase() || "?";
     // 2026-09-21: se o user tem foto salva, mostra <img> em vez da inicial.
     // Fonte: users.avatar_url (mesma coluna que web/desktop escrevem em
@@ -1760,7 +1832,7 @@ function renderTable() {
     // disponivel dentro do modal de detalhe do ticket (botao "Deletar").
 
     return `
-      <tr class="ticket-row ${checked ? 'table-active' : ''}" data-ticket-id="${t.id}">
+      <tr class="ticket-row ${checked ? 'table-active' : ''}${semAnim ? ' sem-anim' : ''}" data-ticket-id="${t.id}">
         <td onclick="event.stopPropagation()">
           <input type="checkbox" class="row-checkbox" value="${t.id}"
                  onchange="toggleRowSelect(${t.id}, this);" ${checked}>
@@ -1803,21 +1875,48 @@ function renderTable() {
             </button>` : ''}
         </td>
       </tr>`;
-  }).join("");
+  };
+
+  const jaNaTela = body.querySelectorAll('tr.ticket-row').length;
+  if (modo === 'acrescentar' && jaNaTela > 0 && jaNaTela <= pageTickets.length) {
+    body.insertAdjacentHTML('beforeend', pageTickets.slice(jaNaTela).map(linhaHtml).join(""));
+  } else {
+    body.innerHTML = pageTickets.map(linhaHtml).join("");
+  }
 
   updatePagination();
 }
 
+// Rodapé da lista: quantos estão na tela, total filtrado e se ainda há
+// chamados antigos chegando. (Nome mantido: chamado em vários lugares.)
 function updatePagination() {
-  const total      = filteredTickets.length;
-  const totalPages = Math.ceil(total / itemsPerPage) || 1;
-  const start      = total === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
-  const end        = Math.min(currentPage * itemsPerPage, total);
+  const total    = filteredTickets.length;
+  const exibidos = Math.min(renderLimit, total);
+  const txt = document.getElementById("paginationText");
+  if (txt) txt.textContent = total === 0 ? '' : `Mostrando ${exibidos} de ${total} chamado${total === 1 ? '' : 's'}`;
+  const mais = document.getElementById("ticketsCarregandoMais");
+  if (mais) mais.classList.toggle('d-none', !ticketsCarregandoMais);
+  const fim = document.getElementById("ticketsFimLista");
+  if (fim) fim.classList.toggle('d-none', ticketsCarregandoMais || total === 0 || exibidos < total);
+  const btnMais = document.getElementById("btnMostrarMaisTickets");
+  if (btnMais) btnMais.classList.toggle('d-none', exibidos >= total);
+  _observarFimDaLista();
+}
 
-  document.getElementById("totalItems").textContent    = total;
-  document.getElementById("totalPages").textContent    = totalPages;
-  document.getElementById("paginationText").textContent = `${start} a ${end} de ${total}`;
-  document.getElementById("currentPage").value         = currentPage;
+// Rolagem infinita: quando o rodapé da lista entra na tela (com folga de
+// 600px), mostra mais RENDER_PASSO linhas. Os dados já estão no navegador.
+let _fimListaObserver = null;
+function _observarFimDaLista() {
+  const alvo = document.getElementById('ticketsSentinel');
+  if (!alvo || _fimListaObserver || !('IntersectionObserver' in window)) return;
+  _fimListaObserver = new IntersectionObserver(entradas => {
+    if (!entradas.some(e => e.isIntersecting)) return;
+    if (renderLimit < filteredTickets.length) {
+      renderLimit += RENDER_PASSO;
+      renderTable({ modo: 'acrescentar' });
+    }
+  }, { rootMargin: '600px 0px' });
+  _fimListaObserver.observe(alvo);
 }
 
 // 2026-09-29: clique na celula do ID copia o codigo pro clipboard.
@@ -2486,31 +2585,15 @@ function submitDetailInternal(e) { e.preventDefault(); submitComment(e.target, f
 // 18. PAGINAÇÃO
 // =========================================
 
-function changeItemsPerPage(value) {
-  itemsPerPage = parseInt(value);
-  currentPage  = 1;
-  renderTable();
-}
-
-function previousPage() {
-  if (currentPage > 1) { currentPage--; renderTable(); }
-}
-
-function nextPage() {
-  if (currentPage < Math.ceil(filteredTickets.length / itemsPerPage)) {
-    currentPage++;
-    renderTable();
+// 2026-10-09: paginação por páginas substituída pela rolagem infinita
+// (ver _observarFimDaLista). "Mostrar mais" no rodapé cobre quem não rola.
+function mostrarMaisTickets() {
+  if (renderLimit < filteredTickets.length) {
+    renderLimit += RENDER_PASSO;
+    renderTable({ modo: 'acrescentar' });
   }
 }
-
-function goToPage(pageNum) {
-  const num        = parseInt(pageNum);
-  const totalPages = Math.ceil(filteredTickets.length / itemsPerPage) || 1;
-  if (num >= 1 && num <= totalPages) {
-    currentPage = num;
-    renderTable();
-  }
-}
+window.mostrarMaisTickets = mostrarMaisTickets;
 
 // =========================================
 // 19. BADGES

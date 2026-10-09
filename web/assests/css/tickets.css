@@ -2856,6 +2856,13 @@
 .main-content .table tbody tr:nth-child(7)  { animation-delay: .32s; }
 .main-content .table tbody tr:nth-child(n+8) { animation-delay: .35s; }
 
+/* 2026-10-09: linhas acrescentadas pela rolagem infinita ou redesenhadas
+   quando um bloco antigo chega em segundo plano entram sem animação —
+   senão a tabela inteira "piscava" (opacity 0) a cada passo. */
+.main-content .table tbody tr.sem-anim {
+  animation: none; opacity: 1; transform: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .main-content .stats-bar .stat-item,
   .main-content .table tbody tr {

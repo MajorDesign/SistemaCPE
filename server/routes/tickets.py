@@ -858,6 +858,7 @@ async def obter_tickets(
     pular: int = Query(0, ge=0),
     limite: int = Query(LIMITE_PADRAO, ge=1, le=500),
     include_timeline: int = Query(0, ge=0, le=1, description="1=inclui campo 'trajeto' (setores por onde passou) em cada ticket. Usado por relatorios."),
+    ativos_primeiro: int = Query(0, ge=0, le=1, description="1=ordena chamados ativos (nao Resolvido/Fechado) antes dos encerrados, pra que o limite nunca corte um ativo. Usado pela tela de tickets."),
 ):
     usuario_id = int(current_user["id"])
     # ✅ CORRIGIDO: Adicionar filtro de acesso baseado em ROLE + GROUP_ID
@@ -1034,6 +1035,18 @@ async def obter_tickets(
         if filtros:
             logger.info(f"    > {' AND '.join(filtros)}")
 
+        # 2026-10-09: com ativos_primeiro=1 os chamados ainda em aberto vêm
+        # antes dos encerrados (4=Resolvido, 5=Fechado — ticket_status.finalizador
+        # está 0 pra todos, não dá pra usar). Sem isso o LIMIT 500 da tela de
+        # tickets cortava os ATIVOS mais antigos: com 876 chamados em prod,
+        # 17 ativos de antes de 14/09 sumiram da lista e da busca. Só muda a
+        # ordem — o WHERE (privacidade) é o mesmo.
+        # t.id DESC desempata: a tela carrega em blocos (pular/limite) e,
+        # sem desempate estável, chamados com o mesmo created_at podiam
+        # pular ou repetir entre um bloco e outro.
+        ordem = ("(t.status_id IN (4, 5)) ASC, t.created_at DESC, t.id DESC"
+                 if ativos_primeiro else "t.created_at DESC, t.id DESC")
+
         # 2026-08-24: adicionado JOIN em categorias/subcategorias — antes
         # o front recebia categoria_nome=null e a coluna Categoria da
         # tabela sempre aparecia "—".
@@ -1064,7 +1077,7 @@ async def obter_tickets(
             LEFT JOIN subcategorias sub  ON t.subcategoria_id = sub.id
             LEFT JOIN ticket_sla ts      ON ts.ticket_id = t.id
             {where}
-            ORDER BY t.created_at DESC
+            ORDER BY {ordem}
             LIMIT %s OFFSET %s
         """
         params.extend([limite, pular])

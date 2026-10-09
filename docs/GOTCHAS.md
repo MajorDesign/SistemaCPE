@@ -650,6 +650,25 @@ Backend faz `WHERE nome_status = ?` (comparação exata case-sensitive). Só "Re
 
 ---
 
+## Lista de tickets escondia chamados ATIVOS antigos (2026-10-09)
+
+**Sintoma:** chamado aberto/em andamento some da tela de tickets e a busca (por código, título, solicitante) não acha. Caso real: SU0139, SU0218, SU0271, SU0372 (Daniela, Suporte TI, 31/08–11/09) — parados há mais de um mês, invisíveis pra todo mundo.
+
+**Causa:** `tickets.js loadTickets()` pede `GET /tickets?limite=500` e o backend ordenava só por `created_at DESC`. Busca e filtros são **client-side** sobre esse array. Com 876 chamados em prod, tudo que foi aberto antes de 14/09 ficou fora — inclusive **17 ativos** (12 Abertos + 5 Em Andamento). Quanto mais velho o chamado esquecido, mais ele some.
+
+**Fix (mesmo dia, 2 etapas):**
+1. Param `ativos_primeiro=1` em `listar_tickets` → `ORDER BY (t.status_id IN (4,5)) ASC, t.created_at DESC, t.id DESC` (só muda a ordem, o `WHERE` de privacidade é o mesmo; `t.id` desempata pra paginação estável).
+2. **Lista sem limite:** `loadTickets()` busca blocos de 200 (`pular`/`limite`) até acabar — o 1º bloco já traz todos os ativos e é exibido na hora; os encerrados antigos chegam em segundo plano ("Carregando chamados mais antigos…"). A paginação por páginas virou **rolagem infinita**: a tabela mostra 50 linhas e acrescenta +50 quando o rodapé (`#ticketsSentinel`, IntersectionObserver) entra na tela; botão "Mostrar mais" como reserva. Busca/filtros/contadores seguem client-side e ficam completos quando todos os blocos chegam. Busca sem resultado durante a carga cai em `GET /tickets/by-numero/{codigo}` (silenciosa; tolera "O" no lugar de zero).
+
+**Não redesenhar a tabela inteira na rolagem:** as linhas têm animação de entrada (`ticketsEnter`, opacity 0→1). `renderTable({modo:'acrescentar'})` só adiciona as linhas novas; bloco chegando em segundo plano usa `{modo:'silencioso'}` (classe `.sem-anim`). Redesenhar tudo fazia a tabela inteira piscar a cada passo.
+
+**Atenção:**
+- `ticket_status.finalizador` está **0 pra todos** os status em prod — não usar pra saber se está encerrado; o código usa `status_id IN (4,5)` (Resolvido/Fechado), igual ao `mapStatusFromApi` do front.
+- Uma nova `loadTickets()` cancela a carga anterior (`_ticketsLoadGen`) — ações que recarregam a lista no meio da carga não duplicam linhas.
+- Custo cresce com o volume: cada abertura da tela baixa todos os chamados que o usuário pode ver (~700 em ~0,4s no teste). Se ficar pesado, o próximo passo é busca/filtro no servidor.
+
+---
+
 ## Convenção `docs/`
 
 Já existe:
