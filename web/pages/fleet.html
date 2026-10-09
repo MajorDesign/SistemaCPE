@@ -1162,6 +1162,12 @@
     </div>
     <div class="fleet-modal-footer">
       <button class="btn-fleet btn-fleet-secondary" onclick="closeModal('modalRetorno')">Cancelar</button>
+      <!-- Só ADMIN/TI/Resp. Frotas (exibido em openRetorno) -->
+      <button class="btn-fleet" id="btnRetEmergencia" style="display:none;background:#FEF3C7;color:#92400E;border:1px solid #F59E0B"
+              onclick="abrirDevolucaoEmergenciaChecklist(document.getElementById('retornoChecklistId').value, true)"
+              title="Encerra a devolução sem fotos e libera o veículo">
+        <i class="bi bi-shield-fill-exclamation"></i> Devolver sem fotos (emergência)
+      </button>
       <button class="btn-fleet btn-fleet-primary" onclick="saveDevolver()">
         <i class="bi bi-send-fill"></i> Registrar Devolução
       </button>
@@ -1455,9 +1461,13 @@
           <select class="fleet-select" id="devEmergComb">
             <option value="">Não informado</option>
             <option value="0">E (Vazio)</option>
-            <option value="2">1/4</option>
-            <option value="4">1/2</option>
-            <option value="6">3/4</option>
+            <option value="1">1/8</option>
+            <option value="2">2/8 (1/4)</option>
+            <option value="3">3/8</option>
+            <option value="4">4/8 (1/2)</option>
+            <option value="5">5/8</option>
+            <option value="6">6/8 (3/4)</option>
+            <option value="7">7/8</option>
             <option value="8">F (Cheio)</option>
           </select>
         </div>
@@ -2182,12 +2192,14 @@ async function deleteVehicle(vehicleId, placa) {
    Backend: POST /vehicles/{id}/forcar-vistoria (fecha checklist + reserva,
    KM, histórico, avisa condutor e "avise-me").
    ============================================================ */
-function abrirDevolucaoEmergencia(vehicleId) {
+// info (opcional) vem da aba Checklist: { placa, modelo, status, km_ref, km, comb }
+function abrirDevolucaoEmergencia(vehicleId, info = null) {
   if (!canManageFleet()) {
     showToast('Você não tem permissão para registrar devolução de emergência.', 'error');
     return;
   }
-  const v = allVehicles.find(x => x.id === vehicleId) || {};
+  const veic = allVehicles.find(x => x.id === vehicleId) || {};
+  const v = { placa: veic.placa, modelo: veic.modelo, status: veic.status, km_ref: veic.km_atual, ...(info || {}) };
   document.getElementById('devEmergVehicleId').value = vehicleId;
   document.getElementById('devEmergVeiculo').textContent =
     [v.placa, v.modelo].filter(Boolean).join(' — ') || `Veículo #${vehicleId}`;
@@ -2195,15 +2207,37 @@ function abrirDevolucaoEmergencia(vehicleId) {
     v.status === 'em_viagem' ? 'Em viagem — condutor ainda não devolveu'
                              : 'Aguardando vistoria de retorno';
   const km = document.getElementById('devEmergKm');
-  km.value = '';
-  km.placeholder = v.km_atual ? `Último KM registrado: ${Number(v.km_atual).toLocaleString('pt-BR')}` : 'Ex: 45230';
-  km.min = v.km_atual || 0;
-  document.getElementById('devEmergComb').value = '';
+  km.value = v.km ? String(v.km) : '';
+  km.placeholder = v.km_ref ? `KM de saída / último: ${Number(v.km_ref).toLocaleString('pt-BR')}` : 'Ex: 45230';
+  km.min = v.km_ref || 0;
+  document.getElementById('devEmergComb').value = (v.comb ?? '') === '' ? '' : String(v.comb);
   document.getElementById('devEmergAvariaNao').checked = true;
   document.getElementById('devEmergMotivo').value = '';
   document.getElementById('devEmergErr').style.display = 'none';
   openModal('modalDevEmergencia');
   setTimeout(() => document.getElementById('devEmergMotivo').focus(), 100);
+}
+
+// Aba Checklist (linha da lista ou rodapé do formulário de devolução):
+// busca o checklist pra saber veículo/KM de saída e abre o mesmo modal.
+// Do formulário de devolução, reaproveita KM e combustível já preenchidos.
+async function abrirDevolucaoEmergenciaChecklist(checklistId, doFormRetorno = false) {
+  const data = await apiFetch(`/checklists/${checklistId}`);
+  const c = data?.checklist;
+  if (!c) { showToast(data?.detail || 'Checklist não encontrado', 'error'); return; }
+  const info = {
+    placa: c.placa, modelo: c.modelo,
+    status: c.status === 'em_viagem' ? 'em_viagem' : 'aguardando_vistoria',
+    km_ref: c.km_saida,
+  };
+  if (doFormRetorno) {
+    const kmDig = parseInt(document.getElementById('retKm')?.value);
+    if (kmDig > 0) info.km = kmDig;
+    const comb = parseInt(document.getElementById('retNivelComb')?.value);
+    if (comb > 0) info.comb = comb;   // 0 = não tocou no medidor
+    closeModal('modalRetorno');
+  }
+  abrirDevolucaoEmergencia(c.vehicle_id, info);
 }
 
 async function confirmarDevolucaoEmergencia() {
@@ -2901,6 +2935,11 @@ async function loadChecklists() {
         ${(c.status === 'devolvido' && currentUser?.id !== c.condutor_id) ? `
           <button class="btn-fleet btn-fleet-sm" style="background:#DBEAFE;color:#1D4ED8;border:1px solid #93C5FD" onclick="openVistoriaRetorno(${c.id})" title="Vistoriar retorno">
             <i class="bi bi-shield-check"></i>
+          </button>` : ''}
+        ${(['em_viagem','devolvido'].includes(c.status) && canManageFleet()) ? `
+          <button class="btn-fleet btn-fleet-sm btn-dev-emergencia-ck" style="background:#FEF3C7;color:#92400E;border:1px solid #F59E0B"
+                  onclick="abrirDevolucaoEmergenciaChecklist(${c.id})" title="Devolução de emergência (sem fotos)" aria-label="Devolução de emergência sem fotos — checklist #${c.id}">
+            <i class="bi bi-shield-fill-exclamation"></i>
           </button>` : ''}
       </td>
     </tr>
@@ -4330,6 +4369,7 @@ async function openRetorno(checklistId) {
   if (!c) return;
 
   document.getElementById('retornoChecklistId').value = checklistId;
+  document.getElementById('btnRetEmergencia').style.display = canManageFleet() ? '' : 'none';
   // Guardar KM de saída para validação
   _retKmSaida = c.km_saida || 0;
 

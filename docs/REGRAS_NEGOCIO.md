@@ -61,7 +61,9 @@ Banner "Checklist de saída pendente" tem 2 botões: **Fazer Checklist Agora** e
 - Lembretes por email escalam: 1h antes, no horário do fim, atrasado a cada 3h. RESPONSAVEL_GRUPO é acionado se atraso >= 6h.
 - Vistoria periódica do veículo tem lembrete próprio (`fleet_vistoria_lembrete`)
 - **Devolução de emergência — sem fotos** (2026-10-07): ADMIN, TI ou Resp. do grupo Frotas encerram
-  a viagem pelo botão "Devolução de emergência" no card do veículo (`em_viagem` ou `aguardando_vistoria`).
+  a viagem pelo botão "Devolução de emergência" no card do veículo (`em_viagem` ou `aguardando_vistoria`),
+  pelo ícone amarelo na linha do checklist (aba Checklist) ou pelo "Devolver sem fotos (emergência)" no
+  rodapé do formulário de devolução (aproveita KM/combustível já digitados).
   Motivo obrigatório; KM e combustível de retorno opcionais (KM não pode ser menor que o de saída);
   "com avaria" manda o veículo pra `manutencao` com avaria registrada, senão volta `ativo`.
   Fecha checklist (`retornado`/`retornado_com_avaria`) + reserva (`concluido`), grava auditoria em
